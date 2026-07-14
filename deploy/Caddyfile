@@ -1,0 +1,30 @@
+# Caddy автоматически получает и продлевает HTTPS-сертификаты Let's Encrypt.
+# Домены берутся из переменных окружения (см. docker-compose.prod.yml).
+#
+# Mini App (frontend) — основной домен:
+{$DOMAIN} {
+    encode gzip zstd
+
+    # API идёт в backend...
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # ...всё остальное — статика Mini App
+    handle {
+        reverse_proxy frontend:80
+    }
+}
+
+# Админка — отдельный поддомен (второй бесплатный DuckDNS-субдомен):
+{$ADMIN_DOMAIN} {
+    encode gzip zstd
+
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    handle {
+        reverse_proxy admin:80
+    }
+}

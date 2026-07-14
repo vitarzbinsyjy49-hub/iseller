@@ -1,0 +1,35 @@
+version: "3.9"
+services:
+  ai-engine:
+    build: .
+    env_file: .env
+    ports: ["8090:8090"]
+    depends_on: [postgres, redis, meilisearch]
+    restart: unless-stopped
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ai
+      POSTGRES_PASSWORD: ai
+      POSTGRES_DB: ai_engine
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    ports: ["5433:5432"]
+  redis:
+    image: redis:7-alpine
+    ports: ["6380:6379"]
+  meilisearch:
+    image: getmeili/meilisearch:v1.8
+    environment:
+      MEILI_MASTER_KEY: masterKey
+    volumes: [meilidata:/meili_data]
+    ports: ["7700:7700"]
+  ollama:
+    image: ollama/ollama:latest
+    volumes: [ollamadata:/root/.ollama]
+    ports: ["11434:11434"]
+volumes:
+  pgdata:
+  meilidata:
+  ollamadata:

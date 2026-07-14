@@ -1,0 +1,24 @@
+# secrets / env
+.env
+*.env.local
+
+# node
+node_modules/
+frontend/node_modules/
+admin/node_modules/
+dist/
+frontend/dist/
+admin/dist/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# caddy / runtime
+deploy/caddy_data/
+deploy/caddy_config/
+
+# os
+.DS_Store
+Thumbs.db

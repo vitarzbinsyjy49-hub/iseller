@@ -1,0 +1,9 @@
+classify: |
+  Определи намерение пользователя магазина техники. Ответь СТРОГО одним JSON без пояснений:
+  {{"intent": "<one_of>", "confidence": 0.0, "filters": {{"category": null, "brand": null, "price_max": null, "price_min": null, "query": "<поисковая фраза>"}}}}
+
+  Возможные intent:
+  product_search, comparison, recommendation, advice, trade_in, warranty, payment,
+  delivery, accessory_compatibility, news, other
+
+  Сообщение: {question}

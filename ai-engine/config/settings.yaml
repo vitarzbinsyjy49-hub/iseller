@@ -1,0 +1,37 @@
+# Бизнес-настройки AI Engine. Меняются без деплоя кода.
+# FIX (integration): recommender ожидает weights.personalization, weights.promo_new
+# и hard_filters.hide_out_of_stock; pipeline ожидает секцию faq — добавлены.
+
+pipeline:
+  max_products_to_llm: 12        # никогда не отправляем полный каталог
+  response_timeout_seconds: 2.0
+  cache_ttl_seconds: 3600
+
+ranking:
+  weights:                       # Recommendation Engine: бизнес-логика, не LLM (сумма = 1.0)
+    relevance: 0.35
+    in_stock: 0.15
+    personalization: 0.10
+    rating: 0.10
+    popularity: 0.15
+    margin: 0.10
+    promo_new: 0.05
+  hard_filters:
+    hide_out_of_stock: false     # false: товары «нет в наличии» показываем с кнопкой «Сообщить»
+  personalization:
+    preferred_brand_boost: 0.15
+    budget_fit_boost: 0.10
+
+intents:
+  confidence_threshold: 0.55     # ниже порога — уточняющий вопрос, не галлюцинация
+
+safety:
+  no_data_message: "У меня нет точной информации по этому вопросу. Могу уточнить у менеджера или показать похожие товары."
+
+# Ответы на частые вопросы — отдаются мгновенно, без LLM.
+# ЗАМЕНИТЕ на реальные условия вашего магазина.
+faq:
+  warranty: "На всю технику действует официальная гарантия производителя от 12 месяцев. Чек и гарантийный талон приходят в Telegram после покупки."
+  payment: "Оплата: банковской картой, СБП или в рассрочку без переплаты на 6–12 месяцев. Все платежи проходят через защищённого провайдера."
+  delivery: "Доставка по городу — 1–2 дня, по стране — 3–7 дней. Самовывоз из магазина — в день заказа."
+  trade_in: "Trade-in доступен для смартфонов и ноутбуков: оценим ваше устройство и сделаем скидку на новое. Напишите модель — подскажу ориентировочную выгоду."

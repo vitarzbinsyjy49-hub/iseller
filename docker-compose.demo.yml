@@ -1,0 +1,119 @@
+# TechShop Demo MVP — полный стек одной командой.
+#
+# Запуск:
+#   docker compose -f docker-compose.demo.yml up -d --build
+#   docker compose -f docker-compose.demo.yml exec backend python -m app.scripts.seed_products
+#
+# По умолчанию AI_PROVIDER=fallback — демо работает БЕЗ Ollama и без ключей.
+# Ollama — опциональна (профиль ai): docker compose --profile ai up -d
+#
+# Порты: frontend 5173, admin 5174, backend 8000, ai-engine 8090.
+
+services:
+  # ==================== Основной проект ====================
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-techshop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-techshop}
+      POSTGRES_DB: ${POSTGRES_DB:-techshop}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-techshop} -d ${POSTGRES_DB:-techshop}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/code/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/code/src
+      - ./frontend/index.html:/code/index.html
+
+  admin:
+    build: ./admin
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5174:5174"
+    volumes:
+      - ./admin/src:/code/src
+      - ./admin/index.html:/code/index.html
+
+  # ==================== AI Engine (опционально) ====================
+  # Демо работает и без него (AI_PROVIDER=fallback). Поднимается вместе со стеком,
+  # но если контейнер недоступен — backend просто отвечает fallback-подбором.
+  ai-engine:
+    profiles: ["ai"]
+    build: ./ai-engine
+    restart: unless-stopped
+    env_file: ./ai-engine/.env
+    depends_on:
+      - ai-db
+      - redis
+    ports:
+      - "8090:8090"
+
+  ai-db:
+    profiles: ["ai"]
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ai
+      POSTGRES_PASSWORD: ai
+      POSTGRES_DB: ai_engine
+    volumes:
+      - ai_pgdata:/var/lib/postgresql/data
+      - ./ai-engine/migrations:/docker-entrypoint-initdb.d
+
+  redis:
+    profiles: ["ai"]
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  meilisearch:
+    profiles: ["ai"]
+    image: getmeili/meilisearch:v1.8
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILISEARCH_KEY:-masterKey}
+    volumes:
+      - meilidata:/meili_data
+
+  # AI stack (AI Engine + Meili + Redis + Ollama) включается только профилем ai:
+  #   docker compose -f docker-compose.demo.yml --profile ai up -d
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    profiles: ["ai"]
+    volumes:
+      - ollamadata:/root/.ollama
+    ports:
+      - "11434:11434"
+
+volumes:
+  pgdata:
+  ai_pgdata:
+  meilidata:
+  ollamadata:

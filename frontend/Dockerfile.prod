@@ -1,0 +1,14 @@
+# Production build: собираем статику Vite и раздаём её через nginx.
+# Caddy (reverse-proxy) уже проксирует /api -> backend, поэтому nginx тут
+# отвечает только за статику + SPA-fallback.
+FROM node:20-alpine AS build
+WORKDIR /code
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /code/dist /usr/share/nginx/html
+EXPOSE 80

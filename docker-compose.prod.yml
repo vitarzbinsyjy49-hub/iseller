@@ -1,0 +1,77 @@
+# TechShop — production-стек для VPS.
+#
+# Отличия от docker-compose.demo.yml:
+#   - frontend/admin собираются в статику (Dockerfile.prod) и раздаются nginx,
+#     а не через Vite dev server;
+#   - backend без --reload и без монтирования исходников;
+#   - наружу торчит только Caddy (80/443), он же выдаёт HTTPS и проксирует /api;
+#   - порты БД/бэкенда/фронта на хост НЕ пробрасываются (доступ только внутри сети).
+#
+# Запуск на сервере:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml exec backend python -m app.scripts.seed_products  # один раз
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-techshop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-techshop}
+      POSTGRES_DB: ${POSTGRES_DB:-techshop}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-techshop} -d ${POSTGRES_DB:-techshop}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    # порт наружу не пробрасываем — Caddy ходит к backend:8000 по внутренней сети
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - admin
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
