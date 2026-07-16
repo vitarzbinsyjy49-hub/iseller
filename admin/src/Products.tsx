@@ -174,7 +174,7 @@ function ProductModal({
 
   useEffect(() => {
     if (!product) {
-      setForm({ title: "", brand: "", category: "", price: "", old_price: "", stock: "0", image: "", description: "", warranty_months: "12" });
+      setForm({ title: "", sku: "", brand: "", category: "", price: "", old_price: "", stock: "0", image: "", description: "", warranty_months: "12", condition: "new" });
       setSpecsText("{}");
       return;
     }
@@ -185,10 +185,12 @@ function ProductModal({
       const merged = { ...product, ...(p ?? {}) };
       setFull(merged);
       setForm({
-        title: merged.title ?? "", brand: merged.brand ?? "", category: merged.category ?? "",
+        title: merged.title ?? "", sku: (merged as { sku?: string | null }).sku ?? "",
+        brand: merged.brand ?? "", category: merged.category ?? "",
         price: String(Math.round(merged.price)), old_price: merged.old_price == null ? "" : String(Math.round(merged.old_price)),
         stock: String(merged.stock ?? 0), image: merged.image ?? "",
         description: merged.description ?? "", warranty_months: String(merged.warranty_months ?? 12),
+        condition: (merged as { condition?: string }).condition ?? "new",
       });
       setImages(merged.images ?? []);
       setSpecsText(JSON.stringify(merged.specs ?? {}, null, 2));
@@ -240,10 +242,12 @@ function ProductModal({
     let specs: Record<string, unknown>;
     try { specs = JSON.parse(specsText || "{}"); } catch { setError("Характеристики: некорректный JSON"); return; }
     const body: Record<string, unknown> = {
-      title: form.title.trim(), brand: form.brand.trim() || null, category: form.category.trim() || null,
+      title: form.title.trim(), sku: form.sku.trim() || null,
+      brand: form.brand.trim() || null, category: form.category.trim() || null,
       price: Number(form.price), old_price: form.old_price === "" ? null : Number(form.old_price),
       stock: Number(form.stock || 0), image: form.image.trim() || null,
       description: form.description.trim() || null, warranty_months: Number(form.warranty_months || 12),
+      condition: form.condition || "new",
       specs,
     };
     setSaving(true);
@@ -285,6 +289,18 @@ function ProductModal({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 }}>
           <label style={{ gridColumn: "1 / -1", fontSize: 13, color: C.sub }}>
             Название<input style={input} value={form.title ?? ""} onChange={(e) => set("title", e.target.value)} />
+          </label>
+          <label style={{ fontSize: 13, color: C.sub }}>
+            SKU (артикул для импорта и фото)
+            <input style={input} value={form.sku ?? ""} onChange={(e) => set("sku", e.target.value.toUpperCase())} placeholder="IPH15PRO128BLACK" />
+          </label>
+          <label style={{ fontSize: 13, color: C.sub }}>
+            Состояние
+            <select style={input} value={form.condition ?? "new"} onChange={(e) => set("condition", e.target.value)}>
+              <option value="new">Новый</option>
+              <option value="used">Б/у</option>
+              <option value="refurbished">Восстановленный</option>
+            </select>
           </label>
           <label style={{ fontSize: 13, color: C.sub }}>
             Бренд<input style={input} value={form.brand ?? ""} onChange={(e) => set("brand", e.target.value)} />

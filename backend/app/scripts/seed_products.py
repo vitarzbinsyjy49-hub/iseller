@@ -29,6 +29,21 @@ def img(category: str | None) -> str:
     return _PLACEHOLDERS.get((category or "").lower(), "/assets/placeholders/product.svg")
 
 
+# Транслит для генерации SKU из названия (в демо-каталоге кириллицы немного)
+_TRANSLIT = str.maketrans({
+    "а": "A", "б": "B", "в": "V", "г": "G", "д": "D", "е": "E", "ж": "ZH", "з": "Z",
+    "и": "I", "й": "Y", "к": "K", "л": "L", "м": "M", "н": "N", "о": "O", "п": "P",
+    "р": "R", "с": "S", "т": "T", "у": "U", "ф": "F", "х": "H", "ц": "C", "ч": "CH",
+    "ш": "SH", "щ": "SCH", "ъ": "", "ы": "Y", "ь": "", "э": "E", "ю": "YU", "я": "YA",
+})
+
+
+def make_sku(title: str) -> str:
+    """'iPhone 15 Pro 128 ГБ' -> 'IPHONE15PRO128GB' — детерминированный SKU для демо."""
+    s = title.lower().translate(_TRANSLIT)
+    return "".join(ch for ch in s.upper() if ch.isalnum())[:64]
+
+
 P = [
     # ---------- Смартфоны ----------
     dict(title="iPhone 15 Pro 128 ГБ", brand="Apple", category="смартфоны", price=89990, old_price=99990,
@@ -204,20 +219,27 @@ def main() -> None:
         count = db.execute(select(func.count()).select_from(Product)).scalar_one()
         if count:
             # Апгрейд существующей демо-БД: заменяем внешние dummyimage-URL
-            # на локальные placeholder'ы. Реальные картинки не трогаем.
-            upgraded = 0
+            # на локальные placeholder'ы и заполняем пустые sku (v4: нужен для
+            # импорта и матчинга фото). Реальные картинки/sku не трогаем.
+            upgraded = skus = 0
             for prod in db.execute(select(Product)).scalars():
                 if prod.image and "dummyimage.com" in prod.image:
                     prod.image = img(prod.category)
                     upgraded += 1
+                if not prod.sku:
+                    prod.sku = make_sku(prod.title)
+                    skus += 1
             db.commit()
             print(f"В каталоге уже {count} товаров — сид пропущен."
-                  + (f" Обновлено картинок: {upgraded}." if upgraded else ""))
+                  + (f" Обновлено картинок: {upgraded}." if upgraded else "")
+                  + (f" Заполнено sku: {skus}." if skus else ""))
             return
         for p in P:
             p["in_stock"] = p.get("stock", 0) > 0
             p["image"] = img(p.get("category"))
             p["is_active"] = True
+            p["sku"] = make_sku(p["title"])
+            p["source"] = "seed"
             db.add(Product(**p))
         db.commit()
         print(f"Добавлено {len(P)} демо-товаров.")

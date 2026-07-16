@@ -169,9 +169,10 @@ def admin_products(db: Session = Depends(get_db), limit: int = 200):
 
 # Поля товара, которые можно править/задавать из админки (демо)
 _PRODUCT_EDITABLE = (
-    "title", "brand", "category", "price", "old_price", "stock", "in_stock",
+    "sku", "title", "brand", "category", "subcategory", "price", "old_price", "stock", "in_stock",
     "is_active", "is_hot", "is_available_today", "is_new", "on_sale",
-    "warranty_months", "description", "specs", "tags", "image", "url",
+    "warranty_months", "condition", "color", "memory", "storage", "screen_size", "cpu", "ram",
+    "description", "specs", "tags", "image", "images", "url",
     "rating", "popularity", "margin_pct",
 )
 
@@ -330,20 +331,13 @@ def admin_import_products(body: list[dict] | dict, db: Session = Depends(get_db)
         try:
             product = None
             if sku:
-                # sku храним в specs.sku (отдельной колонки в демо нет)
-                candidates = db.execute(select(Product)).scalars().all()
-                product = next((p for p in candidates if (p.specs or {}).get("sku") == sku), None)
+                product = db.execute(select(Product).where(Product.sku == sku)).scalars().first()
             if product is None and title:
                 product = db.execute(
                     select(Product).where(func.lower(Product.title) == title.lower())
                 ).scalar_one_or_none()
 
             payload = dict(raw)
-            if sku:
-                specs = dict(payload.get("specs") or (product.specs if product else {}) or {})
-                specs["sku"] = sku
-                payload["specs"] = specs
-            payload.pop("sku", None)
             payload.pop("id", None)
 
             if product is None:

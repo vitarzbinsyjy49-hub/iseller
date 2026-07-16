@@ -1,0 +1,5 @@
+sku,title,brand,category,subcategory,price,old_price,stock,condition,warranty_months,color,memory,storage,description,specs,tags,image_1,image_2,image_3,is_hot,is_available_today,is_active
+IPH15PRO128BLACK,iPhone 15 Pro 128 ГБ Black,Apple,смартфоны,,89990,99990,10,new,12,чёрный титан,,128 ГБ,iPhone 15 Pro в титановом корпусе: чип A17 Pro,"{""экран"":""6.1 Super Retina XDR"",""чип"":""A17 Pro""}","хит,титан",,,,true,true,true
+MBA13M2256GRAY,MacBook Air 13 M2 8/256 Gray,Apple,ноутбуки,,94990,104990,5,new,12,серый космос,8 ГБ,256 ГБ,Тонкий и бесшумный MacBook Air на M2,"{""экран"":""13.6 Liquid Retina"",""чип"":""Apple M2""}",для работы,,,,false,true,true
+PS5SLIM1TB,PlayStation 5 Slim 1 ТБ,Sony,консоли,,54990,59990,8,new,12,белый,,1 ТБ,Обновлённая компактная PS5 с дисководом,"{""память"":""1 ТБ SSD"",""разрешение"":""4K""}","хит,для игр",,,,true,true,true
+AIRPODSPRO2USED,AirPods Pro 2 (USB-C) витринные,Apple,наушники,,15990,19990,2,used,6,белый,,,Витринный образец в отличном состоянии полный комплект,,шумодав,,,,false,true,true

@@ -11,11 +11,13 @@ export type CardButton = {
 
 export type ProductCard = {
   id: number;
+  sku?: string | null;
   title: string;
   brand: string | null;
   category?: string | null;
   price: number;
   old_price: number | null;
+  discount_percent?: number | null;
   in_stock: boolean;
   stock?: number;
   rating: number | null;
@@ -33,6 +35,14 @@ export type ProductDetail = ProductCard & {
   description: string;
   specs: Record<string, string>;
   warranty_months: number;
+  condition?: "new" | "used" | "refurbished";
+  color?: string | null;
+  memory?: string | null;
+  storage?: string | null;
+  screen_size?: string | null;
+  cpu?: string | null;
+  ram?: string | null;
+  subcategory?: string | null;
   stock: number;
   on_sale: boolean;
   is_new: boolean;

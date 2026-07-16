@@ -160,6 +160,31 @@ else
   bad "admin login не удался (проверьте ADMIN_EMAIL/ADMIN_PASSWORD)"
 fi
 
+# 13b. v4: главная (баннеры + категории)
+info "13b. home banners/categories (v4)"
+homej=$(curl -s -H "$AUTH" "$BASE_URL/api/home")
+b0=$(json_get "$homej" "banners.0.title")
+c0=$(json_get "$homej" "categories.0.title")
+[ -n "$b0" ] && [ -n "$c0" ] && ok "главная: баннер «$b0», категория «$c0»" || bad "/api/home пуст: $homej"
+
+# 13c. v4: import preview (CSV, ничего не пишет в БД)
+if [ -n "${ATOKEN:-}" ]; then
+  info "13c. import preview CSV (v4)"
+  # Файл кладём в текущую папку: пути /tmp из mktemp не читаются Windows-curl в -F
+  CSV_TMP="./smoke_import_preview_$$.csv"
+  printf 'sku,title,price,stock\nSMOKE-CSV-1,Смоук CSV товар,1990,2\n' > "$CSV_TMP"
+  prev=$(curl -s -X POST "$BASE_URL/api/admin/import/products/preview" -H "$AAUTH" -F "file=@$CSV_TMP;type=text/csv")
+  rm -f "$CSV_TMP"
+  pc=$(json_get "$prev" "created"); pu=$(json_get "$prev" "updated")
+  { [ "$pc" = "1" ] || [ "$pu" = "1" ]; } && ok "preview: created=$pc updated=$pu" || bad "preview не сработал: $prev"
+
+  # 13d. v4: поиск с алиасом («плойка» -> playstation)
+  info "13d. search alias (v4)"
+  al=$(curl -s -H "$AUTH" "$BASE_URL/api/catalog/search?query=%D0%BF%D0%BB%D0%BE%D0%B9%D0%BA%D0%B0")
+  al_id=$(json_get "$al" "cards.0.id")
+  [ -n "$al_id" ] && ok "поиск «плойка» нашёл товар (id=$al_id)" || bad "алиас «плойка» не сработал"
+fi
+
 # 14. analytics event via /events
 info "14. analytics event"
 ev=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/events" -H "$AUTH" \

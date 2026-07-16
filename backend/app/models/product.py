@@ -19,9 +19,11 @@ class Product(Base):
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    sku: Mapped[str | None] = mapped_column(String(64), index=True)   # артикул: ключ импорта и матчинга фото
     title: Mapped[str] = mapped_column(String(300))
     brand: Mapped[str | None] = mapped_column(String(100), index=True)
     category: Mapped[str | None] = mapped_column(String(100), index=True)
+    subcategory: Mapped[str | None] = mapped_column(String(100))
     price: Mapped[float] = mapped_column(Numeric(12, 2))
     old_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
     in_stock: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -35,15 +37,34 @@ class Product(Base):
     is_available_today: Mapped[bool] = mapped_column(Boolean, default=False)   # «можно забрать сегодня»
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)             # вкл/выкл в каталоге (админка)
     warranty_months: Mapped[int] = mapped_column(Integer, default=12)
+    condition: Mapped[str] = mapped_column(String(20), default="new")  # new / used / refurbished
+    color: Mapped[str | None] = mapped_column(String(50))
+    memory: Mapped[str | None] = mapped_column(String(50))             # оперативная/встроенная, как в прайсе
+    storage: Mapped[str | None] = mapped_column(String(50))
+    screen_size: Mapped[str | None] = mapped_column(String(50))
+    cpu: Mapped[str | None] = mapped_column(String(100))
+    ram: Mapped[str | None] = mapped_column(String(50))
+    source: Mapped[str] = mapped_column(String(50), default="manual")  # manual / import / seed
     description: Mapped[str | None] = mapped_column(Text)
     specs: Mapped[dict] = mapped_column(JSON, default=dict)
     tags: Mapped[list] = mapped_column(JSON, default=list)
     image: Mapped[str | None] = mapped_column(Text)                 # главная картинка
     images: Mapped[list] = mapped_column(JSON, default=list)         # галерея: упорядоченный список URL
     url: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    @property
+    def discount_percent(self) -> int | None:
+        """Скидка в % от old_price. Считается, не хранится: цена — источник правды."""
+        try:
+            if self.old_price and float(self.old_price) > float(self.price) > 0:
+                return round((1 - float(self.price) / float(self.old_price)) * 100)
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+        return None
 
     # ---- Демо-кнопки карточки: бронь и заявка вместо корзины ----
     def _buttons(self) -> list[dict]:
@@ -79,11 +100,13 @@ class Product(Base):
         """Карточка для ленты/AI-ответа/fallback — единый формат для фронтенда."""
         return {
             "id": self.id,
+            "sku": self.sku,
             "title": self.title,
             "brand": self.brand,
             "category": self.category,
             "price": float(self.price),
             "old_price": float(self.old_price) if self.old_price is not None else None,
+            "discount_percent": self.discount_percent,
             "in_stock": self.in_stock,
             "stock": self.stock,
             "rating": self.rating,
@@ -103,6 +126,10 @@ class Product(Base):
             "description": self.description or "",
             "specs": self.specs or {},
             "warranty_months": self.warranty_months,
+            "condition": self.condition or "new",
+            "color": self.color, "memory": self.memory, "storage": self.storage,
+            "screen_size": self.screen_size, "cpu": self.cpu, "ram": self.ram,
+            "subcategory": self.subcategory,
             "stock": self.stock,
             "on_sale": self.on_sale,
             "is_new": self.is_new,
@@ -113,13 +140,18 @@ class Product(Base):
     def to_admin(self) -> dict:
         """Строка товара для админки."""
         return {
-            "id": self.id, "title": self.title, "brand": self.brand, "category": self.category,
+            "id": self.id, "sku": self.sku, "title": self.title, "brand": self.brand,
+            "category": self.category, "subcategory": self.subcategory,
             "price": float(self.price), "old_price": float(self.old_price) if self.old_price is not None else None,
+            "discount_percent": self.discount_percent,
             "in_stock": self.in_stock, "stock": self.stock, "is_active": self.is_active,
             "is_hot": self.is_hot, "is_available_today": self.is_available_today,
             "popularity": self.popularity, "rating": self.rating,
             # Полные поля для формы редактирования в админке (v2)
             "image": self.image, "images": self.images or [], "description": self.description,
             "specs": self.specs or {}, "tags": self.tags or [],
-            "warranty_months": self.warranty_months,
+            "warranty_months": self.warranty_months, "condition": self.condition or "new",
+            "color": self.color, "memory": self.memory, "storage": self.storage,
+            "screen_size": self.screen_size, "cpu": self.cpu, "ram": self.ram,
+            "source": self.source or "manual",
         }

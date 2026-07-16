@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { C, card, input, btn, chip, apiGet, apiPatch, fmtPrice, STATUSES, STATUS_RU, SOURCE_RU } from "./ui";
-import { Products, ImportTab } from "./Products";
+import { Products } from "./Products";
 import { Analytics, AiLogs } from "./Analytics";
+import { ImportCenter, HomeContent, MediaTab } from "./HomeAdmin";
 
 export default function App() {
   const [token, setToken] = useState<string | null>(null);
@@ -52,12 +53,14 @@ function Login({ onToken }: { onToken: (t: string) => void }) {
 }
 
 // ---------- Shell with tabs ----------
-type Tab = "dashboard" | "leads" | "products" | "import" | "analytics" | "ai";
+type Tab = "dashboard" | "leads" | "products" | "import" | "home" | "media" | "analytics" | "ai";
 const TABS: { key: Tab; label: string }[] = [
   { key: "dashboard", label: "Дашборд" },
   { key: "leads", label: "Заявки" },
   { key: "products", label: "Товары" },
   { key: "import", label: "Импорт" },
+  { key: "home", label: "Главная" },
+  { key: "media", label: "Медиа" },
   { key: "analytics", label: "Аналитика" },
   { key: "ai", label: "AI-логи" },
 ];
@@ -95,7 +98,9 @@ function Shell({ token, onLogout }: { token: string; onLogout: () => void }) {
         {tab === "dashboard" && <Dashboard token={token} />}
         {tab === "leads" && <Leads token={token} />}
         {tab === "products" && <Products token={token} />}
-        {tab === "import" && <ImportTab token={token} />}
+        {tab === "import" && <ImportCenter token={token} />}
+        {tab === "home" && <HomeContent token={token} />}
+        {tab === "media" && <MediaTab token={token} />}
         {tab === "analytics" && <Analytics token={token} />}
         {tab === "ai" && <AiLogs token={token} />}
       </main>

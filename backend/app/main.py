@@ -9,10 +9,11 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, ai, auth, catalog, events, health, leads, users
+from app.api import admin, admin_crm, ai, auth, catalog, events, health, home, imports, leads, users
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import analytics_event as _analytics_event  # noqa: F401
+from app.models import home as _home  # noqa: F401
 from app.models import lead as _lead  # noqa: F401
 from app.models import product as _product  # noqa: F401
 
@@ -69,6 +70,10 @@ app.include_router(events.router, prefix="/api")
 # Demo MVP: CRM (заявки) + расширенная админка
 app.include_router(leads.router, prefix="/api")
 app.include_router(admin_crm.router, prefix="/api")
+# v4: управляемая главная + Import Center
+app.include_router(home.router, prefix="/api")
+app.include_router(home.admin_router, prefix="/api")
+app.include_router(imports.router, prefix="/api")
 
 # Раздача загруженных изображений товаров (тот же origin, что и API)
 app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
@@ -89,6 +94,21 @@ def _apply_demo_migrations() -> None:
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS delivery_method VARCHAR(32)",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS product_price NUMERIC(12, 2)",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSON DEFAULT '[]'::json",
+        # v4: расширение карточки товара (импорт, характеристики, матчинг фото)
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS sku VARCHAR(64)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory VARCHAR(100)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS condition VARCHAR(20) DEFAULT 'new'",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS color VARCHAR(50)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS memory VARCHAR(50)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS storage VARCHAR(50)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS screen_size VARCHAR(50)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS cpu VARCHAR(100)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS ram VARCHAR(50)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'manual'",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()",
+        "CREATE INDEX IF NOT EXISTS ix_products_sku ON products (sku)",
+        # Перенос sku из specs (так его хранил старый импорт) в новую колонку
+        "UPDATE products SET sku = specs->>'sku' WHERE sku IS NULL AND specs->>'sku' IS NOT NULL",
     ]
     for stmt in statements:
         try:
@@ -103,4 +123,13 @@ def on_startup():
     # Sprint 1: создаём таблицы напрямую. Начиная со Sprint 2 переходим на Alembic-миграции.
     Base.metadata.create_all(bind=engine)
     _apply_demo_migrations()
+    # v4: если баннеры/категории главной ещё не создавались — заполняем дефолтными
+    from app.api.home import seed_home_defaults
+    from app.db.session import SessionLocal
+    try:
+        with SessionLocal() as db:
+            if seed_home_defaults(db):
+                logger.info("Home banners/categories seeded with defaults")
+    except Exception:  # noqa: BLE001 — сид не должен ронять API
+        logger.exception("Home defaults seed failed")
     logger.info("TechShop API started. DEV_MODE=%s", settings.DEV_MODE)

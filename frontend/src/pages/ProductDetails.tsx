@@ -98,6 +98,21 @@ export default function ProductDetails() {
       <p className="mt-4 text-xs text-muted">{p.brand}{p.category ? ` · ${p.category}` : ""}</p>
       <h1 className="mt-1 text-xl font-bold leading-6">{p.title}</h1>
 
+      {/* Состояние + ключевые характеристики одной строкой */}
+      {(p.condition === "used" || p.condition === "refurbished" || p.color || p.memory || p.storage) && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {p.condition === "used" && (
+            <span className="rounded-full bg-[#fff3d6] px-2 py-0.5 text-[11px] font-semibold text-[#a16207]">Б/у</span>
+          )}
+          {p.condition === "refurbished" && (
+            <span className="rounded-full bg-[#e0f4f3] px-2 py-0.5 text-[11px] font-semibold text-[#0f766e]">Восстановленный</span>
+          )}
+          {[p.color, p.memory, p.storage].filter(Boolean).map((v) => (
+            <span key={v as string} className="rounded-full bg-mutedbg px-2 py-0.5 text-[11px] font-medium text-muted">{v}</span>
+          ))}
+        </div>
+      )}
+
       {/* Цена + выгода */}
       <div className="mt-2.5 flex items-center gap-2.5">
         <span className="text-[26px] font-bold leading-8">{formatPrice(p.price)}</span>

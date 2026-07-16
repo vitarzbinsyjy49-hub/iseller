@@ -35,6 +35,7 @@ export default function Catalog() {
   const [brands, setBrands] = useState<string[]>([]);
   const [onlyStock, setOnlyStock] = useState(false);
   const [onlyToday, setOnlyToday] = useState(params.get("today") === "1");
+  const collection = params.get("collection") ?? "";
   const [lead, setLead] = useState<TCard | null>(null);
 
   useEffect(() => { track("catalog_opened", { category }); }, []);
@@ -57,11 +58,12 @@ export default function Catalog() {
     if (brand) qs.set("brand", brand);
     if (onlyStock) qs.set("in_stock", "true");
     if (onlyToday) qs.set("available_today", "true");
+    if (collection) qs.set("collection", collection);
     qs.set("sort", sort);
     api<{ cards?: TCard[] }>(`/catalog/list?${qs.toString()}`)
       .then((d) => setCards(Array.isArray(d.cards) ? d.cards : []))
       .catch(() => setCards([]));
-  }, [category, sort, priceMax, debouncedQuery, brand, onlyStock, onlyToday]);
+  }, [category, sort, priceMax, debouncedQuery, brand, onlyStock, onlyToday, collection]);
 
   function pickCategory(key: string) {
     setCategory(key);

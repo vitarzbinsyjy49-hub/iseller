@@ -9,6 +9,8 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.2.1
 python-multipart==0.0.20
 httpx==0.28.1
+# v4 Import Center: чтение XLSX-прайсов (чистый Python, без бинарных зависимостей)
+openpyxl==3.1.5
 # Опционально: только если задан RATE_LIMIT_REDIS_URL (распределённый rate limit).
 # Без Redis rate limit работает in-memory и этот пакет не требуется.
 redis==5.2.1

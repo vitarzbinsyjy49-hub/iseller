@@ -10,7 +10,7 @@ GET /api/catalog/search  — публичный (JWT). Простой поиск
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import Text, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -47,19 +47,41 @@ def export_catalog(
 # Разговорные алиасы -> слова, которые реально встречаются в title/brand.
 # Нужны для live-поиска: "ps5" не подстрока "PlayStation 5", а искать её должны.
 _SEARCH_ALIASES = {
-    "ps5": "playstation", "пс5": "playstation", "плейстейшн": "playstation",
-    "айфон": "iphone", "макбук": "macbook", "аирподс": "airpods",
-    "эпл": "apple", "самсунг": "samsung", "дайсон": "dyson",
+    "ps5": "playstation", "ps4": "playstation", "пс5": "playstation", "пс": "playstation",
+    "плейстейшн": "playstation", "плойка": "playstation", "сони": "sony",
+    "айфон": "iphone", "iph": "iphone", "афон": "iphone",
+    "макбук": "macbook", "мак": "macbook", "mac": "macbook", "мбп": "macbook",
+    "аирподс": "airpods", "аирподсы": "airpods", "эирподс": "airpods", "наушники-tws": "airpods",
+    "эпл": "apple", "самсунг": "samsung", "дайсон": "dyson", "ксбокс": "xbox",
+    "икс-бокс": "xbox", "свитч": "switch", "нинтендо": "nintendo",
+    "айпад": "ipad", "ipad": "ipad", "часы": "watch", "вотч": "watch",
+    "джибиэль": "jbl", "колонка": "jbl", "леново": "lenovo", "асус": "asus",
 }
+
+
+def _alias(word: str) -> str:
+    """Алиас с поддержкой префиксов: 'iph', 'айфо' -> iphone (для live-поиска по буквам)."""
+    w = word.lower()
+    if w in _SEARCH_ALIASES:
+        return _SEARCH_ALIASES[w]
+    for key, value in _SEARCH_ALIASES.items():
+        if len(w) >= 3 and key.startswith(w):
+            return value
+    return word
 
 
 def search_products(db: Session, query: str, price_max: float | None = None, limit: int = 6) -> list[Product]:
     """Простой поиск по словам. Общая функция для /catalog/search и AI-fallback."""
-    stmt = select(Product)
-    words = [_SEARCH_ALIASES.get(w.lower(), w) for w in query.split() if len(w) >= 3][:5]
+    stmt = select(Product).where(Product.is_active.is_(True))
+    words = [_alias(w) for w in query.split() if len(w) >= 2][:5]
     for word in words:
         like = f"%{word}%"
-        stmt = stmt.where(or_(Product.title.ilike(like), Product.brand.ilike(like), Product.category.ilike(like)))
+        stmt = stmt.where(or_(
+            Product.title.ilike(like), Product.brand.ilike(like),
+            Product.category.ilike(like), Product.subcategory.ilike(like),
+            Product.sku.ilike(like),
+            func.cast(Product.tags, Text).ilike(like),
+        ))
     if price_max:
         stmt = stmt.where(Product.price <= price_max)
     stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc()).limit(limit)
@@ -117,6 +139,8 @@ def list_catalog(
     in_stock: bool | None = Query(default=None),
     available_today: bool | None = Query(default=None),
     on_sale: bool | None = Query(default=None),
+    condition: str | None = Query(default=None, max_length=20),
+    collection: str | None = Query(default=None, max_length=20),
     limit: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
@@ -125,12 +149,21 @@ def list_catalog(
         stmt = stmt.where(Product.on_sale.is_(True))
     elif category:
         stmt = stmt.where(Product.category == category)
+    # Именованные подборки для баннеров (action_type=collection)
+    if collection == "hot":
+        stmt = stmt.where(Product.is_hot.is_(True))
+    elif collection == "today":
+        stmt = stmt.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
+    elif collection == "sale":
+        stmt = stmt.where(Product.on_sale.is_(True))
     if in_stock:
         stmt = stmt.where(Product.in_stock.is_(True))
     if available_today:
         stmt = stmt.where(Product.is_available_today.is_(True))
     if on_sale:
         stmt = stmt.where(Product.on_sale.is_(True))
+    if condition:
+        stmt = stmt.where(Product.condition == condition)
     if brand:
         stmt = stmt.where(Product.brand == brand)
     if price_min is not None:
@@ -138,8 +171,13 @@ def list_catalog(
     if price_max is not None:
         stmt = stmt.where(Product.price <= price_max)
     if query:
-        like = f"%{_SEARCH_ALIASES.get(query.strip().lower(), query)}%"
-        stmt = stmt.where(or_(Product.title.ilike(like), Product.brand.ilike(like)))
+        for word in [_alias(w) for w in query.split() if len(w) >= 2][:5]:
+            like = f"%{word}%"
+            stmt = stmt.where(or_(
+                Product.title.ilike(like), Product.brand.ilike(like),
+                Product.category.ilike(like), Product.sku.ilike(like),
+                func.cast(Product.tags, Text).ilike(like),
+            ))
 
     if sort == "price_asc":
         stmt = stmt.order_by(Product.price.asc())
@@ -147,6 +185,8 @@ def list_catalog(
         stmt = stmt.order_by(Product.price.desc())
     elif sort == "rating":
         stmt = stmt.order_by(Product.rating.desc())
+    elif sort == "hot":
+        stmt = stmt.order_by(Product.is_hot.desc(), Product.popularity.desc())
     else:
         stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc())
 
