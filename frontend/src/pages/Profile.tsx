@@ -24,11 +24,11 @@ export default function Profile() {
   const source = isInsideTelegram() ? "Telegram Mini App" : "Веб (dev-режим)";
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto max-w-md lg:max-w-5xl">
       <h1 className="text-2xl font-bold">Профиль</h1>
 
-      {/* Карточка пользователя */}
-      <div className="mt-4 flex items-center gap-4 rounded-xl2 bg-surface p-4 shadow-soft">
+      {/* Карточка пользователя — профильный header на всю ширину */}
+      <div className="mt-4 flex items-center gap-4 rounded-xl2 bg-surface p-4 shadow-soft lg:p-6">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 text-xl font-bold text-accent">
           {name[0]?.toUpperCase() ?? "?"}
         </div>
@@ -39,8 +39,11 @@ export default function Profile() {
         </div>
       </div>
 
+      {/* Desktop: 2 колонки — [аккаунт/заявки | контакты/опт/B2B/Trade-In] */}
+      <div className="lg:mt-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6">
+      <div>
       {/* Бонусы — заглушка */}
-      <div className="mt-3 flex items-center justify-between rounded-xl2 bg-gradient-to-r from-[#e3f2fd] to-[#e8eaf6] p-4">
+      <div className="mt-3 flex items-center justify-between rounded-xl2 bg-gradient-to-r from-[#e3f2fd] to-[#e8eaf6] p-4 lg:mt-0">
         <div>
           <p className="text-sm font-bold">Бонусы</p>
           <p className="mt-0.5 text-xs text-muted">Скоро: копите баллы за покупки</p>
@@ -56,10 +59,12 @@ export default function Profile() {
         <MenuRow icon="📍" title="Точка выдачи" subtitle="Горбушка, Москва — ежедневно 10:00–21:00" />
         <MenuRow icon="ℹ️" title="О магазине" subtitle="Техника с Горбушки: проверка при вас, гарантия" last />
       </div>
+      </div>{/* /левая колонка */}
 
+      <div>
       {/* Связь с менеджерами: ссылки приходят из /api/config/public (.env backend),
           во фронтенде контактов нет. Пустая специальная ссылка -> розничный менеджер. */}
-      <h2 className="mt-5 text-[17px] font-bold">Связаться с нами</h2>
+      <h2 className="mt-5 text-[17px] font-bold lg:mt-0">Связаться с нами</h2>
       <div className="mt-2 overflow-hidden rounded-xl2 bg-surface shadow-soft">
         <MenuRow icon="💬" title="Написать менеджеру" subtitle="Вопросы по товарам и заказам — ответим быстро"
           onClick={() => openManager(config.manager_retail_url)} />
@@ -70,6 +75,8 @@ export default function Profile() {
         <MenuRow icon="🔄" title="Trade-In / предложить технику" subtitle="Обменяйте старое устройство или продайте нам" last
           onClick={() => openManager(config.manager_tradein_url)} />
       </div>
+      </div>{/* /правая колонка */}
+      </div>{/* /desktop 2 колонки */}
     </div>
   );
 }

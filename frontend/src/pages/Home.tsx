@@ -6,6 +6,8 @@ import { useAuthStore } from "../store/auth";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
+import { usePublicConfig } from "../lib/appConfig";
+import { openExternalLink } from "../lib/telegram";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; recommended: TCard[] };
@@ -45,9 +47,12 @@ const FALLBACK_PROMOS: HomeBanner[] = [
 export default function Home() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
+  const config = usePublicConfig();
   const [categories, setCategories] = useState<Category[]>([]);
   const [home, setHome] = useState<HomeData | null>(null);
   const [feed, setFeed] = useState<Feed | null>(null);
+  // Доп. секции desktop-главной (Скидки/Apple/Gaming) — те же API каталога
+  const [extra, setExtra] = useState<{ sale: TCard[]; apple: TCard[]; gaming: TCard[] } | null>(null);
   const [lead, setLead] = useState<TCard | null>(null);
   const [search, setSearch] = useState("");
   // Live-поиск: null — панель скрыта, [] — «ничего не нашлось», иначе подсказки
@@ -61,6 +66,12 @@ export default function Home() {
       .catch(() => setHome({ banners: FALLBACK_PROMOS, categories: [] }));
     api<{ categories: Category[] }>("/catalog/categories").then((d) => setCategories(d.categories)).catch(() => {});
     api<Feed>("/catalog/feed").then(setFeed).catch(() => {});
+    // Секции desktop-главной; ошибки не критичны — секция просто не показывается
+    Promise.all([
+      api<{ cards?: TCard[] }>("/catalog/list?category=__sale__&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
+      api<{ cards?: TCard[] }>("/catalog/list?brand=Apple&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
+      api<{ cards?: TCard[] }>(`/catalog/list?category=${encodeURIComponent("консоли")}&sort=popularity`).then((d) => d.cards ?? []).catch(() => []),
+    ]).then(([sale, apple, gaming]) => setExtra({ sale, apple, gaming }));
   }, []);
 
   // Debounce 250ms: ищем по мере ввода, без Enter
@@ -83,9 +94,9 @@ export default function Home() {
   }
 
   return (
-    <div className="mx-auto max-w-md">
-      {/* ===== Градиентный header: бренд + точка выдачи + поиск (marketplace-style) ===== */}
-      <div className="-mx-4 -mt-3 rounded-b-3xl bg-gradient-to-br from-[#1a7fd4] via-[#2aabee] to-[#6d5ae0] px-4 pb-5 pt-4 text-white">
+    <div className="mx-auto max-w-md lg:max-w-none">
+      {/* ===== Градиентный header (только mobile/tablet — на desktop есть DesktopHeader) ===== */}
+      <div className="-mx-4 -mt-3 rounded-b-3xl bg-gradient-to-br from-[#1a7fd4] via-[#2aabee] to-[#6d5ae0] px-4 pb-5 pt-4 text-white lg:hidden">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl2 bg-white/15 text-sm font-extrabold tracking-tight backdrop-blur">AI</div>
@@ -183,8 +194,21 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ===== Hero-баннеры (управляются из админки) ===== */}
-      <div className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1">
+      {/* ===== Desktop: сетка [sidebar 260px | контент] ===== */}
+      <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8">
+        <HomeSidebar
+          categories={categories}
+          homeCats={home?.categories ?? []}
+          onCategory={(route) => navigate(route)}
+          onManager={(url) => { if (!openExternalLink(url || config.manager_retail_url)) navigate("/ai"); }}
+          wholesaleUrl={config.manager_wholesale_url}
+          b2bUrl={config.manager_b2b_url}
+          tradeinUrl={config.manager_tradein_url}
+        />
+
+        <div className="min-w-0">
+      {/* ===== Hero-баннеры (управляются из админки): mobile — лента, desktop — сетка 3 ===== */}
+      <div className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0">
         {(home ? home.banners : Array.from({ length: 2 }, () => null)).map((b, i) =>
           b ? (
             <button
@@ -193,7 +217,7 @@ export default function Home() {
                 if (b.action_type === "external" && b.action_value) { window.open(b.action_value, "_blank"); return; }
                 navigate(actionRoute(b.action_type, b.action_value));
               }}
-              className="tap relative h-[120px] w-[280px] shrink-0 snap-start overflow-hidden rounded-xl2 p-4 text-left text-white shadow-soft"
+              className="tap relative h-[120px] w-[280px] shrink-0 snap-start overflow-hidden rounded-xl2 p-4 text-left text-white shadow-soft transition-shadow lg:h-[140px] lg:w-auto lg:hover:shadow-[0_10px_28px_rgba(17,24,39,0.18)]"
               style={{ background: b.background_gradient || "linear-gradient(135deg,#1a7fd4,#6d5ae0)" }}
             >
               {b.image_url && (
@@ -210,13 +234,13 @@ export default function Home() {
               {b.image_url && <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />}
             </button>
           ) : (
-            <div key={i} className="skeleton h-[120px] w-[280px] shrink-0 rounded-xl2" />
+            <div key={i} className="skeleton h-[120px] w-[280px] shrink-0 rounded-xl2 lg:h-[140px] lg:w-auto" />
           ),
         )}
       </div>
 
-      {/* ===== Кнопки категорий (управляются из админки; fallback на /catalog/categories) ===== */}
-      <div className="stagger mt-5 grid grid-cols-4 gap-2">
+      {/* ===== Кнопки категорий (mobile/tablet; на desktop категории в sidebar) ===== */}
+      <div className="stagger mt-5 grid grid-cols-4 gap-2 lg:hidden">
         {home && home.categories.length > 0
           ? home.categories.map((c) => (
               <button
@@ -247,13 +271,27 @@ export default function Home() {
             )}
       </div>
 
-      {/* ===== Секции товаров: ленты + сетка 2 колонки ===== */}
+      {/* ===== Секции товаров: mobile — ленты/сетка 2, desktop — сетка 4 (5 на wide) ===== */}
       <Section title="Хиты продаж" cards={feed?.hot} onLead={setLead}
         onAll={() => navigate("/catalog")} />
       <Section title="Забрать сегодня" cards={feed?.available_today} onLead={setLead}
         onAll={() => navigate("/catalog?today=1")} />
+
+      {/* Desktop-секции (Скидки/Apple/Gaming) — только lg+, mobile-страницу не удлиняем */}
+      <div className="hidden lg:block">
+        <Section title="Скидки" cards={extra?.sale} onLead={setLead}
+          onAll={() => navigate("/catalog?category=__sale__")} grid />
+        <Section title="Apple" cards={extra?.apple} onLead={setLead}
+          onAll={() => navigate("/catalog")} grid />
+        <Section title="Gaming" cards={extra?.gaming} onLead={setLead}
+          onAll={() => navigate(`/catalog?category=${encodeURIComponent("консоли")}`)} grid />
+      </div>
+
       <Section title="Рекомендуем" cards={feed?.recommended} onLead={setLead}
         onAll={() => navigate("/catalog")} grid />
+
+        </div>{/* /контент */}
+      </div>{/* /desktop grid */}
 
       {lead && (
         <LeadForm
@@ -277,15 +315,84 @@ function Section({
         <button onClick={onAll} className="text-xs font-medium text-accent">Смотреть все</button>
       </div>
       {grid ? (
-        <div className="stagger mt-3 grid grid-cols-2 gap-3">
+        // mobile 2 кол -> tablet 3 -> desktop 4 -> wide 5
+        <div className="stagger mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
           {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} />)}
         </div>
       ) : (
-        <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-3 overflow-x-auto px-4 pb-2">
+        // mobile — горизонтальная лента, desktop — та же сетка 4/5
+        <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0 wide:grid-cols-5">
           {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} compact />)}
         </div>
       )}
     </div>
+  );
+}
+
+/** Desktop-sidebar главной: категории + быстрые действия (Опт/B2B/Trade-In/менеджер).
+ *  Данные те же, что и в mobile-версии; бизнес-логики нет. */
+function HomeSidebar({
+  categories, homeCats, onCategory, onManager, wholesaleUrl, b2bUrl, tradeinUrl,
+}: {
+  categories: Category[];
+  homeCats: HomeCat[];
+  onCategory: (route: string) => void;
+  onManager: (url: string) => void;
+  wholesaleUrl: string;
+  b2bUrl: string;
+  tradeinUrl: string;
+}) {
+  const cats: { key: string; label: string; icon: string; route: string }[] =
+    homeCats.length > 0
+      ? homeCats.map((c) => ({
+          key: String(c.id), label: c.title, icon: c.emoji || "🛍️",
+          route: actionRoute(c.action_type, c.action_value),
+        }))
+      : categories.map((c) => ({
+          key: c.key, label: c.label, icon: c.icon,
+          route: `/catalog?category=${encodeURIComponent(c.key)}`,
+        }));
+
+  const actions = [
+    { icon: "📦", label: "Опт", sub: "Партии от 5 шт", url: wholesaleUrl },
+    { icon: "🏢", label: "Поставка для компании", sub: "Документы для юрлиц", url: b2bUrl },
+    { icon: "🔄", label: "Trade-In", sub: "Обмен и выкуп техники", url: tradeinUrl },
+    { icon: "💬", label: "Написать менеджеру", sub: "Ответим быстро", url: "" },
+  ];
+
+  return (
+    <aside className="hidden lg:block">
+      <div className="rounded-xl2 bg-surface p-2 shadow-soft">
+        <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">Категории</p>
+        {(cats.length ? cats : [{ key: "_", label: "Каталог", icon: "🛍️", route: "/catalog" }]).map((c) => (
+          <button
+            key={c.key}
+            onClick={() => onCategory(c.route)}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-mutedbg"
+          >
+            <span className="text-lg">{c.icon}</span>
+            <span className="min-w-0 truncate">{c.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-xl2 bg-surface p-2 shadow-soft">
+        <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">Быстрые действия</p>
+        {actions.map((a) => (
+          <button
+            key={a.label}
+            onClick={() => onManager(a.url)}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-mutedbg"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mutedbg text-lg">{a.icon}</span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold">{a.label}</span>
+              <span className="block truncate text-xs text-muted">{a.sub}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </aside>
   );
 }
 

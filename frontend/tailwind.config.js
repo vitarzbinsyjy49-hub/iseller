@@ -3,6 +3,8 @@ export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      // wide desktop >= 1440px (mobile <640 / tablet sm..lg / desktop lg+ — стандартные)
+      screens: { wide: "1440px" },
       colors: {
         bg: "var(--app-bg)",
         surface: "var(--app-surface)",

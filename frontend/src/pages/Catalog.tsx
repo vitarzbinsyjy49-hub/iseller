@@ -35,6 +35,9 @@ export default function Catalog() {
   const [brands, setBrands] = useState<string[]>([]);
   const [onlyStock, setOnlyStock] = useState(false);
   const [onlyToday, setOnlyToday] = useState(params.get("today") === "1");
+  const [condition, setCondition] = useState("");
+  // Desktop: сворачиваемый sidebar фильтров (>=1024px)
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const collection = params.get("collection") ?? "";
   const [lead, setLead] = useState<TCard | null>(null);
 
@@ -58,12 +61,13 @@ export default function Catalog() {
     if (brand) qs.set("brand", brand);
     if (onlyStock) qs.set("in_stock", "true");
     if (onlyToday) qs.set("available_today", "true");
+    if (condition) qs.set("condition", condition);
     if (collection) qs.set("collection", collection);
     qs.set("sort", sort);
     api<{ cards?: TCard[] }>(`/catalog/list?${qs.toString()}`)
       .then((d) => setCards(Array.isArray(d.cards) ? d.cards : []))
       .catch(() => setCards([]));
-  }, [category, sort, priceMax, debouncedQuery, brand, onlyStock, onlyToday, collection]);
+  }, [category, sort, priceMax, debouncedQuery, brand, onlyStock, onlyToday, condition, collection]);
 
   function pickCategory(key: string) {
     setCategory(key);
@@ -76,12 +80,27 @@ export default function Catalog() {
     }`;
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto max-w-md lg:max-w-none">
       <h1 className="text-2xl font-bold">Каталог</h1>
 
-      {/* Sticky-блок: поиск + чипсы категорий (остаётся сверху при скролле) */}
-      <div className="sticky top-0 z-20 -mx-4 bg-bg px-4 pb-1 pt-2">
-        <div className="flex items-center gap-2 rounded-xl2 bg-surface px-4 shadow-soft">
+      {/* Desktop: сетка [sidebar фильтров | контент]; sidebar сворачивается */}
+      <div className={`lg:mt-4 lg:grid lg:items-start lg:gap-8 ${sidebarOpen ? "lg:grid-cols-[260px_minmax(0,1fr)]" : ""}`}>
+        {sidebarOpen && (
+          <FilterSidebar
+            category={category} onCategory={pickCategory}
+            brands={brands} brand={brand} onBrand={setBrand}
+            priceMax={priceMax} onPriceMax={setPriceMax}
+            onlyStock={onlyStock} onOnlyStock={setOnlyStock}
+            onlyToday={onlyToday} onOnlyToday={setOnlyToday}
+            condition={condition} onCondition={setCondition}
+          />
+        )}
+
+        <div className="min-w-0">
+      {/* Sticky-блок: поиск + чипсы категорий (mobile) / поиск + сортировка (desktop) */}
+      <div className="sticky top-0 z-20 -mx-4 bg-bg px-4 pb-1 pt-2 lg:mx-0 lg:px-0 lg:pt-0">
+        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl2 bg-surface px-4 shadow-soft">
           <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
           </svg>
@@ -92,7 +111,22 @@ export default function Catalog() {
           {query && <button onClick={() => setQuery("")} className="text-muted">✕</button>}
         </div>
 
-        <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
+        {/* Desktop: сортировка + сворачивание фильтров в одной строке с поиском */}
+        <div className="hidden shrink-0 items-center gap-2 lg:flex">
+          {SORTS.map((s) => (
+            <button key={s.key} onClick={() => setSort(s.key)} className={chip(sort === s.key)}>{s.label}</button>
+          ))}
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className={chip(false)}
+            title={sidebarOpen ? "Скрыть фильтры" : "Показать фильтры"}
+          >
+            {sidebarOpen ? "⟨ Фильтры" : "Фильтры ⟩"}
+          </button>
+        </div>
+        </div>
+
+        <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
           {CATS.map((c) => (
             <button key={c.key} onClick={() => pickCategory(c.key)} className={chip(category === c.key)}>
               {c.label}
@@ -101,8 +135,8 @@ export default function Catalog() {
         </div>
       </div>
 
-      {/* Фильтры: сортировка, наличие, сегодня, бренд, цена */}
-      <div className="no-scrollbar -mx-4 mt-2 flex items-center gap-2 overflow-x-auto px-4 pb-1">
+      {/* Фильтры (mobile/tablet): сортировка, наличие, сегодня, бренд, цена */}
+      <div className="no-scrollbar -mx-4 mt-2 flex items-center gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
         {SORTS.map((s) => (
           <button key={s.key} onClick={() => setSort(s.key)} className={chip(sort === s.key)}>{s.label}</button>
         ))}
@@ -122,10 +156,10 @@ export default function Catalog() {
         />
       </div>
 
-      {/* Сетка товаров */}
+      {/* Сетка товаров: 2 / 3 (tablet) / 4 (desktop) / 5 (wide) */}
       {!cards ? (
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-72 rounded-xl2" />)}
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <div key={i} className="skeleton h-72 rounded-xl2" />)}
         </div>
       ) : cards.length === 0 ? (
         <div className="mt-14 text-center">
@@ -133,10 +167,13 @@ export default function Catalog() {
           <p className="mt-3 text-sm text-muted">Ничего не найдено. Попробуйте изменить фильтры.</p>
         </div>
       ) : (
-        <div className="stagger mt-4 grid grid-cols-2 gap-3">
+        <div className="stagger mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
           {cards.map((c) => <ProductCard key={c.id} card={c} onLead={setLead} />)}
         </div>
       )}
+
+        </div>{/* /контент */}
+      </div>{/* /desktop grid */}
 
       {lead && (
         <LeadForm
@@ -145,5 +182,90 @@ export default function Catalog() {
         />
       )}
     </div>
+  );
+}
+
+const CONDITIONS = [
+  { key: "", label: "Любое" },
+  { key: "new", label: "Новое" },
+  { key: "used", label: "Б/у" },
+  { key: "refurbished", label: "Восстановленное" },
+];
+
+/** Desktop-sidebar фильтров каталога (>=1024px). Только представление —
+ *  вся логика фильтрации остаётся в Catalog (те же state/эффекты, что и mobile). */
+function FilterSidebar({
+  category, onCategory, brands, brand, onBrand, priceMax, onPriceMax,
+  onlyStock, onOnlyStock, onlyToday, onOnlyToday, condition, onCondition,
+}: {
+  category: string; onCategory: (k: string) => void;
+  brands: string[]; brand: string; onBrand: (v: string) => void;
+  priceMax: string; onPriceMax: (v: string) => void;
+  onlyStock: boolean; onOnlyStock: (v: boolean) => void;
+  onlyToday: boolean; onOnlyToday: (v: boolean) => void;
+  condition: string; onCondition: (v: string) => void;
+}) {
+  return (
+    <aside className="hidden lg:block">
+      <div className="rounded-xl2 bg-surface p-4 shadow-soft">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">Категория</p>
+        <div className="mt-2 space-y-0.5">
+          {CATS.map((c) => (
+            <button
+              key={c.key}
+              onClick={() => onCategory(c.key)}
+              className={`block w-full rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors ${
+                category === c.key ? "bg-accent/10 text-accent" : "hover:bg-mutedbg"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-muted">Бренд</p>
+        <select
+          value={brand} onChange={(e) => onBrand(e.target.value)}
+          className="mt-2 w-full appearance-none rounded-xl border border-border bg-mutedbg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-accent/40"
+        >
+          <option value="">Все бренды</option>
+          {brands.map((b) => <option key={b} value={b}>{b}</option>)}
+        </select>
+
+        <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-muted">Цена до, ₽</p>
+        <input
+          value={priceMax} onChange={(e) => onPriceMax(e.target.value.replace(/\D/g, ""))}
+          placeholder="Например, 100000" inputMode="numeric"
+          className="mt-2 w-full rounded-xl border border-border bg-mutedbg px-3 py-2.5 text-sm outline-none placeholder:text-muted focus:ring-2 focus:ring-accent/40"
+        />
+
+        <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-muted">Наличие</p>
+        <label className="mt-2 flex cursor-pointer items-center gap-2.5 rounded-xl px-1 py-1.5 text-sm">
+          <input type="checkbox" checked={onlyStock} onChange={(e) => onOnlyStock(e.target.checked)}
+            className="h-4 w-4 accent-[var(--app-accent)]" />
+          В наличии
+        </label>
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl px-1 py-1.5 text-sm">
+          <input type="checkbox" checked={onlyToday} onChange={(e) => onOnlyToday(e.target.checked)}
+            className="h-4 w-4 accent-[var(--app-accent)]" />
+          Забрать сегодня
+        </label>
+
+        <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-muted">Состояние</p>
+        <div className="mt-2 space-y-0.5">
+          {CONDITIONS.map((c) => (
+            <button
+              key={c.key}
+              onClick={() => onCondition(c.key)}
+              className={`block w-full rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors ${
+                condition === c.key ? "bg-accent/10 text-accent" : "hover:bg-mutedbg"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </aside>
   );
 }

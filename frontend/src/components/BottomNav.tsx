@@ -66,7 +66,8 @@ export default function BottomNav() {
   const { pathname } = useLocation();
 
   return (
-    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/90 backdrop-blur-lg">
+    // lg:hidden — на desktop навигация в DesktopHeader, мобильный bottom nav скрыт
+    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/90 backdrop-blur-lg lg:hidden">
       <div className="mx-auto flex max-w-md justify-around py-1.5">
         {items.map((item) => {
           const isActive = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);

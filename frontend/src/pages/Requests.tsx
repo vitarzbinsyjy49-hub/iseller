@@ -50,7 +50,7 @@ export default function Requests() {
   }, [leads, filter]);
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto max-w-md lg:max-w-5xl">
       <h1 className="text-2xl font-bold">Мои заявки</h1>
 
       <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
@@ -67,8 +67,8 @@ export default function Requests() {
       </div>
 
       {!visible ? (
-        <div className="mt-4 space-y-3">
-          {[0, 1].map((i) => <div key={i} className="skeleton h-28 rounded-xl2" />)}
+        <div className="mt-4 space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-28 rounded-xl2" />)}
         </div>
       ) : visible.length === 0 ? (
         <div className="mt-14 text-center">
@@ -81,9 +81,10 @@ export default function Requests() {
           </button>
         </div>
       ) : (
-        <div className="stagger mt-4 space-y-3">
+        // Desktop: 2 колонки компактных карточек; mobile — прежний список
+        <div className="stagger mt-4 space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
           {visible.map((l) => (
-            <div key={l.id} className="card-appear rounded-xl2 bg-surface p-4 shadow-soft">
+            <div key={l.id} className="card-appear rounded-xl2 bg-surface p-4 shadow-soft transition-shadow lg:hover:shadow-[0_8px_24px_rgba(17,24,39,0.10)]">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-[15px] font-semibold">{l.product_title || "Консультация"}</p>

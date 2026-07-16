@@ -62,10 +62,11 @@ export default function ProductDetails() {
     }`;
 
   return (
-    // pb-40 (160px): контент никогда не перекрывается фиксированной CTA-зоной
-    <div className="mx-auto max-w-md pb-40">
+    // pb-40 (160px) — только mobile: чтобы контент не перекрывался фиксированной CTA.
+    // На desktop CTA в правой колонке, поэтому lg:pb-12.
+    <div className="mx-auto max-w-md pb-40 lg:max-w-5xl lg:pb-12">
       {/* ===== Sticky top bar: назад / поиск / поделиться / избранное ===== */}
-      <div className="sticky top-0 z-30 -mx-4 -mt-3 mb-3 flex items-center gap-2 bg-bg/90 px-4 py-2 backdrop-blur-lg">
+      <div className="sticky top-0 z-30 -mx-4 -mt-3 mb-3 flex items-center gap-2 bg-bg/90 px-4 py-2 backdrop-blur-lg lg:mx-0 lg:mt-0 lg:rounded-xl2">
         <TopBtn onClick={() => navigate(-1)} label="Назад">
           <path d="M15 18l-6-6 6-6" />
         </TopBtn>
@@ -84,6 +85,8 @@ export default function ProductDetails() {
         )}
       </div>
 
+      {/* ===== Desktop: 2 колонки — галерея слева, инфо+CTA справа ===== */}
+      <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-10">
       {/* Крупное изображение: карусель фото со свайпом + бейджи */}
       <Gallery
         images={p.images && p.images.length ? p.images : p.image ? [p.image] : []}
@@ -98,7 +101,9 @@ export default function ProductDetails() {
         }
       />
 
-      <p className="mt-4 text-xs text-muted">{p.brand}{p.category ? ` · ${p.category}` : ""}</p>
+      {/* Правая колонка (desktop) / продолжение потока (mobile) */}
+      <div>
+      <p className="mt-4 text-xs text-muted lg:mt-0">{p.brand}{p.category ? ` · ${p.category}` : ""}</p>
       <h1 className="mt-1 text-xl font-bold leading-6">{p.title}</h1>
 
       {/* Состояние + ключевые характеристики одной строкой */}
@@ -163,7 +168,19 @@ export default function ProductDetails() {
         <InfoTile icon="🚚" title="Доставка" subtitle="По Москве" />
       </div>
 
-      {/* ===== Табы: Описание / Характеристики / Получение ===== */}
+      {/* Desktop CTA — обычный блок в правой колонке (sticky снизу не нужен: колонка компактная) */}
+      <button
+        onClick={() => setLead({ source: "product" })}
+        className="mt-5 hidden w-full rounded-xl2 bg-accent py-3.5 text-white transition-colors hover:bg-accentdark lg:block"
+      >
+        <span className="block text-[15px] font-bold leading-5">Оставить заявку</span>
+        <span className="block text-[11px] font-medium text-white/80">Менеджер свяжется сегодня</span>
+      </button>
+
+      </div>{/* /правая колонка */}
+      </div>{/* /desktop 2 колонки */}
+
+      {/* ===== Табы: Описание / Характеристики / Получение (на всю ширину) ===== */}
       <div className="mt-4 flex gap-1 rounded-xl2 bg-mutedbg p-1">
         <button onClick={() => setTab("desc")} className={tabCls(tab === "desc")}>Описание</button>
         <button onClick={() => setTab("specs")} className={tabCls(tab === "specs")}>Характеристики</button>
@@ -211,8 +228,8 @@ export default function ProductDetails() {
         </div>
       )}
 
-      {/* ===== Единственная закреплённая CTA — строго внизу, над BottomNav ===== */}
-      <div className="fixed inset-x-0 bottom-[64px] z-30 border-t border-border bg-surface/95 px-4 py-2.5 backdrop-blur-lg">
+      {/* ===== Фиксированная CTA — ТОЛЬКО mobile (на desktop CTA в правой колонке) ===== */}
+      <div className="fixed inset-x-0 bottom-[64px] z-30 border-t border-border bg-surface/95 px-4 py-2.5 backdrop-blur-lg lg:hidden">
         <div className="mx-auto max-w-md">
           <button
             onClick={() => setLead({ source: "product" })}

@@ -92,14 +92,20 @@ export default function AiSearch() {
   }
 
   return (
-    // pb-24: контент чата не уходит под фиксированную строку ввода
-    <div className="mx-auto flex max-w-md flex-col pb-24">
+    // pb-24 — mobile: контент чата не уходит под фиксированную строку ввода.
+    // Desktop: строка ввода sticky внутри pane, поэтому lg:pb-0.
+    <div className="mx-auto max-w-md pb-24 lg:max-w-none lg:pb-0">
+      <div className="lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start lg:gap-8">
+      {/* Desktop-sidebar: быстрые запросы + история сессии */}
+      <AiSidebar chat={chat} onPick={(q) => submit(q)} disabled={loading} />
+
+      <div className="flex min-w-0 flex-col lg:mx-auto lg:w-full lg:max-w-[860px]">
       <h1 className="text-2xl font-bold">AI-подбор техники</h1>
       <p className="mt-1 text-sm text-muted">Опишите, что вам нужно — подберём варианты из наличия</p>
 
-      {/* Быстрые кнопки */}
+      {/* Быстрые кнопки (mobile/tablet; на desktop — в sidebar) */}
       {chat.length === 0 && (
-        <div className="stagger mt-4 grid grid-cols-2 gap-2">
+        <div className="stagger mt-4 grid grid-cols-2 gap-2 lg:hidden">
           {QUICK.map((q) => (
             <button
               key={q} onClick={() => submit(q)}
@@ -111,22 +117,34 @@ export default function AiSearch() {
         </div>
       )}
 
+      {/* Desktop empty-state */}
+      {chat.length === 0 && (
+        <div className="mt-6 hidden rounded-xl2 border border-dashed border-border bg-surface/60 px-6 py-10 text-center lg:block">
+          <span className="text-3xl">🤖</span>
+          <p className="mt-2 text-sm text-muted">
+            Выберите быстрый запрос слева или опишите задачу своими словами в строке ниже —
+            подберём варианты из наличия.
+          </p>
+        </div>
+      )}
+
       {/* Чат */}
       <div className="mt-4 space-y-3">
         {chat.map((item, i) =>
           item.role === "user" ? (
             <div key={i} className="card-appear flex justify-end">
-              <div className="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-sm text-white">
+              <div className="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-sm text-white lg:max-w-[560px]">
                 {item.text}
               </div>
             </div>
           ) : (
             <div key={i} className="card-appear">
-              <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-sm leading-relaxed shadow-soft">
+              {/* max-w текста ответа на desktop ~760px — не растягиваем на всю ширину */}
+              <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-sm leading-relaxed shadow-soft lg:max-w-[760px]">
                 {item.answer.text}
               </div>
               {(item.answer.cards ?? []).length > 0 && (
-                <div className="stagger mt-3 grid grid-cols-2 gap-3">
+                <div className="stagger mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4 wide:grid-cols-4">
                   {(item.answer.cards ?? []).slice(0, 6).map((c) => (
                     <ProductCard
                       key={c.id} card={c}
@@ -151,11 +169,10 @@ export default function AiSearch() {
         <div ref={endRef} className="scroll-mb-40" />
       </div>
 
-      {/* Строка ввода — фиксирована вплотную над нижней навигацией (как CTA на карточке
-          товара). Раньше была sticky bottom-0 и залипала на 112px выше — из-за pb-28
-          у <main> между строкой и навигацией зияла пустая полоса. */}
-      <div className="fixed inset-x-0 bottom-[64px] z-30 border-t border-border bg-bg/95 px-4 py-2.5 backdrop-blur-lg">
-        <div className="mx-auto flex max-w-md gap-2">
+      {/* Строка ввода: mobile — фиксирована над нижней навигацией; desktop — sticky
+          снизу внутри чат-pane (main — скролл-контейнер, sticky bottom работает). */}
+      <div className="fixed inset-x-0 bottom-[64px] z-30 border-t border-border bg-bg/95 px-4 py-2.5 backdrop-blur-lg lg:sticky lg:inset-x-auto lg:bottom-0 lg:mt-4 lg:rounded-xl2 lg:border lg:border-border lg:bg-surface/95 lg:px-3 lg:py-3">
+        <div className="mx-auto flex max-w-md gap-2 lg:max-w-none">
           <input
             ref={inputRef} value={value} maxLength={1000}
             onChange={(e) => setValue(e.target.value)}
@@ -175,6 +192,9 @@ export default function AiSearch() {
         </div>
       </div>
 
+      </div>{/* /чат-pane */}
+      </div>{/* /desktop grid */}
+
       {lead && (
         <LeadForm
           productId={lead.card?.id ?? null} productTitle={lead.card?.title ?? null}
@@ -183,5 +203,41 @@ export default function AiSearch() {
         />
       )}
     </div>
+  );
+}
+
+/** Desktop-sidebar AI-подбора: быстрые запросы + история запросов текущей сессии. */
+function AiSidebar({
+  chat, onPick, disabled,
+}: { chat: ChatItem[]; onPick: (q: string) => void; disabled: boolean }) {
+  const history = chat.filter((c): c is Extract<ChatItem, { role: "user" }> => c.role === "user").slice(-6).reverse();
+  return (
+    <aside className="hidden lg:block">
+      <div className="rounded-xl2 bg-surface p-2 shadow-soft">
+        <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">Быстрые запросы</p>
+        {QUICK.map((q) => (
+          <button
+            key={q} onClick={() => onPick(q)} disabled={disabled}
+            className="block w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-mutedbg disabled:opacity-50"
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+
+      {history.length > 0 && (
+        <div className="mt-4 rounded-xl2 bg-surface p-2 shadow-soft">
+          <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">История</p>
+          {history.map((h, i) => (
+            <button
+              key={i} onClick={() => onPick(h.text)} disabled={disabled}
+              className="block w-full truncate rounded-xl px-3 py-2 text-left text-sm text-muted transition-colors hover:bg-mutedbg hover:text-text disabled:opacity-50"
+            >
+              {h.text}
+            </button>
+          ))}
+        </div>
+      )}
+    </aside>
   );
 }

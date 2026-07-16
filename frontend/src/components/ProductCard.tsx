@@ -90,8 +90,12 @@ export default function ProductCard({ card, onLead, compact }: Props) {
   const disc = discountPct(card.price, card.old_price);
 
   return (
+    // h-full + flex-col: в сетке все карточки одной высоты, кнопка прижата вниз.
+    // lg:hover — desktop-состояние; tap scale остаётся на mobile.
     <div
-      className={`card-appear tap overflow-hidden rounded-xl2 bg-surface shadow-soft ${compact ? "w-40 shrink-0" : ""}`}
+      className={`card-appear tap flex h-full flex-col overflow-hidden rounded-xl2 bg-surface shadow-soft transition-shadow lg:hover:shadow-[0_10px_28px_rgba(17,24,39,0.12)] ${
+        compact ? "w-40 shrink-0 lg:w-auto" : ""
+      }`}
     >
       {/* FavButton — сосед кнопки, не вложен в неё (валидный DOM) */}
       <div className="relative">
@@ -111,7 +115,7 @@ export default function ProductCard({ card, onLead, compact }: Props) {
         <FavButton id={card.id} className="absolute right-2 top-2" />
       </div>
 
-      <div className="p-2.5">
+      <div className="flex flex-1 flex-col p-2.5">
         <div className="flex items-baseline gap-1.5">
           <span className="text-[16px] font-bold leading-5">{formatPrice(card.price)}</span>
           {card.old_price && (
@@ -131,6 +135,8 @@ export default function ProductCard({ card, onLead, compact }: Props) {
         {card.in_stock && card.stock != null && card.stock > 0 && card.stock <= 5 && (
           <p className="mt-0.5 text-[11px] font-medium text-orange">Осталось {card.stock} шт</p>
         )}
+        {/* Спейсер прижимает кнопку к низу карточки при разной высоте контента */}
+        <span aria-hidden className="flex-1" />
         <button
           onClick={() => onLead?.(card)}
           className="tap mt-2 w-full rounded-xl bg-mutedbg py-2 text-xs font-semibold text-text transition-colors hover:bg-accent hover:text-white"
