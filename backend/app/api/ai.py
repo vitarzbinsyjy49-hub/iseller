@@ -68,7 +68,19 @@ async def chat(
     answer: dict
     ai_error: str | None = None
     mode = (settings.AI_PROVIDER or "fallback").lower()
-    if mode == "ai":
+    if mode == "ollama_remote":
+        # v5: локальный AI-консультант (Mac mini + Ollama через AI Gateway).
+        # Оркестратор сам деградирует в fallback — сюда ошибки не долетают,
+        # кроме случая AI_FALLBACK_ENABLED=false (тогда честный 503).
+        from app.services.ai_orchestrator import answer_via_local_ai
+        try:
+            history = [h.model_dump() for h in body.history]
+            answer = await answer_via_local_ai(db, message, history)
+        except Exception:
+            logger.exception("Local AI failed and fallback is disabled")
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                                "AI-консультант временно недоступен, попробуйте позже.")
+    elif mode == "ai":
         try:
             # user_id для AI Engine = внутренний id основного проекта (DataContract §1).
             answer = await ai_chat(str(user.id), message)

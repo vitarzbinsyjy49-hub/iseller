@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- launchd-сервис: автозапуск AI Gateway после перезагрузки Mac mini.
+     Установка (подставь свой путь к папке ai-gateway):
+       1. sed -i '' "s|__AI_GATEWAY_DIR__|$HOME/ai-gateway|g" com.aiseller.gateway.plist
+       2. cp com.aiseller.gateway.plist ~/Library/LaunchAgents/
+       3. launchctl load ~/Library/LaunchAgents/com.aiseller.gateway.plist
+     Логи: ai-gateway/gateway.log -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.aiseller.gateway</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__AI_GATEWAY_DIR__/run.sh</string>
+  </array>
+  <key>WorkingDirectory</key><string>__AI_GATEWAY_DIR__</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>__AI_GATEWAY_DIR__/gateway.log</string>
+  <key>StandardErrorPath</key><string>__AI_GATEWAY_DIR__/gateway.log</string>
+</dict>
+</plist>

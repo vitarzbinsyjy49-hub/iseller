@@ -61,9 +61,19 @@ class Settings(BaseSettings):
 
     # ==== Режим AI для демо ====
     # fallback | mock — не обращаться к AI Engine, отвечать по каталогу (быстро, без ключей);
-    # ai            — сначала пробовать AI Engine, при ошибке — тот же fallback.
+    # ai            — legacy AI Engine (docker profile ai);
+    # ollama_remote — локальный AI-консультант через AI Gateway на Mac mini (v5).
     # Демо по умолчанию = fallback, чтобы не зависеть от Ollama/ключей.
     AI_PROVIDER: str = "fallback"
+
+    # ==== Локальный AI-консультант через AI Gateway (v5) ====
+    # Gateway живёт на Mac mini (Ollama), доступен по приватной сети (Tailscale и т.п.).
+    AI_GATEWAY_URL: str = ""           # например http://100.64.0.2:8100
+    AI_GATEWAY_API_KEY: str = ""       # общий секрет VPS <-> Gateway
+    AI_MAX_HISTORY_MESSAGES: int = 10  # сколько последних сообщений диалога отправлять
+    AI_MAX_PRODUCT_CANDIDATES: int = 12  # максимум товаров-кандидатов в контекст LLM
+    AI_FALLBACK_ENABLED: bool = True   # при недоступности Gateway отвечать fallback'ом
+    AI_SYSTEM_PROMPT_VERSION: str = "v1"  # версия файла app/prompts/ai_seller_system_<v>.md
 
     class Config:
         env_file = ".env"

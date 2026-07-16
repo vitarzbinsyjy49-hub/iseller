@@ -52,14 +52,33 @@ export default function AiSearch() {
     };
   }
 
+  /** История для backend (v5): последние 10 текстовых сообщений, без карточек. */
+  function historyPayload(items: ChatItem[]): { role: string; text: string }[] {
+    return items
+      .map((c) => c.role === "user"
+        ? { role: "user", text: c.text }
+        : { role: "assistant", text: c.answer.text })
+      .filter((h) => h.text && h.text.trim().length > 0)
+      .slice(-10)
+      .map((h) => ({ ...h, text: h.text.slice(0, 1000) }));
+  }
+
   async function submit(text: string) {
     const query = text.trim();
     if (!query || loading) return;
     setLoading(true);
     setValue("");
+    const history = historyPayload(chat);
     setChat((c) => [...c, { role: "user", text: query }]);
+    // Timeout 60с: локальная модель может думать долго, но не бесконечно
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
     try {
-      const raw = await api<Partial<AiAnswer>>("/ai/chat", { method: "POST", body: JSON.stringify({ message: query }) });
+      const raw = await api<Partial<AiAnswer>>("/ai/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: query, history }),
+        signal: controller.signal,
+      });
       const data = normalizeAnswer(raw);
       setChat((c) => [...c, { role: "assistant", answer: data }]);
       data.cards.forEach((card) => track("ai_product_card_viewed", { product_id: card.id, source: data.meta?.source }));
@@ -87,6 +106,7 @@ export default function AiSearch() {
         }]);
       }
     } finally {
+      clearTimeout(timer);
       setLoading(false);
     }
   }

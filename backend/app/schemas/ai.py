@@ -21,8 +21,16 @@ ALLOWED_EVENTS = {
 }
 
 
+class AiHistoryItem(BaseModel):
+    """Одно сообщение истории диалога (текст, без карточек и без PII)."""
+    role: str = Field(pattern="^(user|assistant)$")
+    text: str = Field(min_length=1, max_length=MAX_MESSAGE_LEN)
+
+
 class AiChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_LEN)
+    # История диалога от фронтенда (v5): максимум 10 последних сообщений.
+    history: list[AiHistoryItem] = Field(default_factory=list, max_length=10)
 
 
 class EventIn(BaseModel):
