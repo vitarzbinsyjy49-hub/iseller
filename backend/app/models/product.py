@@ -38,7 +38,8 @@ class Product(Base):
     description: Mapped[str | None] = mapped_column(Text)
     specs: Mapped[dict] = mapped_column(JSON, default=dict)
     tags: Mapped[list] = mapped_column(JSON, default=list)
-    image: Mapped[str | None] = mapped_column(Text)
+    image: Mapped[str | None] = mapped_column(Text)                 # главная картинка
+    images: Mapped[list] = mapped_column(JSON, default=list)         # галерея: упорядоченный список URL
     url: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -105,6 +106,7 @@ class Product(Base):
             "stock": self.stock,
             "on_sale": self.on_sale,
             "is_new": self.is_new,
+            "images": self.images or [],          # галерея для карусели на витрине
         })
         return d
 
@@ -117,7 +119,7 @@ class Product(Base):
             "is_hot": self.is_hot, "is_available_today": self.is_available_today,
             "popularity": self.popularity, "rating": self.rating,
             # Полные поля для формы редактирования в админке (v2)
-            "image": self.image, "description": self.description,
+            "image": self.image, "images": self.images or [], "description": self.description,
             "specs": self.specs or {}, "tags": self.tags or [],
             "warranty_months": self.warranty_months,
         }

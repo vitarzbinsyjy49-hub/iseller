@@ -20,6 +20,7 @@ export type ProductCard = {
   stock?: number;
   rating: number | null;
   image: string;
+  images?: string[];
   url: string;
   is_hot?: boolean;
   is_available_today?: boolean;

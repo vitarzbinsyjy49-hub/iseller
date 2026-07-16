@@ -34,6 +34,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # загруженные фото товаров — на постоянном томе, чтобы переживали пересборку
+    volumes:
+      - uploads:/code/uploads
     # порт наружу не пробрасываем — Caddy ходит к backend:8000 по внутренней сети
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
@@ -75,3 +78,4 @@ volumes:
   pgdata:
   caddy_data:
   caddy_config:
+  uploads:

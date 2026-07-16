@@ -92,7 +92,8 @@ export default function AiSearch() {
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col">
+    // pb-24: контент чата не уходит под фиксированную строку ввода
+    <div className="mx-auto flex max-w-md flex-col pb-24">
       <h1 className="text-2xl font-bold">AI-подбор техники</h1>
       <p className="mt-1 text-sm text-muted">Опишите, что вам нужно — подберём варианты из наличия</p>
 
@@ -146,27 +147,32 @@ export default function AiSearch() {
             <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
           </div>
         )}
-        <div ref={endRef} />
+        {/* scroll-mb-40: автоскролл оставляет последнюю карточку над фикс-строкой ввода */}
+        <div ref={endRef} className="scroll-mb-40" />
       </div>
 
-      {/* Input снизу */}
-      <div className="sticky bottom-0 mt-4 flex gap-2 bg-bg pb-1 pt-2">
-        <input
-          ref={inputRef} value={value} maxLength={1000}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit(value)}
-          placeholder="Опишите, что вам нужно…"
-          className="min-w-0 flex-1 rounded-xl2 bg-surface px-4 py-3.5 text-sm shadow-soft outline-none placeholder:text-muted"
-        />
-        <button
-          onClick={() => submit(value)} disabled={loading || !value.trim()}
-          className="tap flex h-12 w-12 shrink-0 items-center justify-center rounded-xl2 bg-accent text-white shadow-soft disabled:opacity-40"
-          aria-label="Отправить"
-        >
-          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7z" />
-          </svg>
-        </button>
+      {/* Строка ввода — фиксирована вплотную над нижней навигацией (как CTA на карточке
+          товара). Раньше была sticky bottom-0 и залипала на 112px выше — из-за pb-28
+          у <main> между строкой и навигацией зияла пустая полоса. */}
+      <div className="fixed inset-x-0 bottom-[64px] z-30 border-t border-border bg-bg/95 px-4 py-2.5 backdrop-blur-lg">
+        <div className="mx-auto flex max-w-md gap-2">
+          <input
+            ref={inputRef} value={value} maxLength={1000}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit(value)}
+            placeholder="Опишите, что вам нужно…"
+            className="min-w-0 flex-1 rounded-xl2 bg-surface px-4 py-3.5 text-sm shadow-soft outline-none placeholder:text-muted"
+          />
+          <button
+            onClick={() => submit(value)} disabled={loading || !value.trim()}
+            className="tap flex h-12 w-12 shrink-0 items-center justify-center rounded-xl2 bg-accent text-white shadow-soft disabled:opacity-40"
+            aria-label="Отправить"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {lead && (

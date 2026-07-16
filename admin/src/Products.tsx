@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { C, card, input, btn, btnGhost, apiGet, apiPatch, apiPost, apiSend } from "./ui";
+import { C, card, input, btn, btnGhost, apiGet, apiPatch, apiPost, apiSend, apiUpload } from "./ui";
 
 /** Управление товарами: наличие, цены, флаги, редактирование, добавление. */
 
@@ -12,7 +12,7 @@ export type Prod = {
 
 type ProdFull = Prod & {
   description?: string; specs?: Record<string, unknown>; tags?: string[];
-  image?: string; warranty_months?: number;
+  image?: string; images?: string[]; warranty_months?: number;
 };
 
 export function Products({ token }: { token: string }) {
@@ -167,6 +167,8 @@ function ProductModal({
   const [full, setFull] = useState<ProdFull | null>(product ? null : ({} as ProdFull));
   const [form, setForm] = useState<Record<string, string>>({});
   const [specsText, setSpecsText] = useState("{}");
+  const [images, setImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -188,11 +190,49 @@ function ProductModal({
         stock: String(merged.stock ?? 0), image: merged.image ?? "",
         description: merged.description ?? "", warranty_months: String(merged.warranty_months ?? 12),
       });
+      setImages(merged.images ?? []);
       setSpecsText(JSON.stringify(merged.specs ?? {}, null, 2));
     });
   }, [product, token]);
 
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })); }
+
+  // ---- Фотографии: загрузка / выбор главной / удаление (сохраняются сразу) ----
+  async function uploadPhoto(file: File) {
+    if (!product) return;
+    setError(""); setUploading(true);
+    try {
+      const p = await apiUpload<ProdFull>(`/admin/products/${product.id}/images`, token, file);
+      setImages(p.images ?? []);
+      set("image", p.image ?? "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось загрузить фото");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function makeMain(url: string) {
+    if (!product) return;
+    try {
+      const p = await apiPost<ProdFull>(`/admin/products/${product.id}/images/main`, token, { url });
+      setImages(p.images ?? []);
+      set("image", p.image ?? "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось сменить главную");
+    }
+  }
+
+  async function removePhoto(url: string) {
+    if (!product) return;
+    try {
+      const p = await apiSend<ProdFull>("DELETE", `/admin/products/${product.id}/images`, token, { url });
+      setImages(p.images ?? []);
+      set("image", p.image ?? "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось удалить фото");
+    }
+  }
 
   async function save() {
     setError("");
@@ -264,8 +304,58 @@ function ProductModal({
           <label style={{ fontSize: 13, color: C.sub }}>
             Гарантия, мес<input style={input} inputMode="numeric" value={form.warranty_months ?? ""} onChange={(e) => set("warranty_months", e.target.value.replace(/\D/g, ""))} />
           </label>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <div style={{ fontSize: 13, color: C.sub, marginBottom: 6 }}>
+              Фотографии{images.length > 0 ? ` · ${images.length}` : ""}
+              <span style={{ color: C.sub, fontWeight: 400 }}> — первая загруженная становится главной, можно выбрать другую</span>
+            </div>
+            {isNew ? (
+              <p style={{ fontSize: 13, color: C.sub, margin: 0 }}>
+                Сначала создайте товар (кнопка ниже) — затем откройте его и добавьте фото.
+              </p>
+            ) : (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
+                {images.map((url) => {
+                  const isMain = url === form.image;
+                  return (
+                    <div key={url} style={{ width: 96 }}>
+                      <div style={{
+                        position: "relative", width: 96, height: 96, borderRadius: 10, overflow: "hidden",
+                        border: `2px solid ${isMain ? C.accent : C.border}`,
+                      }}>
+                        <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        {isMain && (
+                          <span style={{
+                            position: "absolute", left: 4, top: 4, background: C.accent, color: "#fff",
+                            fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 999,
+                          }}>Главная</span>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                        {!isMain && (
+                          <button style={{ ...btnGhost, padding: "3px 8px", fontSize: 11, flex: 1 }}
+                            onClick={() => makeMain(url)}>Главная</button>
+                        )}
+                        <button style={{ ...btnGhost, padding: "3px 8px", fontSize: 11, color: C.red }}
+                          onClick={() => removePhoto(url)} title="Удалить фото">✕</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                <label style={{
+                  width: 96, height: 96, borderRadius: 10, border: `1px dashed ${C.border}`,
+                  display: "grid", placeItems: "center", cursor: uploading ? "wait" : "pointer",
+                  color: C.sub, fontSize: 12, textAlign: "center", background: C.muted,
+                }}>
+                  {uploading ? "Загрузка…" : "+ Фото"}
+                  <input type="file" accept="image/*" style={{ display: "none" }} disabled={uploading}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); e.currentTarget.value = ""; }} />
+                </label>
+              </div>
+            )}
+          </div>
           <label style={{ gridColumn: "1 / -1", fontSize: 13, color: C.sub }}>
-            Image URL<input style={input} value={form.image ?? ""} onChange={(e) => set("image", e.target.value)} placeholder="https://…" />
+            Image URL (внешняя ссылка, если без загрузки)<input style={input} value={form.image ?? ""} onChange={(e) => set("image", e.target.value)} placeholder="https://…" />
           </label>
           <label style={{ gridColumn: "1 / -1", fontSize: 13, color: C.sub }}>
             Описание

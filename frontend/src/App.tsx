@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import { api } from "./lib/api";
-import { getTelegram, isInsideTelegram } from "./lib/telegram";
+import { getTelegram, isInsideTelegram, enterFullscreen } from "./lib/telegram";
 import { useAuthStore, User } from "./store/auth";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
@@ -20,7 +20,7 @@ export default function App() {
   useEffect(() => {
     const tg = getTelegram();
     tg?.ready();
-    tg?.expand();
+    enterFullscreen();
 
     async function login() {
       try {

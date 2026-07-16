@@ -54,6 +54,22 @@ export async function apiSend<T>(method: string, path: string, token: string, bo
 export const apiPatch = <T,>(path: string, token: string, body: unknown) => apiSend<T>("PATCH", path, token, body);
 export const apiPost = <T,>(path: string, token: string, body: unknown) => apiSend<T>("POST", path, token, body);
 
+/** Загрузка файла (multipart). Content-Type НЕ ставим — браузер сам выставит boundary. */
+export async function apiUpload<T>(path: string, token: string, file: File): Promise<T> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch(`/api${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    throw new Error(data.detail || `HTTP ${r.status}`);
+  }
+  return r.json();
+}
+
 export function fmtPrice(v: number | null | undefined): string {
   if (v == null) return "—";
   return new Intl.NumberFormat("ru-RU").format(Math.round(v)) + " ₽";

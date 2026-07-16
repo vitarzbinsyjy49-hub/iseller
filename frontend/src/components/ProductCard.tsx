@@ -43,8 +43,8 @@ export function ProductImage({
           onError={() => setFailed(true)}
         />
       ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-3 text-center">
-          <span className="text-4xl drop-shadow-sm">{ph.emoji}</span>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-center">
+          <span className="text-3xl drop-shadow-sm">{ph.emoji}</span>
           <span className="line-clamp-1 rounded-full bg-white/70 px-2.5 py-0.5 text-[10px] font-semibold text-[#5b6472]">
             {title}
           </span>
@@ -96,7 +96,8 @@ export default function ProductCard({ card, onLead, compact }: Props) {
       {/* FavButton — сосед кнопки, не вложен в неё (валидный DOM) */}
       <div className="relative">
         <button onClick={() => navigate(`/product/${card.id}`)} className="block w-full text-left">
-          <ProductImage src={card.image} title={card.title} category={card.category} className="aspect-square w-full" />
+          {/* h-40 (160px) вместо aspect-square: карточка компактнее, сетка плотнее */}
+          <ProductImage src={card.image} title={card.title} category={card.category} className="h-40 w-full" />
           <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
             {card.is_hot && <Badge color="orange">🔥 Хит</Badge>}
             {disc && <Badge color="red">−{disc}%</Badge>}
@@ -110,17 +111,20 @@ export default function ProductCard({ card, onLead, compact }: Props) {
         <FavButton id={card.id} className="absolute right-2 top-2" />
       </div>
 
-      <div className="p-3">
-        <p className="text-[11px] text-muted">{card.brand}</p>
-        <button onClick={() => navigate(`/product/${card.id}`)} className="block w-full text-left">
-          <p className="line-clamp-2 min-h-[2.4rem] text-[13px] font-medium leading-5">{card.title}</p>
-        </button>
-        <div className="mt-1 flex items-baseline gap-1.5">
-          <span className="text-[15px] font-bold">{formatPrice(card.price)}</span>
+      <div className="p-2.5">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[16px] font-bold leading-5">{formatPrice(card.price)}</span>
           {card.old_price && (
             <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price)}</span>
           )}
         </div>
+        <button onClick={() => navigate(`/product/${card.id}`)} className="block w-full text-left">
+          <p className="mt-0.5 line-clamp-2 min-h-[2.4rem] text-[13px] font-medium leading-5">
+            {card.brand && !card.title.toLowerCase().includes(card.brand.toLowerCase())
+              ? `${card.brand} ${card.title}`
+              : card.title}
+          </p>
+        </button>
         <p className={`mt-0.5 text-[11px] font-medium ${card.in_stock ? "text-green" : "text-muted"}`}>
           {card.in_stock ? (card.is_available_today ? "В наличии · Сегодня" : "В наличии") : "Под заказ"}
         </p>

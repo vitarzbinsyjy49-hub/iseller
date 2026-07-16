@@ -3,9 +3,11 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.logging import setup_logging
+from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
 from app.api import admin, admin_crm, ai, auth, catalog, events, health, leads, users
 
@@ -68,6 +70,9 @@ app.include_router(events.router, prefix="/api")
 app.include_router(leads.router, prefix="/api")
 app.include_router(admin_crm.router, prefix="/api")
 
+# Раздача загруженных изображений товаров (тот же origin, что и API)
+app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
@@ -83,6 +88,7 @@ def _apply_demo_migrations() -> None:
     statements = [
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS delivery_method VARCHAR(32)",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS product_price NUMERIC(12, 2)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSON DEFAULT '[]'::json",
     ]
     for stmt in statements:
         try:

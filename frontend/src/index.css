@@ -20,6 +20,13 @@
 }
 
 html, body, #root { height: 100%; }
+
+/* Полноэкранный режим Telegram (requestFullscreen): сдвигаем контент вниз под
+   статус-бар/чёлку и плавающие кнопки Telegram. Вне fullscreen переменные = 0. */
+#root {
+  padding-top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+  box-sizing: border-box;
+}
 body {
   background: var(--app-bg);
   color: var(--app-text);
@@ -61,7 +68,10 @@ body {
   40% { transform: translateY(-4px); opacity: 1; }
 }
 
-.page-enter   { animation: fadeUp 220ms cubic-bezier(.2,.8,.3,1) both; }
+/* page-enter — только opacity, БЕЗ transform: fill-mode both оставляет
+   transform на <main> навсегда, а transform-предок становится containing block
+   для position:fixed — фиксированные CTA "прилипают" к контенту вместо viewport. */
+.page-enter   { animation: fadeIn 220ms ease-out both; }
 .card-appear  { animation: fadeUp 240ms cubic-bezier(.2,.8,.3,1) both; }
 .fade-in      { animation: fadeIn 200ms ease-out both; }
 .pop-in       { animation: popIn 200ms cubic-bezier(.2,.8,.3,1) both; }

@@ -5,11 +5,12 @@
 """
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin
+from app.core.uploads import MAX_BYTES, delete_image, is_allowed, save_image
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
 from app.models.lead import LEAD_STATUSES, Lead
@@ -237,6 +238,65 @@ def admin_delete_product(product_id: int, db: Session = Depends(get_db)):
     product.is_active = False
     db.commit()
     return {"ok": True, "id": product_id, "is_active": False}
+
+
+# ==================== Product images (галерея) ====================
+@router.post("/products/{product_id}/images", status_code=status.HTTP_201_CREATED)
+async def admin_add_product_image(
+    product_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)
+):
+    """Загрузить фото к товару. Первое загруженное фото автоматически становится главным."""
+    product = db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    if not is_allowed(file.content_type):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Только изображения: jpg, png, webp, gif")
+    data = await file.read()
+    if len(data) > MAX_BYTES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Файл больше 8 МБ")
+    url = save_image(file.content_type, data)
+    product.images = list(product.images or []) + [url]
+    # первая реальная картинка становится главной: если главной ещё нет
+    # или там демо-заглушка из сида (/assets/placeholders/...)
+    if not product.image or product.image.startswith("/assets/placeholders/"):
+        product.image = url
+    db.commit()
+    db.refresh(product)
+    return product.to_admin()
+
+
+@router.post("/products/{product_id}/images/main")
+def admin_set_main_image(product_id: int, body: dict = Body(...), db: Session = Depends(get_db)):
+    """Сделать одну из загруженных картинок главной."""
+    product = db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    url = (body or {}).get("url")
+    if not url or url not in (product.images or []):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "url должен быть одной из загруженных картинок")
+    product.image = url
+    db.commit()
+    db.refresh(product)
+    return product.to_admin()
+
+
+@router.delete("/products/{product_id}/images")
+def admin_delete_product_image(product_id: int, body: dict = Body(...), db: Session = Depends(get_db)):
+    """Удалить фото товара. Если удалили главную — главной становится первая оставшаяся."""
+    product = db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    url = (body or {}).get("url")
+    images = list(product.images or [])
+    if url in images:
+        images.remove(url)
+        product.images = images
+        delete_image(url)
+        if product.image == url:
+            product.image = images[0] if images else None
+        db.commit()
+        db.refresh(product)
+    return product.to_admin()
 
 
 @router.post("/products/import")

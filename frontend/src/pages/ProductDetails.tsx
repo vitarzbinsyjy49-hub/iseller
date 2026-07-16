@@ -81,15 +81,19 @@ export default function ProductDetails() {
         )}
       </div>
 
-      {/* Крупное изображение + бейджи */}
-      <div className="relative overflow-hidden rounded-xl2 shadow-soft">
-        <ProductImage src={p.image} title={p.title} category={p.category} className="aspect-square w-full" />
-        <div className="absolute left-3 top-3 flex gap-1.5">
-          {p.is_hot && <Badge color="orange">🔥 Хит</Badge>}
-          {p.in_stock && <Badge color="green">В наличии</Badge>}
-          {disc && <Badge color="red">−{disc}%</Badge>}
-        </div>
-      </div>
+      {/* Крупное изображение: карусель фото со свайпом + бейджи */}
+      <Gallery
+        images={p.images && p.images.length ? p.images : p.image ? [p.image] : []}
+        title={p.title}
+        category={p.category}
+        badges={
+          <>
+            {p.is_hot && <Badge color="orange">🔥 Хит</Badge>}
+            {p.in_stock && <Badge color="green">В наличии</Badge>}
+            {disc && <Badge color="red">−{disc}%</Badge>}
+          </>
+        }
+      />
 
       <p className="mt-4 text-xs text-muted">{p.brand}{p.category ? ` · ${p.category}` : ""}</p>
       <h1 className="mt-1 text-xl font-bold leading-6">{p.title}</h1>
@@ -109,6 +113,22 @@ export default function ProductDetails() {
       {p.in_stock && p.stock != null && p.stock > 0 && p.stock <= 5 && (
         <p className="mt-1.5 text-[13px] font-medium text-orange">Осталось {p.stock} шт — успейте забрать</p>
       )}
+
+      {/* Быстрые действия — в потоке контента, ниже цены (не в fixed-зоне) */}
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={() => navigate(`/ai?q=${encodeURIComponent("Расскажи про " + p.title)}`)}
+          className="tap flex-1 rounded-xl2 border border-border bg-surface py-2.5 text-xs font-medium text-muted"
+        >
+          ✨ Спросить AI
+        </button>
+        <button
+          onClick={() => setLead({ source: "manager", preset: `Вопрос по товару: ${p.title}` })}
+          className="tap flex-1 rounded-xl2 border border-border bg-surface py-2.5 text-xs font-medium text-muted"
+        >
+          💬 Написать менеджеру
+        </button>
+      </div>
 
       {/* Условия: наличие / гарантия / самовывоз / доставка */}
       <div className="stagger mt-4 grid grid-cols-2 gap-2">
@@ -167,8 +187,8 @@ export default function ProductDetails() {
         </div>
       )}
 
-      {/* ===== Закреплённая CTA-зона ===== */}
-      <div className="safe-bottom fixed inset-x-0 bottom-[64px] z-30 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur-lg">
+      {/* ===== Единственная закреплённая CTA — строго внизу, над BottomNav ===== */}
+      <div className="fixed inset-x-0 bottom-[64px] z-30 border-t border-border bg-surface/95 px-4 py-2.5 backdrop-blur-lg">
         <div className="mx-auto max-w-md">
           <button
             onClick={() => setLead({ source: "product" })}
@@ -177,20 +197,6 @@ export default function ProductDetails() {
             <span className="block text-[15px] font-bold leading-5">Оставить заявку</span>
             <span className="block text-[11px] font-medium text-white/80">Менеджер свяжется сегодня</span>
           </button>
-          <div className="mt-2 flex gap-2">
-            <button
-              onClick={() => navigate(`/ai?q=${encodeURIComponent("Расскажи про " + p.title)}`)}
-              className="tap flex-1 rounded-xl2 border border-border py-2 text-xs font-medium text-muted"
-            >
-              ✨ Спросить AI
-            </button>
-            <button
-              onClick={() => setLead({ source: "manager", preset: `Вопрос по товару: ${p.title}` })}
-              className="tap flex-1 rounded-xl2 border border-border py-2 text-xs font-medium text-muted"
-            >
-              💬 Написать менеджеру
-            </button>
-          </div>
         </div>
       </div>
 
@@ -200,6 +206,47 @@ export default function ProductDetails() {
           source={lead.source} presetMessage={lead.preset}
           onClose={() => setLead(null)}
         />
+      )}
+    </div>
+  );
+}
+
+/** Карусель фото товара: горизонтальный свайп (scroll-snap) + точки-индикаторы. */
+function Gallery({
+  images, title, category, badges,
+}: { images: string[]; title: string; category?: string | null; badges: ReactNode }) {
+  const [idx, setIdx] = useState(0);
+  const slides = images.length ? images : [""];
+  return (
+    <div className="relative overflow-hidden rounded-xl2 shadow-soft">
+      <div
+        className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const i = Math.round(el.scrollLeft / el.clientWidth);
+          if (i !== idx) setIdx(i);
+        }}
+      >
+        {slides.map((src, i) => (
+          <div key={i} className="w-full flex-none snap-center">
+            <ProductImage src={src} title={title} category={category} className="aspect-square w-full" />
+          </div>
+        ))}
+      </div>
+
+      <div className="pointer-events-none absolute left-3 top-3 flex gap-1.5">{badges}</div>
+
+      {slides.length > 1 && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
+          {slides.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 rounded-full shadow-soft transition-all ${
+                i === idx ? "w-4 bg-white" : "w-1.5 bg-white/60"
+              }`}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
