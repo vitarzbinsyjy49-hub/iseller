@@ -14,7 +14,9 @@ set -euo pipefail
 SERVER="iseller"                 # алиас из ~/.ssh/config -> root@158.255.1.248
 REMOTE_DIR="/opt/techshop"
 BACKUP_DIR="/opt/backups"
-HEALTH_URL="http://localhost:8000/api/health"
+# backend порт наружу не пробрасывает (см. docker-compose.prod.yml) — проверяем
+# изнутри docker-сети через `compose exec`, а не localhost:8000 на хосте.
+HEALTH_CMD="docker compose -f docker-compose.prod.yml exec -T backend python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)\""
 
 echo ">> 1/4 бэкап боевой БД (pg_dump -> $BACKUP_DIR)"
 ssh "$SERVER" "set -e; mkdir -p $BACKUP_DIR; cd $REMOTE_DIR && \
@@ -36,11 +38,11 @@ tar czf - \
 echo ">> 3/4 пересобираю и перезапускаю стек"
 ssh "$SERVER" "set -e; cd $REMOTE_DIR; docker compose -f docker-compose.prod.yml up -d --build; docker image prune -f >/dev/null 2>&1 || true"
 
-echo ">> 4/4 health check ($HEALTH_URL, до 60 секунд)"
-if ssh "$SERVER" "for i in \$(seq 1 12); do curl -sf $HEALTH_URL >/dev/null && exit 0; sleep 5; done; exit 1"; then
+echo ">> 4/4 health check (внутри docker-сети, до 60 секунд)"
+if ssh "$SERVER" "cd $REMOTE_DIR && for i in \$(seq 1 12); do $HEALTH_CMD >/dev/null 2>&1 && exit 0; sleep 5; done; exit 1"; then
   echo ">> health OK"
 else
-  echo "!! HEALTH CHECK FAILED — backend не отвечает на $HEALTH_URL"
+  echo "!! HEALTH CHECK FAILED — backend не отвечает на /api/health изнутри контейнера"
   echo "!! Смотрите логи: ssh $SERVER 'cd $REMOTE_DIR && docker compose -f docker-compose.prod.yml logs backend --tail 50'"
   ssh "$SERVER" "cd $REMOTE_DIR && docker compose -f docker-compose.prod.yml ps --format 'table {{.Service}}\t{{.Status}}'" || true
   exit 1
