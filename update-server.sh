@@ -34,7 +34,7 @@ tar czf - \
   . | ssh "$SERVER" "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
 
 echo ">> 3/4 пересобираю и перезапускаю стек"
-ssh "$SERVER" "cd $REMOTE_DIR && docker compose -f docker-compose.prod.yml up -d --build && docker image prune -f >/dev/null 2>&1 || true"
+ssh "$SERVER" "set -e; cd $REMOTE_DIR; docker compose -f docker-compose.prod.yml up -d --build; docker image prune -f >/dev/null 2>&1 || true"
 
 echo ">> 4/4 health check ($HEALTH_URL, до 60 секунд)"
 if ssh "$SERVER" "for i in \$(seq 1 12); do curl -sf $HEALTH_URL >/dev/null && exit 0; sleep 5; done; exit 1"; then

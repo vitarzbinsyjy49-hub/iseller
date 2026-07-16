@@ -40,7 +40,9 @@ nano .env      # заполнить домены, пароли, TELEGRAM_BOT_TOK
 - `JWT_SECRET` — длинная случайная строка;
 - `ADMIN_PASSWORD`;
 - `TELEGRAM_BOT_TOKEN`, `BOT_USERNAME`;
-- `MINI_APP_URL`, `WEBAPP_URL`, `ALLOWED_ORIGINS` — под свой `DOMAIN`.
+- `MINI_APP_URL`, `WEBAPP_URL`, `ALLOWED_ORIGINS` — под свой `DOMAIN`;
+- `MANAGER_RETAIL_URL` — реальный Telegram-аккаунт менеджера или support-бот с настроенной пересылкой;
+- при необходимости `MANAGER_WHOLESALE_URL`, `MANAGER_B2B_URL`, `MANAGER_TRADEIN_URL`, `TELEGRAM_CHANNEL_URL`.
 
 ## 4. Первый запуск
 ```bash

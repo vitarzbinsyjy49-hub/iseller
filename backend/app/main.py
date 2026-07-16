@@ -20,7 +20,7 @@ from app.models import product as _product  # noqa: F401
 setup_logging()
 logger = logging.getLogger("techshop")
 
-app = FastAPI(title="AI Seller API", version="0.4.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
+app = FastAPI(title="AI Seller API", version="1.0.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
 
 
 def _build_cors_kwargs() -> dict:

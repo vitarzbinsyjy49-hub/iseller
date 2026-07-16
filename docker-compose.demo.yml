@@ -37,6 +37,8 @@ services:
       - "8000:8000"
     volumes:
       - ./backend/app:/code/app
+      # Загруженные через админку фото должны переживать пересборку backend
+      - uploads:/code/uploads
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
@@ -114,6 +116,7 @@ services:
 
 volumes:
   pgdata:
+  uploads:
   ai_pgdata:
   meilidata:
   ollamadata:
