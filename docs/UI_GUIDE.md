@@ -1,4 +1,4 @@
-# UI Guide — TechShop Mini App v2
+# UI Guide — AI Seller Mini App v2
 
 Стиль: **Telegram Mini Apps × Яндекс Go / Яндекс Лавка** — светлый, чистый, mobile-first, плавный.
 

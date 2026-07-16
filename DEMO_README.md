@@ -1,4 +1,4 @@
-# TechShop Demo MVP v3 — Ozon-style UI (fixed-critical)
+# AI Seller Demo MVP v3 — Ozon-style UI (fixed-critical)
 
 **v3-fixed-critical:** устойчивость навигации — BottomNav переведён с NavLink на
 Link + useLocation (исключает крэш hasValidRef/NavLinkWithRef при расхождении версий

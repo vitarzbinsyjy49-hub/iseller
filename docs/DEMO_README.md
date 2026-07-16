@@ -1,4 +1,4 @@
-# TechShop Demo MVP
+# AI Seller Demo MVP
 
 Демонстрационная версия Telegram Mini App-магазина техники с AI-подбором, каталогом, заявками (CRM) и админкой. Собрана на готовых артефактах (Sprint 1 + AI Engine + Integration Layer) и доведена до состояния демо для показа заказчику.
 

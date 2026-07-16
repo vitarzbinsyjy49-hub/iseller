@@ -178,6 +178,9 @@ _PRODUCT_EDITABLE = (
 
 
 def _apply_product_fields(product: Product, body: dict) -> None:
+    # SKU всегда канонизируем: верхний регистр, без пробелов (ключ импорта/фото)
+    if body.get("sku"):
+        body = {**body, "sku": str(body["sku"]).strip().upper() or None}
     for field in _PRODUCT_EDITABLE:
         if field in body:
             setattr(product, field, body[field])
@@ -331,7 +334,9 @@ def admin_import_products(body: list[dict] | dict, db: Session = Depends(get_db)
         try:
             product = None
             if sku:
-                product = db.execute(select(Product).where(Product.sku == sku)).scalars().first()
+                product = db.execute(
+                    select(Product).where(func.lower(Product.sku) == sku.lower())
+                ).scalars().first()
             if product is None and title:
                 product = db.execute(
                     select(Product).where(func.lower(Product.title) == title.lower())

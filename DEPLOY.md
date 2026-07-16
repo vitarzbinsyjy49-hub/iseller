@@ -1,4 +1,4 @@
-# Деплой TechShop на VPS (production)
+# Деплой AI Seller на VPS (production)
 
 Пошаговая инструкция, как поднять Mini App на сервере с настоящим HTTPS
 и открыть его в Telegram. Всё держится на Docker Compose + Caddy (авто-HTTPS).

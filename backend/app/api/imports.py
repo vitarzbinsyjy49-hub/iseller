@@ -103,7 +103,8 @@ def _normalize_row(raw: dict, index: int) -> tuple[dict | None, list[str], list[
     warnings: list[str] = []
     row = { (k or "").strip().lower(): v for k, v in raw.items() }
 
-    sku = str(row.get("sku") or "").strip()
+    # SKU канонизируем в верхний регистр: 'iphone15pro' и 'IPHONE15PRO' — один товар
+    sku = str(row.get("sku") or "").strip().upper()
     if not sku:
         return None, ["sku обязателен"], []
     if len(sku) > 64:
@@ -233,8 +234,10 @@ async def _read_rows(file: UploadFile) -> list[dict]:
 
 def _analyze(rows: list[dict], db: Session) -> dict:
     """Общий проход preview/confirm: нормализация, валидация, план действий."""
+    # Матчинг регистронезависимый: ключи — lower(sku)
     existing = {
-        p.sku: p for p in db.execute(select(Product).where(Product.sku.is_not(None))).scalars()
+        p.sku.lower(): p
+        for p in db.execute(select(Product).where(Product.sku.is_not(None))).scalars()
     }
     plan: list[dict] = []
     report = {"total": len(rows), "created": 0, "updated": 0, "skipped": 0,
@@ -249,13 +252,13 @@ def _analyze(rows: list[dict], db: Session) -> dict:
             report["errors"].append({"line": line, "sku": raw.get("sku"), "error": "; ".join(errors)})
             continue
         sku = item["sku"]
-        if sku in seen_skus:
+        if sku.lower() in seen_skus:
             report["skipped"] += 1
             report["errors"].append({"line": line, "sku": sku, "error": "дубль sku в этом же файле"})
             continue
-        seen_skus.add(sku)
+        seen_skus.add(sku.lower())
 
-        product = existing.get(sku)
+        product = existing.get(sku.lower())
         action = "update" if product else "create"
         if action == "create":
             if not item.get("title"):

@@ -2,12 +2,19 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuthStore } from "../store/auth";
-import { isInsideTelegram } from "../lib/telegram";
+import { isInsideTelegram, openExternalLink } from "../lib/telegram";
+import { usePublicConfig } from "../lib/appConfig";
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
+  const config = usePublicConfig();
   const [leadCount, setLeadCount] = useState<number | null>(null);
+
+  /** Открыть диалог с менеджером; если ссылка не настроена — AI-консультант. */
+  function openManager(url: string) {
+    if (!openExternalLink(url || config.manager_retail_url)) navigate("/ai");
+  }
 
   useEffect(() => {
     api<{ leads: unknown[] }>("/leads/my").then((d) => setLeadCount(d.leads.length)).catch(() => setLeadCount(0));
@@ -47,9 +54,21 @@ export default function Profile() {
           onClick={() => navigate("/requests")} />
         <MenuRow icon="🕐" title="История просмотров" subtitle="Скоро" />
         <MenuRow icon="📍" title="Точка выдачи" subtitle="Горбушка, Москва — ежедневно 10:00–21:00" />
-        <MenuRow icon="💬" title="Помощь" subtitle="Напишите менеджеру — ответим быстро"
-          onClick={() => navigate("/ai")} />
         <MenuRow icon="ℹ️" title="О магазине" subtitle="Техника с Горбушки: проверка при вас, гарантия" last />
+      </div>
+
+      {/* Связь с менеджерами: ссылки приходят из /api/config/public (.env backend),
+          во фронтенде контактов нет. Пустая специальная ссылка -> розничный менеджер. */}
+      <h2 className="mt-5 text-[17px] font-bold">Связаться с нами</h2>
+      <div className="mt-2 overflow-hidden rounded-xl2 bg-surface shadow-soft">
+        <MenuRow icon="💬" title="Написать менеджеру" subtitle="Вопросы по товарам и заказам — ответим быстро"
+          onClick={() => openManager(config.manager_retail_url)} />
+        <MenuRow icon="📦" title="Оптовая закупка" subtitle="Партии от 5 шт, спеццены"
+          onClick={() => openManager(config.manager_wholesale_url)} />
+        <MenuRow icon="🏢" title="Поставка для компании" subtitle="Техника для офиса, документы для юрлиц"
+          onClick={() => openManager(config.manager_b2b_url)} />
+        <MenuRow icon="🔄" title="Trade-In / предложить технику" subtitle="Обменяйте старое устройство или продайте нам" last
+          onClick={() => openManager(config.manager_tradein_url)} />
       </div>
     </div>
   );

@@ -12,6 +12,16 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    # ==== Публичная конфигурация витрины (v4 pre-launch) ====
+    # Отдаётся наружу через GET /api/config/public — НИКАКИХ секретов здесь.
+    APP_NAME: str = "AI Seller"
+    MANAGER_RETAIL_URL: str = ""      # t.me-ссылка розничного менеджера
+    MANAGER_WHOLESALE_URL: str = ""   # оптовые закупки (пусто => fallback на retail)
+    MANAGER_B2B_URL: str = ""         # поставки компаниям (пусто => fallback на retail)
+    MANAGER_TRADEIN_URL: str = ""     # trade-in / выкуп (пусто => fallback на retail)
+    TELEGRAM_CHANNEL_URL: str = ""
+    MINI_APP_URL: str = ""
+
     DATABASE_URL: str
     TELEGRAM_BOT_TOKEN: str = ""
     JWT_SECRET: str

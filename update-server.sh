@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
-# Обновление сервера в одну команду.
-# Синхронизирует локальный код на VPS и пересобирает стек (бот + админка).
+# Обновление сервера в одну команду (с деплой-страховкой, v4 pre-launch).
 # Запуск из Git Bash в папке проекта:  bash update-server.sh
 #
-# .env на сервере НЕ трогается (исключён из синхронизации) — секреты и токен сохраняются.
+# Что делает:
+#   1) pg_dump боевой БД -> /opt/backups/techshop_YYYY-mm-dd_HHMM.sql.gz на сервере;
+#   2) tar-синхронизация кода (серверный .env НЕ трогается);
+#   3) пересборка и перезапуск стека;
+#   4) health check /api/health — если он не прошёл, скрипт завершается ошибкой
+#      (код и контейнеры уже обновлены; откат = git checkout + повторный запуск,
+#       данные целы — бэкап из шага 1).
 set -euo pipefail
 
 SERVER="iseller"                 # алиас из ~/.ssh/config -> root@158.255.1.248
 REMOTE_DIR="/opt/techshop"
+BACKUP_DIR="/opt/backups"
+HEALTH_URL="http://localhost:8000/api/health"
 
-echo ">> синхронизирую код на сервер ($SERVER:$REMOTE_DIR)"
+echo ">> 1/4 бэкап боевой БД (pg_dump -> $BACKUP_DIR)"
+ssh "$SERVER" "set -e; mkdir -p $BACKUP_DIR; cd $REMOTE_DIR && \
+  docker compose -f docker-compose.prod.yml exec -T db sh -c 'pg_dump -U \"\$POSTGRES_USER\" \"\$POSTGRES_DB\"' \
+  | gzip > $BACKUP_DIR/techshop_\$(date +%F_%H%M).sql.gz && \
+  ls -lh $BACKUP_DIR | tail -3"
+
+echo ">> 2/4 синхронизирую код на сервер ($SERVER:$REMOTE_DIR)"
 tar czf - \
   --exclude=node_modules \
   --exclude=dist \
@@ -20,10 +33,20 @@ tar czf - \
   --exclude=update-server.sh \
   . | ssh "$SERVER" "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
 
-echo ">> пересобираю и перезапускаю стек"
+echo ">> 3/4 пересобираю и перезапускаю стек"
 ssh "$SERVER" "cd $REMOTE_DIR && docker compose -f docker-compose.prod.yml up -d --build && docker image prune -f >/dev/null 2>&1 || true"
 
-echo ">> статус:"
+echo ">> 4/4 health check ($HEALTH_URL, до 60 секунд)"
+if ssh "$SERVER" "for i in \$(seq 1 12); do curl -sf $HEALTH_URL >/dev/null && exit 0; sleep 5; done; exit 1"; then
+  echo ">> health OK"
+else
+  echo "!! HEALTH CHECK FAILED — backend не отвечает на $HEALTH_URL"
+  echo "!! Смотрите логи: ssh $SERVER 'cd $REMOTE_DIR && docker compose -f docker-compose.prod.yml logs backend --tail 50'"
+  ssh "$SERVER" "cd $REMOTE_DIR && docker compose -f docker-compose.prod.yml ps --format 'table {{.Service}}\t{{.Status}}'" || true
+  exit 1
+fi
+
+echo ">> статус контейнеров:"
 ssh "$SERVER" "cd $REMOTE_DIR && docker compose -f docker-compose.prod.yml ps --format 'table {{.Service}}\t{{.Status}}'"
 
-echo ">> готово. Бот и админка обновлены."
+echo ">> готово. Бот и админка обновлены, бэкап БД лежит в $BACKUP_DIR."

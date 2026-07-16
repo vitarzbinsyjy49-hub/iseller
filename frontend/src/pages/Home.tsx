@@ -88,9 +88,9 @@ export default function Home() {
       <div className="-mx-4 -mt-3 rounded-b-3xl bg-gradient-to-br from-[#1a7fd4] via-[#2aabee] to-[#6d5ae0] px-4 pb-5 pt-4 text-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl2 bg-white/15 text-lg font-bold backdrop-blur">T</div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl2 bg-white/15 text-sm font-extrabold tracking-tight backdrop-blur">AI</div>
             <div>
-              <p className="text-[15px] font-bold leading-4">TechShop</p>
+              <p className="text-[15px] font-bold leading-4">AI Seller</p>
               <p className="mt-0.5 flex items-center gap-1 text-xs text-white/80">
                 📍 Горбушка · Москва
               </p>

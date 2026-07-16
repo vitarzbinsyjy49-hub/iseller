@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, ai, auth, catalog, events, health, home, imports, leads, users
+from app.api import admin, admin_crm, ai, auth, catalog, config as config_api, events, health, home, imports, leads, users
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import analytics_event as _analytics_event  # noqa: F401
@@ -20,7 +20,7 @@ from app.models import product as _product  # noqa: F401
 setup_logging()
 logger = logging.getLogger("techshop")
 
-app = FastAPI(title="TechShop API", version="0.2.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
+app = FastAPI(title="AI Seller API", version="0.4.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
 
 
 def _build_cors_kwargs() -> dict:
@@ -70,10 +70,11 @@ app.include_router(events.router, prefix="/api")
 # Demo MVP: CRM (заявки) + расширенная админка
 app.include_router(leads.router, prefix="/api")
 app.include_router(admin_crm.router, prefix="/api")
-# v4: управляемая главная + Import Center
+# v4: управляемая главная + Import Center + публичная конфигурация
 app.include_router(home.router, prefix="/api")
 app.include_router(home.admin_router, prefix="/api")
 app.include_router(imports.router, prefix="/api")
+app.include_router(config_api.router, prefix="/api")
 
 # Раздача загруженных изображений товаров (тот же origin, что и API)
 app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
@@ -109,6 +110,8 @@ def _apply_demo_migrations() -> None:
         "CREATE INDEX IF NOT EXISTS ix_products_sku ON products (sku)",
         # Перенос sku из specs (так его хранил старый импорт) в новую колонку
         "UPDATE products SET sku = specs->>'sku' WHERE sku IS NULL AND specs->>'sku' IS NOT NULL",
+        # pre-launch: sku канонизируем в верхний регистр (ключ импорта/матчинга фото)
+        "UPDATE products SET sku = upper(trim(sku)) WHERE sku IS NOT NULL AND sku <> upper(trim(sku))",
     ]
     for stmt in statements:
         try:
@@ -116,6 +119,31 @@ def _apply_demo_migrations() -> None:
                 conn.execute(text(stmt))
         except Exception:  # noqa: BLE001 — sqlite в тестах не знает IF NOT EXISTS
             logger.warning("Demo migration skipped: %s", stmt)
+
+    # pre-launch: уникальность SKU (регистронезависимая). Сначала честно ищем
+    # дубли: если они есть, индекс не создастся — пишем ПОНЯТНЫЙ лог со списком,
+    # а не роняем запуск и не ломаем существующую базу молча.
+    try:
+        with engine.begin() as conn:
+            dupes = conn.execute(text(
+                "SELECT lower(sku) AS k, count(*) AS n, array_agg(id) AS ids "
+                "FROM products WHERE sku IS NOT NULL GROUP BY lower(sku) HAVING count(*) > 1"
+            )).fetchall()
+        if dupes:
+            for k, n, ids in dupes:
+                logger.error(
+                    "SKU-дубль '%s' у товаров id=%s (%d шт). Уникальный индекс НЕ создан. "
+                    "Исправьте sku в админке (Товары -> Изменить) и перезапустите backend.",
+                    k, ids, n,
+                )
+        else:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_products_sku_lower "
+                    "ON products (lower(sku)) WHERE sku IS NOT NULL"
+                ))
+    except Exception:  # noqa: BLE001 — sqlite/старый PG: без индекса, но с работающим API
+        logger.warning("SKU unique index migration skipped", exc_info=True)
 
 
 @app.on_event("startup")
@@ -132,4 +160,4 @@ def on_startup():
                 logger.info("Home banners/categories seeded with defaults")
     except Exception:  # noqa: BLE001 — сид не должен ронять API
         logger.exception("Home defaults seed failed")
-    logger.info("TechShop API started. DEV_MODE=%s", settings.DEV_MODE)
+    logger.info("AI Seller API started. DEV_MODE=%s", settings.DEV_MODE)

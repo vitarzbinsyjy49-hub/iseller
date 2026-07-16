@@ -1,4 +1,4 @@
-# Архитектура TechShop Demo MVP
+# Архитектура AI Seller Demo MVP
 
 ## Общая схема
 

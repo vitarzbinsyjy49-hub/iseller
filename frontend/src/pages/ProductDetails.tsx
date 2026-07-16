@@ -6,12 +6,15 @@ import { ProductDetail } from "../components/ai/types";
 import { formatPrice, discountPct } from "../lib/format";
 import { ProductImage, Badge, FavButton } from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
+import { openExternalLink } from "../lib/telegram";
+import { usePublicConfig } from "../lib/appConfig";
 
 type Tab = "desc" | "specs" | "delivery";
 
 export default function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const config = usePublicConfig();
   const [p, setP] = useState<ProductDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [tab, setTab] = useState<Tab>("desc");
@@ -138,7 +141,13 @@ export default function ProductDetails() {
           ✨ Спросить AI
         </button>
         <button
-          onClick={() => setLead({ source: "manager", preset: `Вопрос по товару: ${p.title}` })}
+          onClick={() => {
+            // Прямой диалог с менеджером в Telegram; если ссылка не настроена
+            // в .env backend'а — прежнее поведение (форма заявки source=manager)
+            if (!openExternalLink(config.manager_retail_url)) {
+              setLead({ source: "manager", preset: `Вопрос по товару: ${p.title}` });
+            }
+          }}
           className="tap flex-1 rounded-xl2 border border-border bg-surface py-2.5 text-xs font-medium text-muted"
         >
           💬 Написать менеджеру

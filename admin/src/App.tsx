@@ -30,9 +30,9 @@ function Login({ onToken }: { onToken: (t: string) => void }) {
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 16, background: C.bg, color: C.text }}>
       <div style={{ ...card, width: 340 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: C.accent, color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 18 }}>T</div>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: C.accent, color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13 }}>AI</div>
           <div>
-            <h1 style={{ margin: 0, fontSize: 18 }}>TechShop — Админ</h1>
+            <h1 style={{ margin: 0, fontSize: 18 }}>AI Seller — Админ</h1>
             <p style={{ color: C.sub, fontSize: 13, margin: 0 }}>Центр управления магазином</p>
           </div>
         </div>
@@ -75,8 +75,8 @@ function Shell({ token, onLogout }: { token: string; onLogout: () => void }) {
         borderBottom: `1px solid ${C.border}`, background: C.surface, position: "sticky", top: 0, zIndex: 10,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 10, background: C.accent, color: "#fff", display: "grid", placeItems: "center", fontWeight: 700 }}>T</div>
-          <h1 style={{ margin: 0, fontSize: 16 }}>TechShop Admin</h1>
+          <div style={{ width: 32, height: 32, borderRadius: 10, background: C.accent, color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12 }}>AI</div>
+          <h1 style={{ margin: 0, fontSize: 16 }}>AI Seller Admin</h1>
         </div>
         <nav style={{ display: "flex", gap: 6, flex: 1, flexWrap: "wrap" }}>
           {TABS.map((t) => (
