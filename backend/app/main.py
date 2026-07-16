@@ -9,13 +9,14 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, ai, auth, catalog, config as config_api, events, health, home, imports, leads, users
+from app.api import admin, admin_crm, ai, auth, catalog, config as config_api, events, health, home, imports, leads, posts, users
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import analytics_event as _analytics_event  # noqa: F401
 from app.models import home as _home  # noqa: F401
 from app.models import lead as _lead  # noqa: F401
 from app.models import product as _product  # noqa: F401
+from app.models import post as _post  # noqa: F401
 
 setup_logging()
 logger = logging.getLogger("techshop")
@@ -75,6 +76,7 @@ app.include_router(home.router, prefix="/api")
 app.include_router(home.admin_router, prefix="/api")
 app.include_router(imports.router, prefix="/api")
 app.include_router(config_api.router, prefix="/api")
+app.include_router(posts.router, prefix="/api")
 
 # Раздача загруженных изображений товаров (тот же origin, что и API)
 app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")

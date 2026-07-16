@@ -24,6 +24,8 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str
     TELEGRAM_BOT_TOKEN: str = ""
+    # @username or numeric -100... id. The bot must be a channel administrator.
+    TELEGRAM_CHANNEL_ID: str = ""
     JWT_SECRET: str
     ACCESS_TOKEN_MINUTES: int = 30
     REFRESH_TOKEN_DAYS: int = 14
