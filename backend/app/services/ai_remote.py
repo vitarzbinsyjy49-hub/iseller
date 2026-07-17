@@ -17,9 +17,11 @@ class AIGatewayError(Exception):
     """AI Gateway недоступен или ответил вне контракта."""
 
 
-async def call_gateway(*, system: str, message: str, history: list[dict], candidates: list[dict]) -> dict:
+async def call_gateway(*, system: str, message: str, context: str, candidates: list[dict]) -> dict:
     """POST /v1/chat на Gateway. Возвращает {content, model, total_ms, ...}.
 
+    context — сериализованная клиентская история как НЕДОВЕРЕННЫЙ блок данных
+    (v5.1): она не отправляется привилегированными assistant-сообщениями.
     content — сырой текст модели (ожидается JSON, парсится в ai_schemas).
     """
     if not settings.AI_GATEWAY_URL or not settings.AI_GATEWAY_API_KEY:
@@ -29,11 +31,13 @@ async def call_gateway(*, system: str, message: str, history: list[dict], candid
     payload = {
         "system": system,
         "message": message,
-        "history": history,
+        "context": context,
         "candidates": candidates,
     }
     try:
-        async with httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS or 45.0) as client:
+        # Таймаут VPS->Gateway больше inference-таймаута самого gateway (45с),
+        # чтобы получить от него честный 504, а не оборвать соединение первыми.
+        async with httpx.AsyncClient(timeout=settings.AI_GATEWAY_TIMEOUT_SECONDS) as client:
             resp = await client.post(url, json=payload, headers={"X-API-Key": settings.AI_GATEWAY_API_KEY})
     except httpx.HTTPError as e:  # таймаут/refused/DNS — без деталей наружу
         logger.warning("AI Gateway unreachable: %s", type(e).__name__)

@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
-import { AiAnswer, ProductCard as TCard } from "../components/ai/types";
+import { AiAction, AiAnswer, ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
+import { usePublicConfig } from "../lib/appConfig";
+import { openExternalLink } from "../lib/telegram";
 
 const QUICK = [
   "iPhone до 90 000",
@@ -24,12 +26,37 @@ type ChatItem =
  *  вернёт fallback/mock — пользователь никогда не видит ошибку AI. */
 export default function AiSearch() {
   const [params] = useSearchParams();
+  const config = usePublicConfig();
   const [value, setValue] = useState("");
   const [chat, setChat] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [lead, setLead] = useState<{ card?: TCard; source: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+
+  /** Кнопки-действия из ответа AI (v5.1): refine/manager/lead. */
+  function handleAction(action: AiAction, answer: AiAnswer) {
+    if (action.type === "refine") {
+      inputRef.current?.focus();
+      return;
+    }
+    if (action.type === "manager") {
+      const urlByRole: Record<string, string> = {
+        retail: config.manager_retail_url,
+        wholesale: config.manager_wholesale_url,
+        b2b: config.manager_b2b_url,
+        trade_in: config.manager_tradein_url,
+      };
+      const url = urlByRole[action.manager_role ?? "retail"] || config.manager_retail_url;
+      if (!openExternalLink(url)) setLead({ source: "manager" });
+      return;
+    }
+    if (action.type === "lead") {
+      // product_id уже проверен backend'ом; карточку берём из этого же ответа
+      const card = (answer.cards ?? []).find((c) => c.id === action.product_id);
+      setLead({ card, source: "ai" });
+    }
+  }
 
   useEffect(() => { track("ai_chat_opened"); }, []);
   useEffect(() => {
@@ -170,6 +197,20 @@ export default function AiSearch() {
                       key={c.id} card={c}
                       onLead={(card) => { track("ai_product_card_clicked", { product_id: card.id }); setLead({ card, source: "ai" }); }}
                     />
+                  ))}
+                </div>
+              )}
+              {/* Кнопки-действия (v5.1): только у последнего ответа, чтобы старые не путали */}
+              {i === chat.length - 1 && (item.answer.actions ?? []).length > 0 && (
+                <div className="fade-in mt-2.5 flex flex-wrap gap-2">
+                  {(item.answer.actions ?? []).map((a) => (
+                    <button
+                      key={`${a.type}-${a.label}`}
+                      onClick={() => handleAction(a, item.answer)}
+                      className="tap rounded-full bg-surface px-3.5 py-2 text-xs font-medium text-text shadow-soft transition-colors hover:bg-accent hover:text-white"
+                    >
+                      {a.label}
+                    </button>
                   ))}
                 </div>
               )}

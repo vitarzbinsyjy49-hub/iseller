@@ -20,5 +20,8 @@ pip install -q -r requirements.txt
 # --- env + запуск ---
 set -a; source .env; set +a
 PORT="${GATEWAY_PORT:-8100}"
-echo ">> AI Gateway на 0.0.0.0:${PORT} (модель: ${OLLAMA_CHAT_MODEL:-qwen3:14b})"
-exec uvicorn main:app --host 0.0.0.0 --port "$PORT"
+# Безопасный дефолт: слушаем только localhost. Для VPS-доступа задай в .env
+# GATEWAY_BIND=<tailscale-ip> — приватный интерфейс, а не 0.0.0.0.
+BIND="${GATEWAY_BIND:-127.0.0.1}"
+echo ">> AI Gateway на ${BIND}:${PORT} (модель: ${OLLAMA_CHAT_MODEL:-qwen3:14b})"
+exec uvicorn main:app --host "$BIND" --port "$PORT"

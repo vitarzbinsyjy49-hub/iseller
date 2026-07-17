@@ -46,12 +46,17 @@ _CONDITION_HINTS = {
 }
 
 
+# «не apple», «без самсунга», «кроме xiaomi» — исключение бренда
+_NEG_BRAND_RE = re.compile(r"(?:не|без|кроме|только не)\s+([a-zа-яё]+)", re.IGNORECASE)
+
+
 @dataclass
 class ExtractedFilters:
     """Детерминированно извлечённые фильтры — считаем их надёжнее, чем мнение LLM."""
     budget_max: float | None = None
     category: str | None = None
     brand: str | None = None
+    excluded_brands: list[str] = field(default_factory=list)
     condition: str | None = None
     use_cases: list[str] = field(default_factory=list)
     in_stock_only: bool = False
@@ -60,7 +65,8 @@ class ExtractedFilters:
         """conversation state для фронта/логов (без чувствительных данных)."""
         return {
             "budget_max": self.budget_max, "category": self.category,
-            "brand": self.brand, "condition": self.condition,
+            "brand": self.brand, "excluded_brands": self.excluded_brands,
+            "condition": self.condition,
             "use_cases": self.use_cases, "in_stock_only": self.in_stock_only,
         }
 
@@ -81,8 +87,20 @@ def extract_filters(message: str, history: list[str] | None = None) -> Extracted
         category = _detect_category(text)
         if category:
             f.category = category
+        # Сначала исключения («без apple»), потом позитивный бренд по остатку текста,
+        # чтобы «не apple» не превратилось в brand=Apple.
+        positive_text = low
+        for m in _NEG_BRAND_RE.finditer(low):
+            word = m.group(1)
+            brand = _BRAND_HINTS.get(word)
+            if brand and brand not in f.excluded_brands:
+                f.excluded_brands.append(brand)
+                if f.brand == brand:
+                    f.brand = None
+            if brand:
+                positive_text = positive_text.replace(m.group(0), " ")
         for kw, brand in _BRAND_HINTS.items():
-            if kw in low:
+            if kw in positive_text and brand not in f.excluded_brands:
                 f.brand = brand
                 break
         for cond, kws in _CONDITION_HINTS.items():
@@ -97,9 +115,67 @@ def extract_filters(message: str, history: list[str] | None = None) -> Extracted
     return f
 
 
-def _score(p: Product, f: ExtractedFilters) -> float:
-    """Мягкий ranking. Жёсткие фильтры уже применены в SQL."""
+_TOKEN_RE = re.compile(r"[a-zа-яё0-9]+", re.IGNORECASE)
+
+# Стоп-слова запроса: не участвуют в релевантности по title
+_STOPWORDS = {
+    "до", "для", "под", "нужен", "нужна", "нужно", "хочу", "надо", "тыс", "тысяч",
+    "руб", "рублей", "какой", "какая", "лучше", "посоветуй", "подбери", "купить",
+    "в", "на", "и", "или", "с", "же", "бы", "не", "без",
+}
+
+_INT_RE = re.compile(r"\d+")
+
+
+def _num(value: str | None) -> int | None:
+    """«16 ГБ» -> 16; None/мусор -> None."""
+    if not value:
+        return None
+    m = _INT_RE.search(str(value))
+    return int(m.group()) if m else None
+
+
+def _query_tokens(message: str) -> list[str]:
+    return [
+        _alias(t) for t in _TOKEN_RE.findall(message.lower())
+        if len(t) >= 2 and t not in _STOPWORDS
+    ]
+
+
+def _relevance(p: Product, tokens: list[str]) -> float:
+    """Релевантность конкретной модели: exact SKU, совпадение токенов в title,
+    попадание в память/накопитель/цвет. «iPhone 16 Pro» должен побеждать
+    просто популярный iPhone другой модели."""
+    if not tokens:
+        return 0.0
+    title_tokens = set(_TOKEN_RE.findall((p.title or "").lower()))
+    brand_low = (p.brand or "").lower()
+    sku_low = (p.sku or "").lower()
     score = 0.0
+    hits = 0
+    for t in tokens:
+        if sku_low and t == sku_low:
+            score += 15  # точный артикул — сильнейший сигнал
+        if t in title_tokens:
+            hits += 1
+            score += 7
+        elif t == brand_low:
+            score += 3
+        # совпадение значений характеристик: «512», «16», «синий».
+        # Вес высокий (12): явно названная характеристика важнее популярности —
+        # иначе популярный «серый 256» обгонит запрошенный «синий 512».
+        for attr in (p.memory, p.storage, p.ram, p.color):
+            if attr and t == str(attr).lower().split()[0].lower():
+                score += 12
+                break
+    if hits >= 2:
+        score += 5  # несколько совпадений в title = вероятно та самая модель
+    return score
+
+
+def _score(p: Product, f: ExtractedFilters, tokens: list[str]) -> float:
+    """Мягкий ranking. Жёсткие фильтры уже применены в SQL."""
+    score = _relevance(p, tokens)
     if p.in_stock:
         score += 30
         if p.is_available_today:
@@ -113,11 +189,13 @@ def _score(p: Product, f: ExtractedFilters) -> float:
             score += 12
         elif ratio < 0.35:
             score -= 4
-    # сценарии использования: премируем заполненные профильные характеристики
+    # сценарии использования: значение RAM важнее факта её наличия —
+    # для монтажа/игр 32 ГБ должны ощутимо обгонять 8 ГБ
     if "video_editing" in f.use_cases or "gaming" in f.use_cases:
+        ram_gb = _num(p.ram) or _num(p.memory)
+        if ram_gb:
+            score += min(ram_gb, 32) * 0.4   # 8→3.2, 16→6.4, 32→12.8
         if p.cpu:
-            score += 5
-        if p.ram:
             score += 4
         if p.screen_size:
             score += 2
@@ -142,21 +220,31 @@ def retrieve_candidates(db: Session, message: str, f: ExtractedFilters, limit: i
         stmt = stmt.where(Product.price <= f.budget_max)
     if f.brand:
         stmt = stmt.where(or_(Product.brand.ilike(f"%{f.brand}%"), Product.title.ilike(f"%{f.brand}%")))
+    for excluded in f.excluded_brands:
+        stmt = stmt.where(~Product.brand.ilike(f"%{excluded}%"))
     if f.condition:
         stmt = stmt.where(Product.condition == f.condition)
     if f.in_stock_only:
         stmt = stmt.where(Product.in_stock.is_(True))
-    structural = list(db.execute(stmt.limit(limit * 3)).scalars().all())
+    # Явная детерминированная сортировка ДО limit: иначе при большом каталоге
+    # в пул до Python-ranking попадёт случайный срез.
+    stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc(), Product.id).limit(limit * 3)
+    structural = list(db.execute(stmt).scalars().all())
 
-    # 3) объединяем без дублей; структурные результаты первичны при пустом поиске
+    # 3) объединяем без дублей; исключённые бренды фильтруем и в текстовой ветке
+    excluded_low = {b.lower() for b in f.excluded_brands}
     seen: set[int] = set()
     merged: list[Product] = []
     for p in [*by_words, *structural]:
-        if p.id not in seen:
-            seen.add(p.id)
-            merged.append(p)
+        if p.id in seen:
+            continue
+        if excluded_low and (p.brand or "").lower() in excluded_low:
+            continue
+        seen.add(p.id)
+        merged.append(p)
 
-    merged.sort(key=lambda p: _score(p, f), reverse=True)
+    tokens = _query_tokens(message)
+    merged.sort(key=lambda p: _score(p, f, tokens), reverse=True)
     return merged[:limit]
 
 

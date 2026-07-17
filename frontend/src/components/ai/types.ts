@@ -48,10 +48,14 @@ export type ProductDetail = ProductCard & {
   is_new: boolean;
 };
 
+export type ManagerRole = "retail" | "wholesale" | "b2b" | "trade_in";
+
 export type AiAction = {
-  type: "compare" | "refine" | "manager";
+  type: "compare" | "refine" | "manager" | "lead";
   label: string;
   product_ids?: number[];
+  product_id?: number;        // для type="lead": проверенный backend'ом товар
+  manager_role?: ManagerRole; // для type="manager": какого менеджера открыть
 };
 
 export type AiAnswer = {
