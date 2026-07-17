@@ -74,9 +74,10 @@ class Settings(BaseSettings):
     AI_MAX_PRODUCT_CANDIDATES: int = 12  # максимум товаров-кандидатов в контекст LLM
     AI_FALLBACK_ENABLED: bool = True   # при недоступности Gateway отвечать fallback'ом
     AI_SYSTEM_PROMPT_VERSION: str = "v2"  # версия файла app/prompts/ai_seller_system_<v>.md
-    # Таймаут запроса VPS->Gateway. Должен быть БОЛЬШЕ таймаута inference на
-    # gateway (45с) на 5-10с, а таймаут фронтенда (60с) — больше этого.
-    AI_GATEWAY_TIMEOUT_SECONDS: float = 55.0
+    # Таймаут запроса VPS->Gateway (v5.1.1). Полный запрос на gateway может занять
+    # queue wait (до 10с) + inference (до 45с) + сетевой overhead, поэтому здесь
+    # 65с; таймаут фронтенда (75с) — больше этого.
+    AI_GATEWAY_TIMEOUT_SECONDS: float = 65.0
 
     class Config:
         env_file = ".env"

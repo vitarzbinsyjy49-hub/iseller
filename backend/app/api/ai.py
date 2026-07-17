@@ -94,11 +94,13 @@ async def chat(
         answer = build_demo_answer(db, message, source="mock" if mode == "mock" else "fallback")
 
     answer.setdefault("meta", {})
+    # Privacy (v5.1.1): сырой текст запроса НЕ сохраняется ни в аналитике, ни в
+    # логах — только безопасные метаданные (длина/источник/интент/латентность).
     _log_event(db, user.id, "ai_response_received", {
         "source": answer["meta"].get("source"),
         "intent": answer["meta"].get("intent"),
         "cards": len(answer.get("cards", [])),
-        "query": message[:120],
+        "query_length": len(message),
         "analytics_id": answer["meta"].get("analytics_id"),
         "latency_ms": answer["meta"].get("latency_ms"),
         "error": ai_error,

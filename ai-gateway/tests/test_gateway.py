@@ -59,11 +59,15 @@ def test_rate_limit_429(monkeypatch):
     assert _chat().status_code == 429
 
 
-def test_history_field_rejected_as_unknown_shape():
-    # v5.1: ролевой истории больше нет; лишние поля игнорируются pydantic'ом,
-    # но контекст с превышением лимита должен резаться 422
+def test_oversized_context_422():
     r = _chat({"context": "x" * 15000})
     assert r.status_code == 422
+
+
+def test_unknown_fields_forbidden_422():
+    """v5.1.1: extra="forbid" — устаревший/чужой ключ не игнорируется молча."""
+    assert _chat({"history": []}).status_code == 422
+    assert _chat({"totally_unknown": 1}).status_code == 422
 
 
 # ---------- сборка payload для Ollama ----------

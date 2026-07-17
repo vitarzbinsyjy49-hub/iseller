@@ -20,6 +20,6 @@ echo ""
 echo "4) Тестовый inference (10-40 сек на первом запуске — модель грузится в память):"
 curl -s --max-time 90 -X POST "http://${BIND}:${PORT}/v1/chat" \
   -H "X-API-Key: ${AI_GATEWAY_API_KEY}" -H "Content-Type: application/json" \
-  -d '{"system":"Отвечай строго JSON: {\"ok\": true, \"echo\": \"<текст>\"}","message":"привет","history":[],"candidates":[]}' \
+  -d '{"system":"Отвечай строго JSON: {\"ok\": true, \"echo\": \"<текст>\"}","message":"привет","context":"","candidates":[]}' \
   | head -c 400
 echo ""

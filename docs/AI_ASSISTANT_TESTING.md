@@ -4,7 +4,7 @@
 ```bash
 cd backend
 pip install -r requirements-dev.txt
-python -m pytest tests -q          # 33 теста
+python -m pytest tests -q          # backend-тесты (v5.1.1: 63)
 ```
 `call_gateway` подменяется fake-ответами: реальная модель для юнитов не нужна.
 
@@ -24,7 +24,7 @@ python -m pytest tests -q          # 33 теста
 | 11 | Невалидный JSON → repair/fallback | `test_parse_*`, `test_invalid_json_falls_back` |
 | 12 | Неизвестный product_id → отброшен | `test_unknown_product_ids_dropped` |
 | 13 | Prompt injection → промпт не утекает | `test_prompt_injection_not_leaked_via_fallback` + системный промпт |
-| 14 | Цена LLM ≠ БД → у пользователя цена из БД | `test_price_always_from_db` |
+| 14 | Цена LLM ≠ БД → у пользователя цена из БД | `test_price_always_from_db`, `test_any_price_in_text_removed_even_if_real` |
 | 15 | Mobile AI chat не сломан | ручная проверка (см. ниже) + сборка |
 | 16 | Desktop AI chat не сломан | ручная проверка + сборка |
 
@@ -36,7 +36,7 @@ docker compose -f docker-compose.demo.yml up -d --build   # AI_PROVIDER=fallback
 Поведение не должно отличаться от прежнего (fallback-путь не менялся).
 
 ## Ручной smoke полной цепочки (с Mac mini)
-1. На Mac mini: `bash ai-gateway/health_check.sh` — все 3 шага OK.
+1. На Mac mini: `bash ai-gateway/health_check.sh` — все 4 шага OK (liveness+readiness).
 2. На VPS/локально в backend `.env`: `AI_PROVIDER=ollama_remote`, `AI_GATEWAY_URL`, `AI_GATEWAY_API_KEY`; рестарт backend.
 3. В чате: «Нужен ноутбук до 150 тысяч для монтажа, желательно лёгкий»
    — ответ живой, ≤3 карточек, цены совпадают с каталогом, `meta.source="ai"`.
@@ -52,4 +52,9 @@ docker compose -f docker-compose.demo.yml up -d --build   # AI_PROVIDER=fallback
 - Первый запрос после простоя: +10–30 с (загрузка модели).
 - Тёплый inference с format=json, ~700 токенов: ~5–15 с.
 - meta в ответе: `retrieval_ms` (БД), `gateway_ms` (inference), `latency_ms` (всего).
-Если стабильно > timeout 45с — уменьшить AI_MAX_OUTPUT_TOKENS или перейти на qwen3:8b.
+Полный путь = очередь (до 10с) + inference (до 45с) + сеть; backend ждёт 65с, фронтенд 75с. Если inference стабильно > 45с — уменьшить AI_MAX_OUTPUT_TOKENS или перейти на qwen3:8b.
+
+## Gateway-тесты
+```bash
+cd ai-gateway && pip install -r requirements-dev.txt && python -m pytest tests -q
+```

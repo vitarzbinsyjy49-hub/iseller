@@ -25,7 +25,7 @@ import uuid
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ---------- конфигурация из env ----------
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
@@ -97,6 +97,10 @@ ANSWER_SCHEMA: dict = {
 
 # ---------- schemas ----------
 class ChatIn(BaseModel):
+    # v5.1.1: неизвестные поля (например, устаревший history) — жёсткий 422,
+    # а не молчаливое игнорирование: рассинхрон контракта виден сразу.
+    model_config = ConfigDict(extra="forbid")
+
     system: str = Field(min_length=1, max_length=8000)
     message: str = Field(min_length=1, max_length=2000)
     # Недоверенный контекст (история диалога и т.п.) одним текстовым блоком.

@@ -70,6 +70,25 @@ def test_ai_chat_rejects_empty_message(client):
     assert client.post("/api/ai/chat", json={"message": "   "}).status_code == 400
 
 
+def test_analytics_do_not_store_raw_query(client, db):
+    """Privacy (v5.1.1): в AnalyticsEvent нет ни ключа query, ни текста запроса."""
+    import json as _json
+    from app.models.analytics_event import AnalyticsEvent
+
+    secret = "куплю зелёный ноутбук для бабушки хвостатой"
+    r = client.post("/api/ai/chat", json={"message": secret})
+    assert r.status_code == 200
+    events = db.query(AnalyticsEvent).all()
+    assert events, "события должны записываться"
+    for e in events:
+        payload = _json.dumps(e.payload or {}, ensure_ascii=False)
+        assert "query" not in (e.payload or {}), "ключ query запрещён"
+        assert secret not in payload
+        assert "бабушки" not in payload           # ни фрагмента текста
+    lengths = [e.payload.get("query_length") for e in events if "query_length" in (e.payload or {})]
+    assert len(secret) in lengths                 # безопасная метрика осталась
+
+
 # ==================== /api/admin/posts (модерация) ====================
 
 def _make_post(client) -> dict:

@@ -97,9 +97,10 @@ export default function AiSearch() {
     setValue("");
     const history = historyPayload(chat);
     setChat((c) => [...c, { role: "user", text: query }]);
-    // Timeout 60с: локальная модель может думать долго, но не бесконечно
+    // Timeout 75с (v5.1.1) — больше backend-таймаута (65с), который в свою
+    // очередь покрывает очередь gateway (10с) + inference (45с) + сеть.
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60000);
+    const timer = setTimeout(() => controller.abort(), 75000);
     try {
       const raw = await api<Partial<AiAnswer>>("/ai/chat", {
         method: "POST",

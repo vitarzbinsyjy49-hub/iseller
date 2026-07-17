@@ -1,84 +1,66 @@
-"""Authoritative facts (v5.1): коммерческие данные пользователю — только из БД.
+"""Authoritative facts (v5.1.1): коммерческие данные пользователю — только из БД.
 
-LLM может написать в свободном тексте что угодно («отдам за 10 рублей»).
-Карточки и так собираются из БД, но текст тоже не имеет права называть
-цену/скидку, которой нет в каталоге. Здесь — фильтр денежных утверждений:
-каждое найденное денежное значение сверяется с ценами переданных товаров;
-предложение с неподтверждённой суммой удаляется целиком.
+Политика ужесточена против v5.1: system prompt v2 УЖЕ запрещает модели называть
+цены, поэтому whitelist «сумма совпала с ценой кандидата» больше не используется —
+он позволял приписать цену одного товара другому. Теперь из текста LLM удаляется
+ЛЮБОЕ предложение с денежным утверждением; точные цены пользователь видит только
+в карточках, которые backend собирает из БД.
+
+Не считаются деньгами обычные характеристики и названия моделей:
+«iPhone 16 Pro 256 GB», «16 GB RAM», «M4 Pro», «экран 4K».
 """
 import re
 
-from app.models.product import Product
+NEUTRAL_FALLBACK = "Подобрал варианты — цены и наличие смотрите в карточках ниже."
 
-# «119 990 ₽», «119990 руб», «10 рублей», «120 тыс ₽», «за 90к»
-_MONEY_RE = re.compile(
-    r"(?P<num>\d[\d\s .,]{0,12}?)\s*(?P<suf>тыс\w*|к\b|k\b)?\s*(?:₽|руб\w*|р\.)"
-    r"|(?P<num2>\d[\d\s ]{0,9})\s*(?P<suf2>тыс\w*)",
+# --- Деньги по валютному маркеру: «10 ₽», «10 руб», «10 рублей», «10 р.», «10 000 ₽»
+_CURRENCY_RE = re.compile(
+    r"\d[\d\s  .,]*\s*(?:₽|руб\w*|р\.(?:\s|$))",
+    re.IGNORECASE,
+)
+
+# --- Деньги по суффиксу тысяч: «10 тыс», «10 тысяч», «10к», «10k».
+# Порог >=10 отсекает характеристики дисплея «4K»/«8K».
+_THOUSANDS_RE = re.compile(r"(\d[\d\s  ]*)\s*(?:тыс\w*|[кk])(?![a-zа-яё])", re.IGNORECASE)
+
+# --- Деньги по контексту: «цена 10 000», «стоит 10 000», «отдам за 10 000»,
+# «скидка 10 000», «выгода 10 000», «дешевле/дороже на 10 000», «обойдётся в 10 000»
+_CONTEXT_RE = re.compile(
+    r"(?:цен[аоыу]\w*|сто[ий]\w*|стоимост\w*|отдам\s+за|продам\s+за|куп\w+\s+за"
+    r"|скидк\w*|выгод\w*|дешевле\s+на|дороже\s+на|обойд\w+\s+в|за\s+вс[её])"
+    r"\W{0,8}\d",
     re.IGNORECASE,
 )
 
 _SENT_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
-NEUTRAL_FALLBACK = "Подобрал варианты — цены и наличие смотрите в карточках ниже."
+
+def _has_money_claim(sentence: str) -> bool:
+    if _CURRENCY_RE.search(sentence):
+        return True
+    if _CONTEXT_RE.search(sentence):
+        return True
+    for m in _THOUSANDS_RE.finditer(sentence):
+        raw = m.group(1).replace(" ", "").replace(" ", "").replace(" ", "")
+        try:
+            if int(raw) >= 10:  # «4K»-экран — не деньги, «10к» — деньги
+                return True
+        except ValueError:
+            continue
+    return False
 
 
-def _to_amount(num: str, suffix: str | None) -> float | None:
-    raw = num.replace(" ", "").replace(" ", "").replace(",", ".")
-    try:
-        value = float(raw)
-    except ValueError:
-        return None
-    if suffix:
-        value *= 1000
-    return value
+def sanitize_money_claims(text: str, _products=None) -> tuple[str, int]:
+    """Удаляет предложения с денежными утверждениями из текста LLM.
 
-
-def _allowed_amounts(products: list[Product]) -> set[int]:
-    """Все суммы, которые можно упоминать: цены/старые цены/выгода по товарам."""
-    allowed: set[int] = set()
-    for p in products:
-        price = int(float(p.price))
-        allowed.add(price)
-        if p.old_price is not None:
-            old = int(float(p.old_price))
-            allowed.add(old)
-            allowed.add(old - price)  # «выгода N ₽»
-    # разговорные тысячи: 119990 -> допускаем и «120 тысяч» (округление до тыс)
-    for a in list(allowed):
-        allowed.add(round(a / 1000) * 1000)
-    return allowed
-
-
-def _amount_ok(value: float, allowed: set[int]) -> bool:
-    v = int(round(value))
-    return v in allowed or v + 1 in allowed or v - 1 in allowed
-
-
-def sanitize_money_claims(text: str, products: list[Product]) -> tuple[str, int]:
-    """Удаляет предложения с денежными суммами, которых нет в БД.
-
-    Возвращает (очищенный текст, сколько предложений удалено).
-    Если после чистки не осталось ничего — нейтральная замена.
+    _products оставлен в сигнатуре для совместимости, но НЕ используется:
+    никакой whitelist цен (v5.1.1). Возвращает (очищенный текст, удалено предложений).
     """
     if not text.strip():
         return text, 0
-    allowed = _allowed_amounts(products)
     sentences = _SENT_SPLIT_RE.split(text)
-    kept: list[str] = []
-    removed = 0
-    for sentence in sentences:
-        bad = False
-        for m in _MONEY_RE.finditer(sentence):
-            num = m.group("num") or m.group("num2")
-            suf = m.group("suf") or m.group("suf2")
-            amount = _to_amount(num, suf)
-            if amount is not None and not _amount_ok(amount, allowed):
-                bad = True
-                break
-        if bad:
-            removed += 1
-        else:
-            kept.append(sentence)
+    kept = [s for s in sentences if not _has_money_claim(s)]
+    removed = len(sentences) - len(kept)
     cleaned = " ".join(s.strip() for s in kept if s.strip()).strip()
     if not cleaned:
         cleaned = NEUTRAL_FALLBACK

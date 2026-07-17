@@ -204,11 +204,15 @@ def test_fake_price_in_text_removed(db, monkeypatch):
     assert ans["meta"]["sanitized_claims"] >= 1
 
 
-def test_real_db_price_in_text_kept(db, monkeypatch):
+def test_any_price_in_text_removed_even_if_real(db, monkeypatch):
+    """v5.1.1: whitelist отменён — даже реальная цена из БД в тексте вырезается
+    (цену показывает карточка), чтобы её нельзя было приписать другому товару."""
     p = make_product(db, title="iPhone 16 Pro", price=119990)
     monkeypatch.setattr(orch, "call_gateway", _gw_response({
-        "answer": "Стоит 119 990 ₽ — в рамках бюджета.",
+        "answer": "Отличный вариант под задачу. Стоит 119 990 ₽ — в рамках бюджета.",
         "recommended_product_ids": [p.id],
     }))
     ans = run(orch.answer_via_local_ai(db, "iphone до 150 тысяч", []))
-    assert "119 990" in ans["text"]               # честная цена из БД не тронута
+    assert "119 990" not in ans["text"]
+    assert "Отличный вариант" in ans["text"]
+    assert ans["cards"][0]["price"] == 119990.0   # цена — только в карточке из БД

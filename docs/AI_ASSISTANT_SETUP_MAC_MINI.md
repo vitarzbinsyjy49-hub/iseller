@@ -91,10 +91,13 @@ AI_GATEWAY_API_KEY=<тот же ключ, что в ai-gateway/.env>
 Откат в один шаг: `AI_PROVIDER=fallback` + тот же рестарт.
 
 ## Таймауты (важно соблюдать иерархию)
+Полный запрос к Gateway = ожидание очереди (до 10с) + inference (до 45с) + сетевой
+overhead, поэтому таймаут каждого следующего уровня больше предыдущего:
 ```
-Ollama inference (gateway AI_TIMEOUT_SECONDS) = 45с
-  < backend AI_GATEWAY_TIMEOUT_SECONDS       = 55с
-    < frontend AbortController               = 60с
+Ollama inference (gateway AI_TIMEOUT_SECONDS)   = 45с
++ очередь (gateway AI_QUEUE_WAIT_SECONDS)       = до 10с
+  < backend AI_GATEWAY_TIMEOUT_SECONDS          = 65с
+    < frontend AbortController                  = 75с
 ```
 
 ## Шпаргалка «после перезагрузки Mac mini»
