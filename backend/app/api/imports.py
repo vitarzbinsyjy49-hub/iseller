@@ -37,192 +37,17 @@ MAX_ROWS = 2000
 MAX_FILE_BYTES = 20 * 1024 * 1024   # 20 МБ на файл импорта
 MAX_ZIP_BYTES = 200 * 1024 * 1024   # 200 МБ на ZIP с фото
 
-# Колонки, которые понимает импорт (лишние молча игнорируем — прайсы бывают разные)
-_STR_FIELDS = ("title", "brand", "category", "subcategory", "condition", "color",
-               "memory", "storage", "screen_size", "cpu", "ram", "description")
-_BOOL_FIELDS = ("is_hot", "is_available_today", "is_active", "is_new", "on_sale")
-_TRUE = {"1", "true", "да", "yes", "y", "истина", "+"}
-_FALSE = {"0", "false", "нет", "no", "n", "ложь", "-", ""}
-_CONDITIONS = {"new", "used", "refurbished"}
-
-
-def _parse_bool(value, default: bool | None = None) -> bool | None:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    s = str(value).strip().lower()
-    if s in _TRUE:
-        return True
-    if s in _FALSE:
-        return default if s == "" else False
-    return default
-
-
-def _parse_price(value):
-    """'89 990,50 ₽' -> 89990.5; пусто/мусор -> None."""
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return float(value) if value > 0 else None
-    s = str(value).strip().replace("\xa0", "").replace(" ", "").replace("₽", "").replace(",", ".")
-    if not s:
-        return None
-    try:
-        p = float(s)
-        return p if p > 0 else None
-    except ValueError:
-        return None
-
-
-def _parse_json_field(value, kind: str):
-    """specs -> dict, tags -> list. Принимает и JSON-строку, и 'а,б,в' для tags."""
-    if value is None or value == "":
-        return {} if kind == "dict" else []
-    if isinstance(value, dict) and kind == "dict":
-        return value
-    if isinstance(value, list) and kind == "list":
-        return [str(v) for v in value]
-    s = str(value).strip()
-    try:
-        parsed = json.loads(s)
-        if kind == "dict" and isinstance(parsed, dict):
-            return parsed
-        if kind == "list" and isinstance(parsed, list):
-            return [str(v) for v in parsed]
-    except (ValueError, TypeError):
-        pass
-    if kind == "list":  # запасной формат: "хит, титан"
-        return [t.strip() for t in s.split(",") if t.strip()]
-    return None  # dict не распарсился — это warning
-
-
-def _normalize_row(raw: dict, index: int) -> tuple[dict | None, list[str], list[str]]:
-    """Строка файла -> нормализованный payload + errors + warnings."""
-    errors: list[str] = []
-    warnings: list[str] = []
-    row = { (k or "").strip().lower(): v for k, v in raw.items() }
-
-    # SKU канонизируем в верхний регистр: 'iphone15pro' и 'IPHONE15PRO' — один товар
-    sku = str(row.get("sku") or "").strip().upper()
-    if not sku:
-        return None, ["sku обязателен"], []
-    if len(sku) > 64:
-        return None, ["sku длиннее 64 символов"], []
-
-    item: dict = {"sku": sku}
-    for f in _STR_FIELDS:
-        v = row.get(f)
-        if v is not None and str(v).strip() != "":
-            item[f] = str(v).strip()
-
-    if "condition" in item and item["condition"].lower() not in _CONDITIONS:
-        warnings.append(f"condition '{item['condition']}' не из new/used/refurbished — заменён на new")
-        item["condition"] = "new"
-    elif "condition" in item:
-        item["condition"] = item["condition"].lower()
-
-    price = _parse_price(row.get("price"))
-    if row.get("price") not in (None, "") and price is None:
-        errors.append(f"некорректная цена: {row.get('price')!r}")
-    if price is not None:
-        item["price"] = price
-    old_price = _parse_price(row.get("old_price"))
-    if old_price is not None:
-        item["old_price"] = old_price
-        if price is not None and old_price <= price:
-            warnings.append("old_price не больше price — скидка не будет показана")
-
-    if row.get("stock") in (None, ""):
-        item["stock"] = 0
-    else:
-        try:
-            item["stock"] = max(0, int(float(str(row["stock"]).replace(" ", ""))))
-        except (TypeError, ValueError):
-            warnings.append(f"некорректный stock {row.get('stock')!r} — записан 0")
-            item["stock"] = 0
-
-    if row.get("warranty_months") not in (None, ""):
-        try:
-            item["warranty_months"] = max(0, int(float(row["warranty_months"])))
-        except (TypeError, ValueError):
-            warnings.append("некорректный warranty_months — пропущен")
-
-    for f in _BOOL_FIELDS:
-        v = _parse_bool(row.get(f), default=None)
-        if v is not None:
-            item[f] = v
-    if "is_active" not in item:
-        item["is_active"] = True
-
-    specs = _parse_json_field(row.get("specs"), "dict")
-    if specs is None:
-        warnings.append("specs не является JSON-объектом — пропущены")
-    elif specs:
-        item["specs"] = specs
-    tags = _parse_json_field(row.get("tags"), "list")
-    if tags:
-        item["tags"] = tags
-
-    images = [str(row[k]).strip() for k in ("image_1", "image_2", "image_3")
-              if row.get(k) and str(row[k]).strip()]
-    if images:
-        item["images"] = images
-
-    return item, errors, warnings
-
-
-# ==================== Разбор файлов ====================
-
-def _rows_from_csv(data: bytes) -> list[dict]:
-    text = data.decode("utf-8-sig", errors="replace")
-    sample = text[:2048]
-    delimiter = ";" if sample.count(";") > sample.count(",") else ","
-    return list(csv.DictReader(io.StringIO(text), delimiter=delimiter))
-
-
-def _rows_from_json(data: bytes) -> list[dict]:
-    parsed = json.loads(data.decode("utf-8-sig", errors="replace"))
-    items = parsed if isinstance(parsed, list) else parsed.get("items") if isinstance(parsed, dict) else None
-    if not isinstance(items, list):
-        raise ValueError("Ожидается JSON array товаров или {\"items\": [...]}")
-    return [r for r in items if isinstance(r, dict)]
-
-
-def _rows_from_xlsx(data: bytes) -> list[dict]:
-    from openpyxl import load_workbook
-    wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
-    ws = wb.active
-    rows_iter = ws.iter_rows(values_only=True)
-    header = next(rows_iter, None)
-    if not header:
-        return []
-    keys = [str(h or "").strip().lower() for h in header]
-    out = []
-    for values in rows_iter:
-        if values is None or all(v in (None, "") for v in values):
-            continue
-        out.append({k: v for k, v in zip(keys, values) if k})
-    wb.close()
-    return out
-
+# v5.2: вся нормализация/парсинг файлов — в app/services/import_center.py
+# (единая реализация для старых endpoints и batch-импорта).
 
 async def _read_rows(file: UploadFile) -> list[dict]:
+    """v5.2: разбор делегирован общему сервису import_center (одна реализация)."""
+    from app.services import import_center as _ic
     data = await file.read()
     if len(data) > MAX_FILE_BYTES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Файл больше 20 МБ")
-    name = (file.filename or "").lower()
     try:
-        if name.endswith(".csv") or name.endswith(".txt"):
-            rows = _rows_from_csv(data)
-        elif name.endswith(".json"):
-            rows = _rows_from_json(data)
-        elif name.endswith(".xlsx"):
-            rows = _rows_from_xlsx(data)
-        else:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Поддерживаются файлы: .csv, .json, .xlsx")
-    except HTTPException:
-        raise
+        rows, _sheet = _ic.read_data_file(file.filename or "", data)
     except Exception as e:  # noqa: BLE001 — кривой файл = 400 с пояснением
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Не удалось разобрать файл: {str(e)[:200]}")
     if len(rows) > MAX_ROWS:
@@ -244,9 +69,13 @@ def _analyze(rows: list[dict], db: Session) -> dict:
               "errors": [], "warnings": [], "items": []}
     seen_skus: set[str] = set()
 
+    from app.services import import_center as _ic
     for i, raw in enumerate(rows):
         line = i + 2  # человеку удобнее номер строки файла (с учётом заголовка)
-        item, errors, warnings = _normalize_row(raw, i)
+        # v5.2: единая нормализация с частичной семантикой — пустые поля при
+        # update больше НЕ затирают stock/is_active существующего товара.
+        sku_norm, changes, errors, warnings, _info = _ic.normalize_row(raw)
+        item = None if sku_norm is None else {"sku": sku_norm, **changes}
         if item is None:
             report["skipped"] += 1
             report["errors"].append({"line": line, "sku": raw.get("sku"), "error": "; ".join(errors)})
@@ -265,6 +94,9 @@ def _analyze(rows: list[dict], db: Session) -> dict:
                 errors.append("для нового товара нужен title")
             if item.get("price") is None:
                 errors.append("для нового товара нужна корректная price")
+            # дефолты только для НОВЫХ товаров (v5.2)
+            item.setdefault("stock", 0)
+            item.setdefault("is_active", True)
         if errors:
             report["skipped"] += 1
             report["errors"].append({"line": line, "sku": sku, "error": "; ".join(errors)})
@@ -333,19 +165,9 @@ _IMG_EXT = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
 
 
 def _sku_from_filename(name: str) -> tuple[str, int]:
-    """'IPH15PRO128BLACK-2.jpg' -> ('IPH15PRO128BLACK', 2). '_main'/без суффикса -> 0.
-
-    Порядок: SKU_main/SKU -> 0 (главная), SKU-1 -> 1, SKU-2 -> 2 и т.д.
-    """
-    stem = PurePosixPath(name.replace("\\", "/")).stem
-    lower = stem.lower()
-    if lower.endswith("_main") or lower.endswith("-main"):
-        return stem[:-5], 0
-    for sep in ("-", "_"):
-        head, _, tail = stem.rpartition(sep)
-        if head and tail.isdigit():
-            return head, int(tail)
-    return stem, 0
+    """v5.2: делегирует общему сервису (формат SKU_main/SKU-1 не менялся)."""
+    from app.services.import_center import sku_from_filename
+    return sku_from_filename(name)
 
 
 @router.post("/uploads/products/images-zip")
@@ -430,3 +252,233 @@ async def upload_single_image(file: UploadFile = File(...)):
     if len(data) > MAX_BYTES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Файл больше 8 МБ")
     return {"url": save_image(file.content_type, data)}
+
+
+# ============================================================
+# Batch Import Center (v5.2): пакетный импорт с job-жизненным циклом
+# preview -> job(TTL 30 мин) -> confirm(идемпотентный) / cancel
+# ============================================================
+import logging as _logging
+import time as _time
+from typing import Annotated
+
+from fastapi import Form
+
+from app.core.config import settings
+from app.models.audit import AuditLog
+from app.services import import_center as ic
+from app.services.import_jobs import JobError, get_job_store, public_job_view
+
+_batch_logger = _logging.getLogger("techshop.import.batch")
+
+_MODES = {"create_or_update", "update_only", "create_only"}
+_DUP_POLICIES = {"error", "last_wins"}
+
+
+def _audit_event(db: Session, admin: str, action: str, detail: str) -> None:
+    try:
+        db.add(AuditLog(actor=f"admin:{admin}", action=action, detail=detail[:500]))
+        db.commit()
+    except Exception:  # noqa: BLE001 — аудит не должен ронять импорт
+        db.rollback()
+        _batch_logger.exception("audit event failed: %s", action)
+
+
+@router.post("/import/batch/preview")
+async def batch_preview(
+    files: list[UploadFile] = File(...),
+    mode: Annotated[str, Form()] = "create_or_update",
+    duplicate_policy: Annotated[str, Form()] = "error",
+    admin: str = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Пакетный preview: CSV/JSON/XLSX/ZIP (фото и/или Import Pack).
+    БД не меняется, фото в постоянное хранилище не сохраняются."""
+    if mode not in _MODES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"mode должен быть одним из {sorted(_MODES)}")
+    if duplicate_policy not in _DUP_POLICIES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"duplicate_policy: {sorted(_DUP_POLICIES)}")
+    if len(files) > settings.IMPORT_MAX_FILES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Не больше {settings.IMPORT_MAX_FILES} файлов")
+    if not files:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Файлы не переданы")
+
+    data_files: list[dict] = []      # {"name", "rows", "sheet"}
+    image_entries: list[ic.ZipEntry] = []
+    staged: dict[str, bytes] = {}    # имя -> байты (для confirm без повторной загрузки)
+    scan_info: list[dict] = []
+    scan_errors: list[dict] = []
+    total_rows = 0
+
+    for up in files:
+        name = (up.filename or "file").replace("\\", "/").split("/")[-1]
+        payload = await up.read()
+        low = name.lower()
+        if low.endswith(".zip"):
+            if len(payload) > settings.IMPORT_MAX_ZIP_BYTES:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"ZIP {name} больше лимита")
+            try:
+                scan = ic.scan_zip(payload)
+            except ValueError as e:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{name}: {e}")
+            manifest = scan.manifest or {}
+            if manifest:
+                m_mode = manifest.get("mode")
+                if m_mode in _MODES:
+                    mode = m_mode
+                m_dup = manifest.get("duplicate_policy")
+                if m_dup in _DUP_POLICIES:
+                    duplicate_policy = m_dup
+                scan_info.append({"file": name, "info": "manifest.json применён (mode/duplicate_policy)"})
+            # data-файлы внутри Import Pack
+            for inner_name, inner_data in scan.data_files:
+                try:
+                    rows, sheet = ic.read_data_file(inner_name, inner_data)
+                except ValueError as e:
+                    scan_errors.append({"file": f"{name}/{inner_name}", "error": str(e)[:200]})
+                    continue
+                total_rows += len(rows)
+                data_files.append({"name": inner_name, "rows": rows, "sheet": sheet})
+                staged[inner_name] = inner_data
+            image_entries.extend(scan.images)
+            if scan.images:
+                staged[name] = payload   # весь ZIP стейджим один раз
+            scan_info.extend(scan.skipped)
+            scan_errors.extend(scan.errors)
+        elif low.endswith(ic.DATA_EXTENSIONS) or low.endswith(".txt"):
+            if len(payload) > settings.IMPORT_MAX_DATA_FILE_BYTES:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Файл {name} больше 20 МБ")
+            try:
+                rows, sheet = ic.read_data_file(name, payload)
+            except ValueError as e:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{name}: {str(e)[:200]}")
+            total_rows += len(rows)
+            data_files.append({"name": name, "rows": rows, "sheet": sheet})
+            staged[name] = payload
+        else:
+            scan_info.append({"file": name, "info": "неподдерживаемый файл — игнорирован"})
+
+    if total_rows > settings.IMPORT_MAX_TOTAL_ROWS:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            f"Суммарно не больше {settings.IMPORT_MAX_TOTAL_ROWS} строк")
+    if not data_files and not image_entries:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "В пакете нет данных или изображений")
+
+    plan = ic.build_batch_plan(db, data_files, image_entries,
+                               mode=mode, duplicate_policy=duplicate_policy)
+    plan["scan_info"] = scan_info
+    plan["scan_errors"] = scan_errors
+
+    job = get_job_store().create(admin, plan, staged, settings.IMPORT_JOB_TTL_SECONDS)
+    _audit_event(db, admin, "import_batch_preview",
+                 f"job:{job['job_id']} files:{len(files)} rows:{plan['summary']['rows_total']} "
+                 f"create:{plan['summary']['create']} update:{plan['summary']['update']}")
+    return {"job_id": job["job_id"], "expires_at": job["expires_at"], **plan}
+
+
+@router.get("/import/batch/{job_id}")
+async def batch_get(job_id: str, admin: str = Depends(get_current_admin)):
+    try:
+        return public_job_view(get_job_store().get(job_id, admin))
+    except JobError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+
+
+@router.delete("/import/batch/{job_id}")
+async def batch_cancel(job_id: str, admin: str = Depends(get_current_admin),
+                       db: Session = Depends(get_db)):
+    try:
+        get_job_store().delete(job_id, admin)
+    except JobError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+    _audit_event(db, admin, "import_batch_cancel", f"job:{job_id}")
+    return {"job_id": job_id, "status": "cancelled"}
+
+
+@router.post("/import/batch/{job_id}/confirm")
+async def batch_confirm(job_id: str, admin: str = Depends(get_current_admin),
+                        db: Session = Depends(get_db)):
+    """Применить ранее previewed план. Новых файлов не принимает.
+    Товары — одной транзакцией; фото — после товаров, с отчётом по ошибкам."""
+    store = get_job_store()
+    try:
+        job = store.get(job_id, admin)
+    except JobError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+
+    if job["status"] == "applied":
+        # идемпотентный повторный confirm: возвращаем сохранённый результат
+        return {**public_job_view(job), "idempotent": True}
+    if job["status"] != "previewed":
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Job в статусе {job['status']}")
+
+    plan = job["normalized_plan"]
+    blocking = [e for e in plan["rows"] if e["errors"]]
+    if blocking:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"В плане {len(blocking)} строк с ошибками — confirm запрещён")
+
+    # SHA-256 staged-файлов проверяется в read_staged; заново собираем фото из ZIP
+    image_entries: list[ic.ZipEntry] = []
+    for name in job["files"]:
+        if name.lower().endswith(".zip"):
+            try:
+                data = store.read_staged(job_id, admin, name)
+                image_entries.extend(ic.scan_zip(data).images)
+            except (JobError, ValueError) as e:
+                raise HTTPException(status.HTTP_409_CONFLICT, f"Staged-файл повреждён: {e}")
+
+    # --- 1) товары: одна транзакция, всё или ничего ---
+    t0 = _time.monotonic()
+    try:
+        sku_to_id = ic.apply_product_plan(db, plan)
+        db.commit()
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        _batch_logger.exception("batch confirm failed, rolled back")
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"Импорт отменён, БД не изменена: {str(e)[:200]}")
+
+    # --- 2) фото: по товарам, ошибки отдельных файлов не откатывают товары ---
+    # Матчинг с планом job И с уже существующими SKU (image-only ZIP без data-файлов)
+    all_sku_to_id = dict(sku_to_id)
+    for p in db.execute(select(Product).where(Product.sku.is_not(None))).scalars():
+        all_sku_to_id.setdefault(p.sku, p.id)
+    image_report: list[dict] = []
+    image_errors: list[dict] = []
+    matched_paths: dict[str, list[ic.ZipEntry]] = {}
+    for img in image_entries:
+        sku_guess, order = ic.sku_from_filename(img.name)
+        for sku in all_sku_to_id:
+            if sku.lower() == sku_guess.lower():
+                matched_paths.setdefault(sku, []).append(img)
+                break
+    for sku, imgs in matched_paths.items():
+        try:
+            imgs.sort(key=lambda im: ic.sku_from_filename(im.name)[1])
+            urls = [save_image(im.content_type, im.data) for im in imgs]
+            product = db.get(Product, all_sku_to_id[sku])
+            if product is not None:
+                product.images = urls
+                product.image = urls[0]
+            db.commit()
+            image_report.append({"sku": sku, "matched_images": len(urls),
+                                 "main_file": imgs[0].name, "files": [im.name for im in imgs]})
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            image_errors.append({"sku": sku, "error": str(e)[:200]})
+
+    report = {
+        "applied": True,
+        "partial": bool(image_errors),
+        "summary": plan["summary"],
+        "images_applied": image_report,
+        "image_errors": image_errors,
+        "took_ms": int((_time.monotonic() - t0) * 1000),
+    }
+    store.mark_applied(job_id, admin, report)
+    _audit_event(db, admin, "import_batch_confirm",
+                 f"job:{job_id} create:{plan['summary']['create']} "
+                 f"update:{plan['summary']['update']} images:{len(image_report)} "
+                 f"image_errors:{len(image_errors)}")
+    return {"job_id": job_id, "status": "applied", **report}

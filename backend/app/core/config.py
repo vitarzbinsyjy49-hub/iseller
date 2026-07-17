@@ -79,6 +79,16 @@ class Settings(BaseSettings):
     # 65с; таймаут фронтенда (75с) — больше этого.
     AI_GATEWAY_TIMEOUT_SECONDS: float = 65.0
 
+    # ==== Batch Import Center (v5.2) ====
+    IMPORT_MAX_FILES: int = 30                       # файлов в одном пакете
+    IMPORT_MAX_TOTAL_ROWS: int = 5000                # суммарно строк во всех файлах
+    IMPORT_MAX_DATA_FILE_BYTES: int = 20971520       # 20 МБ на data-файл
+    IMPORT_MAX_ZIP_BYTES: int = 524288000            # 500 МБ на ZIP
+    IMPORT_MAX_UNCOMPRESSED_BYTES: int = 1073741824  # 1 ГБ распакованного
+    IMPORT_JOB_TTL_SECONDS: int = 1800               # 30 минут на confirm
+    IMPORT_MAX_IMAGES: int = 5000                    # изображений в пакете
+    IMPORT_PRICE_CHANGE_WARN_PCT: float = 30.0       # warning при изменении цены > N%
+
     class Config:
         env_file = ".env"
         extra = "ignore"

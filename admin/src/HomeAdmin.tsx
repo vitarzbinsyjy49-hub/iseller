@@ -3,123 +3,371 @@
 import { useEffect, useRef, useState } from "react";
 import { C, card, input, btn, btnGhost, chip, apiGet, apiPost, apiPatch, apiSend, apiUpload } from "./ui";
 
-// ==================== Import Center ====================
+// ==================== Batch Import Center (v5.2) ====================
 
-type ImportItem = { line: number; sku: string; action: "create" | "update"; title: string; price: number | null; stock: number };
-type ImportReport = {
-  total: number; created: number; updated: number; skipped: number; applied?: boolean;
-  errors: { line: number; sku?: string | null; error: string }[];
-  warnings: { line: number; sku: string; warning: string }[];
-  items: ImportItem[];
+type BatchRow = {
+  source_file: string; source_sheet: string | null; source_line: number;
+  sku: string | null; action: string | null;
+  changes: Record<string, unknown>;
+  diff?: Record<string, { old: unknown; new: unknown }>;
+  warnings: string[]; errors: string[]; info: string[];
+};
+type BatchSummary = {
+  files_total: number; data_files: number; zip_images: number; rows_total: number;
+  create: number; update: number; unchanged: number; skip: number;
+  errors: number; warnings: number; images_matched: number; images_unmatched: number;
+  products_without_photos: number; duplicates: number;
+  catalog_total_price_before: number; catalog_total_price_after: number;
+  catalog_avg_price_before: number; catalog_avg_price_after: number;
+};
+type BatchPreview = {
+  job_id: string; expires_at: number; summary: BatchSummary;
+  files: { name: string; sheet: string | null; rows: number; errors: number }[];
+  rows: BatchRow[];
+  duplicates: { sku: string; winner?: string; loser?: string; first?: string; second?: string; policy: string }[];
+  images: { sku: string; matched_images: number; main_file: string; files: string[] }[];
+  unmatched_images: string[]; products_without_photos: string[];
+  scan_info: { file: string; info: string }[]; scan_errors: { file: string; error: string }[];
+  mode: string; duplicate_policy: string;
+};
+type ConfirmResult = {
+  job_id: string; status: string; applied: boolean; partial: boolean;
+  summary: BatchSummary; image_errors: { sku: string; error: string }[];
+  images_applied: { sku: string; matched_images: number }[]; idempotent?: boolean;
 };
 
-export function ImportCenter({ token }: { token: string }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [report, setReport] = useState<ImportReport | null>(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState<"" | "preview" | "confirm">("");
-  const fileRef = useRef<HTMLInputElement>(null);
+async function apiUploadMany<T>(path: string, token: string, files: File[],
+                                fields: Record<string, string>): Promise<T> {
+  const fd = new FormData();
+  files.forEach((f) => fd.append("files", f));
+  Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
+  const r = await fetch(`/api${path}`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${r.status}`);
+  }
+  return r.json();
+}
 
-  async function run(mode: "preview" | "confirm") {
-    if (!file) { setError("Сначала выберите файл"); return; }
-    setError(""); setBusy(mode);
+const fmtSize = (n: number) => n > 1048576 ? `${(n / 1048576).toFixed(1)} МБ` : `${Math.ceil(n / 1024)} КБ`;
+const fmtVal = (v: unknown) => v === null || v === undefined ? "—"
+  : typeof v === "object" ? JSON.stringify(v).slice(0, 40) : String(v);
+
+type RowFilter = "" | "errors" | "warnings" | "create" | "update" | "unchanged";
+
+export function ImportCenter({ token }: { token: string }) {
+  const [files, setFiles] = useState<File[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const [dupPolicy, setDupPolicy] = useState<"error" | "last_wins">("error");
+  const [mode, setMode] = useState("create_or_update");
+  const [preview, setPreview] = useState<BatchPreview | null>(null);
+  const [result, setResult] = useState<ConfirmResult | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState<"" | "preview" | "confirm" | "cancel">("");
+  const [filter, setFilter] = useState<RowFilter>("");
+  const [skuSearch, setSkuSearch] = useState("");
+  const [openFiles, setOpenFiles] = useState<Record<string, boolean>>({});
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function addFiles(list: FileList | File[]) {
+    const incoming = Array.from(list);
+    setFiles((prev) => {
+      const seen = new Set(prev.map((f) => f.name + f.size));
+      return [...prev, ...incoming.filter((f) => !seen.has(f.name + f.size))];
+    });
+    setPreview(null); setResult(null); setError("");
+  }
+
+  async function runPreview() {
+    if (!files.length) { setError("Добавьте файлы пакета"); return; }
+    setError(""); setBusy("preview"); setResult(null);
     try {
-      const r = await apiUpload<ImportReport>(`/admin/import/products/${mode}`, token, file);
-      setReport(r);
+      const r = await apiUploadMany<BatchPreview>("/admin/import/batch/preview", token, files,
+        { mode, duplicate_policy: dupPolicy });
+      setPreview(r); setFilter(""); setSkuSearch("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось обработать файл");
+      setError(e instanceof Error ? e.message : "Не удалось проверить пакет");
     } finally { setBusy(""); }
   }
 
+  async function runConfirm() {
+    if (!preview) return;
+    const s = preview.summary;
+    const ok = window.confirm(
+      `Импортировать ${s.create + s.update} товаров и ${s.images_matched} изображений?\n` +
+      `Создать: ${s.create} · Обновить: ${s.update} · Без изменений: ${s.unchanged}`);
+    if (!ok) return;
+    setError(""); setBusy("confirm");
+    try {
+      const r = await apiPost<ConfirmResult>(`/admin/import/batch/${preview.job_id}/confirm`, token, {});
+      setResult(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось применить пакет");
+    } finally { setBusy(""); }
+  }
+
+  async function cancelJob() {
+    if (!preview) return;
+    setBusy("cancel");
+    try { await apiSend("DELETE", `/admin/import/batch/${preview.job_id}`, token); } catch { /* уже удалена */ }
+    setPreview(null); setResult(null); setBusy("");
+  }
+
+  function downloadErrorsCsv() {
+    if (!preview) return;
+    const rows = preview.rows.filter((r) => r.errors.length);
+    const csv = "file;sheet;line;sku;errors\n" + rows.map((r) =>
+      [r.source_file, r.source_sheet ?? "", r.source_line, r.sku ?? "", r.errors.join(" | ")]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const a = document.createElement("a");
+    a.href = "data:text/csv;charset=utf-8,﻿" + encodeURIComponent(csv);
+    a.download = "import_errors.csv";
+    a.click();
+  }
+
+  const visibleRows = (preview?.rows ?? []).filter((r) => {
+    if (filter === "errors" && !r.errors.length) return false;
+    if (filter === "warnings" && !r.warnings.length) return false;
+    if ((filter === "create" || filter === "update" || filter === "unchanged") && r.action !== filter) return false;
+    if (skuSearch && !(r.sku ?? "").toLowerCase().includes(skuSearch.toLowerCase())) return false;
+    return true;
+  }).slice(0, 300);
+
+  const blocking = (preview?.summary.errors ?? 0) > 0;
+
   return (
-    <div style={{ maxWidth: 860 }}>
+    <div style={{ maxWidth: 1100 }}>
+      {/* ===== Зона загрузки ===== */}
       <div style={card}>
-        <h3 style={{ marginTop: 0 }}>Импорт товаров: CSV / JSON / XLSX</h3>
+        <h3 style={{ marginTop: 0 }}>Пакетный импорт: CSV / XLSX / JSON / ZIP</h3>
         <p style={{ color: C.sub, fontSize: 14, marginTop: 4 }}>
-          Ключ — колонка <b>sku</b>: существующий sku обновляется, новый создаётся, старые товары не удаляются.
-          Для новых товаров обязательны <b>title</b> и <b>price</b>. Пустой stock = 0.
-          Шаблон: <code>templates/products_template.csv</code> в репозитории (или скачайте пример ниже).
-        </p>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
-          <input ref={fileRef} type="file" accept=".csv,.json,.xlsx"
-            onChange={(e) => { setFile(e.target.files?.[0] ?? null); setReport(null); setError(""); }} />
-          <button style={btnGhost} disabled={!file || busy !== ""} onClick={() => run("preview")}>
-            {busy === "preview" ? "Проверяем…" : "1 · Проверить (preview)"}
-          </button>
-          <button style={{ ...btn, opacity: report && !report.applied ? 1 : 0.5 }}
-            disabled={!file || !report || !!report.applied || busy !== ""} onClick={() => run("confirm")}>
-            {busy === "confirm" ? "Импортируем…" : "2 · Импортировать"}
-          </button>
+          Перетащите сразу несколько прайсов и ZIP с фото (или один Import Pack ZIP).
+          Ключ — колонка <b>sku</b>. Пустые поля у существующих товаров <b>не изменяются</b>.
           <a href={"data:text/csv;charset=utf-8," + encodeURIComponent(CSV_TEMPLATE)}
-            download="products_template.csv" style={{ color: C.accentDark, fontSize: 13 }}>
-            Скачать шаблон CSV
-          </a>
+            download="products_template.csv" style={{ color: C.accentDark, marginLeft: 8 }}>Шаблон CSV</a>
+        </p>
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
+          onClick={() => inputRef.current?.click()}
+          style={{
+            marginTop: 12, padding: "28px 16px", textAlign: "center", cursor: "pointer",
+            border: `2px dashed ${dragOver ? C.accent : C.border}`, borderRadius: 14,
+            background: dragOver ? "#eef7fd" : C.muted, color: C.sub, fontSize: 14,
+          }}
+        >
+          {dragOver ? "Отпустите файлы здесь" : "Перетащите файлы сюда или нажмите для выбора"}
+          <input ref={inputRef} type="file" multiple accept=".csv,.json,.xlsx,.zip"
+            style={{ display: "none" }}
+            onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.currentTarget.value = ""; }} />
+        </div>
+
+        {files.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            {files.map((f, i) => (
+              <div key={f.name + i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 4px", borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
+                <span style={{ fontFamily: "monospace", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{f.name}</span>
+                <span style={{ color: C.sub }}>{f.name.split(".").pop()?.toUpperCase()}</span>
+                <span style={{ color: C.sub, width: 70, textAlign: "right" }}>{fmtSize(f.size)}</span>
+                <button style={{ ...btnGhost, padding: "3px 9px", fontSize: 12, color: C.red }}
+                  onClick={() => { setFiles(files.filter((_, j) => j !== i)); setPreview(null); setResult(null); }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
+          <select value={mode} onChange={(e) => setMode(e.target.value)} style={{ ...input, marginTop: 0, width: "auto" }}>
+            <option value="create_or_update">Создавать и обновлять</option>
+            <option value="update_only">Только обновлять</option>
+            <option value="create_only">Только создавать</option>
+          </select>
+          <select value={dupPolicy} onChange={(e) => setDupPolicy(e.target.value as "error" | "last_wins")}
+            style={{ ...input, marginTop: 0, width: "auto" }}>
+            <option value="error">Дубль SKU между файлами = ошибка</option>
+            <option value="last_wins">Дубль SKU: последний файл побеждает</option>
+          </select>
+          <button style={btnGhost} disabled={!files.length || busy !== ""} onClick={runPreview}>
+            {busy === "preview" ? "Проверяем пакет…" : "1 · Проверить пакет"}
+          </button>
+          <button style={{ ...btn, opacity: preview && !blocking && !result ? 1 : 0.5 }}
+            disabled={!preview || blocking || !!result || busy !== ""} onClick={runConfirm}
+            title={blocking ? "Сначала исправьте ошибки" : ""}>
+            {busy === "confirm" ? "Применяем…" : "2 · Применить пакет"}
+          </button>
+          {preview && !result && (
+            <button style={{ ...btnGhost, color: C.red }} disabled={busy !== ""} onClick={cancelJob}>
+              {busy === "cancel" ? "Отменяем…" : "Отменить job"}
+            </button>
+          )}
         </div>
         {error && <p style={{ color: C.red, fontSize: 13, marginTop: 10 }}>{error}</p>}
+        {busy === "preview" && <p style={{ color: C.sub, fontSize: 13, marginTop: 8 }}>Загружаем и разбираем файлы — большие ZIP могут занять до минуты…</p>}
       </div>
 
-      {report && (
-        <div style={{ ...card, marginTop: 14 }}>
+      {/* ===== Результат confirm ===== */}
+      {result && (
+        <div style={{ ...card, marginTop: 14, borderLeft: `4px solid ${result.partial ? C.yellow : C.green}` }}>
           <h3 style={{ marginTop: 0 }}>
-            {report.applied ? "✅ Импорт выполнен" : "Предпросмотр (в базу пока ничего не записано)"}
+            {result.idempotent ? "Пакет уже был применён ранее (повторный confirm)"
+              : result.partial ? "⚠️ Пакет применён, но часть фото с ошибками" : "✅ Пакет применён"}
           </h3>
-          <div style={{ display: "flex", gap: 18, fontSize: 15, flexWrap: "wrap" }}>
-            <span>строк: <b>{report.total}</b></span>
-            <span style={{ color: C.green, fontWeight: 700 }}>создаётся: {report.created}</span>
-            <span style={{ color: C.accentDark, fontWeight: 700 }}>обновляется: {report.updated}</span>
-            <span style={{ color: report.skipped ? C.red : C.sub, fontWeight: 700 }}>пропущено: {report.skipped}</span>
-          </div>
-
-          {report.errors.length > 0 && (
-            <div style={{ marginTop: 12, background: "#fff5f5", borderRadius: 10, padding: "10px 14px" }}>
-              <b style={{ color: C.red, fontSize: 13 }}>Ошибки (строки пропущены):</b>
-              {report.errors.map((e, i) => (
-                <p key={i} style={{ color: C.red, fontSize: 13, margin: "4px 0" }}>
-                  строка {e.line}{e.sku ? ` · ${e.sku}` : ""}: {e.error}
-                </p>
+          <p style={{ fontSize: 13, color: C.sub, margin: "4px 0" }}>job: <code>{result.job_id}</code></p>
+          <p style={{ fontSize: 14, margin: "6px 0" }}>
+            Создано: <b style={{ color: C.green }}>{result.summary?.create ?? "—"}</b> ·
+            Обновлено: <b style={{ color: C.accentDark }}> {result.summary?.update ?? "—"}</b> ·
+            Фото загружено: <b> {(result.images_applied ?? []).reduce((a, r) => a + r.matched_images, 0)}</b>
+          </p>
+          {(result.image_errors ?? []).length > 0 && (
+            <div style={{ background: "#fff5f5", borderRadius: 10, padding: "8px 12px", marginTop: 6 }}>
+              {result.image_errors.map((e, i) => (
+                <p key={i} style={{ color: C.red, fontSize: 13, margin: "3px 0" }}>{e.sku}: {e.error}</p>
               ))}
             </div>
-          )}
-          {report.warnings.length > 0 && (
-            <div style={{ marginTop: 10, background: "#fffaf0", borderRadius: 10, padding: "10px 14px" }}>
-              <b style={{ color: "#b57e00", fontSize: 13 }}>Предупреждения:</b>
-              {report.warnings.map((w, i) => (
-                <p key={i} style={{ color: "#b57e00", fontSize: 13, margin: "4px 0" }}>
-                  строка {w.line} · {w.sku}: {w.warning}
-                </p>
-              ))}
-            </div>
-          )}
-
-          {report.items.length > 0 && (
-            <table style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ color: C.sub, textAlign: "left" }}>
-                  <th style={th}>строка</th><th style={th}>sku</th><th style={th}>действие</th>
-                  <th style={th}>товар</th><th style={th}>цена</th><th style={th}>остаток</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.items.map((it) => (
-                  <tr key={it.line} style={{ borderTop: `1px solid ${C.border}` }}>
-                    <td style={td}>{it.line}</td>
-                    <td style={{ ...td, fontFamily: "monospace" }}>{it.sku}</td>
-                    <td style={{ ...td, color: it.action === "create" ? C.green : C.accentDark, fontWeight: 600 }}>
-                      {it.action === "create" ? "создать" : "обновить"}
-                    </td>
-                    <td style={td}>{it.title}</td>
-                    <td style={td}>{it.price != null ? new Intl.NumberFormat("ru-RU").format(it.price) + " ₽" : "—"}</td>
-                    <td style={td}>{it.stock}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           )}
         </div>
+      )}
+
+      {/* ===== Preview ===== */}
+      {preview && !result && (
+        <>
+          <div style={{ ...card, marginTop: 14 }}>
+            <h3 style={{ marginTop: 0 }}>Предпросмотр пакета <span style={{ color: C.sub, fontSize: 13, fontWeight: 400 }}>(в базу ничего не записано; job истекает через 30 минут)</span></h3>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 8, fontSize: 13 }}>
+              <Stat label="Файлов" value={preview.summary.files_total} />
+              <Stat label="Строк" value={preview.summary.rows_total} />
+              <Stat label="Создать" value={preview.summary.create} color={C.green} />
+              <Stat label="Обновить" value={preview.summary.update} color={C.accentDark} />
+              <Stat label="Без изменений" value={preview.summary.unchanged} />
+              <Stat label="Пропущено" value={preview.summary.skip} />
+              <Stat label="Ошибки" value={preview.summary.errors} color={preview.summary.errors ? C.red : undefined} />
+              <Stat label="Предупреждения" value={preview.summary.warnings} color={preview.summary.warnings ? "#b57e00" : undefined} />
+              <Stat label="Фото сопоставлено" value={preview.summary.images_matched} />
+              <Stat label="Фото без SKU" value={preview.summary.images_unmatched} color={preview.summary.images_unmatched ? "#b57e00" : undefined} />
+              <Stat label="Товары без фото" value={preview.summary.products_without_photos} color={preview.summary.products_without_photos ? "#b57e00" : undefined} />
+              <Stat label="Дубли SKU" value={preview.summary.duplicates} color={preview.summary.duplicates ? "#b57e00" : undefined} />
+            </div>
+            <p style={{ fontSize: 13, color: C.sub, marginTop: 10 }}>
+              Каталог: средняя цена {fmtPriceShort(preview.summary.catalog_avg_price_before)} → {fmtPriceShort(preview.summary.catalog_avg_price_after)},
+              суммарная {fmtPriceShort(preview.summary.catalog_total_price_before)} → {fmtPriceShort(preview.summary.catalog_total_price_after)}
+            </p>
+            {blocking && <p style={{ color: C.red, fontSize: 13, marginTop: 4 }}>
+              Применение заблокировано: исправьте {preview.summary.errors} строк с ошибками (или уберите файл из пакета).
+              <button style={{ ...btnGhost, marginLeft: 10, padding: "4px 10px", fontSize: 12 }} onClick={downloadErrorsCsv}>Скачать ошибки CSV</button>
+            </p>}
+            {!blocking && preview.summary.errors === 0 && (
+              <button style={{ ...btnGhost, marginTop: 6, padding: "4px 10px", fontSize: 12 }} onClick={downloadErrorsCsv}>Скачать отчёт об ошибках (пусто)</button>
+            )}
+
+            {/* по-файловые отчёты */}
+            <div style={{ marginTop: 12 }}>
+              {preview.files.map((f) => (
+                <div key={f.name} style={{ borderTop: `1px solid ${C.border}`, padding: "6px 0", fontSize: 13 }}>
+                  <button style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}
+                    onClick={() => setOpenFiles((o) => ({ ...o, [f.name]: !o[f.name] }))}>
+                    {openFiles[f.name] ? "▾" : "▸"} {f.name}{f.sheet ? ` · лист «${f.sheet}»` : ""} — строк: {f.rows}, ошибок: {f.errors}
+                  </button>
+                  {openFiles[f.name] && (
+                    <div style={{ padding: "4px 12px", color: C.sub }}>
+                      {preview.rows.filter((r) => r.source_file === f.name && (r.errors.length || r.warnings.length || r.info.length))
+                        .slice(0, 30).map((r, i) => (
+                          <p key={i} style={{ margin: "3px 0", color: r.errors.length ? C.red : r.warnings.length ? "#b57e00" : C.sub }}>
+                            строка {r.source_line}{r.sku ? ` · ${r.sku}` : ""}: {[...r.errors, ...r.warnings, ...r.info].join("; ")}
+                          </p>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {(preview.scan_info.length > 0 || preview.scan_errors.length > 0) && (
+                <div style={{ marginTop: 6, fontSize: 12, color: C.sub }}>
+                  {preview.scan_errors.map((e, i) => <p key={"e" + i} style={{ color: C.red, margin: "2px 0" }}>{e.file}: {e.error}</p>)}
+                  {preview.scan_info.slice(0, 10).map((s, i) => <p key={"i" + i} style={{ margin: "2px 0" }}>{s.file}: {s.info}</p>)}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* таблица строк */}
+          <div style={{ ...card, marginTop: 14 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {([["", "Все"], ["errors", "Ошибки"], ["warnings", "Warning"], ["create", "Создать"],
+                 ["update", "Обновить"], ["unchanged", "Без изменений"]] as [RowFilter, string][]).map(([k, label]) => (
+                <button key={k || "all"} style={chip(filter === k)} onClick={() => setFilter(k)}>{label}</button>
+              ))}
+              <input placeholder="Поиск по SKU" value={skuSearch} onChange={(e) => setSkuSearch(e.target.value)}
+                style={{ ...input, marginTop: 0, width: 190 }} />
+              <span style={{ color: C.sub, fontSize: 12 }}>показано {visibleRows.length}</span>
+            </div>
+            <div style={{ overflowX: "auto", marginTop: 10 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 760 }}>
+                <thead><tr style={{ color: C.sub, textAlign: "left" }}>
+                  <th style={th}>файл</th><th style={th}>строка</th><th style={th}>sku</th>
+                  <th style={th}>действие</th><th style={th}>изменения</th><th style={th}>замечания</th>
+                </tr></thead>
+                <tbody>
+                  {visibleRows.map((r, i) => (
+                    <tr key={i} style={{ borderTop: `1px solid ${C.border}`, background: r.errors.length ? "#fff5f5" : undefined }}>
+                      <td style={{ ...td, color: C.sub }}>{r.source_file}{r.source_sheet ? `·${r.source_sheet}` : ""}</td>
+                      <td style={td}>{r.source_line}</td>
+                      <td style={{ ...td, fontFamily: "monospace" }}>{r.sku ?? "—"}</td>
+                      <td style={{ ...td, fontWeight: 600, color: r.action === "create" ? C.green : r.action === "update" ? C.accentDark : C.sub }}>
+                        {r.action === "create" ? "создать" : r.action === "update" ? "обновить"
+                          : r.action === "unchanged" ? "без изменений" : r.action === "superseded" ? "перекрыт" : "пропуск"}
+                      </td>
+                      <td style={td}>
+                        {r.action === "update" && r.diff
+                          ? Object.entries(r.diff).slice(0, 4).map(([k, v]) => (
+                              <div key={k} style={{ whiteSpace: "nowrap" }}>
+                                {k}: <span style={{ color: C.sub }}>{fmtVal(v.old)}</span> → <b>{fmtVal(v.new)}</b>
+                              </div>
+                            ))
+                          : r.action === "create"
+                            ? `${fmtVal(r.changes.title)} · ${fmtVal(r.changes.price)} ₽ · склад ${fmtVal(r.changes.stock)}`
+                            : "—"}
+                      </td>
+                      <td style={{ ...td, maxWidth: 260 }}>
+                        {r.errors.map((e, j) => <div key={"e" + j} style={{ color: C.red }}>{e}</div>)}
+                        {r.warnings.map((w, j) => <div key={"w" + j} style={{ color: "#b57e00" }}>{w}</div>)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {preview.unmatched_images.length > 0 && (
+              <div style={{ marginTop: 12, fontSize: 13 }}>
+                <b style={{ color: "#b57e00" }}>Фото без подходящего SKU ({preview.unmatched_images.length}):</b>
+                <p style={{ color: C.sub, margin: "4px 0", fontFamily: "monospace", fontSize: 12 }}>
+                  {preview.unmatched_images.slice(0, 15).join(", ")}{preview.unmatched_images.length > 15 ? "…" : ""}
+                </p>
+              </div>
+            )}
+            {preview.summary.products_without_photos > 0 && (
+              <p style={{ color: "#b57e00", fontSize: 13, marginTop: 8 }}>
+                ⚠️ {preview.summary.products_without_photos} создаваемых товаров останутся без фото:
+                {" "}{preview.products_without_photos.slice(0, 10).join(", ")}
+              </p>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
 }
+
+function Stat({ label, value, color }: { label: string; value: number; color?: string }) {
+  return (
+    <div style={{ background: C.muted, borderRadius: 10, padding: "8px 10px" }}>
+      <div style={{ color: C.sub, fontSize: 11 }}>{label}</div>
+      <div style={{ fontWeight: 700, fontSize: 16, color: color ?? C.text }}>{value}</div>
+    </div>
+  );
+}
+
+const fmtPriceShort = (v: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(v) + " ₽";
 
 const th = { padding: "6px 8px" } as const;
 const td = { padding: "6px 8px" } as const;

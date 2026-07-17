@@ -6,11 +6,16 @@ env задаём ДО импорта app.* — Settings требует обяз�
 """
 import os
 
+import tempfile
+
 os.environ.setdefault("DATABASE_URL", "sqlite://")
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("ADMIN_EMAIL", "admin@test.local")
 os.environ.setdefault("ADMIN_PASSWORD", "test-password")
 os.environ.setdefault("DEV_MODE", "true")
+# v5.2: изолированные каталоги для upload'ов и import jobs в тестах
+os.environ.setdefault("UPLOAD_DIR", tempfile.mkdtemp(prefix="test-uploads-"))
+os.environ.setdefault("IMPORT_JOBS_DIR", tempfile.mkdtemp(prefix="test-jobs-"))
 
 import pytest
 from sqlalchemy import create_engine
