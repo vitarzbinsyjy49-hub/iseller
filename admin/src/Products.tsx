@@ -1,99 +1,283 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { C, card, input, btn, btnGhost, apiGet, apiPatch, apiPost, apiSend, apiUpload } from "./ui";
 
-/** Управление товарами: наличие, цены, флаги, редактирование, добавление. */
+/** Управление товарами: поиск, массовые действия, безопасное удаление,
+ *  наличие, цены, флаги, редактирование, добавление. */
 
 export type Prod = {
-  id: number; title: string; brand: string | null; category: string | null;
+  id: number; sku: string | null; title: string; brand: string | null; category: string | null;
   price: number; old_price: number | null; stock: number; in_stock: boolean;
   is_active: boolean; is_hot: boolean; is_available_today: boolean;
   popularity: number; rating: number;
+  // Полные поля (to_admin) — используются модалкой редактирования
+  description?: string | null; specs?: Record<string, unknown>; tags?: string[];
+  image?: string | null; images?: string[]; warranty_months?: number; condition?: string;
+  color?: string | null; memory?: string | null; storage?: string | null;
+  screen_size?: string | null; cpu?: string | null; ram?: string | null; source?: string;
 };
 
-type ProdFull = Prod & {
-  description?: string; specs?: Record<string, unknown>; tags?: string[];
-  image?: string; images?: string[]; warranty_months?: number;
+type ProdFull = Prod;
+
+type ListResp = {
+  products: Prod[]; total: number; page: number; page_size: number; pages: number;
+  categories: string[]; brands: string[];
 };
+type BulkAction = "activate" | "deactivate" | "set_out_of_stock" | "delete";
+type BulkResult = {
+  action: string; requested: number; deleted: number; hidden: number; updated: number;
+  skipped: number; skipped_details: { id: number; reason: string }[]; processed: number;
+};
+type ConfirmSpec = { title: string; message: string; danger?: boolean; confirmLabel: string; onConfirm: () => void };
+
+function pluralTovar(n: number): string {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "товар";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "товара";
+  return "товаров";
+}
+
+function summarize(action: BulkAction, r: BulkResult): string {
+  const tail = r.skipped ? `, пропущено ${r.skipped}` : "";
+  if (action === "delete") return `Удалено ${r.deleted}, скрыто ${r.hidden}, пропущено ${r.skipped}`;
+  if (action === "activate") return `Показано в каталоге: ${r.updated}${tail}`;
+  if (action === "deactivate") return `Скрыто из каталога: ${r.updated}${tail}`;
+  return `Отмечено «нет в наличии»: ${r.updated}${tail}`;
+}
 
 export function Products({ token }: { token: string }) {
   const [items, setItems] = useState<Prod[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [brands, setBrands] = useState<string[]>([]);
+
   const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");        // debounced версия search
   const [category, setCategory] = useState("");
   const [brand, setBrand] = useState("");
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [summary, setSummary] = useState("");
+
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
+
   const [editing, setEditing] = useState<Prod | null>(null);
   const [creating, setCreating] = useState(false);
 
-  function load() {
-    setLoading(true);
-    apiGet<{ products: Prod[] }>("/admin/products", token).then((d) => setItems(d.products)).finally(() => setLoading(false));
-  }
-  useEffect(load, []);
+  // debounce поиска (по названию и SKU — фильтрует бэкенд)
+  useEffect(() => {
+    const t = setTimeout(() => { setQuery(search.trim()); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const load = useCallback(() => {
+    setLoading(true); setError("");
+    const qs = new URLSearchParams();
+    if (query) qs.set("q", query);
+    if (category) qs.set("category", category);
+    if (brand) qs.set("brand", brand);
+    qs.set("page", String(page));
+    qs.set("page_size", String(pageSize));
+    return apiGet<ListResp>(`/admin/products?${qs.toString()}`, token)
+      .then((d) => {
+        setItems(d.products); setTotal(d.total); setPages(d.pages);
+        setCategories(d.categories); setBrands(d.brands);
+        // после массового удаления последняя страница могла опустеть
+        if (d.products.length === 0 && page > 1 && d.total > 0) setPage((p) => Math.max(1, p - 1));
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Не удалось загрузить товары"))
+      .finally(() => setLoading(false));
+  }, [token, query, category, brand, page, pageSize]);
+
+  useEffect(() => { load(); }, [load]);
 
   async function patch(id: number, body: Record<string, unknown>) {
-    await apiPatch(`/admin/products/${id}`, token, body);
-    load();
+    try { await apiPatch(`/admin/products/${id}`, token, body); await load(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Не удалось сохранить изменение"); }
   }
 
-  const categories = useMemo(() => Array.from(new Set(items.map((p) => p.category).filter(Boolean))) as string[], [items]);
-  const brands = useMemo(() => Array.from(new Set(items.map((p) => p.brand).filter(Boolean))) as string[], [items]);
+  // ---- Выбор строк ----
+  const allPageSelected = items.length > 0 && items.every((p) => selected.has(p.id));
+  const somePageSelected = items.some((p) => selected.has(p.id));
+  function toggleOne(id: number) {
+    setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
+  function toggleAllOnPage() {
+    setSelected((s) => {
+      const n = new Set(s);
+      if (items.every((p) => n.has(p.id))) items.forEach((p) => n.delete(p.id));
+      else items.forEach((p) => n.add(p.id));
+      return n;
+    });
+  }
+  const selCount = selected.size;
 
-  const visible = items.filter((p) =>
-    (!search || p.title.toLowerCase().includes(search.toLowerCase())) &&
-    (!category || p.category === category) &&
-    (!brand || p.brand === brand),
-  );
+  // ---- Массовые действия ----
+  function askBulk(action: BulkAction) {
+    if (selCount === 0) return;
+    setSummary("");
+    const q = `Изменить ${selCount} ${pluralTovar(selCount)}?`;
+    if (action === "delete") {
+      setConfirm({
+        title: "Удаление товаров", message: q, danger: true, confirmLabel: "Продолжить",
+        onConfirm: () => setConfirm({
+          title: "Подтвердите удаление", danger: true, confirmLabel: `Удалить ${selCount}`,
+          message: "Товар будет полностью удалён. Восстановление возможно только из резервной копии.",
+          onConfirm: () => doBulk("delete"),
+        }),
+      });
+    } else {
+      const titles: Record<Exclude<BulkAction, "delete">, string> = {
+        activate: "Показать в каталоге", deactivate: "Скрыть из каталога", set_out_of_stock: "Отметить «нет в наличии»",
+      };
+      setConfirm({ title: titles[action], message: q, confirmLabel: "Подтвердить", onConfirm: () => doBulk(action) });
+    }
+  }
 
-  if (loading) return <p style={{ color: C.sub }}>Загрузка…</p>;
+  async function doBulk(action: BulkAction) {
+    setConfirm(null); setBusy(true); setError(""); setSummary("");
+    try {
+      const ids = Array.from(selected);
+      const res = await apiPost<BulkResult>("/admin/products/bulk-action", token, { product_ids: ids, action });
+      setSelected(new Set());
+      await load();
+      setSummary(summarize(action, res));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Массовая операция не выполнена");
+    } finally { setBusy(false); }
+  }
+
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
 
   return (
     <div>
+      {/* Панель поиска и фильтров */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-        <input placeholder="Поиск по названию" value={search} onChange={(e) => setSearch(e.target.value)}
-          style={{ ...input, marginTop: 0, width: 240 }} />
-        <select value={category} onChange={(e) => setCategory(e.target.value)} style={{ ...input, marginTop: 0, width: "auto" }}>
+        <input placeholder="Поиск по названию или SKU" value={search} onChange={(e) => setSearch(e.target.value)}
+          style={{ ...input, marginTop: 0, width: 260 }} />
+        <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} style={{ ...input, marginTop: 0, width: "auto" }}>
           <option value="">Категория: все</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select value={brand} onChange={(e) => setBrand(e.target.value)} style={{ ...input, marginTop: 0, width: "auto" }}>
+        <select value={brand} onChange={(e) => { setBrand(e.target.value); setPage(1); }} style={{ ...input, marginTop: 0, width: "auto" }}>
           <option value="">Бренд: все</option>
           {brands.map((b) => <option key={b} value={b}>{b}</option>)}
+        </select>
+        <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} style={{ ...input, marginTop: 0, width: "auto" }} title="Товаров на странице">
+          <option value={50}>50 на стр.</option>
+          <option value={100}>100 на стр.</option>
         </select>
         <span style={{ flex: 1 }} />
         <button style={btn} onClick={() => setCreating(true)}>+ Добавить товар</button>
       </div>
 
-      <div style={{ ...card, padding: 0, overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+      {/* Итог последней операции / ошибка */}
+      {summary && (
+        <div style={{ ...card, padding: "10px 14px", marginBottom: 12, borderColor: C.green, color: C.text, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>✓ {summary}</span>
+          <button style={{ ...btnGhost, padding: "4px 8px", fontSize: 12 }} onClick={() => setSummary("")}>×</button>
+        </div>
+      )}
+      {error && (
+        <div style={{ ...card, padding: "10px 14px", marginBottom: 12, borderColor: C.red, color: C.red }}>
+          {error}
+        </div>
+      )}
+
+      {/* Панель массовых действий */}
+      {selCount > 0 && (
+        <div style={{
+          ...card, padding: "10px 14px", marginBottom: 12, display: "flex", gap: 10, alignItems: "center",
+          flexWrap: "wrap", position: "sticky", top: 64, zIndex: 5, borderColor: C.accent,
+        }}>
+          <strong style={{ fontSize: 14 }}>Выбрано: {selCount}</strong>
+          <button style={{ ...btnGhost, padding: "7px 12px", fontSize: 13 }} disabled={busy} onClick={() => askBulk("activate")}>Показать</button>
+          <button style={{ ...btnGhost, padding: "7px 12px", fontSize: 13 }} disabled={busy} onClick={() => askBulk("deactivate")}>Скрыть</button>
+          <button style={{ ...btnGhost, padding: "7px 12px", fontSize: 13 }} disabled={busy} onClick={() => askBulk("set_out_of_stock")}>Нет в наличии</button>
+          <button style={{ ...btn, padding: "7px 12px", fontSize: 13, background: C.red }} disabled={busy} onClick={() => askBulk("delete")}>Удалить</button>
+          <span style={{ flex: 1 }} />
+          <button style={{ ...btnGhost, padding: "7px 12px", fontSize: 13 }} disabled={busy} onClick={() => setSelected(new Set())}>Снять выбор</button>
+        </div>
+      )}
+
+      {/* Таблица со sticky-заголовком; скролл — только внутри контейнера */}
+      <div style={{ ...card, padding: 0, overflow: "auto", maxHeight: "calc(100vh - 260px)" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: 40 }} /><col style={{ width: 116 }} /><col />
+            <col style={{ width: 116 }} /><col style={{ width: 104 }} /><col style={{ width: 96 }} />
+            <col style={{ width: 78 }} /><col style={{ width: 64 }} /><col style={{ width: 78 }} /><col style={{ width: 104 }} />
+          </colgroup>
           <thead>
-            <tr style={{ color: C.sub, textAlign: "left", borderBottom: `1px solid ${C.border}` }}>
-              <th style={{ padding: "12px 14px" }}>Товар</th>
-              <th>Цена, ₽</th><th>Старая, ₽</th><th>Склад</th>
-              <th>Активен</th><th>Хит</th><th>Сегодня</th><th></th>
+            <tr style={{ color: C.sub, textAlign: "left" }}>
+              <th style={thCell}><HeaderCheckbox checked={allPageSelected} indeterminate={somePageSelected && !allPageSelected} onChange={toggleAllOnPage} /></th>
+              <th style={thCell}>SKU</th>
+              <th style={thCell}>Товар</th>
+              <th style={thCell}>Цена, ₽</th>
+              <th style={thCell}>Старая, ₽</th>
+              <th style={thCell}>Склад</th>
+              <th style={thCell}>Активен</th>
+              <th style={thCell}>Хит</th>
+              <th style={thCell}>Сегодня</th>
+              <th style={thCell}></th>
             </tr>
           </thead>
           <tbody>
-            {visible.map((p) => (
-              <tr key={p.id} style={{ borderBottom: `1px solid ${C.border}`, opacity: p.is_active ? 1 : 0.45 }}>
-                <td style={{ padding: "10px 14px", maxWidth: 280 }}>
-                  <div style={{ fontWeight: 600 }}>{p.title}</div>
-                  <div style={{ color: C.sub, fontSize: 12 }}>{p.brand} · {p.category}</div>
-                </td>
-                <td><PriceCell value={p.price} onSave={(v) => patch(p.id, { price: v })} /></td>
-                <td><PriceCell value={p.old_price} onSave={(v) => patch(p.id, { old_price: v })} allowEmpty /></td>
-                <td><StockCell value={p.stock} inStock={p.in_stock} onSave={(v) => patch(p.id, { stock: v })} /></td>
-                <td><Toggle on={p.is_active} onClick={() => patch(p.id, { is_active: !p.is_active })} /></td>
-                <td><Toggle on={p.is_hot} color={C.yellow} onClick={() => patch(p.id, { is_hot: !p.is_hot })} /></td>
-                <td><Toggle on={p.is_available_today} color={C.green} onClick={() => patch(p.id, { is_available_today: !p.is_available_today })} /></td>
-                <td style={{ padding: "10px 14px" }}>
-                  <button style={{ ...btnGhost, padding: "6px 10px", fontSize: 13 }} onClick={() => setEditing(p)}>Изменить</button>
-                </td>
-              </tr>
-            ))}
+            {items.map((p) => {
+              const sel = selected.has(p.id);
+              return (
+                <tr key={p.id} style={{ borderBottom: `1px solid ${C.border}`, opacity: p.is_active ? 1 : 0.5, background: sel ? "#eaf5fd" : "transparent" }}>
+                  <td style={tdCell}>
+                    <input type="checkbox" checked={sel} onChange={() => toggleOne(p.id)} style={{ cursor: "pointer", width: 16, height: 16 }} />
+                  </td>
+                  <td style={tdCell}>
+                    <span title={p.sku ?? ""} style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: C.sub, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.sku || "—"}
+                    </span>
+                  </td>
+                  <td style={tdCell}>
+                    <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.title}>{p.title}</div>
+                    <div style={{ color: C.sub, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{[p.brand, p.category].filter(Boolean).join(" · ")}</div>
+                  </td>
+                  <td style={tdCell}><PriceCell value={p.price} onSave={(v) => patch(p.id, { price: v })} /></td>
+                  <td style={tdCell}><PriceCell value={p.old_price} onSave={(v) => patch(p.id, { old_price: v })} allowEmpty /></td>
+                  <td style={tdCell}><StockCell value={p.stock} inStock={p.in_stock} onSave={(v) => patch(p.id, { stock: v })} /></td>
+                  <td style={tdCell}><Toggle on={p.is_active} onClick={() => patch(p.id, { is_active: !p.is_active })} /></td>
+                  <td style={tdCell}><Toggle on={p.is_hot} color={C.yellow} onClick={() => patch(p.id, { is_hot: !p.is_hot })} /></td>
+                  <td style={tdCell}><Toggle on={p.is_available_today} color={C.green} onClick={() => patch(p.id, { is_available_today: !p.is_available_today })} /></td>
+                  <td style={tdCell}>
+                    <button style={{ ...btnGhost, padding: "6px 10px", fontSize: 13 }} onClick={() => setEditing(p)}>Изменить</button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-        {visible.length === 0 && <p style={{ color: C.sub, padding: 16 }}>Ничего не найдено</p>}
+        {loading && <p style={{ color: C.sub, padding: 16 }}>Загрузка…</p>}
+        {!loading && items.length === 0 && <p style={{ color: C.sub, padding: 16 }}>Ничего не найдено</p>}
       </div>
+
+      {/* Пагинация */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
+        <span style={{ color: C.sub, fontSize: 13 }}>
+          {total > 0 ? `Показаны ${from}–${to} из ${total}` : "Нет товаров"}
+        </span>
+        <span style={{ flex: 1 }} />
+        <button style={{ ...btnGhost, padding: "6px 12px", fontSize: 13, opacity: page <= 1 ? 0.5 : 1 }}
+          disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>← Назад</button>
+        <span style={{ color: C.sub, fontSize: 13 }}>Стр. {page} из {Math.max(1, pages)}</span>
+        <button style={{ ...btnGhost, padding: "6px 12px", fontSize: 13, opacity: page >= pages ? 0.5 : 1 }}
+          disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Вперёд →</button>
+      </div>
+
+      {confirm && <ConfirmDialog spec={confirm} onCancel={() => setConfirm(null)} />}
 
       {(editing || creating) && (
         <ProductModal
@@ -103,6 +287,33 @@ export function Products({ token }: { token: string }) {
           onSaved={() => { setEditing(null); setCreating(false); load(); }}
         />
       )}
+    </div>
+  );
+}
+
+const thCell: CSSProperties = {
+  padding: "10px 10px", position: "sticky", top: 0, background: C.surface, zIndex: 1,
+  borderBottom: `1px solid ${C.border}`, fontWeight: 600, whiteSpace: "nowrap",
+};
+const tdCell: CSSProperties = { padding: "8px 10px", verticalAlign: "middle" };
+
+function HeaderCheckbox({ checked, indeterminate, onChange }: { checked: boolean; indeterminate: boolean; onChange: () => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (ref.current) ref.current.indeterminate = indeterminate; }, [indeterminate]);
+  return <input ref={ref} type="checkbox" checked={checked} onChange={onChange} title="Выбрать все на странице" style={{ cursor: "pointer", width: 16, height: 16 }} />;
+}
+
+function ConfirmDialog({ spec, onCancel }: { spec: ConfirmSpec; onCancel: () => void }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,.45)", display: "grid", placeItems: "center", zIndex: 60, padding: 16 }} onClick={onCancel}>
+      <div style={{ ...card, width: 420, maxWidth: "100%" }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ margin: 0, color: spec.danger ? C.red : C.text }}>{spec.title}</h3>
+        <p style={{ color: C.sub, fontSize: 14, marginTop: 10, lineHeight: 1.5 }}>{spec.message}</p>
+        <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+          <button style={btnGhost} onClick={onCancel}>Отмена</button>
+          <button style={{ ...btn, background: spec.danger ? C.red : C.accent }} onClick={spec.onConfirm}>{spec.confirmLabel}</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -122,21 +333,28 @@ function Toggle({ on, onClick, color = C.accent }: { on: boolean; onClick: () =>
   );
 }
 
+const GROUP = new Intl.NumberFormat("ru-RU");
+
 function PriceCell({ value, onSave, allowEmpty }: { value: number | null; onSave: (v: number | null) => void; allowEmpty?: boolean }) {
   const [v, setV] = useState(value == null ? "" : String(Math.round(value)));
-  useEffect(() => { setV(value == null ? "" : String(Math.round(value))); }, [value]);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setV(value == null ? "" : String(Math.round(value))); }, [value, focused]);
+  // Вне фокуса — с разделителями (99 990); в фокусе — сырые цифры для правки.
+  const shown = focused ? v : (value == null ? (allowEmpty ? "—" : "") : GROUP.format(Math.round(value)));
   return (
     <input
-      value={v} inputMode="numeric"
+      value={shown} inputMode="numeric"
       onChange={(e) => setV(e.target.value.replace(/\D/g, ""))}
-      onBlur={() => {
+      onFocus={(e) => { setFocused(true); e.target.style.border = `1px solid ${C.accent}`; }}
+      onBlur={(e) => {
+        setFocused(false);
+        e.target.style.border = "1px solid transparent";
         if (v === "" && allowEmpty) { if (value != null) onSave(null); return; }
         const n = Number(v);
         if (v !== "" && !Number.isNaN(n) && n !== value) onSave(n);
       }}
       onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-      style={{ ...input, marginTop: 0, width: 90, padding: "6px 8px", background: "transparent", border: `1px solid transparent` }}
-      onFocus={(e) => (e.target.style.border = `1px solid ${C.accent}`)}
+      style={{ ...input, marginTop: 0, width: "100%", padding: "6px 8px", background: "transparent", border: "1px solid transparent" }}
     />
   );
 }
@@ -178,24 +396,20 @@ function ProductModal({
       setSpecsText("{}");
       return;
     }
-    // Полные данные товара берём из публичной детальной ручки нельзя (JWT юзера),
-    // поэтому используем то, что есть в списке + подгружать description/specs можно через PATCH-ответ.
-    apiGet<{ products: ProdFull[] }>(`/admin/products?limit=500`, token).then((d) => {
-      const p = d.products.find((x) => x.id === product.id) as ProdFull | undefined;
-      const merged = { ...product, ...(p ?? {}) };
-      setFull(merged);
-      setForm({
-        title: merged.title ?? "", sku: (merged as { sku?: string | null }).sku ?? "",
-        brand: merged.brand ?? "", category: merged.category ?? "",
-        price: String(Math.round(merged.price)), old_price: merged.old_price == null ? "" : String(Math.round(merged.old_price)),
-        stock: String(merged.stock ?? 0), image: merged.image ?? "",
-        description: merged.description ?? "", warranty_months: String(merged.warranty_months ?? 12),
-        condition: (merged as { condition?: string }).condition ?? "new",
-      });
-      setImages(merged.images ?? []);
-      setSpecsText(JSON.stringify(merged.specs ?? {}, null, 2));
+    // Список /admin/products уже отдаёт полный товар (to_admin), поэтому
+    // берём переданную строку напрямую — без повторной загрузки всего каталога.
+    setFull(product);
+    setForm({
+      title: product.title ?? "", sku: product.sku ?? "",
+      brand: product.brand ?? "", category: product.category ?? "",
+      price: String(Math.round(product.price)), old_price: product.old_price == null ? "" : String(Math.round(product.old_price)),
+      stock: String(product.stock ?? 0), image: product.image ?? "",
+      description: product.description ?? "", warranty_months: String(product.warranty_months ?? 12),
+      condition: product.condition ?? "new",
     });
-  }, [product, token]);
+    setImages(product.images ?? []);
+    setSpecsText(JSON.stringify(product.specs ?? {}, null, 2));
+  }, [product]);
 
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })); }
 
@@ -263,11 +477,15 @@ function ProductModal({
   }
 
   async function deactivate() {
+    // «Выключить» = скрыть из каталога (is_active=false). Физическое удаление —
+    // только через массовое действие с двойным подтверждением.
     if (isNew || !product) return;
     setSaving(true);
     try {
-      await apiSend("DELETE", `/admin/products/${product.id}`, token);
+      await apiPatch(`/admin/products/${product.id}`, token, { is_active: false });
       onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось скрыть товар");
     } finally {
       setSaving(false);
     }

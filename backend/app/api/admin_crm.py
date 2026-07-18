@@ -3,16 +3,18 @@
 Всё под get_current_admin (та же JWT-цепочка Sprint 1, admin:{email}).
 Отдельный роутер, чтобы не трогать рабочий admin.py (stats/audit).
 """
+import json
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin
+from app.api.deps import client_ip, get_current_admin
 from app.core.uploads import MAX_BYTES, delete_image, is_allowed, save_image
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
+from app.models.audit import AuditLog
 from app.models.lead import LEAD_STATUSES, Lead
 from app.models.product import Product
 from app.models.user import User
@@ -161,10 +163,61 @@ def ai_logs(db: Session = Depends(get_db), limit: int = 100):
 
 # ==================== Products management ====================
 @router.get("/products")
-def admin_products(db: Session = Depends(get_db), limit: int = 200):
-    limit = min(limit, 500)
-    rows = db.execute(select(Product).order_by(Product.id).limit(limit)).scalars().all()
-    return {"products": [p.to_admin() for p in rows]}
+def admin_products(
+    db: Session = Depends(get_db),
+    q: str | None = None,
+    category: str | None = None,
+    brand: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+    limit: int | None = None,   # legacy alias -> page_size
+):
+    """Список товаров с поиском (название + SKU), фильтрами и пагинацией.
+
+    Поиск по q ведётся в Python (Unicode-регистронезависимо) — sqlite/PG
+    ведут себя одинаково для кириллицы. category/brand — точное совпадение.
+    Возвращает страницу + total/pages и полный список категорий/брендов
+    (facets), чтобы фильтры в админке были полными вне текущей страницы.
+    """
+    if limit is not None:
+        page_size = limit
+    page = max(1, page)
+    page_size = max(1, min(page_size, 500))
+
+    stmt = select(Product).order_by(Product.id)
+    if category:
+        stmt = stmt.where(Product.category == category)
+    if brand:
+        stmt = stmt.where(Product.brand == brand)
+    rows = db.execute(stmt).scalars().all()
+
+    if q and q.strip():
+        needle = q.strip().lower()
+        rows = [
+            p for p in rows
+            if needle in (p.title or "").lower() or needle in (p.sku or "").lower()
+        ]
+
+    total = len(rows)
+    start = (page - 1) * page_size
+    page_rows = rows[start:start + page_size]
+
+    cats = db.execute(
+        select(Product.category).where(Product.category.is_not(None)).distinct()
+    ).scalars().all()
+    brands = db.execute(
+        select(Product.brand).where(Product.brand.is_not(None)).distinct()
+    ).scalars().all()
+
+    return {
+        "products": [p.to_admin() for p in page_rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size if total else 0,
+        "categories": sorted(cats),
+        "brands": sorted(brands),
+    }
 
 
 # Поля товара, которые можно править/задавать из админки (демо)
@@ -233,15 +286,141 @@ def admin_update_stock(product_id: int, body: dict, db: Session = Depends(get_db
     return product.to_admin()
 
 
+# ==================== Массовые действия и безопасное удаление ====================
+_BULK_ACTIONS = ("activate", "deactivate", "set_out_of_stock", "delete")
+_BLOCKED_MESSAGE = "Товар используется в заявках или постах. Его можно только скрыть"
+
+
+def product_delete_blockers(db: Session, product_id: int) -> dict:
+    """Связи, при которых товар нельзя удалять физически.
+
+    Жёсткий блокер — только заявки (Lead.product_id): это реальные записи CRM.
+    Посты (ChannelPost) не ссылаются на товар в схеме БД. Аналитика —
+    append-only лог событий (product_id лежит внутри JSON payload) и удалению
+    товара не мешает, иначе почти каждый просмотренный демо-товар стал бы
+    неудаляемым, что противоречит задаче «чистить демо-каталог».
+    """
+    leads = db.execute(
+        select(func.count()).select_from(Lead).where(Lead.product_id == product_id)
+    ).scalar_one()
+    blockers: dict = {}
+    if leads:
+        blockers["leads"] = leads
+    return blockers
+
+
 @router.delete("/products/{product_id}")
-def admin_delete_product(product_id: int, db: Session = Depends(get_db)):
-    """Демо: мягкое удаление — товар выключается (is_active=false), данные не теряем."""
+def admin_delete_product(
+    product_id: int,
+    request: Request,
+    admin: str = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Физическое удаление товара. Только для администратора (роутер под
+    get_current_admin). Если товар используется в заявках — 409, не удаляем."""
     product = db.get(Product, product_id)
     if product is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
-    product.is_active = False
+
+    blockers = product_delete_blockers(db, product_id)
+    if blockers:
+        raise HTTPException(status.HTTP_409_CONFLICT, _BLOCKED_MESSAGE)
+
+    sku, title = product.sku, product.title
+    db.delete(product)
+    db.add(AuditLog(
+        actor=f"admin:{admin}", action="product_deleted", ip=client_ip(request),
+        detail=json.dumps({"product_id": product_id, "sku": sku, "title": title}, ensure_ascii=False),
+    ))
     db.commit()
-    return {"ok": True, "id": product_id, "is_active": False}
+    return {"ok": True, "id": product_id, "deleted": True}
+
+
+@router.post("/products/bulk-action")
+def admin_bulk_action(
+    body: dict,
+    request: Request,
+    admin: str = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Массовое действие над выбранными товарами (одной транзакцией).
+
+    body = {"product_ids": [1,2,3], "action": "deactivate"}
+    action ∈ activate | deactivate | set_out_of_stock | delete.
+
+    Для delete товары со связанными заявками не удаляются физически, а
+    скрываются (is_active=false) и попадают в счётчик hidden. Несуществующие
+    id — в skipped. Любая непредвиденная ошибка откатывает всю транзакцию.
+    """
+    action = (body or {}).get("action")
+    raw_ids = (body or {}).get("product_ids")
+    if action not in _BULK_ACTIONS:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"action must be one of {_BULK_ACTIONS}")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "product_ids must be a non-empty list")
+    try:
+        ids = list(dict.fromkeys(int(x) for x in raw_ids))  # дедуп с сохранением порядка
+    except (TypeError, ValueError):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "product_ids must be integers")
+    if len(ids) > 1000:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Не больше 1000 товаров за одну операцию")
+
+    deleted = hidden = updated = 0
+    skipped_details: list[dict] = []
+    try:
+        for pid in ids:
+            product = db.get(Product, pid)
+            if product is None:
+                skipped_details.append({"id": pid, "reason": "не найден"})
+                continue
+            if action == "activate":
+                product.is_active = True
+                updated += 1
+            elif action == "deactivate":
+                product.is_active = False
+                updated += 1
+            elif action == "set_out_of_stock":
+                product.stock = 0
+                product.in_stock = False
+                product.is_available_today = False
+                updated += 1
+            elif action == "delete":
+                if product_delete_blockers(db, pid):
+                    product.is_active = False   # используется в заявках — скрываем, не удаляем
+                    hidden += 1
+                else:
+                    db.delete(product)
+                    deleted += 1
+
+        skipped = len(skipped_details)
+        db.add(AuditLog(
+            actor=f"admin:{admin}", action=f"products_bulk_{action}", ip=client_ip(request),
+            detail=json.dumps({
+                "action": action, "product_ids": ids,
+                "deleted": deleted, "hidden": hidden, "updated": updated,
+                "skipped": skipped, "skipped_details": skipped_details,
+            }, ensure_ascii=False),
+        ))
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception:  # noqa: BLE001 — атомарность: либо весь пакет, либо ничего
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Массовая операция не выполнена, изменения откачены",
+        )
+
+    return {
+        "action": action,
+        "requested": len(ids),
+        "deleted": deleted,
+        "hidden": hidden,
+        "updated": updated,
+        "skipped": len(skipped_details),
+        "skipped_details": skipped_details,
+        "processed": deleted + hidden + updated,
+    }
 
 
 # ==================== Product images (галерея) ====================
