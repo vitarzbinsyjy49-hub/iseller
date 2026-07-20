@@ -123,7 +123,11 @@ export default function Catalog() {
           а строка сортировки/фильтров шла отдельным несклеенным блоком ниже и при
           скролле «наезжала» на неё же и на первый ряд карточек. Теперь один блок,
           одна нижняя граница, наложения нет. */}
-      <div className="sticky top-0 z-20 -mx-4 space-y-2 bg-bg px-4 pb-2.5 pt-2 shadow-[0_1px_0_0_var(--app-border)] lg:mx-0 lg:px-0 lg:pt-0 lg:shadow-none">
+      {/* -top-3 = ровно pt-3 скролл-контейнера <main>: sticky прижимается к краю
+          padding-box, и с top-0 панель зависала на 12px ниже верха — в этой
+          полосе просвечивали скроллящиеся карточки (та самая «щель»). На
+          desktop поведение прежнее (lg:top-0). */}
+      <div className="seam-guard sticky -top-3 z-20 -mx-4 space-y-2 border-b border-border bg-bg px-4 pb-2.5 pt-2 lg:top-0 lg:mx-0 lg:border-0 lg:px-0 lg:pt-0">
         <div className="flex items-center gap-2">
         {/* Поиск каталога — ТОЛЬКО mobile/tablet. На desktop единственный поиск —
             в шапке (DesktopHeader), пишет в тот же URL-параметр `query`. */}

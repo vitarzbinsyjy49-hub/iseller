@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ProductCard as TCard } from "./ai/types";
 import { formatPrice, discountPct } from "../lib/format";
+import { imagePaddingClass } from "../lib/viewport";
 import { useFavorite } from "../lib/favorites";
 
 type Props = {
@@ -22,25 +23,42 @@ const PLACEHOLDER_STYLE: Record<string, { emoji: string; from: string; to: strin
 };
 const PLACEHOLDER_DEFAULT = { emoji: "📦", from: "#eef2f7", to: "#dfe7f0" };
 
-/** Градиентная заглушка вместо битой/отсутствующей картинки — UI не прыгает. */
+/** Медиа-контейнер товара.
+ *  - Реальное фото: object-contain по центру на нейтральном фоне поверхности —
+ *    товар всегда помещается целиком, верх/низ устройства не обрезаются
+ *    (раньше object-cover в фиксированном h-40 резал вытянутые фото).
+ *  - Внутренний отступ вычисляется из реальных пропорций фото
+ *    (imagePaddingClass), без ручных списков SKU.
+ *  - Битая/отсутствующая картинка: градиентная заглушка, UI не прыгает,
+ *    broken-image icon не показывается. */
 export function ProductImage({
   src, title, category, className = "",
 }: { src?: string; title: string; category?: string | null; className?: string }) {
   const [failed, setFailed] = useState(false);
+  const [pad, setPad] = useState<"p-2" | "p-1">("p-2");
   const showImg = src && !failed;
   const ph = PLACEHOLDER_STYLE[(category ?? "").toLowerCase()] ?? PLACEHOLDER_DEFAULT;
   return (
     <div
       className={`relative overflow-hidden ${className}`}
-      style={{ background: `linear-gradient(135deg, ${ph.from}, ${ph.to})` }}
+      style={
+        showImg
+          ? { background: "var(--app-surface)" }
+          : { background: `linear-gradient(135deg, ${ph.from}, ${ph.to})` }
+      }
     >
       {showImg ? (
         <img
           src={src}
           alt=""
           loading="lazy"
-          className="h-full w-full object-cover"
+          decoding="async"
+          className={`h-full w-full object-contain object-center ${pad}`}
           onError={() => setFailed(true)}
+          onLoad={(e) => {
+            const img = e.currentTarget;
+            setPad(imagePaddingClass(img.naturalWidth, img.naturalHeight));
+          }}
         />
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-center">
@@ -100,8 +118,9 @@ export default function ProductCard({ card, onLead, compact }: Props) {
       {/* FavButton — сосед кнопки, не вложен в неё (валидный DOM) */}
       <div className="relative">
         <button onClick={() => navigate(`/product/${card.id}`)} className="block w-full text-left">
-          {/* h-40 (160px) вместо aspect-square: карточка компактнее, сетка плотнее */}
-          <ProductImage src={card.image} title={card.title} category={card.category} className="h-40 w-full" />
+          {/* aspect-square: одинаковая высота image-area у всех карточек ряда,
+              высота не меняется после загрузки фото (нет layout shift) */}
+          <ProductImage src={card.image} title={card.title} category={card.category} className="aspect-square w-full" />
           <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
             {card.is_hot && <Badge color="orange">🔥 Хит</Badge>}
             {disc && <Badge color="red">−{disc}%</Badge>}

@@ -19,13 +19,31 @@
   --app-red: #ff3b30;
 }
 
-html, body, #root { height: 100%; }
-
-/* Полноэкранный режим Telegram (requestFullscreen): сдвигаем контент вниз под
-   статус-бар/чёлку и плавающие кнопки Telegram. Вне fullscreen переменные = 0. */
+/* ============================================================
+   Высота приложения и safe-area (v5.2.3).
+   JS (lib/telegram.ts → syncViewportVars) ставит на <html>:
+     --app-height             — надёжная высота (Telegram → visualViewport);
+     --app-content-top-offset — итоговый верхний отступ контента
+                                (ставится ТОЛЬКО внутри Telegram);
+     --app-safe-bottom        — итоговый нижний safe-отступ (только в Telegram).
+   Вне Telegram переменные отсутствуют и работают env()-fallback'и ниже —
+   поэтому env() и Telegram-значения никогда не суммируются.
+   ============================================================ */
+html, body { height: 100%; }
 #root {
-  padding-top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+  min-height: 100%;
+  /* Приоритет: JS-переменная (px) → 100% (до первого расчёта — как раньше,
+     без layout shift; сам расчёт происходит до первого кадра контента). */
+  height: var(--app-height, 100%);
+  /* Верхний отступ: в Telegram fullscreen — под статус-бар + плавающие кнопки
+     Telegram (значения Telegram), в обычном режиме Telegram — 0 (webview уже
+     начинается под нативной шапкой), в браузере с viewport-fit=cover — env(). */
+  padding-top: var(--app-content-top-offset, env(safe-area-inset-top, 0px));
   box-sizing: border-box;
+  /* Фон root = фон body: между Telegram chrome и контентом нет белой полосы
+     чужого оттенка, и отступ сверху выглядит как продолжение приложения. */
+  background: var(--app-bg);
+  overflow: hidden; /* единственный скролл — внутри <main>; body не скроллит */
 }
 body {
   background: var(--app-bg);
@@ -104,8 +122,39 @@ body {
 .typing-dot:nth-child(2) { animation-delay: .15s; }
 .typing-dot:nth-child(3) { animation-delay: .3s; }
 
-/* Отступ под нижнюю навигацию с safe-area */
-.safe-bottom { padding-bottom: calc(env(safe-area-inset-bottom, 0px)); }
+/* Отступ под нижнюю навигацию с safe-area: в Telegram — значение Telegram,
+   вне Telegram — env(). Один источник, без двойной компенсации. */
+.safe-bottom { padding-bottom: var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)); }
+
+/* Нижний отступ скролл-контента под фиксированной навигацией:
+   высота контента навигации (~60px) + запас 16px + safe-area.
+   Ровно одна safe-area компенсация (та же переменная, что у .safe-bottom). */
+/* Только mobile/tablet (<1024px): на desktop нижней навигации нет,
+   там действует tailwind lg:pb-12 (этот блок объявлен после утилит и
+   без media-ограничения перебивал бы её). */
+@media (max-width: 1023.98px) {
+  .pb-nav { padding-bottom: calc(76px + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))); }
+}
+
+/* Открыта клавиатура (JS вешает .kb-open на <html>): нижняя навигация
+   скрывается, чтобы не всплывать над клавиатурой и не прыгать; после
+   закрытия возвращается (класс снимается на viewport-событии). */
+html.kb-open .js-bottom-nav { display: none; }
+
+/* Sticky-панель каталога: ::after закрывает субпиксельную щель (DPR 2–3
+   даёт дробные координаты, между нижней границей панели и контентом
+   просвечивает 1px скроллящихся карточек). Основная причина устранена
+   непрозрачным фоном + border-b; ::after страхует округление. */
+.seam-guard { position: sticky; }
+.seam-guard::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--app-bg);
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

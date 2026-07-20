@@ -14,7 +14,7 @@ export default function Layout() {
       <DesktopHeader />
       <main
         key={location.pathname}
-        className="page-enter flex-1 overflow-y-auto px-4 pb-28 pt-3 lg:px-8 lg:pb-12 lg:pt-6"
+        className="page-enter pb-nav flex-1 overflow-y-auto px-4 pt-3 lg:px-8 lg:pb-12 lg:pt-6"
       >
         <div className="lg:mx-auto lg:w-full lg:max-w-[1320px]">
           <Outlet />
