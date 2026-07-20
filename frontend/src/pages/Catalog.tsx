@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
+import { ErrorState, EmptyState } from "../components/StateViews";
 
 const CATS = [
   { key: "", label: "Все" },
@@ -26,9 +27,14 @@ const SORTS = [
 export default function Catalog() {
   const [params, setParams] = useSearchParams();
   const [cards, setCards] = useState<TCard[] | null>(null);
+  const [cardsError, setCardsError] = useState(false);
   const [category, setCategory] = useState(params.get("category") ?? "");
-  const [query, setQuery] = useState(params.get("query") ?? "");
-  const [debouncedQuery, setDebouncedQuery] = useState(query);
+  // Единое состояние поиска — URL-параметр `query` (тот же, что использует
+  // шапка на desktop и живые подсказки на главной). Локальный `q` нужен только
+  // для мгновенного отклика инпута; в URL пишем с debounce, само значение для
+  // запроса берём из URL (`urlQuery`) — один источник правды, а не два стейта.
+  const urlQuery = params.get("query") ?? "";
+  const [q, setQ] = useState(urlQuery);
   const [sort, setSort] = useState("popularity");
   const [priceMax, setPriceMax] = useState("");
   const [brand, setBrand] = useState("");
@@ -46,17 +52,27 @@ export default function Catalog() {
     api<{ brands: string[] }>("/catalog/brands").then((d) => setBrands(d.brands)).catch(() => {});
   }, []);
 
-  // Live-поиск: debounce 250ms, чтобы не слать запрос на каждый символ
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(query), 250);
-    return () => clearTimeout(t);
-  }, [query]);
+  // Подхватить внешнее изменение URL (переход из шапки/баннера/подсказки на главной).
+  useEffect(() => { setQ(urlQuery); }, [urlQuery]);
 
+  // Live-поиск: debounce 250ms, пишем в URL — единственный источник правды.
   useEffect(() => {
+    const t = setTimeout(() => {
+      const trimmed = q.trim();
+      if (trimmed === urlQuery) return;
+      const next = new URLSearchParams(params);
+      if (trimmed) next.set("query", trimmed); else next.delete("query");
+      setParams(next, { replace: true });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const load = useCallback(() => {
     setCards(null);
+    setCardsError(false);
     const qs = new URLSearchParams();
     if (category) qs.set("category", category);
-    if (debouncedQuery.trim()) qs.set("query", debouncedQuery.trim());
+    if (urlQuery) qs.set("query", urlQuery);
     if (priceMax) qs.set("price_max", priceMax);
     if (brand) qs.set("brand", brand);
     if (onlyStock) qs.set("in_stock", "true");
@@ -66,12 +82,16 @@ export default function Catalog() {
     qs.set("sort", sort);
     api<{ cards?: TCard[] }>(`/catalog/list?${qs.toString()}`)
       .then((d) => setCards(Array.isArray(d.cards) ? d.cards : []))
-      .catch(() => setCards([]));
-  }, [category, sort, priceMax, debouncedQuery, brand, onlyStock, onlyToday, condition, collection]);
+      .catch(() => { setCards([]); setCardsError(true); });
+  }, [category, sort, priceMax, urlQuery, brand, onlyStock, onlyToday, condition, collection]);
+
+  useEffect(() => { load(); }, [load]);
 
   function pickCategory(key: string) {
     setCategory(key);
-    if (key) setParams({ category: key }); else setParams({});
+    const next = new URLSearchParams(params);
+    if (key) next.set("category", key); else next.delete("category");
+    setParams(next);
   }
 
   const chip = (active: boolean) =>
@@ -97,22 +117,29 @@ export default function Catalog() {
         )}
 
         <div className="min-w-0">
-      {/* Sticky-блок: поиск + чипсы категорий (mobile) / поиск + сортировка (desktop) */}
-      <div className="sticky top-0 z-20 -mx-4 bg-bg px-4 pb-1 pt-2 lg:mx-0 lg:px-0 lg:pt-0">
+      {/* ===== Единая sticky-панель инструментов =====
+          Всё, что скроллится вместе с шапкой каталога, живёт в ОДНОМ sticky-блоке
+          с непрозрачным фоном — раньше поиск/чипсы категорий были в sticky-блоке,
+          а строка сортировки/фильтров шла отдельным несклеенным блоком ниже и при
+          скролле «наезжала» на неё же и на первый ряд карточек. Теперь один блок,
+          одна нижняя граница, наложения нет. */}
+      <div className="sticky top-0 z-20 -mx-4 space-y-2 bg-bg px-4 pb-2.5 pt-2 shadow-[0_1px_0_0_var(--app-border)] lg:mx-0 lg:px-0 lg:pt-0 lg:shadow-none">
         <div className="flex items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl2 bg-surface px-4 shadow-soft">
+        {/* Поиск каталога — ТОЛЬКО mobile/tablet. На desktop единственный поиск —
+            в шапке (DesktopHeader), пишет в тот же URL-параметр `query`. */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl2 bg-surface px-4 shadow-soft lg:hidden">
           <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
           </svg>
           <input
-            value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по каталогу"
+            value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по каталогу"
             className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-muted"
           />
-          {query && <button onClick={() => setQuery("")} className="text-muted">✕</button>}
+          {q && <button onClick={() => setQ("")} className="text-muted">✕</button>}
         </div>
 
-        {/* Desktop: сортировка + сворачивание фильтров в одной строке с поиском */}
-        <div className="hidden shrink-0 items-center gap-2 lg:flex">
+        {/* Desktop: сортировка + сворачивание фильтров */}
+        <div className="hidden shrink-0 items-center gap-2 lg:flex lg:w-full lg:justify-end">
           {SORTS.map((s) => (
             <button key={s.key} onClick={() => setSort(s.key)} className={chip(sort === s.key)}>{s.label}</button>
           ))}
@@ -126,46 +153,46 @@ export default function Catalog() {
         </div>
         </div>
 
-        <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
+        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
           {CATS.map((c) => (
             <button key={c.key} onClick={() => pickCategory(c.key)} className={chip(category === c.key)}>
               {c.label}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Фильтры (mobile/tablet): сортировка, наличие, сегодня, бренд, цена */}
-      <div className="no-scrollbar -mx-4 mt-2 flex items-center gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
-        {SORTS.map((s) => (
-          <button key={s.key} onClick={() => setSort(s.key)} className={chip(sort === s.key)}>{s.label}</button>
-        ))}
-        <button onClick={() => setOnlyStock(!onlyStock)} className={chip(onlyStock)}>В наличии</button>
-        <button onClick={() => setOnlyToday(!onlyToday)} className={chip(onlyToday)}>Забрать сегодня</button>
-        <select
-          value={brand} onChange={(e) => setBrand(e.target.value)}
-          className="tap shrink-0 appearance-none rounded-full bg-surface px-3.5 py-2 text-xs font-medium shadow-soft outline-none"
-        >
-          <option value="">Бренд</option>
-          {brands.map((b) => <option key={b} value={b}>{b}</option>)}
-        </select>
-        <input
-          value={priceMax} onChange={(e) => setPriceMax(e.target.value.replace(/\D/g, ""))}
-          placeholder="Цена до, ₽" inputMode="numeric"
-          className="w-24 shrink-0 rounded-full bg-surface px-3.5 py-2 text-xs shadow-soft outline-none placeholder:text-muted"
-        />
+        {/* Фильтры (mobile/tablet): сортировка, наличие, сегодня, бренд, цена —
+            в ТОМ ЖЕ sticky-блоке, что и поиск/категории (см. комментарий выше). */}
+        <div className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
+          {SORTS.map((s) => (
+            <button key={s.key} onClick={() => setSort(s.key)} className={chip(sort === s.key)}>{s.label}</button>
+          ))}
+          <button onClick={() => setOnlyStock(!onlyStock)} className={chip(onlyStock)}>В наличии</button>
+          <button onClick={() => setOnlyToday(!onlyToday)} className={chip(onlyToday)}>Забрать сегодня</button>
+          <select
+            value={brand} onChange={(e) => setBrand(e.target.value)}
+            className="tap shrink-0 appearance-none rounded-full bg-surface px-3.5 py-2 text-xs font-medium shadow-soft outline-none"
+          >
+            <option value="">Бренд</option>
+            {brands.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <input
+            value={priceMax} onChange={(e) => setPriceMax(e.target.value.replace(/\D/g, ""))}
+            placeholder="Цена до, ₽" inputMode="numeric"
+            className="w-24 shrink-0 rounded-full bg-surface px-3.5 py-2 text-xs shadow-soft outline-none placeholder:text-muted"
+          />
+        </div>
       </div>
 
       {/* Сетка товаров: 2 / 3 (tablet) / 4 (desktop) / 5 (wide) */}
-      {!cards ? (
+      {cardsError ? (
+        <div className="mt-6"><ErrorState message="Не удалось загрузить товары" onRetry={load} /></div>
+      ) : !cards ? (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <div key={i} className="skeleton h-72 rounded-xl2" />)}
         </div>
       ) : cards.length === 0 ? (
-        <div className="mt-14 text-center">
-          <div className="text-4xl">🔍</div>
-          <p className="mt-3 text-sm text-muted">Ничего не найдено. Попробуйте изменить фильтры.</p>
-        </div>
+        <EmptyState message="Ничего не найдено. Попробуйте изменить фильтры." />
       ) : (
         <div className="stagger mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
           {cards.map((c) => <ProductCard key={c.id} card={c} onLead={setLead} />)}

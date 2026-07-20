@@ -3,6 +3,17 @@ import { useAuthStore } from "../store/auth";
 
 const BASE = "/api";
 
+/** Ошибка API с реальным HTTP-статусом — чтобы вызывающий код мог отличить
+ *  «не найдено» (404) от временного сбоя сети/сервера, не парся текст. */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function rawRequest(path: string, options: RequestInit = {}): Promise<Response> {
   const { accessToken } = useAuthStore.getState();
   const headers: Record<string, string> = {
@@ -22,7 +33,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `Ошибка запроса (${res.status})`);
+    throw new ApiError(body.detail || `Ошибка запроса (${res.status})`, res.status);
   }
   return res.json();
 }

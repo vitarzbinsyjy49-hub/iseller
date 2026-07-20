@@ -1,11 +1,15 @@
-import { useState, type ReactElement } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState, type ReactElement } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../store/auth";
 import { usePublicConfig } from "../lib/appConfig";
 import { openExternalLink } from "../lib/telegram";
+import { ProfileChip } from "./ProfileChip";
 
 /** Desktop-шапка (>=1024px): логотип, навигация, поиск, действия.
  *  Видна только на lg+ — mobile UX (BottomNav + градиентный header) не трогаем.
+ *  Единственный поиск на desktop: тот же URL-параметр `query`, что и у
+ *  Catalog (чей собственный инпут на desktop скрыт) — не два расходящихся
+ *  состояния поиска, а одно, отражённое в адресной строке.
  *  Никакой бизнес-логики: только навигация и переиспользуемые ссылки конфига. */
 
 const NAV: { to: string; label: string }[] = [
@@ -19,15 +23,32 @@ const NAV: { to: string; label: string }[] = [
 export default function DesktopHeader() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const config = usePublicConfig();
-  const [q, setQ] = useState("");
+  const onCatalog = pathname.startsWith("/catalog");
+  const urlQuery = onCatalog ? (params.get("query") ?? "") : "";
+  const [q, setQ] = useState(urlQuery);
 
-  function goSearch() {
-    const query = q.trim();
-    navigate(query ? `/catalog?query=${encodeURIComponent(query)}` : "/catalog");
-    setQ("");
-  }
+  // Подхватить внешний query (переход на каталог с другим query) или сброс
+  // при уходе со страницы каталога — шапка не должна хранить «чужой» текст.
+  useEffect(() => { setQ(urlQuery); }, [urlQuery, onCatalog]);
+
+  // Live-поиск с debounce 250ms — единственная точка входа в поиск на desktop.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const trimmed = q.trim();
+      if (onCatalog) {
+        if (trimmed === urlQuery) return;
+        const next = new URLSearchParams(params);
+        if (trimmed) next.set("query", trimmed); else next.delete("query");
+        setParams(next, { replace: true });
+      } else if (trimmed) {
+        navigate(`/catalog?query=${encodeURIComponent(trimmed)}`);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <header className="hidden border-b border-border bg-surface/95 backdrop-blur-lg lg:block">
@@ -59,16 +80,20 @@ export default function DesktopHeader() {
           })}
         </nav>
 
-        {/* Поиск */}
+        {/* Поиск — живой, с debounce, единственный на desktop */}
         <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl2 bg-mutedbg px-4 focus-within:ring-2 focus-within:ring-accent/40">
           <SearchIcon />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && goSearch()}
             placeholder="Найти iPhone, MacBook, PlayStation…"
             className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-muted"
           />
+          {q && (
+            <button onClick={() => setQ("")} aria-label="Очистить поиск" className="shrink-0 text-muted hover:text-text">
+              ✕
+            </button>
+          )}
         </div>
 
         {/* Действия справа */}
@@ -85,13 +110,7 @@ export default function DesktopHeader() {
           >
             💬 Менеджер
           </button>
-          <button
-            onClick={() => navigate("/profile")}
-            aria-label="Профиль"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-sm font-bold text-accent transition-colors hover:bg-accent/20"
-          >
-            {user?.first_name?.[0]?.toUpperCase() ?? "👤"}
-          </button>
+          <ProfileChip user={user} variant="desktop" />
         </div>
       </div>
     </header>

@@ -1,32 +1,40 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { track } from "../lib/analytics";
 import { ProductDetail } from "../components/ai/types";
 import { formatPrice, discountPct } from "../lib/format";
 import { ProductImage, Badge, FavButton } from "../components/ProductCard";
+import { ErrorState } from "../components/StateViews";
 import LeadForm from "../components/LeadForm";
 import { openExternalLink } from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
 
 type Tab = "desc" | "specs" | "delivery";
+type LoadState = "loading" | "ready" | "not_found" | "error";
 
 export default function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const config = usePublicConfig();
   const [p, setP] = useState<ProductDetail | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const [state, setState] = useState<LoadState>("loading");
   const [tab, setTab] = useState<Tab>("desc");
   const [shared, setShared] = useState(false);
   const [lead, setLead] = useState<{ source: string; preset?: string } | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!id) return;
+    setState("loading");
     api<ProductDetail>(`/catalog/product/${id}`)
-      .then((d) => { setP(d); track("product_viewed", { product_id: d.id }); })
-      .catch(() => setNotFound(true));
+      .then((d) => { setP(d); setState("ready"); track("product_viewed", { product_id: d.id }); })
+      .catch((e) => {
+        // 404 от API — «не найден»; сеть/5xx — временная ошибка с повтором
+        setState(e instanceof ApiError && e.status === 404 ? "not_found" : "error");
+      });
   }, [id]);
+
+  useEffect(() => { load(); }, [load]);
 
   async function share() {
     if (!p) return;
@@ -44,7 +52,16 @@ export default function ProductDetails() {
     }
   }
 
-  if (notFound) return <div className="mx-auto max-w-md py-20 text-center text-muted">Товар не найден</div>;
+  if (state === "not_found") {
+    return <div className="mx-auto max-w-md py-20 text-center text-muted">Товар не найден</div>;
+  }
+  if (state === "error") {
+    return (
+      <div className="mx-auto max-w-md py-10">
+        <ErrorState message="Не удалось загрузить товар" onRetry={load} />
+      </div>
+    );
+  }
   if (!p) return (
     <div className="mx-auto max-w-md">
       <div className="skeleton aspect-square rounded-xl2" />
@@ -124,7 +141,7 @@ export default function ProductDetails() {
       {/* Цена + выгода */}
       <div className="mt-2.5 flex items-center gap-2.5">
         <span className="text-[26px] font-bold leading-8">{formatPrice(p.price)}</span>
-        {p.old_price && <span className="text-sm text-muted line-through">{formatPrice(p.old_price)}</span>}
+        {disc !== null && <span className="text-sm text-muted line-through">{formatPrice(p.old_price!)}</span>}
         {saving > 0 && (
           <span className="rounded-full bg-[#ffe9ec] px-2 py-1 text-xs font-semibold text-[#e0284f]">
             выгода {formatPrice(saving)}

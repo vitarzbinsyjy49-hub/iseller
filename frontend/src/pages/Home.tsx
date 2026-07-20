@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
@@ -8,6 +8,8 @@ import ProductCard from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
 import { usePublicConfig } from "../lib/appConfig";
 import { openExternalLink } from "../lib/telegram";
+import { ProfileChip } from "../components/ProfileChip";
+import { ErrorState } from "../components/StateViews";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; recommended: TCard[] };
@@ -51,6 +53,10 @@ export default function Home() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [home, setHome] = useState<HomeData | null>(null);
   const [feed, setFeed] = useState<Feed | null>(null);
+  // Раньше ошибка /catalog/feed молча проглатывалась и feed оставался null
+  // навсегда — секции показывали скелетон бесконечно, никогда не сообщая
+  // о сбое. Теперь отдельно отличаем «ещё грузится» от «не удалось».
+  const [feedError, setFeedError] = useState(false);
   // Доп. секции desktop-главной (Скидки/Apple/Gaming) — те же API каталога
   const [extra, setExtra] = useState<{ sale: TCard[]; apple: TCard[]; gaming: TCard[] } | null>(null);
   const [lead, setLead] = useState<TCard | null>(null);
@@ -59,20 +65,26 @@ export default function Home() {
   const [results, setResults] = useState<TCard[] | null>(null);
   const [searching, setSearching] = useState(false);
 
+  const loadFeed = useCallback(() => {
+    setFeed(null);
+    setFeedError(false);
+    api<Feed>("/catalog/feed").then(setFeed).catch(() => setFeedError(true));
+  }, []);
+
   useEffect(() => {
     track("app_opened");
     api<HomeData>("/home")
       .then((d) => setHome(d))
       .catch(() => setHome({ banners: FALLBACK_PROMOS, categories: [] }));
     api<{ categories: Category[] }>("/catalog/categories").then((d) => setCategories(d.categories)).catch(() => {});
-    api<Feed>("/catalog/feed").then(setFeed).catch(() => {});
+    loadFeed();
     // Секции desktop-главной; ошибки не критичны — секция просто не показывается
     Promise.all([
       api<{ cards?: TCard[] }>("/catalog/list?category=__sale__&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
       api<{ cards?: TCard[] }>("/catalog/list?brand=Apple&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
       api<{ cards?: TCard[] }>(`/catalog/list?category=${encodeURIComponent("консоли")}&sort=popularity`).then((d) => d.cards ?? []).catch(() => []),
     ]).then(([sale, apple, gaming]) => setExtra({ sale, apple, gaming }));
-  }, []);
+  }, [loadFeed]);
 
   // Debounce 250ms: ищем по мере ввода, без Enter
   useEffect(() => {
@@ -114,13 +126,7 @@ export default function Home() {
             >
               ✨ AI-подбор
             </button>
-            <button
-              onClick={() => navigate("/profile")}
-              className="tap flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-base backdrop-blur"
-              aria-label="Профиль"
-            >
-              {user?.first_name?.[0]?.toUpperCase() ?? "👤"}
-            </button>
+            <ProfileChip user={user} variant="mobile" />
           </div>
         </div>
 
@@ -271,11 +277,20 @@ export default function Home() {
             )}
       </div>
 
-      {/* ===== Секции товаров: mobile — ленты/сетка 2, desktop — сетка 4 (5 на wide) ===== */}
-      <Section title="Хиты продаж" cards={feed?.hot} onLead={setLead}
-        onAll={() => navigate("/catalog")} />
-      <Section title="Забрать сегодня" cards={feed?.available_today} onLead={setLead}
-        onAll={() => navigate("/catalog?today=1")} />
+      {/* ===== Секции товаров: mobile — ленты/сетка 2, desktop — сетка 4 (5 на wide) =====
+          Все три секции ниже (Хиты/Сегодня/Рекомендуем) читают один и тот же /catalog/feed —
+          при его сбое раньше секции бесконечно показывали скелетон (feed оставался null
+          навсегда). Теперь при ошибке — один явный блок с повтором вместо трёх немых. */}
+      {feedError ? (
+        <div className="mt-6"><ErrorState message="Не удалось загрузить подборки товаров" onRetry={loadFeed} /></div>
+      ) : (
+        <>
+          <Section title="Хиты продаж" cards={feed?.hot} onLead={setLead}
+            onAll={() => navigate("/catalog")} />
+          <Section title="Забрать сегодня" cards={feed?.available_today} onLead={setLead}
+            onAll={() => navigate("/catalog?today=1")} />
+        </>
+      )}
 
       {/* Desktop-секции (Скидки/Apple/Gaming) — только lg+, mobile-страницу не удлиняем */}
       <div className="hidden lg:block">
@@ -287,8 +302,10 @@ export default function Home() {
           onAll={() => navigate(`/catalog?category=${encodeURIComponent("консоли")}`)} grid />
       </div>
 
-      <Section title="Рекомендуем" cards={feed?.recommended} onLead={setLead}
-        onAll={() => navigate("/catalog")} grid />
+      {!feedError && (
+        <Section title="Рекомендуем" cards={feed?.recommended} onLead={setLead}
+          onAll={() => navigate("/catalog")} grid />
+      )}
 
         </div>{/* /контент */}
       </div>{/* /desktop grid */}

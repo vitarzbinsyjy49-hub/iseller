@@ -118,8 +118,9 @@ export default function ProductCard({ card, onLead, compact }: Props) {
       <div className="flex flex-1 flex-col p-2.5">
         <div className="flex items-baseline gap-1.5">
           <span className="text-[16px] font-bold leading-5">{formatPrice(card.price)}</span>
-          {card.old_price && (
-            <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price)}</span>
+          {/* old_price показываем только когда реально даёт скидку — иначе цифры вводят в заблуждение */}
+          {disc !== null && (
+            <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price!)}</span>
           )}
         </div>
         <button onClick={() => navigate(`/product/${card.id}`)} className="block w-full text-left">
