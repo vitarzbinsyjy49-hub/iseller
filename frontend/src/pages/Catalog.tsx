@@ -24,6 +24,21 @@ const SORTS = [
   { key: "price_desc", label: "Дороже" },
 ];
 
+/** Совпадает с limit по умолчанию у GET /catalog/list (backend не меняем).
+ *  Ответ содержит только `cards`, поля total нет — поэтому при заполненной
+ *  до предела выдаче точное общее количество неизвестно, и мы показываем
+ *  «N+», а не утверждаем неверный итог. */
+const LIST_LIMIT = 50;
+
+/** Русские склонения для счётчика: 1 товар / 2 товара / 5 товаров. */
+function plural(n: number, one: string, few: string, many: string) {
+  const d10 = n % 10;
+  const d100 = n % 100;
+  if (d10 === 1 && d100 !== 11) return one;
+  if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return few;
+  return many;
+}
+
 export default function Catalog() {
   const [params, setParams] = useSearchParams();
   const [cards, setCards] = useState<TCard[] | null>(null);
@@ -94,17 +109,32 @@ export default function Catalog() {
     setParams(next);
   }
 
+  // Рамка есть у обоих состояний (у активного — в цвет фона), поэтому высота
+  // одинаковая. На mobile рамка неактивного прозрачна — вид не меняется.
   const chip = (active: boolean) =>
-    `tap shrink-0 rounded-full px-3.5 py-2 text-xs font-medium transition-colors ${
-      active ? "bg-accent text-white" : "bg-surface text-text shadow-soft"
+    `tap shrink-0 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors ${
+      active ? "border-accent bg-accent text-white" : "border-transparent bg-surface text-text shadow-soft lg:border-border"
     }`;
+
+  // Заголовок раздела и счётчик — из фактического ответа API, без хардкода.
+  const sectionTitle = category ? CATS.find((c) => c.key === category)?.label ?? "Каталог" : "Каталог";
+  const total = cards?.length ?? null;
+  const countLabel =
+    total === null
+      ? null
+      : `${total}${total >= LIST_LIMIT ? "+" : ""} ${plural(total, "товар", "товара", "товаров")}`;
 
   return (
     <div className="mx-auto max-w-md lg:max-w-none">
-      <h1 className="text-2xl font-bold">Каталог</h1>
+      {/* Mobile: прежний заголовок над фильтрами. На desktop заголовок раздела
+          живёт в колонке контента (см. title row ниже) — так он выровнен с
+          toolbar и сеткой, а не растянут поверх всей ширины включая sidebar. */}
+      <h1 className="text-2xl font-bold lg:hidden">Каталог</h1>
 
-      {/* Desktop: сетка [sidebar фильтров | контент]; sidebar сворачивается */}
-      <div className={`lg:mt-4 lg:grid lg:items-start lg:gap-8 ${sidebarOpen ? "lg:grid-cols-[260px_minmax(0,1fr)]" : ""}`}>
+      {/* Desktop: сетка [sidebar фильтров | контент]; sidebar сворачивается.
+          lg:mt-0 — отступ от шапки задаёт padding-top у <main> (lg:pt-6 = 24px),
+          иначе к нему прибавлялся ещё mt-4 и разрыв уходил за 32px. */}
+      <div className={`lg:mt-0 lg:grid lg:items-start lg:gap-8 ${sidebarOpen ? "lg:grid-cols-[260px_minmax(0,1fr)]" : ""}`}>
         {sidebarOpen && (
           <FilterSidebar
             category={category} onCategory={pickCategory}
@@ -117,20 +147,29 @@ export default function Catalog() {
         )}
 
         <div className="min-w-0">
+      {/* ===== Desktop title row: раздел + фактическое количество =====
+          Отступы: от шапки 24px (padding-top <main>), до toolbar 16px (mb-4). */}
+      <div className="mb-4 hidden lg:block">
+        <h1 className="text-2xl font-bold leading-8">{sectionTitle}</h1>
+        {countLabel && <p className="mt-1 text-sm text-muted">{countLabel}</p>}
+      </div>
+
       {/* ===== Единая sticky-панель инструментов =====
           Всё, что скроллится вместе с шапкой каталога, живёт в ОДНОМ sticky-блоке
           с непрозрачным фоном — раньше поиск/чипсы категорий были в sticky-блоке,
           а строка сортировки/фильтров шла отдельным несклеенным блоком ниже и при
           скролле «наезжала» на неё же и на первый ряд карточек. Теперь один блок,
           одна нижняя граница, наложения нет. */}
-      {/* Сдвиг sticky равен padding-top скролл-контейнера <main> на своём
-          брейкпоинте: sticky прижимается к краю content-box, поэтому с top-0
-          панель зависает ровно на величину этого padding, и в получившейся
-          полосе просвечивают скроллящиеся карточки (та самая «щель»).
-          mobile:  main pt-3 (12px) → -top-3
-          desktop: main lg:pt-6 (24px) → lg:-top-6
-          При смене pt у <main> эти значения нужно менять синхронно. */}
-      <div className="seam-guard sticky -top-3 z-20 -mx-4 space-y-2 border-b border-border bg-bg px-4 pb-2.5 pt-2 lg:-top-6 lg:mx-0 lg:border-0 lg:px-0 lg:pt-0">
+      {/* Mobile: панель остаётся sticky. Сдвиг равен padding-top скролл-контейнера
+          <main>: sticky прижимается к краю content-box, поэтому с top-0 панель
+          зависает ровно на величину этого padding, и в полосе просвечивают
+          скроллящиеся карточки (та самая «щель»). main pt-3 (12px) → -top-3.
+          При смене pt у <main> значение нужно менять синхронно.
+
+          Desktop (v5.2.4): панель статична (lg:static) и занимает место в потоке —
+          отрицательная компенсация нужна только sticky-режиму, на desktop она
+          лишь создавала наложение на карточки. */}
+      <div className="seam-guard sticky -top-3 z-20 -mx-4 space-y-2 border-b border-border bg-bg px-4 pb-2.5 pt-2 lg:static lg:top-auto lg:mx-0 lg:border-0 lg:px-0 lg:pb-0 lg:pt-0">
         <div className="flex items-center gap-2">
         {/* Поиск каталога — ТОЛЬКО mobile/tablet. На desktop единственный поиск —
             в шапке (DesktopHeader), пишет в тот же URL-параметр `query`. */}
@@ -145,14 +184,18 @@ export default function Catalog() {
           {q && <button onClick={() => setQ("")} className="text-muted">✕</button>}
         </div>
 
-        {/* Desktop: сортировка + сворачивание фильтров */}
-        <div className="hidden shrink-0 items-center gap-2 lg:flex lg:w-full lg:justify-end">
+        {/* Desktop controls row: сортировки и «В наличии» слева, «Фильтры»
+            прижаты вправо через ml-auto у самой кнопки — а не justify-end у
+            всей группы, из-за которого кнопки липли к правому краю вне общей
+            сетки. flex-wrap: на 1024–1199px строка переносится без наложений. */}
+        <div className="hidden lg:flex lg:w-full lg:flex-wrap lg:items-center lg:gap-2.5">
           {SORTS.map((s) => (
             <button key={s.key} onClick={() => setSort(s.key)} className={chip(sort === s.key)}>{s.label}</button>
           ))}
+          <button onClick={() => setOnlyStock(!onlyStock)} className={chip(onlyStock)}>В наличии</button>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className={chip(false)}
+            className={`${chip(false)} lg:ml-auto`}
             title={sidebarOpen ? "Скрыть фильтры" : "Показать фильтры"}
           >
             {sidebarOpen ? "⟨ Фильтры" : "Фильтры ⟩"}
@@ -195,13 +238,13 @@ export default function Catalog() {
       {cardsError ? (
         <div className="mt-6"><ErrorState message="Не удалось загрузить товары" onRetry={load} /></div>
       ) : !cards ? (
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:mt-5 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <div key={i} className="skeleton h-72 rounded-xl2" />)}
         </div>
       ) : cards.length === 0 ? (
         <EmptyState message="Ничего не найдено. Попробуйте изменить фильтры." />
       ) : (
-        <div className="stagger mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
+        <div className="stagger mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:mt-5 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
           {cards.map((c) => <ProductCard key={c.id} card={c} onLead={setLead} />)}
         </div>
       )}

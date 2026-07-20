@@ -73,17 +73,26 @@ export default function ProductDetails() {
   const disc = discountPct(p.price, p.old_price);
   const saving = p.old_price ? p.old_price - p.price : 0;
 
+  // Активная вкладка — белая поверхность с тонкой границей. Рамка есть у обеих
+  // (у неактивной прозрачная), поэтому размеры одинаковые и ничего не «прыгает».
+  // focus-visible задан явно: без него UA рисовал толстый тёмный outline,
+  // который читался как чёрная рамка вокруг вкладки.
   const tabCls = (active: boolean) =>
-    `tap flex-1 rounded-xl py-2 text-[13px] font-semibold transition-colors ${
-      active ? "bg-surface text-text shadow-soft" : "text-muted"
+    `tap flex-1 rounded-xl border py-2 text-[13px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+      active
+        ? "border-border bg-surface text-text"
+        : "border-transparent text-muted hover:text-text"
     }`;
 
   return (
     // pb-40 (160px) — только mobile: чтобы контент не перекрывался фиксированной CTA.
     // На desktop CTA в правой колонке, поэтому lg:pb-12.
-    <div className="mx-auto max-w-md pb-40 lg:max-w-5xl lg:pb-12">
-      {/* ===== Sticky top bar: назад / поиск / поделиться / избранное ===== */}
-      <div className="sticky top-0 z-30 -mx-4 -mt-3 mb-3 flex items-center gap-2 bg-bg/90 px-4 py-2 backdrop-blur-lg lg:mx-0 lg:mt-0 lg:rounded-xl2">
+    <div className="mx-auto max-w-md pb-40 lg:max-w-[1440px] lg:pb-12">
+      {/* ===== Mobile/tablet: компактный sticky-оверлей (поведение v5.2.3) =====
+          На desktop он скрыт: один общий sticky-бар с z-30 обслуживал оба
+          брейкпоинта и при скролле наезжал на галерею (замер: 52px), а кнопки
+          не имели зарезервированного места в сетке. */}
+      <div className="sticky top-0 z-30 -mx-4 -mt-3 mb-3 flex items-center gap-2 bg-bg/90 px-4 py-2 backdrop-blur-lg lg:hidden">
         <TopBtn onClick={() => navigate(-1)} label="Назад">
           <path d="M15 18l-6-6 6-6" />
         </TopBtn>
@@ -102,8 +111,13 @@ export default function ProductDetails() {
         )}
       </div>
 
-      {/* ===== Desktop: 2 колонки — галерея слева, инфо+CTA справа ===== */}
-      <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-10">
+      {/* ===== Desktop: «Назад» — отдельная строка НАД карточкой, в потоке ===== */}
+      <div className="hidden lg:mb-4 lg:block">
+        <BackBtn onClick={() => navigate(-1)} />
+      </div>
+
+      {/* ===== Desktop: 2 колонки — media ~48% / контент ~52%, выравнивание сверху ===== */}
+      <div className="lg:grid lg:grid-cols-[48fr_52fr] lg:items-start lg:gap-8 xl:gap-12">
       {/* Крупное изображение: карусель фото со свайпом + бейджи */}
       <Gallery
         images={p.images && p.images.length ? p.images : p.image ? [p.image] : []}
@@ -120,8 +134,32 @@ export default function ProductDetails() {
 
       {/* Правая колонка (desktop) / продолжение потока (mobile) */}
       <div>
-      <p className="mt-4 text-xs text-muted lg:mt-0">{p.brand}{p.category ? ` · ${p.category}` : ""}</p>
-      <h1 className="mt-1 text-xl font-bold leading-6">{p.title}</h1>
+      {/* Desktop, первая строка: подпись категории слева, действия справа —
+          обе в обычном потоке, поэтому заголовок ниже получает всю ширину.
+          flex-wrap: на 1024–1199px группа действий переносится отдельной
+          строкой над заголовком, а не сжимает его. */}
+      <div className="relative hidden lg:mb-3 lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-x-4 lg:gap-y-2">
+        <p className="text-xs text-muted">{p.brand}{p.category ? ` · ${p.category}` : ""}</p>
+        <div className="flex shrink-0 items-center gap-2">
+          <ActionBtn onClick={() => navigate("/catalog")} label="Поиск">
+            <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>
+          </ActionBtn>
+          <ActionBtn onClick={share} label="Поделиться">
+            <path d="M12 3v12M12 3 8 7M12 3l4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+          </ActionBtn>
+          <FavButton id={p.id} className="h-[42px] w-[42px] border border-border" />
+        </div>
+        {shared && (
+          <span className="pop-in absolute right-0 top-[52px] z-10 rounded-full bg-text px-3 py-1.5 text-[11px] font-medium text-white">
+            Ссылка скопирована
+          </span>
+        )}
+      </div>
+
+      <p className="mt-4 text-xs text-muted lg:hidden">{p.brand}{p.category ? ` · ${p.category}` : ""}</p>
+      {/* Заголовок занимает всю ширину колонки и переносится полностью:
+          ни truncate, ни line-clamp — действия больше не стоят поверх него. */}
+      <h1 className="mt-1 text-xl font-bold leading-6 lg:mt-0 lg:text-[28px] lg:leading-9">{p.title}</h1>
 
       {/* Состояние + ключевые характеристики одной строкой */}
       {(p.condition === "used" || p.condition === "refurbished" || p.color || p.memory || p.storage) && (
@@ -317,6 +355,35 @@ function TopBtn({ onClick, label, children }: { onClick: () => void; label: stri
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         {children}
       </svg>
+    </button>
+  );
+}
+
+/** Desktop-действие в правой колонке: 42×42, в обычном потоке, с tooltip. */
+function ActionBtn({ onClick, label, children }: { onClick: () => void; label: string; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick} aria-label={label} title={label}
+      className="tap flex h-[42px] w-[42px] items-center justify-center rounded-full border border-border bg-surface text-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+    >
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {children}
+      </svg>
+    </button>
+  );
+}
+
+/** Desktop «Назад»: отдельная строка над карточкой, не поверх изображения. */
+function BackBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick} aria-label="Назад" title="Назад"
+      className="tap inline-flex h-[42px] items-center gap-2 rounded-xl2 border border-border bg-surface px-4 text-sm font-medium text-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15 18l-6-6 6-6" />
+      </svg>
+      Назад
     </button>
   );
 }
