@@ -141,19 +141,27 @@ body {
    закрытия возвращается (класс снимается на viewport-событии). */
 html.kb-open .js-bottom-nav { display: none; }
 
-/* Sticky-панель каталога: ::after закрывает субпиксельную щель (DPR 2–3
-   даёт дробные координаты, между нижней границей панели и контентом
-   просвечивает 1px скроллящихся карточек). Основная причина устранена
-   непрозрачным фоном + border-b; ::after страхует округление. */
-.seam-guard { position: sticky; }
-.seam-guard::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 1px;
-  background: var(--app-bg);
+/* Sticky-панель каталога (только mobile/tablet): ::after закрывает
+   субпиксельную щель (DPR 2–3 даёт дробные координаты, между нижней границей
+   панели и контентом просвечивает 1px скроллящихся карточек). Основная
+   причина устранена непрозрачным фоном + border-b; ::after страхует округление.
+
+   v5.2.4: объявление `position: sticky` убрано — оно шло после
+   @tailwind utilities и перебивало lg:static, из-за чего desktop-панель
+   нельзя было вывести из sticky. Позиционирование теперь задаётся только
+   утилитами на самом элементе (sticky на mobile, lg:static на desktop),
+   а подстраховка щели ограничена брейкпоинтом, где панель действительно
+   sticky. */
+@media (max-width: 1023.98px) {
+  .seam-guard::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 1px;
+    background: var(--app-bg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
