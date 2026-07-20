@@ -123,11 +123,14 @@ export default function Catalog() {
           а строка сортировки/фильтров шла отдельным несклеенным блоком ниже и при
           скролле «наезжала» на неё же и на первый ряд карточек. Теперь один блок,
           одна нижняя граница, наложения нет. */}
-      {/* -top-3 = ровно pt-3 скролл-контейнера <main>: sticky прижимается к краю
-          padding-box, и с top-0 панель зависала на 12px ниже верха — в этой
-          полосе просвечивали скроллящиеся карточки (та самая «щель»). На
-          desktop поведение прежнее (lg:top-0). */}
-      <div className="seam-guard sticky -top-3 z-20 -mx-4 space-y-2 border-b border-border bg-bg px-4 pb-2.5 pt-2 lg:top-0 lg:mx-0 lg:border-0 lg:px-0 lg:pt-0">
+      {/* Сдвиг sticky равен padding-top скролл-контейнера <main> на своём
+          брейкпоинте: sticky прижимается к краю content-box, поэтому с top-0
+          панель зависает ровно на величину этого padding, и в получившейся
+          полосе просвечивают скроллящиеся карточки (та самая «щель»).
+          mobile:  main pt-3 (12px) → -top-3
+          desktop: main lg:pt-6 (24px) → lg:-top-6
+          При смене pt у <main> эти значения нужно менять синхронно. */}
+      <div className="seam-guard sticky -top-3 z-20 -mx-4 space-y-2 border-b border-border bg-bg px-4 pb-2.5 pt-2 lg:-top-6 lg:mx-0 lg:border-0 lg:px-0 lg:pt-0">
         <div className="flex items-center gap-2">
         {/* Поиск каталога — ТОЛЬКО mobile/tablet. На desktop единственный поиск —
             в шапке (DesktopHeader), пишет в тот же URL-параметр `query`. */}
