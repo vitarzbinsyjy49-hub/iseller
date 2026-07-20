@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import { api } from "./lib/api";
-import { getTelegram, isInsideTelegram, enterFullscreen } from "./lib/telegram";
+import { getTelegram, isInsideTelegram, initTelegramUi } from "./lib/telegram";
 import { useAuthStore, User } from "./store/auth";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
@@ -17,11 +17,11 @@ export default function App() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorText, setErrorText] = useState("");
 
-  useEffect(() => {
-    const tg = getTelegram();
-    tg?.ready();
-    enterFullscreen();
+  // Вся инициализация Telegram UI (ready/expand/fullscreen/цвета/viewport
+  // listeners) — в одном месте, с корректным снятием подписок.
+  useEffect(() => initTelegramUi(), []);
 
+  useEffect(() => {
     async function login() {
       try {
         const endpoint = isInsideTelegram() ? "/auth/telegram" : "/auth/dev";
