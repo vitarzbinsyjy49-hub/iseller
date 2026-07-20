@@ -164,10 +164,10 @@ _IMG_EXT = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
             ".webp": "image/webp", ".gif": "image/gif"}
 
 
-def _sku_from_filename(name: str) -> tuple[str, int]:
-    """v5.2: делегирует общему сервису (формат SKU_main/SKU-1 не менялся)."""
-    from app.services.import_center import sku_from_filename
-    return sku_from_filename(name)
+def _resolve_image_sku(name: str, sku_index: dict[str, str]) -> tuple[str | None, int]:
+    """v5.2.4.1: делегирует общему сервису; точный SKU важнее галерейного суффикса."""
+    from app.services.import_center import resolve_filename_to_sku
+    return resolve_filename_to_sku(name, sku_index)
 
 
 @router.post("/uploads/products/images-zip")
@@ -186,6 +186,8 @@ async def upload_images_zip(file: UploadFile = File(...), db: Session = Depends(
         (p.sku or "").lower(): p
         for p in db.execute(select(Product).where(Product.sku.is_not(None))).scalars()
     }
+    # {lower: canonical} строим один раз на весь ZIP — без запроса на каждый файл
+    sku_index = {low: (p.sku or "") for low, p in products.items()}
     # sku -> [(order, имя файла, content_type, данные)]
     matched: dict[str, list[tuple[int, str, str, bytes]]] = {}
     unmatched: list[str] = []
@@ -204,8 +206,8 @@ async def upload_images_zip(file: UploadFile = File(...), db: Session = Depends(
         if info.file_size > 8 * 1024 * 1024:
             errors.append({"file": info.filename, "error": "файл больше 8 МБ"})
             continue
-        sku, order = _sku_from_filename(base)
-        product = products.get(sku.lower())
+        sku, order = _resolve_image_sku(base, sku_index)
+        product = products.get(sku.lower()) if sku else None
         if product is None:
             unmatched.append(info.filename)
             continue
@@ -447,15 +449,15 @@ async def batch_confirm(job_id: str, admin: str = Depends(get_current_admin),
     image_report: list[dict] = []
     image_errors: list[dict] = []
     matched_paths: dict[str, list[ic.ZipEntry]] = {}
+    # индекс строится один раз: раньше на каждый файл шёл линейный скан каталога
+    sku_index = ic.build_sku_index(list(all_sku_to_id))
     for img in image_entries:
-        sku_guess, order = ic.sku_from_filename(img.name)
-        for sku in all_sku_to_id:
-            if sku.lower() == sku_guess.lower():
-                matched_paths.setdefault(sku, []).append(img)
-                break
+        canon, _order = ic.resolve_filename_to_sku(img.name, sku_index)
+        if canon is not None:
+            matched_paths.setdefault(canon, []).append(img)
     for sku, imgs in matched_paths.items():
         try:
-            imgs.sort(key=lambda im: ic.sku_from_filename(im.name)[1])
+            imgs.sort(key=lambda im: ic.resolve_filename_to_sku(im.name, sku_index)[1])
             urls = [save_image(im.content_type, im.data) for im in imgs]
             product = db.get(Product, all_sku_to_id[sku])
             if product is not None:

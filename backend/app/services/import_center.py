@@ -399,17 +399,67 @@ def _safe_read(zf: zipfile.ZipFile, entry: zipfile.ZipInfo, limit: int) -> bytes
     return None if len(data) > limit else data
 
 
-def sku_from_filename(name: str) -> tuple[str, int]:
-    """'IPH15-2.jpg' -> ('IPH15', 2); '_main'/'-main'/без суффикса -> 0 (главная)."""
+# Номер фотографии в галерее. Всё, что больше, — почти наверняка часть SKU
+# (год выпуска: -2024, -2025, -2026), а не порядковый номер кадра.
+MAX_GALLERY_INDEX = 20
+
+
+def parse_filename_candidates(name: str) -> list[tuple[str, int]]:
+    """Кандидаты (sku, image_index) по убыванию приоритета. Без обращения к БД.
+
+    Порядок принципиален — точный SKU всегда важнее галерейного суффикса:
+      1) '<stem>_main' / '<stem>-main'  -> [(stem, 0)] и больше ничего;
+      2) весь stem как точный SKU       -> (stem, 0);
+      3) хвост '-N' / '_N' при 1<=N<=MAX_GALLERY_INDEX -> (head, N).
+
+    Раньше шаг 3 выполнялся ПЕРВЫМ и без верхней границы, поэтому числовой
+    хвост реального SKU принимался за номер кадра: 'APL-APD-4-2024.jpg' читался
+    как ('APL-APD-4', 2024), а 'APL-APD-4-2024-2.jpg' — как ('APL-APD-4-2024', 2),
+    и снимок уходил чужому товару.
+    """
     stem = PurePosixPath(name.replace("\\", "/")).stem
     lower = stem.lower()
     if lower.endswith("_main") or lower.endswith("-main"):
-        return stem[:-5], 0
+        return [(stem[:-5], 0)]
+
+    out: list[tuple[str, int]] = [(stem, 0)]
     for sep in ("-", "_"):
         head, _, tail = stem.rpartition(sep)
         if head and tail.isdigit():
-            return head, int(tail)
-    return stem, 0
+            n = int(tail)
+            if 1 <= n <= MAX_GALLERY_INDEX:
+                out.append((head, n))
+            break
+    return out
+
+
+def build_sku_index(skus) -> dict[str, str]:
+    """{lower(sku): canonical_sku} — строится ОДИН раз на job, не на файл.
+
+    Принимает и {lower: canonical} (значение — каноническое написание), и
+    {canonical: что-угодно} (например sku -> id), и просто список SKU.
+    Наружу всегда отдаётся каноническое написание из базы, не ключ.
+    """
+    if isinstance(skus, dict):
+        out: dict[str, str] = {}
+        for key, val in skus.items():
+            canon = val if isinstance(val, str) and val else key
+            out[canon.lower()] = canon
+        return out
+    return {s.lower(): s for s in skus if s}
+
+
+def resolve_filename_to_sku(name: str, sku_index: dict[str, str]) -> tuple[str | None, int]:
+    """Имя файла -> (канонический SKU из каталога | None, image_index).
+
+    sku_index — заранее построенный {lower: canonical}: сравнение
+    case-insensitive, наружу отдаётся каноническое написание из базы.
+    """
+    for guess, order in parse_filename_candidates(name):
+        canon = sku_index.get(guess.lower())
+        if canon is not None:
+            return canon, order
+    return None, 0
 
 
 # ==================== построение пакетного плана ====================
@@ -558,9 +608,9 @@ def build_batch_plan(
 
     images_by_sku: dict[str, list[tuple[int, ZipEntry]]] = {}
     unmatched_images: list[str] = []
+    sku_index = build_sku_index(known_skus)
     for img in image_entries:
-        sku_guess, order = sku_from_filename(img.name)
-        canon = known_skus.get(sku_guess.lower())
+        canon, order = resolve_filename_to_sku(img.name, sku_index)
         if canon is None:
             unmatched_images.append(img.path)
             continue
