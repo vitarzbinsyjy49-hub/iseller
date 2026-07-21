@@ -123,8 +123,11 @@ body {
 .typing-dot:nth-child(3) { animation-delay: .3s; }
 
 /* Отступ под нижнюю навигацию с safe-area: в Telegram — значение Telegram,
-   вне Telegram — env(). Один источник, без двойной компенсации. */
-.safe-bottom { padding-bottom: var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)); }
+   вне Telegram — env(). Один источник, без двойной компенсации.
+   max(0.5rem, …): гарантированный минимум, чтобы на клиентах без safeAreaInset
+   (старый Telegram / webview без viewport-fit=cover, где обе величины = 0)
+   иконки и подписи не прижимались вплотную к нижней грани. */
+.safe-bottom { padding-bottom: max(0.5rem, var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))); }
 
 /* Нижний отступ скролл-контента под фиксированной навигацией:
    высота контента навигации (~60px) + запас 16px + safe-area.
