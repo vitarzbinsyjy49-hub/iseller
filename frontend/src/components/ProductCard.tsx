@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ProductCard as TCard } from "./ai/types";
 import { formatPrice, discountPct } from "../lib/format";
 import { imagePaddingClass } from "../lib/viewport";
 import { useFavorite } from "../lib/favorites";
+import { haptic } from "../lib/telegram";
+import { toast } from "../lib/toast";
 
 type Props = {
   card: TCard;
@@ -11,46 +13,61 @@ type Props = {
   compact?: boolean;
 };
 
-/** Пастельный градиент + эмодзи по категории — вместо «дешёвого» серого блока. */
-const PLACEHOLDER_STYLE: Record<string, { emoji: string; from: string; to: string }> = {
-  "смартфоны": { emoji: "📱", from: "#e3f2fd", to: "#cfe6fb" },
-  "ноутбуки": { emoji: "💻", from: "#ede9fe", to: "#ddd4fa" },
-  "планшеты": { emoji: "📲", from: "#e0f2fe", to: "#cdeafd" },
-  "наушники": { emoji: "🎧", from: "#ffe9ec", to: "#ffd9df" },
-  "консоли": { emoji: "🎮", from: "#e8f5e9", to: "#d5edd8" },
-  "dyson": { emoji: "💨", from: "#fff3d6", to: "#ffe9b8" },
-  "аксессуары": { emoji: "🔌", from: "#f1f3f5", to: "#e4e8ec" },
-};
-const PLACEHOLDER_DEFAULT = { emoji: "📦", from: "#eef2f7", to: "#dfe7f0" };
+/** Нейтральный силуэт категории для товара без фото. Спокойный серый, без
+ *  ярких пастелей и без emoji-как-товара: заглушка не притворяется фотографией. */
+function CategorySilhouette({ category }: { category?: string | null }) {
+  const s = {
+    fill: "none" as const, stroke: "currentColor", strokeWidth: 1.4,
+    strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
+  };
+  const glyph = (() => {
+    switch ((category ?? "").toLowerCase()) {
+      case "смартфоны":
+        return <><rect x="8" y="3" width="8" height="18" rx="2.2" /><path d="M11 18.5h2" /></>;
+      case "ноутбуки":
+        return <><rect x="5" y="5" width="14" height="9" rx="1" /><path d="M3 17.5h18l-1.4 2.2H4.4z" /></>;
+      case "планшеты":
+        return <><rect x="5" y="4" width="14" height="16" rx="2" /><path d="M11 17h2" /></>;
+      case "наушники":
+        return <><path d="M5 13v-1a7 7 0 0 1 14 0v1" /><rect x="3.5" y="12.5" width="3.4" height="6.5" rx="1.6" /><rect x="17.1" y="12.5" width="3.4" height="6.5" rx="1.6" /></>;
+      case "консоли":
+        return <><rect x="3" y="8" width="18" height="8" rx="4" /><path d="M6.5 11v2M5.5 12h2" /><circle cx="16.5" cy="11.4" r=".7" /><circle cx="18.2" cy="13" r=".7" /></>;
+      case "dyson":
+        return <><path d="M4 9h8.5A2.75 2.75 0 1 0 9.75 6" /><path d="M4 13h11a2.75 2.75 0 1 1-2.75 3" /></>;
+      case "аксессуары":
+        return <><path d="M9.5 3v4.5M14.5 3v4.5" /><rect x="7.5" y="7.5" width="9" height="6" rx="2" /><path d="M12 13.5V18a3 3 0 0 1-3 3" /></>;
+      default:
+        return <><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><circle cx="8.8" cy="10" r="1.5" /><path d="m5 18 4.6-4.4L13 17l2.8-2.7L20 18" /></>;
+    }
+  })();
+  return <svg viewBox="0 0 24 24" className="h-9 w-9 text-[#b6bcc5]" aria-hidden {...s}>{glyph}</svg>;
+}
 
-/** Медиа-контейнер товара.
- *  - Реальное фото: object-contain по центру на нейтральном фоне поверхности —
- *    товар всегда помещается целиком, верх/низ устройства не обрезаются
- *    (раньше object-cover в фиксированном h-40 резал вытянутые фото).
- *  - Внутренний отступ вычисляется из реальных пропорций фото
- *    (imagePaddingClass), без ручных списков SKU.
- *  - Битая/отсутствующая картинка: градиентная заглушка, UI не прыгает,
- *    broken-image icon не показывается. */
+/** Медиа-контейнер товара. Единый во всех местах (карточка, галерея).
+ *  - Реальное фото: object-contain по центру на фоне поверхности — товар
+ *    помещается целиком, верх/низ не обрезаются; отступ по реальным пропорциям.
+ *  - Нет/битое фото: спокойный серо-белый фон + нейтральный силуэт категории
+ *    (не emoji, не яркая пастель), UI не прыгает, broken-image icon не виден.
+ *  - compact (узкая карточка в ленте): подпись «Фото скоро появится» скрываем. */
 export function ProductImage({
-  src, title, category, className = "",
-}: { src?: string; title: string; category?: string | null; className?: string }) {
+  src, title, category, className = "", compact = false,
+}: { src?: string; title: string; category?: string | null; className?: string; compact?: boolean }) {
   const [failed, setFailed] = useState(false);
   const [pad, setPad] = useState<"p-2" | "p-1">("p-2");
   const showImg = src && !failed;
-  const ph = PLACEHOLDER_STYLE[(category ?? "").toLowerCase()] ?? PLACEHOLDER_DEFAULT;
   return (
     <div
       className={`relative overflow-hidden ${className}`}
       style={
         showImg
           ? { background: "var(--app-surface)" }
-          : { background: `linear-gradient(135deg, ${ph.from}, ${ph.to})` }
+          : { background: "linear-gradient(160deg,#f5f6f8,#e8eaee)" }
       }
     >
       {showImg ? (
         <img
           src={src}
-          alt=""
+          alt={title}
           loading="lazy"
           decoding="async"
           className={`h-full w-full object-contain object-center ${pad}`}
@@ -61,27 +78,46 @@ export function ProductImage({
           }}
         />
       ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-center">
-          <span className="text-3xl drop-shadow-sm">{ph.emoji}</span>
-          <span className="line-clamp-1 rounded-full bg-white/70 px-2.5 py-0.5 text-[10px] font-semibold text-[#5b6472]">
-            {title}
-          </span>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-3 text-center">
+          <CategorySilhouette category={category} />
+          {!compact && <span className="text-[11px] font-medium text-[#aeb4bd]">Фото скоро появится</span>}
         </div>
       )}
     </div>
   );
 }
 
-/** Сердечко «в избранное» (localStorage, демо). */
+/** Сердечко «в избранное»: серверное хранение, оптимистичный тоггл с откатом,
+ *  тактильный отклик, toast и короткая scale-анимация. stopPropagation —
+ *  тап по сердцу не открывает карточку товара. */
 export function FavButton({ id, className = "" }: { id: number; className?: string }) {
-  const [fav, toggle] = useFavorite(id);
+  const [fav, toggle, busy] = useFavorite(id);
+  const [pop, setPop] = useState(false);
+
+  async function onClick(e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    if (busy) return;             // антидабл-клик
+    haptic("light");
+    setPop(true);
+    window.setTimeout(() => setPop(false), 220);
+    try {
+      const nowFav = await toggle();
+      toast(nowFav ? "Добавлено в избранное" : "Удалено из избранного");
+    } catch {
+      toast("Не удалось обновить избранное", "error");
+    }
+  }
+
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); toggle(); }}
+      type="button"
+      onClick={onClick}
+      aria-pressed={fav}
       aria-label={fav ? "Убрать из избранного" : "В избранное"}
-      className={`tap flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-soft ${className}`}
+      className={`tap flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-soft transition-transform duration-200 ${pop ? "scale-125" : ""} ${className}`}
     >
-      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]"
+      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-colors"
         fill={fav ? "#ff3b30" : "none"} stroke={fav ? "#ff3b30" : "#9aa1ab"}
         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M19 14c1.5-1.5 2.5-3 2.5-5A5.5 5.5 0 0 0 12 5.6 5.5 5.5 0 0 0 2.5 9c0 2 1 3.5 2.5 5l7 7z" />
@@ -120,7 +156,7 @@ export default function ProductCard({ card, onLead, compact }: Props) {
         <button onClick={() => navigate(`/product/${card.id}`)} className="block w-full text-left">
           {/* aspect-square: одинаковая высота image-area у всех карточек ряда,
               высота не меняется после загрузки фото (нет layout shift) */}
-          <ProductImage src={card.image} title={card.title} category={card.category} className="aspect-square w-full" />
+          <ProductImage src={card.image} title={card.title} category={card.category} className="aspect-square w-full" compact={compact} />
           <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
             {card.is_hot && <Badge color="orange">🔥 Хит</Badge>}
             {disc && <Badge color="red">−{disc}%</Badge>}

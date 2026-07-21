@@ -9,10 +9,11 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, ai, auth, catalog, config as config_api, events, health, home, imports, leads, posts, users
+from app.api import admin, admin_crm, ai, auth, catalog, config as config_api, events, favorites, health, home, imports, leads, posts, users
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import analytics_event as _analytics_event  # noqa: F401
+from app.models import favorite as _favorite  # noqa: F401
 from app.models import home as _home  # noqa: F401
 from app.models import lead as _lead  # noqa: F401
 from app.models import product as _product  # noqa: F401
@@ -63,6 +64,7 @@ app.add_middleware(CORSMiddleware, **_build_cors_kwargs())
 app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
+app.include_router(favorites.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 # Sprint 1.5: Integration Layer (AI + каталог + аналитика)
 app.include_router(ai.router, prefix="/api")

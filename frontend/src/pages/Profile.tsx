@@ -4,12 +4,14 @@ import { api } from "../lib/api";
 import { useAuthStore } from "../store/auth";
 import { isInsideTelegram, openExternalLink } from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
+import { useFavoriteIds } from "../lib/favorites";
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const config = usePublicConfig();
   const [leadCount, setLeadCount] = useState<number | null>(null);
+  const favCount = useFavoriteIds().length;  // из памяти, без лишнего запроса
 
   /** Открыть диалог с менеджером; если ссылка не настроена — AI-консультант. */
   function openManager(url: string) {
@@ -53,6 +55,10 @@ export default function Profile() {
 
       {/* Меню */}
       <div className="mt-3 overflow-hidden rounded-xl2 bg-surface shadow-soft">
+        <MenuRow icon="❤️" title="Избранное"
+          badge={favCount > 0 ? String(favCount) : undefined}
+          subtitle={favCount > 0 ? undefined : "Сохраняйте понравившиеся товары"}
+          onClick={() => navigate("/favorites")} />
         <MenuRow icon="📋" title="Мои заявки" badge={leadCount === null ? "…" : String(leadCount)}
           onClick={() => navigate("/requests")} />
         <MenuRow icon="🕐" title="История просмотров" subtitle="Скоро" />

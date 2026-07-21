@@ -2,8 +2,10 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import { api } from "./lib/api";
 import { getTelegram, isInsideTelegram, initTelegramUi } from "./lib/telegram";
+import { hydrateFavorites } from "./lib/favorites";
 import { useAuthStore, User } from "./store/auth";
 import ErrorBoundary from "./components/ErrorBoundary";
+import Toaster from "./components/Toaster";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import Catalog from "./pages/Catalog";
@@ -11,6 +13,7 @@ import ProductDetails from "./pages/ProductDetails";
 import AiSearch from "./pages/AiSearch";
 import Requests from "./pages/Requests";
 import Profile from "./pages/Profile";
+import Favorites from "./pages/Favorites";
 
 export default function App() {
   const { setTokens, setUser } = useAuthStore();
@@ -33,6 +36,9 @@ export default function App() {
         setTokens(tokens.access_token, tokens.refresh_token);
         const me = await api<User>("/users/me");
         setUser(me);
+        // Избранное: сливаем локальное (гость/до входа) с серверным и берём
+        // серверный список. Не блокируем готовность экрана — фоном.
+        void hydrateFavorites();
         setStatus("ready");
       } catch (e) {
         setErrorText(e instanceof Error ? e.message : "Неизвестная ошибка");
@@ -61,10 +67,12 @@ export default function App() {
           <Route path="/product/:id" element={<ProductDetails />} />
           <Route path="/ai" element={<AiSearch />} />
           <Route path="/requests" element={<Requests />} />
+          <Route path="/favorites" element={<Favorites />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="*" element={<Home />} />
         </Route>
       </Routes>
+      <Toaster />
     </ErrorBoundary>
   );
 }
