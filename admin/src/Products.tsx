@@ -378,6 +378,11 @@ function StockCell({ value, inStock, onSave }: { value: number; inStock: boolean
 }
 
 // ---------- Модалка редактирования/создания ----------
+type ImageGroupInfo = {
+  image_group_key: string | null; model_family: string | null; color: string | null;
+  detached: boolean; variant_count: number; group_images: string[]; effective_images: string[];
+};
+
 function ProductModal({
   token, product, onClose, onSaved,
 }: { token: string; product: Prod | null; onClose: () => void; onSaved: () => void }) {
@@ -389,6 +394,7 @@ function ProductModal({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [group, setGroup] = useState<ImageGroupInfo | null>(null);
 
   useEffect(() => {
     if (!product) {
@@ -409,7 +415,9 @@ function ProductModal({
     });
     setImages(product.images ?? []);
     setSpecsText(JSON.stringify(product.specs ?? {}, null, 2));
-  }, [product]);
+    setGroup(null);
+    void apiGet<ImageGroupInfo>(`/admin/products/${product.id}/image-group`, token).then(setGroup).catch(() => {});
+  }, [product, token]);
 
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })); }
 
@@ -447,6 +455,16 @@ function ProductModal({
       set("image", p.image ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось удалить фото");
+    }
+  }
+
+  async function toggleDetach() {
+    if (!product || !group) return;
+    try {
+      await apiPatch(`/admin/products/${product.id}`, token, { image_group_detached: !group.detached });
+      setGroup(await apiGet<ImageGroupInfo>(`/admin/products/${product.id}/image-group`, token));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось изменить привязку галереи");
     }
   }
 
@@ -538,6 +556,31 @@ function ProductModal({
           <label style={{ fontSize: 13, color: C.sub }}>
             Гарантия, мес<input style={input} inputMode="numeric" value={form.warranty_months ?? ""} onChange={(e) => set("warranty_months", e.target.value.replace(/\D/g, ""))} />
           </label>
+          {!isNew && group && group.image_group_key && (
+            <div style={{ gridColumn: "1 / -1", background: C.muted, borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>
+                Группа фото · {group.model_family || group.image_group_key.split("|")[1]} · {group.color || "—"}
+              </div>
+              <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>
+                {group.variant_count > 1
+                  ? `Общая галерея модели+цвета. Изменение затронет ${group.variant_count} ${pluralTovar(group.variant_count)}.`
+                  : "Общая галерея модели+цвета (пока только этот товар)."}{" "}
+                Память, накопитель и RAM на выбор галереи не влияют.
+              </div>
+              {group.group_images.length > 0 && (
+                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  {group.group_images.slice(0, 6).map((u) => (
+                    <img key={u} src={u} alt="" style={{ width: 48, height: 48, borderRadius: 6, objectFit: "cover", border: `1px solid ${C.border}` }} />
+                  ))}
+                  <span style={{ fontSize: 11, color: C.sub }}>← галерея группы</span>
+                </div>
+              )}
+              <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, fontSize: 12, cursor: "pointer" }}>
+                <input type="checkbox" checked={group.detached} onChange={toggleDetach} />
+                Отвязать этот товар от группы и показывать индивидуальные фото (ниже)
+              </label>
+            </div>
+          )}
           <div style={{ gridColumn: "1 / -1" }}>
             <div style={{ fontSize: 13, color: C.sub, marginBottom: 6 }}>
               Фотографии{images.length > 0 ? ` · ${images.length}` : ""}

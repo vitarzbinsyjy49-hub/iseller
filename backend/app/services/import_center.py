@@ -708,3 +708,117 @@ def apply_product_plan(db: Session, plan: dict) -> dict:
         db.flush()
         sku_to_id[entry["sku"]] = product.id
     return sku_to_id
+
+
+# ==================== режим MODEL_COLOR: галерея на группу модель+цвет ====================
+
+def _basename(name) -> str:
+    return str(name or "").replace("\\", "/").split("/")[-1]
+
+
+def normalize_group_specs(manifest) -> list[dict]:
+    """Извлечь описания групп из manifest. Поддержаны две формы:
+      {"image_groups": [ {brand, model, color, files, primary}, ... ]}
+      {"matchMode": "model_color", brand, model, color, files, primary}   (одна группа)
+    """
+    if not isinstance(manifest, dict):
+        return []
+    specs = manifest.get("image_groups")
+    if not isinstance(specs, list):
+        if manifest.get("matchMode") == "model_color" or ("model" in manifest and "files" in manifest):
+            specs = [manifest]
+        else:
+            return []
+    return [s for s in specs if isinstance(s, dict)]
+
+
+def plan_image_group_import(db: Session, manifest, available_images: set[str]) -> dict:
+    """Разобрать manifest MODEL_COLOR -> план по группам. БД НЕ меняется.
+
+    Для каждой группы показываем: распознанные brand/model/color, canonical key,
+    какие файлы есть/отсутствуют в архиве, сколько вариантов товара получат эту
+    галерею (+ их id/sku), конфликты одинаковых групп, ошибки. При неоднозначном
+    или неполном описании группа помечается ошибкой и НЕ применяется молча.
+    """
+    from app.services.image_groups import image_group_key
+
+    groups_out: list[dict] = []
+    seen_keys: dict[str, int] = {}
+    for idx, spec in enumerate(normalize_group_specs(manifest)):
+        brand = str(spec.get("brand") or "").strip()
+        model = str(spec.get("model") or "").strip()
+        color = str(spec.get("color") or "").strip()
+        files = [_basename(f) for f in (spec.get("files") or [])]
+        primary = _basename(spec.get("primary")) if spec.get("primary") else None
+        key = image_group_key(brand, model, color=color, model_family=model)
+        entry = {
+            "index": idx, "brand": brand, "model": model, "color": color, "key": key,
+            "files": files, "primary": primary, "present": [], "missing": [],
+            "affected_variants": 0, "affected": [], "errors": [], "warnings": [],
+        }
+        if not key:
+            entry["errors"].append("нужны brand, model и color для устойчивого ключа группы")
+            groups_out.append(entry)
+            continue
+        if key in seen_keys:
+            entry["errors"].append(f"конфликт: та же группа модель+цвет уже описана (группа #{seen_keys[key] + 1})")
+            groups_out.append(entry)
+            continue
+        seen_keys[key] = idx
+        entry["present"] = [f for f in files if f in available_images]
+        entry["missing"] = [f for f in files if f not in available_images]
+        if not entry["present"]:
+            entry["errors"].append("ни одного из указанных файлов нет в архиве")
+        if primary and primary not in entry["present"]:
+            entry["warnings"].append("primary отсутствует — главной станет первый доступный файл")
+        variants = db.execute(select(Product).where(Product.image_group_key == key)).scalars().all()
+        entry["affected_variants"] = len(variants)
+        entry["affected"] = [{"id": p.id, "sku": p.sku, "title": p.title} for p in variants[:50]]
+        if not variants:
+            entry["warnings"].append("сейчас нет товаров этой модели+цвета — галерея подключится, когда они появятся")
+        groups_out.append(entry)
+
+    ok = [g for g in groups_out if not g["errors"] and g["present"]]
+    return {
+        "groups": groups_out,
+        "summary": {
+            "groups_total": len(groups_out),
+            "groups_ok": len(ok),
+            "groups_with_errors": sum(1 for g in groups_out if g["errors"]),
+            "variants_affected": sum(g["affected_variants"] for g in ok),
+            "images_total": sum(len(g["present"]) for g in ok),
+        },
+    }
+
+
+def apply_image_group_import(db: Session, groups_plan: dict, url_by_filename: dict[str, str]) -> dict:
+    """Создать/обновить ProductImageGroup по плану. Порядок: primary первым,
+    затем остальные present в порядке files. Существующие URL не удаляем без
+    замены — перезаписываем галерею группы целиком новыми файлами."""
+    from app.models.product_image_group import ProductImageGroup
+
+    applied: list[dict] = []
+    for g in groups_plan["groups"]:
+        if g["errors"] or not g["present"]:
+            continue
+        ordered: list[str] = []
+        if g["primary"] and g["primary"] in g["present"]:
+            ordered.append(g["primary"])
+        for f in g["files"]:
+            if f in g["present"] and f not in ordered:
+                ordered.append(f)
+        urls = [url_by_filename[f] for f in ordered if f in url_by_filename]
+        if not urls:
+            continue
+        grp = db.execute(
+            select(ProductImageGroup).where(ProductImageGroup.key == g["key"])
+        ).scalar_one_or_none()
+        if grp is None:
+            grp = ProductImageGroup(key=g["key"], brand=g["brand"], model=g["model"], color=g["color"])
+            db.add(grp)
+        grp.image = urls[0]
+        grp.images = urls
+        applied.append({"key": g["key"], "images": len(urls),
+                        "affected_variants": g["affected_variants"]})
+    db.commit()
+    return {"applied_groups": applied, "groups_applied": len(applied)}

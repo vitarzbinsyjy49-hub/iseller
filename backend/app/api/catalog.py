@@ -17,6 +17,7 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.product import Product
+from app.services.image_groups import apply_group_images, dedupe_by_group
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -96,7 +97,9 @@ def catalog_search(
     db: Session = Depends(get_db),
 ):
     products = search_products(db, query, price_max, limit)
-    return {"cards": [p.to_card() for p in products]}
+    cards = [p.to_card() for p in products]
+    apply_group_images(db, products, cards)
+    return {"cards": cards}
 
 
 # ==================== Демо: витрина каталога ====================
@@ -191,7 +194,9 @@ def list_catalog(
         stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc())
 
     products = db.execute(stmt.limit(limit)).scalars().all()
-    return {"cards": [p.to_card() for p in products]}
+    cards = [p.to_card() for p in products]
+    apply_group_images(db, products, cards)
+    return {"cards": cards}
 
 
 @router.get("/brands", dependencies=[Depends(get_current_user)])
@@ -206,38 +211,50 @@ def brands(db: Session = Depends(get_db)):
 def feed(db: Session = Depends(get_db)):
     """Секции главного экрана: горячее, забрать сегодня, новинки, рекомендуем.
 
-    До 8 товаров в секции. «Новинки» добираются недавно добавленными, если
-    явных is_new мало. «Рекомендуем» исключает уже показанное выше — так на
-    главной больше РАЗНЫХ товаров (магазин не выглядит пустым), но при
-    маленьком каталоге секция всё равно не остаётся пустой.
+    v5.2.6: каждая секция дедуплицируется по группе модель+цвет (варианты одной
+    модели, отличающиеся памятью, не превращаются в визуальные дубли — остаётся
+    один representative), и «Рекомендуем» исключает уже показанные ГРУППЫ, а не
+    только id. Фото проставляются из канонических групп одним батчем (без N+1).
+    До 8 товаров в секции; при маленьком каталоге секция не остаётся пустой.
     """
-    def rows(stmt, n=8):
+    def rows(stmt, n=32):
         return db.execute(stmt.limit(n)).scalars().all()
 
     base = select(Product).where(Product.is_active.is_(True))
-    hot = rows(base.where(Product.is_hot.is_(True)).order_by(Product.popularity.desc()))
-    today = rows(base.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
-                 .order_by(Product.popularity.desc()))
+    hot = dedupe_by_group(rows(base.where(Product.is_hot.is_(True)).order_by(Product.popularity.desc())))[:8]
+    today = dedupe_by_group(rows(base.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
+                                 .order_by(Product.popularity.desc())))[:8]
 
-    new_items = rows(base.where(Product.is_new.is_(True)).order_by(Product.id.desc()))
+    new_items = dedupe_by_group(rows(base.where(Product.is_new.is_(True)).order_by(Product.id.desc())))
     if len(new_items) < 8:  # добираем недавними (id как надёжный прокси «добавлен позже»)
         seen_new = {p.id for p in new_items}
-        for p in rows(base.order_by(Product.id.desc()), n=16):
+        for p in dedupe_by_group(rows(base.order_by(Product.id.desc()), n=64)):
             if p.id not in seen_new:
                 new_items.append(p)
                 seen_new.add(p.id)
                 if len(new_items) >= 8:
                     break
+    new_items = new_items[:8]
 
-    shown = {p.id for p in (*hot, *today, *new_items)}
-    pool = rows(base.order_by(Product.in_stock.desc(), Product.popularity.desc()), n=32)
-    recommended = [p for p in pool if p.id not in shown][:8] or pool[:8]
+    shown_ids = {p.id for p in (*hot, *today, *new_items)}
+    shown_keys = {p.image_group_key for p in (*hot, *today, *new_items) if p.image_group_key}
+    pool = dedupe_by_group(rows(base.order_by(Product.in_stock.desc(), Product.popularity.desc()), n=96))
+    recommended = [p for p in pool
+                   if p.id not in shown_ids
+                   and (not p.image_group_key or p.image_group_key not in shown_keys)][:8] or pool[:8]
+
+    uniq = list({p.id: p for p in (*hot, *today, *new_items, *recommended)}.values())
+    cards = {p.id: p.to_card() for p in uniq}
+    apply_group_images(db, uniq, [cards[p.id] for p in uniq])
+
+    def section(items):
+        return [cards[p.id] for p in items]
 
     return {
-        "hot": [p.to_card() for p in hot],
-        "available_today": [p.to_card() for p in today],
-        "new": [p.to_card() for p in new_items],
-        "recommended": [p.to_card() for p in recommended],
+        "hot": section(hot),
+        "available_today": section(today),
+        "new": section(new_items),
+        "recommended": section(recommended),
     }
 
 
@@ -247,4 +264,6 @@ def product_details(product_id: int, db: Session = Depends(get_db)):
     product = db.get(Product, product_id)
     if product is None or not product.is_active:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
-    return product.to_detail()
+    detail = product.to_detail()
+    apply_group_images(db, [product], [detail])
+    return detail
