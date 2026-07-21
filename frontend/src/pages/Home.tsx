@@ -142,6 +142,11 @@ export default function Home() {
         }))
   ).slice(0, 6);
 
+  // «Вам также может понравиться» = глобальная подборка МИНУС то, что уже в «Для
+  // вас»: две похожие секции не дублируются, показываем только при достатке РАЗНЫХ.
+  const forYouIds = new Set((recs ?? []).map((c) => c.id));
+  const alsoLike = (feed?.recommended ?? []).filter((c) => !forYouIds.has(c.id));
+
   return (
     <div className="mx-auto max-w-md lg:max-w-none">
       {/* ===== Единый верх (v5.2.6): системная область Telegram + hero одного
@@ -360,10 +365,18 @@ export default function Home() {
           onAll={() => navigate(`/catalog?category=${encodeURIComponent("консоли")}`)} grid />
       </div>
 
-      {!feedError && (
-        <Section title="Рекомендуем" cards={feed?.recommended} onLead={setLead}
+      {!feedError && alsoLike.length >= 3 && (
+        <Section title="Вам также может понравиться" cards={alsoLike} onLead={setLead}
           onAll={() => navigate("/catalog")} grid />
       )}
+
+      {/* Явный вход в полный каталог (mobile): главная ощущается как магазин с продолжением */}
+      <button
+        onClick={() => navigate("/catalog")}
+        className="tap mt-6 flex w-full items-center justify-center gap-1.5 rounded-xl2 bg-surface py-3.5 text-sm font-semibold text-accent shadow-soft lg:hidden"
+      >
+        Открыть весь каталог →
+      </button>
 
         </div>{/* /контент */}
       </div>{/* /desktop grid */}
