@@ -94,16 +94,44 @@ export function enterFullscreen(): void {
    Вызывается РОВНО ОДИН РАЗ из App (useEffect с cleanup).
    ============================================================ */
 
-/** Фон приложения (светлая тема Mini App). Приложение не имеет тёмного
- *  редизайна, поэтому шапке/фону Telegram задаётся фон приложения в обеих
- *  темах — иначе в тёмной теме над контентом появляется полоса чужого цвета. */
+/** Светлый фон/низ приложения (Mini App без тёмного редизайна — держим
+ *  светлыми в обеих темах). Верх (шапка) задаётся отдельно цветом hero
+ *  (readHeaderColor): системная область Telegram и hero сливаются в единую
+ *  композицию, а не читаются как две отдельные полосы. */
 const APP_BG = "#f6f7f9";
 const APP_SURFACE = "#ffffff";
+// Дублирует --app-header-color из index.css — фолбэк, если переменная ещё не
+// посчитана (очень ранний вызов) или DOM недоступен (юнит-тесты).
+const HERO_HEADER_FALLBACK = "#14304d";
 
-function applyTelegramColors(tg: TelegramWebApp): void {
-  try { tg.setHeaderColor?.(APP_BG); } catch {}
-  try { tg.setBackgroundColor?.(APP_BG); } catch {}
-  try { tg.setBottomBarColor?.(APP_SURFACE); } catch {}
+/** Единый цвет верха: читаем CSS-переменную --app-header-color (тот же токен,
+ *  что красит hero) — чтобы шапка Telegram и hero не расходились по цвету.
+ *  Пусто / нет DOM → фолбэк-константа. */
+export function readHeaderColor(): string {
+  try {
+    const v = getComputedStyle(document.documentElement)
+      .getPropertyValue("--app-header-color")
+      .trim();
+    if (v) return v;
+  } catch {}
+  return HERO_HEADER_FALLBACK;
+}
+
+type TgColorSetters = Pick<
+  TelegramWebApp,
+  "setHeaderColor" | "setBackgroundColor" | "setBottomBarColor"
+>;
+
+/** Применить цвета к хрому Telegram. Каждый сеттер защищён: на старом клиенте
+ *  метода может не быть (или он бросит) — тихо пропускаем, следующие всё равно
+ *  выполняются. Чистая функция (tg — аргумент): тестируется без DOM. */
+export function applyTelegramColors(
+  tg: TgColorSetters,
+  colors: { header: string; background: string; bottomBar: string },
+): void {
+  try { tg.setHeaderColor?.(colors.header); } catch {}
+  try { tg.setBackgroundColor?.(colors.background); } catch {}
+  try { tg.setBottomBarColor?.(colors.bottomBar); } catch {}
 }
 
 /** Прочитать все источники и записать CSS-переменные на <html>.
@@ -180,7 +208,9 @@ export function initTelegramUi(): () => void {
   const tg = getTelegram();
   try { tg?.ready(); } catch {}
   enterFullscreen(); // expand + guarded requestFullscreen (без retry: отказ просто оставляет обычный режим)
-  if (tg) applyTelegramColors(tg);
+  const paintChrome = (t: TelegramWebApp) =>
+    applyTelegramColors(t, { header: readHeaderColor(), background: APP_BG, bottomBar: APP_SURFACE });
+  if (tg) paintChrome(tg);
 
   // rAF-коалесценция: сколько бы событий ни пришло за кадр — один пересчёт.
   let raf = 0;
@@ -193,7 +223,7 @@ export function initTelegramUi(): () => void {
   };
   const onTheme = () => {
     const t = getTelegram();
-    if (t) applyTelegramColors(t);
+    if (t) paintChrome(t);
     requestSync();
   };
 
