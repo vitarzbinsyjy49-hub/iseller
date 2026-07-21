@@ -14,6 +14,34 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
 
+# Человекочитаемые подписи структурных колонок (стабильный порядок вывода).
+_STRUCTURED_SPEC_LABELS: list[tuple[str, str]] = [
+    ("brand", "Бренд"),
+    ("condition", "Состояние"),
+    ("color", "Цвет"),
+    ("screen_size", "Экран"),
+    ("cpu", "Процессор"),
+    ("ram", "Оперативная память"),
+    ("memory", "Память"),
+    ("storage", "Накопитель"),
+]
+
+_CONDITION_RU = {"new": "Новый", "used": "Б/у", "refurbished": "Восстановленный"}
+
+
+def _spec_value_to_str(v) -> str | None:
+    """Значение характеристики -> строка для показа. bool -> Да/Нет,
+    список -> перечисление, пустое -> None (строку не добавляем)."""
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return "Да" if v else "Нет"
+    if isinstance(v, (list, tuple)):
+        parts = [p for p in (_spec_value_to_str(x) for x in v) if p]
+        return ", ".join(parts) if parts else None
+    s = str(v).strip()
+    return s or None
+
 
 class Product(Base):
     __tablename__ = "products"
@@ -119,12 +147,54 @@ class Product(Base):
             "buttons": self._buttons(),
         }
 
+    def _specifications(self) -> list[dict]:
+        """Единый упорядоченный список характеристик [{label, value}].
+
+        Data-driven, ничего не выдумываем — только реальные поля товара:
+        1) свободные характеристики из specs (JSON, богаче и человекозаданы);
+        2) структурные колонки, добавляющие НОВОЕ (бренд/состояние/цвет/экран/
+           процессор/ОЗУ/память/накопитель) — без дублей уже показанных;
+        3) гарантия, если задана.
+        Дедуп по нормализованной подписи, пустые значения пропускаем."""
+        out: list[dict] = []
+        seen: set[str] = set()
+
+        def add(label: str, value) -> None:
+            s = _spec_value_to_str(value)
+            label = (label or "").strip()
+            if not s or not label:
+                return
+            key = label.lower()
+            if key in seen:
+                return
+            seen.add(key)
+            out.append({"label": label, "value": s})
+
+        if isinstance(self.specs, dict):
+            for k, v in self.specs.items():
+                lab = str(k).strip()
+                add(lab[:1].upper() + lab[1:] if lab else lab, v)
+
+        for field, label in _STRUCTURED_SPEC_LABELS:
+            value = getattr(self, field, None)
+            if field == "condition":
+                if not value or value == "new":
+                    continue  # «Новый» по умолчанию — не засоряем список
+                value = _CONDITION_RU.get(value, value)
+            add(label, value)
+
+        if self.warranty_months:
+            add("Гарантия", f"{self.warranty_months} мес.")
+
+        return out[:24]
+
     def to_detail(self) -> dict:
         """Полная карточка товара для страницы Product Details."""
         d = self.to_card()
         d.update({
             "description": self.description or "",
             "specs": self.specs or {},
+            "specifications": self._specifications(),  # нормализованный список для UI
             "warranty_months": self.warranty_months,
             "condition": self.condition or "new",
             "color": self.color, "memory": self.memory, "storage": self.storage,

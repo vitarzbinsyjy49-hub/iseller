@@ -72,6 +72,12 @@ export default function ProductDetails() {
 
   const disc = discountPct(p.price, p.old_price);
   const saving = p.old_price ? p.old_price - p.price : 0;
+  // Характеристики: нормализованный список из backend (specs + структурные
+  // колонки, человекочитаемые подписи); fallback на сырой specs для старого API.
+  const specRows =
+    p.specifications && p.specifications.length
+      ? p.specifications
+      : Object.entries(p.specs || {}).map(([label, value]) => ({ label, value: String(value) }));
 
   // Активная вкладка — белая поверхность с тонкой границей. Рамка есть у обеих
   // (у неактивной прозрачная), поэтому размеры одинаковые и ничего не «прыгает».
@@ -259,27 +265,42 @@ export default function ProductDetails() {
 
       {tab === "specs" && (
         <div className="fade-in mt-3 rounded-xl2 bg-surface p-4 shadow-soft">
-          {Object.keys(p.specs || {}).length > 0 ? (
+          {specRows.length > 0 ? (
             <div className="divide-y divide-border">
-              {Object.entries(p.specs).map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-4 py-2 text-sm">
-                  <span className="text-muted">{k}</span>
-                  <span className="text-right font-medium">{String(v)}</span>
+              {specRows.map((s) => (
+                <div key={s.label} className="flex justify-between gap-4 py-2 text-sm">
+                  <span className="text-muted">{s.label}</span>
+                  <span className="text-right font-medium">{s.value}</span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted">Характеристики уточняются у менеджера.</p>
+            <p className="text-sm text-muted">Характеристики уточнит менеджер — задайте вопрос, ответим быстро.</p>
           )}
         </div>
       )}
 
       {tab === "delivery" && (
-        <div className="fade-in mt-3 space-y-2">
-          <DeliveryRow icon="🏬" title="Самовывоз — Горбушка, Москва"
-            subtitle={p.in_stock && p.is_available_today ? "Можно забрать сегодня, 10:00–21:00" : "Обычно на следующий день"} />
-          <DeliveryRow icon="🚚" title="Доставка по Москве" subtitle="1–2 дня, детали уточнит менеджер" />
-          <DeliveryRow icon="🛡️" title={`Гарантия ${p.warranty_months} мес.`} subtitle="Проверка товара при получении" />
+        <div className="fade-in mt-3 space-y-4">
+          <section>
+            <SubHead>Доставка и получение</SubHead>
+            <div className="space-y-2">
+              <DeliveryRow icon="🏬" title="Самовывоз — Горбушка, Москва"
+                subtitle={p.in_stock && p.is_available_today ? "Можно забрать сегодня, 10:00–21:00" : "Обычно на следующий день, 10:00–21:00"} />
+              <DeliveryRow icon="🚚" title="Доставка по Москве" subtitle="1–2 дня, сроки и стоимость уточнит менеджер" />
+              <DeliveryRow icon="🌍" title="В другие города" subtitle="Отправка транспортной компанией — способ зависит от адреса" />
+            </div>
+          </section>
+          <section>
+            <SubHead>Гарантия</SubHead>
+            <DeliveryRow icon="🛡️" title={`Гарантия ${p.warranty_months} мес.`}
+              subtitle={p.condition === "used" ? "Проверка товара при получении" : "Проверка при вас, обмен по гарантии"} />
+          </section>
+          <section>
+            <SubHead>Оплата</SubHead>
+            <DeliveryRow icon="💳" title="Оплата при получении"
+              subtitle="Наличными или переводом — удобный способ подскажет менеджер" />
+          </section>
         </div>
       )}
 
@@ -398,6 +419,10 @@ function InfoTile({ icon, title, subtitle }: { icon: string; title: string; subt
       </div>
     </div>
   );
+}
+
+function SubHead({ children }: { children: ReactNode }) {
+  return <p className="mb-1.5 px-1 text-[13px] font-bold text-text">{children}</p>;
 }
 
 function DeliveryRow({ icon, title, subtitle }: { icon: string; title: string; subtitle: string }) {

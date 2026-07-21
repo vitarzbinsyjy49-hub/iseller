@@ -204,16 +204,41 @@ def brands(db: Session = Depends(get_db)):
 
 @router.get("/feed", dependencies=[Depends(get_current_user)])
 def feed(db: Session = Depends(get_db)):
-    """Секции главного экрана: горячее, можно забрать сегодня, рекомендуем."""
-    def section(stmt, n=8):
-        return [p.to_card() for p in db.execute(stmt.limit(n)).scalars().all()]
+    """Секции главного экрана: горячее, забрать сегодня, новинки, рекомендуем.
+
+    До 8 товаров в секции. «Новинки» добираются недавно добавленными, если
+    явных is_new мало. «Рекомендуем» исключает уже показанное выше — так на
+    главной больше РАЗНЫХ товаров (магазин не выглядит пустым), но при
+    маленьком каталоге секция всё равно не остаётся пустой.
+    """
+    def rows(stmt, n=8):
+        return db.execute(stmt.limit(n)).scalars().all()
 
     base = select(Product).where(Product.is_active.is_(True))
-    hot = section(base.where(Product.is_hot.is_(True)).order_by(Product.popularity.desc()))
-    today = section(base.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
-                    .order_by(Product.popularity.desc()))
-    recommended = section(base.order_by(Product.popularity.desc()))
-    return {"hot": hot, "available_today": today, "recommended": recommended}
+    hot = rows(base.where(Product.is_hot.is_(True)).order_by(Product.popularity.desc()))
+    today = rows(base.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
+                 .order_by(Product.popularity.desc()))
+
+    new_items = rows(base.where(Product.is_new.is_(True)).order_by(Product.id.desc()))
+    if len(new_items) < 8:  # добираем недавними (id как надёжный прокси «добавлен позже»)
+        seen_new = {p.id for p in new_items}
+        for p in rows(base.order_by(Product.id.desc()), n=16):
+            if p.id not in seen_new:
+                new_items.append(p)
+                seen_new.add(p.id)
+                if len(new_items) >= 8:
+                    break
+
+    shown = {p.id for p in (*hot, *today, *new_items)}
+    pool = rows(base.order_by(Product.in_stock.desc(), Product.popularity.desc()), n=32)
+    recommended = [p for p in pool if p.id not in shown][:8] or pool[:8]
+
+    return {
+        "hot": [p.to_card() for p in hot],
+        "available_today": [p.to_card() for p in today],
+        "new": [p.to_card() for p in new_items],
+        "recommended": [p.to_card() for p in recommended],
+    }
 
 
 @router.get("/product/{product_id}", dependencies=[Depends(get_current_user)])

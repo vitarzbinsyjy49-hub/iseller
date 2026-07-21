@@ -31,9 +31,13 @@ export type ProductCard = {
   buttons: CardButton[];
 };
 
+/** Одна характеристика товара: человекочитаемая подпись + значение. */
+export type Specification = { label: string; value: string };
+
 export type ProductDetail = ProductCard & {
   description: string;
   specs: Record<string, string>;
+  specifications?: Specification[];   // нормализованный упорядоченный список (backend)
   warranty_months: number;
   condition?: "new" | "used" | "refurbished";
   color?: string | null;
