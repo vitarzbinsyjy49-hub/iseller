@@ -12,7 +12,7 @@ import { ProfileChip } from "../components/ProfileChip";
 import { ErrorState } from "../components/StateViews";
 
 type Category = { key: string; label: string; icon: string; count: number };
-type Feed = { hot: TCard[]; available_today: TCard[]; recommended: TCard[] };
+type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
 
 /** Управляемая главная (v4): баннеры и кнопки категорий приходят из /api/home. */
 type HomeBanner = {
@@ -289,6 +289,8 @@ export default function Home() {
             onAll={() => navigate("/catalog")} />
           <Section title="Забрать сегодня" cards={feed?.available_today} onLead={setLead}
             onAll={() => navigate("/catalog?today=1")} />
+          <Section title="Новинки" cards={feed?.new} onLead={setLead}
+            onAll={() => navigate("/catalog")} />
         </>
       )}
 

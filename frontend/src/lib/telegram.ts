@@ -67,6 +67,16 @@ export function openExternalLink(url: string | null | undefined): boolean {
   return true;
 }
 
+/** Тактильный отклик (Telegram HapticFeedback). Вне Telegram/на старых
+ *  клиентах — тихий no-op, ошибок не бросает. */
+export function haptic(style: "light" | "medium" | "heavy" | "soft" | "rigid" = "light"): void {
+  try {
+    getTelegram()?.HapticFeedback?.impactOccurred(style);
+  } catch {
+    /* нет Telegram/HapticFeedback — не мешаем */
+  }
+}
+
 export function enterFullscreen(): void {
   const tg = getTelegram();
   if (!tg) return;

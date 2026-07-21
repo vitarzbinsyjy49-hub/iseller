@@ -1,0 +1,5 @@
+{
+  "mode": "create_or_update",
+  "duplicate_policy": "error",
+  "_note": "Необязательный manifest.json для пакетного импорта (Import Pack). Кладётся внутрь ZIP. Сопоставление фото с товаром идёт по имени файла = SKU, отдельный mapping не требуется. mode: create_or_update | update_only | create_only. duplicate_policy: error | last_wins (при дублях SKU в файле)."
+}
