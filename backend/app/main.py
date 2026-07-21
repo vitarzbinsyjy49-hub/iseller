@@ -18,6 +18,7 @@ from app.models import home as _home  # noqa: F401
 from app.models import lead as _lead  # noqa: F401
 from app.models import product as _product  # noqa: F401
 from app.models import product_image_group as _product_image_group  # noqa: F401
+from app.models import user_product_event as _user_product_event  # noqa: F401
 from app.models import post as _post  # noqa: F401
 
 setup_logging()

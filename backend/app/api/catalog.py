@@ -17,7 +17,9 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.product import Product
+from app.models.user import User
 from app.services.image_groups import apply_group_images, dedupe_by_group
+from app.services.recommendations import recently_viewed, recommend
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -256,6 +258,37 @@ def feed(db: Session = Depends(get_db)):
         "new": section(new_items),
         "recommended": section(recommended),
     }
+
+
+@router.get("/recommendations")
+def recommendations(
+    limit: int = Query(default=12, ge=1, le=24),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Персональные рекомендации «Для вас» (preview-формат). Учитывают просмотры/
+    избранное/заявки пользователя; для нового пользователя — популярное+новинки из
+    разных категорий. reason — enum-подсказка (без внутреннего скоринга наружу)."""
+    products, reasons, mode = recommend(db, user.id, limit)
+    cards = [p.to_card() for p in products]
+    apply_group_images(db, products, cards)
+    for c, p in zip(cards, products):
+        c["reason"] = reasons.get(p.id)
+    return {"cards": cards, "mode": mode}
+
+
+@router.get("/recently-viewed")
+def recently_viewed_endpoint(
+    limit: int = Query(default=10, ge=1, le=20),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """«Вы недавно смотрели»: последние просмотренные активные товары (дедуп по
+    товару, порядок последнего просмотра). Пусто -> секция не показывается."""
+    products = recently_viewed(db, user.id, limit)
+    cards = [p.to_card() for p in products]
+    apply_group_images(db, products, cards)
+    return {"cards": cards}
 
 
 @router.get("/product/{product_id}", dependencies=[Depends(get_current_user)])

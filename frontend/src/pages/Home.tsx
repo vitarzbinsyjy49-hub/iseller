@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
-import { track } from "../lib/analytics";
+import { track, trackProduct } from "../lib/analytics";
 import { useAuthStore } from "../store/auth";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
@@ -74,6 +74,10 @@ export default function Home() {
   // Live-поиск: null — панель скрыта, [] — «ничего не нашлось», иначе подсказки
   const [results, setResults] = useState<TCard[] | null>(null);
   const [searching, setSearching] = useState(false);
+  // v5.2.6: персональные секции («Для вас», «Недавно смотрели»)
+  const [recs, setRecs] = useState<TCard[] | null>(null);
+  const [recsMode, setRecsMode] = useState<string>("cold");
+  const [recentlyViewed, setRecentlyViewed] = useState<TCard[] | null>(null);
 
   const loadFeed = useCallback(() => {
     setFeed(null);
@@ -88,6 +92,13 @@ export default function Home() {
       .catch(() => setHome({ banners: FALLBACK_PROMOS, categories: [] }));
     api<{ categories: Category[] }>("/catalog/categories").then((d) => setCategories(d.categories)).catch(() => {});
     loadFeed();
+    // Персональные рекомендации и «недавно смотрели» (v5.2.6)
+    api<{ cards?: TCard[]; mode?: string }>("/catalog/recommendations?limit=12")
+      .then((d) => { setRecs(d.cards ?? []); setRecsMode(d.mode ?? "cold"); })
+      .catch(() => setRecs([]));
+    api<{ cards?: TCard[] }>("/catalog/recently-viewed?limit=10")
+      .then((d) => setRecentlyViewed(d.cards ?? []))
+      .catch(() => setRecentlyViewed([]));
     // Секции desktop-главной; ошибки не критичны — секция просто не показывается
     Promise.all([
       api<{ cards?: TCard[] }>("/catalog/list?category=__sale__&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
@@ -310,6 +321,22 @@ export default function Home() {
           Все три секции ниже (Хиты/Сегодня/Рекомендуем) читают один и тот же /catalog/feed —
           при его сбое раньше секции бесконечно показывали скелетон (feed оставался null
           навсегда). Теперь при ошибке — один явный блок с повтором вместо трёх немых. */}
+
+      {/* v5.2.6: персональные секции — «Недавно смотрели» (если есть история) и «Для вас» */}
+      {recentlyViewed && recentlyViewed.length >= 2 && (
+        <Section title="Вы недавно смотрели" cards={recentlyViewed} onLead={setLead}
+          onAll={() => navigate("/catalog")} />
+      )}
+      <Section
+        title="Для вас"
+        subtitle={recsMode === "cold" ? "Популярное и новое из разных категорий" : "Подобрали по вашим просмотрам"}
+        cards={recs ?? undefined}
+        onLead={setLead}
+        onAll={() => navigate("/catalog")}
+        onOpen={(c) => trackProduct("recommendation_click", { product_id: c.id, source: "for_you" })}
+        grid
+      />
+
       {feedError ? (
         <div className="mt-6"><ErrorState message="Не удалось загрузить подборки товаров" onRetry={loadFeed} /></div>
       ) : (
@@ -352,25 +379,31 @@ export default function Home() {
 }
 
 function Section({
-  title, cards, onLead, onAll, grid,
-}: { title: string; cards?: TCard[]; onLead: (c: TCard) => void; onAll: () => void; grid?: boolean }) {
+  title, subtitle, cards, onLead, onAll, grid, onOpen,
+}: {
+  title: string; subtitle?: string; cards?: TCard[]; onLead: (c: TCard) => void;
+  onAll: () => void; grid?: boolean; onOpen?: (c: TCard) => void;
+}) {
   if (!cards) return <SectionSkeleton title={title} />;
   if (cards.length === 0) return null;
   return (
     <div className="mt-6">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-[17px] font-bold">{title}</h2>
-        <button onClick={onAll} className="text-xs font-medium text-accent">Смотреть все</button>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[17px] font-bold leading-5">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
+        </div>
+        <button onClick={onAll} className="shrink-0 text-xs font-medium text-accent">Смотреть все</button>
       </div>
       {grid ? (
         // mobile 2 кол -> tablet 3 -> desktop 4 -> wide 5
         <div className="stagger mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
-          {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} />)}
+          {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} onOpen={onOpen} />)}
         </div>
       ) : (
         // mobile — горизонтальная лента, desktop — та же сетка 4/5
         <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0 wide:grid-cols-5">
-          {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} compact />)}
+          {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} onOpen={onOpen} compact />)}
         </div>
       )}
     </div>

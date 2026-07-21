@@ -27,3 +27,28 @@ export function track(event: AppEvent, payload: Record<string, unknown> = {}): v
     /* аналитика не должна мешать пользователю */
   });
 }
+
+/** Поведенческие события для персональных рекомендаций (v5.2.6).
+ *  favorite_add/remove и lead_created пишет сам backend (доверенная сторона),
+ *  фронт шлёт только UI-сигналы. Fire-and-forget. */
+export type ProductEventType =
+  | "product_view"
+  | "category_view"
+  | "search"
+  | "recommendation_click";
+
+export function trackProduct(
+  eventType: ProductEventType,
+  data: { product_id?: number; category?: string; query?: string; source?: string } = {},
+): void {
+  const { accessToken } = useAuthStore.getState();
+  if (!accessToken) return;
+  fetch("/api/events/product", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ event_type: eventType, ...data }),
+    keepalive: true,
+  }).catch(() => {
+    /* аналитика не должна мешать пользователю */
+  });
+}

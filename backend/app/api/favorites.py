@@ -22,6 +22,7 @@ from app.db.session import get_db
 from app.models.favorite import ProductFavorite
 from app.models.product import Product
 from app.models.user import User
+from app.services.recommendations import record_event
 
 logger = logging.getLogger("techshop.favorites")
 router = APIRouter(prefix="/favorites", tags=["favorites"])
@@ -63,7 +64,8 @@ def favorites_list(user: User = Depends(get_current_user), db: Session = Depends
 def add_favorite(
     product_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    if db.get(Product, product_id) is None:
+    product = db.get(Product, product_id)
+    if product is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
     exists = db.execute(
         select(ProductFavorite.id).where(
@@ -76,6 +78,9 @@ def add_favorite(
             db.commit()
         except IntegrityError:
             db.rollback()  # параллельно уже добавили — идемпотентно ок
+        # сильный сигнал для рекомендаций (серверная сторона, доверенная)
+        record_event(db, user.id, "favorite_add", product_id=product_id,
+                     category=product.category, source="favorite")
     return {"ok": True, "product_id": product_id, "favorited": True}
 
 
@@ -89,6 +94,7 @@ def remove_favorite(
         )
     )
     db.commit()
+    record_event(db, user.id, "favorite_remove", product_id=product_id, source="favorite")
     return {"ok": True, "product_id": product_id, "favorited": False}
 
 
