@@ -140,9 +140,10 @@ export default function AiSearch() {
   }
 
   return (
-    // pb-24 — mobile: контент чата не уходит под фиксированную строку ввода.
+    // pb-cta (mobile) — тот же вычисляемый отступ под фиксированной строкой ввода,
+    // что и у CTA товара (index.css): позиция над навбаром (safe-area) + высота бара.
     // Desktop: строка ввода sticky внутри pane, поэтому lg:pb-0.
-    <div className="mx-auto max-w-md pb-24 lg:max-w-none lg:pb-0">
+    <div className="mx-auto max-w-md pb-cta lg:max-w-none lg:pb-0">
       <div className="lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start lg:gap-8">
       {/* Desktop-sidebar: быстрые запросы + история сессии */}
       <AiSidebar chat={chat} onPick={(q) => submit(q)} disabled={loading} />
@@ -233,7 +234,7 @@ export default function AiSearch() {
 
       {/* Строка ввода: mobile — фиксирована над нижней навигацией; desktop — sticky
           снизу внутри чат-pane (main — скролл-контейнер, sticky bottom работает). */}
-      <div className="fixed inset-x-0 bottom-[64px] z-30 border-t border-border bg-bg/95 px-4 py-2.5 backdrop-blur-lg lg:sticky lg:inset-x-auto lg:bottom-0 lg:mt-4 lg:rounded-xl2 lg:border lg:border-border lg:bg-surface/95 lg:px-3 lg:py-3">
+      <div className="fixed inset-x-0 above-bottom-nav z-30 border-t border-border bg-bg/95 px-4 py-2.5 backdrop-blur-lg lg:sticky lg:inset-x-auto lg:bottom-0 lg:mt-4 lg:rounded-xl2 lg:border lg:border-border lg:bg-surface/95 lg:px-3 lg:py-3">
         <div className="mx-auto flex max-w-md gap-2 lg:max-w-none">
           <input
             ref={inputRef} value={value} maxLength={1000}

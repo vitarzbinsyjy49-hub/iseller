@@ -95,14 +95,20 @@ export default function ProductDetails() {
     }`;
 
   return (
-    // pb-40 (160px) — только mobile: чтобы контент не перекрывался фиксированной CTA.
+    // pb-cta (mobile) — вычисляемый отступ под фиксированной CTA: позиция CTA над
+    // навбаром (safe-area + зазор) + высота кнопки, см. index.css. Прежний хардкод
+    // pb-40 (160px) не учитывал safe-area и на iPhone прятал низ контента под CTA.
     // На desktop CTA в правой колонке, поэтому lg:pb-12.
-    <div className="mx-auto max-w-md pb-40 lg:max-w-[1440px] lg:pb-12">
+    <div className="mx-auto max-w-md pb-cta lg:max-w-[1440px] lg:pb-12">
       {/* ===== Mobile/tablet: компактный sticky-оверлей (поведение v5.2.3) =====
           На desktop он скрыт: один общий sticky-бар с z-30 обслуживал оба
           брейкпоинта и при скролле наезжал на галерею (замер: 52px), а кнопки
           не имели зарезервированного места в сетке. */}
-      <div className="sticky top-0 z-30 -mx-4 -mt-3 mb-3 flex items-center gap-2 bg-bg/90 px-4 py-2 backdrop-blur-lg lg:hidden">
+      {/* Фон СОЛИДНЫЙ (bg-bg, без /90 и backdrop-blur): при скролле галерея уходит
+          строго ПОД непрозрачную панель — фото не просвечивает сквозь неё.
+          Примечание: bg-bg/90 у нас давал rgb(var(--app-bg)/.9) = невалидный цвет
+          → фон становился ПОЛНОСТЬЮ прозрачным, и сквозь blur просвечивало фото. */}
+      <div className="sticky top-0 z-30 -mx-4 -mt-3 mb-3 flex items-center gap-2 bg-bg px-4 py-2 lg:hidden">
         <TopBtn onClick={() => navigate(-1)} label="Назад">
           <path d="M15 18l-6-6 6-6" />
         </TopBtn>
@@ -308,8 +314,11 @@ export default function ProductDetails() {
         </div>
       )}
 
-      {/* ===== Фиксированная CTA — ТОЛЬКО mobile (на desktop CTA в правой колонке) ===== */}
-      <div className="fixed inset-x-0 bottom-[64px] z-30 border-t border-border bg-surface/95 px-4 py-2.5 backdrop-blur-lg lg:hidden">
+      {/* ===== Фиксированная CTA — ТОЛЬКО mobile (на desktop CTA в правой колонке) =====
+          above-bottom-nav (index.css): bottom = высота навбара + safe-area + 16px —
+          кнопка всегда стоит на 16px выше навигации, без наезда. Фон солидный
+          (bg-surface, без /95 и blur — прежний /95 давал прозрачный фон). */}
+      <div className="fixed inset-x-0 above-bottom-nav z-30 border-t border-border bg-surface px-4 py-2.5 lg:hidden">
         <div className="mx-auto max-w-md">
           <button
             onClick={() => setLead({ source: "product" })}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bottomNavStack,
   computeSafeArea,
   formatCssVars,
   imagePaddingClass,
@@ -115,6 +116,43 @@ describe("isKeyboardOpen", () => {
     expect(isKeyboardOpen(800, 852)).toBe(false);
     expect(isKeyboardOpen(null, 852)).toBe(false);
     expect(isKeyboardOpen(500, null)).toBe(false);
+  });
+});
+
+describe("bottomNavStack (нижний стек CTA/навбар, v5.2.7)", () => {
+  it("зазор CTA над навбаром = 16px в любой safe-area (нет наезда за навбар)", () => {
+    for (const safe of [0, 8, 20, 34, 44]) {
+      expect(bottomNavStack(safe).clearance).toBe(16);
+    }
+  });
+
+  it("safe-area учтена ОДИН раз: навбар и позиция CTA растут на ту же величину", () => {
+    const flat = bottomNavStack(0);
+    const notched = bottomNavStack(34);
+    // effSafe = max(8, safe): при 34 обе величины больше ровно на 34-8=26
+    expect(notched.navHeight - flat.navHeight).toBe(26);
+    expect(notched.ctaBottomOffset - flat.ctaBottomOffset).toBe(26);
+  });
+
+  it("iPhone Pro Max (safe=34): CTA стоит выше навбара, не за ним", () => {
+    const s = bottomNavStack(34);
+    expect(s.navHeight).toBe(64 + 34); // 98
+    expect(s.ctaBottomOffset).toBe(64 + 34 + 16); // 114 — выше верхней кромки навбара
+    expect(s.ctaBottomOffset).toBeGreaterThan(s.navHeight);
+  });
+
+  it("минимум навбара 8px (max(0.5rem,…)) при нулевой/некорректной safe-area", () => {
+    expect(bottomNavStack(0).navHeight).toBe(64 + 8);
+    expect(bottomNavStack(-5).navHeight).toBe(64 + 8);
+    expect(bottomNavStack(NaN).navHeight).toBe(64 + 8);
+  });
+
+  it("контент не уходит под CTA: pb > позиция CTA + высота кнопки (~81px)", () => {
+    const CTA_HEIGHT = 81;
+    for (const safe of [0, 34]) {
+      const s = bottomNavStack(safe);
+      expect(s.contentPadBottom).toBeGreaterThan(s.ctaBottomOffset + CTA_HEIGHT);
+    }
   });
 });
 

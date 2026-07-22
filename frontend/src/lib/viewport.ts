@@ -104,6 +104,39 @@ export function isKeyboardOpen(
   return stableHeight - currentHeight > 150;
 }
 
+/** Метрики нижнего стека страницы товара (v5.2.7): фиксированная CTA «Оставить
+ *  заявку» стоит НАД нижней навигацией без наезда. Единственный числовой контракт,
+ *  который дублирует расчёт index.css (--cta-bottom, .pb-cta) — держим синхронно и
+ *  проверяем тестом: раньше CTA имела хардкод bottom:64px, а навбар (≈71px без
+ *  выреза, ≈97px на iPhone с home indicator) наезжал на неё.
+ *
+ *  effSafe = max(8, safeBottom) — тот же max(0.5rem, …), что и на самой навигации
+ *  (.safe-bottom): safe-area учитывается РОВНО ОДИН раз, и в навбаре, и в позиции CTA.
+ *    navHeight        — полная высота навбара (контент + его safe-inset);
+ *    ctaBottomOffset  — CSS bottom фиксированной CTA (= --cta-bottom);
+ *    clearance        — зазор CTA↔навбар: всегда 16px в любой safe-area;
+ *    contentPadBottom — .pb-cta: чтобы контент не уходил под CTA. */
+export function bottomNavStack(safeBottom: number): {
+  navHeight: number;
+  ctaBottomOffset: number;
+  clearance: number;
+  contentPadBottom: number;
+} {
+  const NAV_CONTENT = 64; // --bottom-nav-content
+  const CLEARANCE = 16; // зазор CTA↔навбар
+  const CTA_AIR = 92; // .pb-cta = --cta-bottom + 92px (высота CTA ~81px + воздух)
+  const safe = Number.isFinite(safeBottom) && safeBottom > 0 ? safeBottom : 0;
+  const effSafe = Math.max(8, safe); // max(0.5rem, safe) — один раз
+  const navHeight = NAV_CONTENT + effSafe;
+  const ctaBottomOffset = NAV_CONTENT + effSafe + CLEARANCE;
+  return {
+    navHeight,
+    ctaBottomOffset,
+    clearance: ctaBottomOffset - navHeight,
+    contentPadBottom: ctaBottomOffset + CTA_AIR,
+  };
+}
+
 /** Вычисляемый класс внутреннего отступа фото по реальным пропорциям:
  *  почти квадратные фото получают обычный отступ, сильно вытянутые —
  *  уменьшенный, чтобы длинная сторона использовала максимум контейнера.

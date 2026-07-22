@@ -6,14 +6,25 @@
    TechShop Mini App v2 — светлая тема Telegram × Яндекс Go/Лавка
    ============================================================ */
 :root {
-  --app-bg: #f6f7f9;
-  --app-surface: #ffffff;
-  --app-muted-bg: #f1f3f5;
-  --app-border: #e8eaee;
-  --app-text: #111827;
-  --app-sub: #6b7280;
-  --app-accent: #2aabee;
-  --app-accent-dark: #229ed9;
+  /* Цвета-токены как RGB-КАНАЛЫ (v5.2.7). Tailwind читает их как
+     rgb(var(--x) / <alpha-value>), поэтому и сплошной цвет (bg-surface), и
+     полупрозрачный (bg-surface/90) работают корректно. РАНЬШЕ токены были hex —
+     тогда bg-surface/90 давал rgb(#hex / .9) = невалидно → фон становился
+     ПОЛНОСТЬЮ ПРОЗРАЧНЫМ (молча пропадал у навбара, хедера, чипов, панели
+     товара). Формат — три канала через пробел, БЕЗ rgb(); при прямом
+     использовании в CSS оборачивать в rgb(var(--x)). */
+  --app-bg: 246 247 249;
+  --app-surface: 255 255 255;
+  --app-muted-bg: 241 243 245;
+  --app-border: 232 234 238;
+  --app-text: 17 24 39;
+  --app-sub: 107 114 128;
+  --app-accent: 42 171 238;
+  --app-accent-dark: 34 158 217;
+  --app-green: 53 199 89;
+  --app-orange: 255 159 10;
+  /* Полные цвета (НЕ каналы) — используются напрямую, не через Tailwind /opacity. */
+  --app-red: #ff3b30;
   /* Верх Mini App (v5.2.6): системная область Telegram, safe-area и hero — один
      сине-графитовый фон, без белой полосы между ними. --app-header-color —
      СОЛИДНЫЙ цвет верха, его же получает Telegram.setHeaderColor: единый токен,
@@ -22,9 +33,6 @@
   --app-hero-bg: linear-gradient(163deg, #14304d 0%, #1b4870 58%, #205488 100%);
   --app-hero-chip: rgba(255, 255, 255, 0.13);
   --app-hero-chip-ink: #e9f1fb;
-  --app-green: #35c759;
-  --app-orange: #ff9f0a;
-  --app-red: #ff3b30;
 }
 
 /* ============================================================
@@ -50,12 +58,12 @@ html, body { height: 100%; }
   box-sizing: border-box;
   /* Фон root = фон body: между Telegram chrome и контентом нет белой полосы
      чужого оттенка, и отступ сверху выглядит как продолжение приложения. */
-  background: var(--app-bg);
+  background: rgb(var(--app-bg));
   overflow: hidden; /* единственный скролл — внутри <main>; body не скроллит */
 }
 body {
-  background: var(--app-bg);
-  color: var(--app-text);
+  background: rgb(var(--app-bg));
+  color: rgb(var(--app-text));
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
@@ -165,6 +173,26 @@ body {
   .pb-nav { padding-bottom: calc(76px + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))); }
 }
 
+/* ===== Нижний стек страницы товара (v5.2.7) =====
+   Фиксированная CTA «Оставить заявку» не должна перекрываться нижней навигацией.
+   Единый расчёт нижней позиции CTA:
+     контентная высота навбара (--bottom-nav-content)
+     + его нижний safe-inset (тот же max(0.5rem, …), что и .safe-bottom на самой
+       навигации — safe-area учтён РОВНО ОДИН раз)
+     + визуальный зазор 16px.
+   Раньше здесь стоял хардкод bottom:64px без safe-area — навбар выше 64px
+   (≈71px без выреза, ≈97px на iPhone с home indicator) наезжал на CTA. Тот же
+   --cta-bottom задаёт и нижний отступ контента (+ высота CTA), чтобы контент не
+   уходил под кнопку и не появлялось лишнего пустого экрана. */
+:root {
+  --bottom-nav-content: 64px;
+  --cta-bottom: calc(var(--bottom-nav-content) + max(0.5rem, var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))) + 16px);
+}
+@media (max-width: 1023.98px) {
+  .above-bottom-nav { bottom: var(--cta-bottom); }
+  .pb-cta { padding-bottom: calc(var(--cta-bottom) + 92px); } /* +92px ≈ высота CTA (~81px) + воздух */
+}
+
 /* Открыта клавиатура (JS вешает .kb-open на <html>): нижняя навигация
    скрывается, чтобы не всплывать над клавиатурой и не прыгать; после
    закрытия возвращается (класс снимается на viewport-событии). */
@@ -189,7 +217,7 @@ html.kb-open .js-bottom-nav { display: none; }
     right: 0;
     bottom: -1px;
     height: 1px;
-    background: var(--app-bg);
+    background: rgb(var(--app-bg));
   }
 }
 

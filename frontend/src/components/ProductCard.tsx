@@ -62,7 +62,7 @@ export function ProductImage({
       className={`relative overflow-hidden ${className}`}
       style={
         showImg
-          ? { background: "var(--app-surface)" }
+          ? { background: "rgb(var(--app-surface))" }
           : { background: "linear-gradient(160deg,#f5f6f8,#e8eaee)" }
       }
     >

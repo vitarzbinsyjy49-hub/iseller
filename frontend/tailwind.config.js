@@ -6,16 +6,21 @@ export default {
       // wide desktop >= 1440px (mobile <640 / tablet sm..lg / desktop lg+ — стандартные)
       screens: { wide: "1440px" },
       colors: {
-        bg: "var(--app-bg)",
-        surface: "var(--app-surface)",
-        mutedbg: "var(--app-muted-bg)",
-        border: "var(--app-border)",
-        text: "var(--app-text)",
-        muted: "var(--app-sub)",
-        accent: "var(--app-accent)",
-        accentdark: "var(--app-accent-dark)",
-        green: "var(--app-green)",
-        orange: "var(--app-orange)",
+        // Токены — RGB-каналы (index.css :root), поэтому alpha-модификатор
+        // Tailwind работает: bg-surface → rgb(var(--app-surface) / 1) = сплошной,
+        // bg-surface/90 → rgb(var(--app-surface) / 0.9). Раньше здесь был
+        // "var(--app-surface)" (готовый hex) → /90 давал невалидный цвет и
+        // прозрачный фон (навбар/хедер/чипы). Не менять на hex обратно.
+        bg: "rgb(var(--app-bg) / <alpha-value>)",
+        surface: "rgb(var(--app-surface) / <alpha-value>)",
+        mutedbg: "rgb(var(--app-muted-bg) / <alpha-value>)",
+        border: "rgb(var(--app-border) / <alpha-value>)",
+        text: "rgb(var(--app-text) / <alpha-value>)",
+        muted: "rgb(var(--app-sub) / <alpha-value>)",
+        accent: "rgb(var(--app-accent) / <alpha-value>)",
+        accentdark: "rgb(var(--app-accent-dark) / <alpha-value>)",
+        green: "rgb(var(--app-green) / <alpha-value>)",
+        orange: "rgb(var(--app-orange) / <alpha-value>)",
       },
       borderRadius: { xl2: "1.25rem" },
       boxShadow: {
