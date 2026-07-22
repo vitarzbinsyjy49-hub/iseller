@@ -11,6 +11,44 @@
 #       данные целы — бэкап из шага 1).
 set -euo pipefail
 
+# --- Гарантируем запуск под Git Bash, а не под WSL -------------------------
+# Деплой ходит на сервер по SSH-алиасу `iseller` из Windows-конфига
+# C:\Users\<you>\.ssh\config (его читает именно Git Bash). У WSL свой отдельный
+# ~/.ssh без этого алиаса -> "ssh: Could not resolve hostname iseller". При этом
+# `bash` в Windows PATH указывает на лаунчер WSL, поэтому `bash update-server.sh`
+# из PowerShell/cmd уходит в WSL. Если это произошло — тихо перезапускаем скрипт
+# через Git Bash. В самом Git Bash проверка ниже всегда ложна, поведение прежнее.
+_iseller_is_wsl() {
+  [ -n "${WSL_DISTRO_NAME:-}" ] && return 0
+  case "$(uname -r 2>/dev/null | tr '[:upper:]' '[:lower:]')" in
+    *microsoft*|*wsl*) return 0 ;;
+  esac
+  if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then return 0; fi
+  return 1
+}
+if [ "${1:-}" != "--reexec-gitbash" ] && _iseller_is_wsl; then
+  _self_dir_win="$(wslpath -m "$(cd "$(dirname "$0")" && pwd)" 2>/dev/null || true)"
+  _self_base="$(basename "$0")"
+  for _gb in \
+    "/mnt/c/Program Files/Git/bin/bash.exe" \
+    "/mnt/c/Program Files (x86)/Git/bin/bash.exe" \
+    "/mnt/c/Program Files/Git/usr/bin/bash.exe" \
+    "${HOME}/AppData/Local/Programs/Git/bin/bash.exe"; do
+    if [ -x "$_gb" ]; then
+      echo ">> Обнаружен WSL — деплою нужен Git Bash (Windows ~/.ssh/config)." >&2
+      echo ">> Перезапускаю через Git Bash: $_gb" >&2
+      exec "$_gb" -lc 'cd "$1" && exec bash "$2" --reexec-gitbash' _ "$_self_dir_win" "$_self_base"
+    fi
+  done
+  echo "!! Скрипт запущен под WSL, а Git Bash не найден автоматически." >&2
+  echo "!! Откройте «Git Bash» и выполните:" >&2
+  echo "!!     cd /c/iseller-demo && bash update-server.sh" >&2
+  exit 1
+fi
+# Если пришли из ветки перезапуска — убираем служебный аргумент.
+[ "${1:-}" = "--reexec-gitbash" ] && shift || true
+# ---------------------------------------------------------------------------
+
 SERVER="iseller"                 # алиас из ~/.ssh/config -> root@158.255.1.248
 REMOTE_DIR="/opt/techshop"
 BACKUP_DIR="/opt/backups"
