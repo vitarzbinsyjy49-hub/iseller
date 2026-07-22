@@ -9,6 +9,8 @@ admin/node_modules/
 dist/
 frontend/dist/
 admin/dist/
+# TypeScript incremental build cache — артефакт сборки, машинозависим, шумит в диффах
+*.tsbuildinfo
 
 # python
 __pycache__/
