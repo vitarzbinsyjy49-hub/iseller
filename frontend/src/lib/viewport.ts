@@ -104,18 +104,19 @@ export function isKeyboardOpen(
   return stableHeight - currentHeight > 150;
 }
 
-/** Метрики нижнего стека страницы товара (v5.2.7): фиксированная CTA «Оставить
- *  заявку» стоит НАД нижней навигацией без наезда. Единственный числовой контракт,
- *  который дублирует расчёт index.css (--cta-bottom, .pb-cta) — держим синхронно и
- *  проверяем тестом: раньше CTA имела хардкод bottom:64px, а навбар (≈71px без
- *  выреза, ≈97px на iPhone с home indicator) наезжал на неё.
+/** Метрики нижнего стека (v5.2.7 / фикс v5.2.7.1): фикс. нижняя панель (CTA товара /
+ *  строка ввода AI) прижата к низу (.cta-dock), её кнопка стоит на 16px ВЫШЕ нижней
+ *  навигации, а непрозрачный фон панели идёт до самого низа — без наезда и без
+ *  сквозной щели над навбаром. Единственный числовой контракт, дублирующий index.css
+ *  (--bottom-nav-height, .cta-dock, .pb-cta) — держим синхронно и проверяем тестом.
  *
  *  effSafe = max(8, safeBottom) — тот же max(0.5rem, …), что и на самой навигации
- *  (.safe-bottom): safe-area учитывается РОВНО ОДИН раз, и в навбаре, и в позиции CTA.
+ *  (.safe-bottom): safe-area учитывается РОВНО ОДИН раз, и в высоте навбара, и в
+ *  подъёме кнопки.
  *    navHeight        — полная высота навбара (контент + его safe-inset);
- *    ctaBottomOffset  — CSS bottom фиксированной CTA (= --cta-bottom);
- *    clearance        — зазор CTA↔навбар: всегда 16px в любой safe-area;
- *    contentPadBottom — .pb-cta: чтобы контент не уходил под CTA. */
+ *    ctaBottomOffset  — нижняя кромка кнопки над низом вьюпорта (= navHeight + 16);
+ *    clearance        — зазор кнопка↔навбар: всегда 16px в любой safe-area;
+ *    contentPadBottom — .pb-cta: чтобы контент не уходил под панель. */
 export function bottomNavStack(safeBottom: number): {
   navHeight: number;
   ctaBottomOffset: number;
@@ -123,8 +124,8 @@ export function bottomNavStack(safeBottom: number): {
   contentPadBottom: number;
 } {
   const NAV_CONTENT = 64; // --bottom-nav-content
-  const CLEARANCE = 16; // зазор CTA↔навбар
-  const CTA_AIR = 92; // .pb-cta = --cta-bottom + 92px (высота CTA ~81px + воздух)
+  const CLEARANCE = 16; // подъём кнопки над навбаром
+  const CTA_AIR = 80; // .pb-cta = ctaBottomOffset + 80 (бар над кнопкой ~64px + воздух)
   const safe = Number.isFinite(safeBottom) && safeBottom > 0 ? safeBottom : 0;
   const effSafe = Math.max(8, safe); // max(0.5rem, safe) — один раз
   const navHeight = NAV_CONTENT + effSafe;
