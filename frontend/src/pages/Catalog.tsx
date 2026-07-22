@@ -319,12 +319,12 @@ function FilterSidebar({
         <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-muted">Наличие</p>
         <label className="mt-2 flex cursor-pointer items-center gap-2.5 rounded-xl px-1 py-1.5 text-sm">
           <input type="checkbox" checked={onlyStock} onChange={(e) => onOnlyStock(e.target.checked)}
-            className="h-4 w-4 accent-[var(--app-accent)]" />
+            className="h-4 w-4 accent-[rgb(var(--app-accent))]" />
           В наличии
         </label>
         <label className="flex cursor-pointer items-center gap-2.5 rounded-xl px-1 py-1.5 text-sm">
           <input type="checkbox" checked={onlyToday} onChange={(e) => onOnlyToday(e.target.checked)}
-            className="h-4 w-4 accent-[var(--app-accent)]" />
+            className="h-4 w-4 accent-[rgb(var(--app-accent))]" />
           Забрать сегодня
         </label>
 
