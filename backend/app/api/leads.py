@@ -26,11 +26,13 @@ def create_lead(body: LeadIn, user: User = Depends(get_current_user), db: Sessio
     # Название и цену товара берём из БД (не доверяем клиенту), если передан product_id.
     product_title = body.product_title
     product_price = None
+    product_category = None
     if body.product_id:
         product = db.get(Product, body.product_id)
         if product:
             product_title = product.title
             product_price = product.price
+            product_category = product.category
 
     lead = Lead(
         user_id=user.id,
@@ -58,6 +60,15 @@ def create_lead(body: LeadIn, user: User = Depends(get_current_user), db: Sessio
     except Exception:
         db.rollback()
         logger.exception("analytics lead_created failed")
+
+    # Сильный сигнал для персональных рекомендаций (заявка = высокий вес)
+    try:
+        from app.services.recommendations import record_event
+        record_event(db, user.id, "lead_created", product_id=body.product_id,
+                     category=product_category, source="lead")
+    except Exception:
+        db.rollback()
+        logger.exception("rec lead_created event failed")
 
     return lead.to_dict()
 

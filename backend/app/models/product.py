@@ -72,6 +72,10 @@ class Product(Base):
     screen_size: Mapped[str | None] = mapped_column(String(50))
     cpu: Mapped[str | None] = mapped_column(String(100))
     ram: Mapped[str | None] = mapped_column(String(50))
+    # v5.2.6: канонические группы изображений (фото зависят от модели+цвета).
+    model_family: Mapped[str | None] = mapped_column(String(120))  # каноническая модель (опц.; иначе выводится из title)
+    image_group_detached: Mapped[bool] = mapped_column(Boolean, default=False)  # true => использовать свои фото, не групповые
+    image_group_key: Mapped[str | None] = mapped_column(String(255), index=True)  # brand|model|color; пересчитывается автоматически
     source: Mapped[str] = mapped_column(String(50), default="manual")  # manual / import / seed
     description: Mapped[str | None] = mapped_column(Text)
     specs: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -224,4 +228,25 @@ class Product(Base):
             "color": self.color, "memory": self.memory, "storage": self.storage,
             "screen_size": self.screen_size, "cpu": self.cpu, "ram": self.ram,
             "source": self.source or "manual",
+            "model_family": self.model_family,
+            "image_group_detached": bool(self.image_group_detached),
+            "image_group_key": self.image_group_key,
         }
+
+
+# v5.2.6: image_group_key пересчитывается автоматически при любом сохранении
+# товара (админка/импорт/сид) — чтобы группировка фото и дедуп вариантов не
+# зависели от того, кто и где менял поля. Пустой/сбойный ключ -> None (товар
+# просто не группируется). image_groups — чистая утилита (без импорта моделей),
+# поэтому цикла импортов нет.
+from sqlalchemy import event  # noqa: E402
+from app.services.image_groups import product_image_group_key  # noqa: E402
+
+
+@event.listens_for(Product, "before_insert", propagate=True)
+@event.listens_for(Product, "before_update", propagate=True)
+def _product_set_image_group_key(_mapper, _connection, target: "Product") -> None:
+    try:
+        target.image_group_key = product_image_group_key(target)
+    except Exception:  # noqa: BLE001 — ключ вспомогательный, не роняем сохранение
+        target.image_group_key = None

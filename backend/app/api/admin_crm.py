@@ -227,6 +227,7 @@ _PRODUCT_EDITABLE = (
     "warranty_months", "condition", "color", "memory", "storage", "screen_size", "cpu", "ram",
     "description", "specs", "tags", "image", "images", "url",
     "rating", "popularity", "margin_pct",
+    "model_family", "image_group_detached",   # v5.2.6: канонические группы фото
 )
 
 
@@ -284,6 +285,44 @@ def admin_update_stock(product_id: int, body: dict, db: Session = Depends(get_db
     db.commit()
     db.refresh(product)
     return product.to_admin()
+
+
+@router.get("/products/{product_id}/image-group")
+def admin_product_image_group(product_id: int, db: Session = Depends(get_db)):
+    """v5.2.6: инфо о канонической группе фото товара для админки — сколько
+    вариантов (модель+цвет) затрагивает общая галерея, какие это варианты,
+    картинки группы и эффективная галерея (что реально покажется на витрине)."""
+    from app.models.product_image_group import ProductImageGroup
+    from app.services.image_groups import resolve_product_images
+    product = db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    key = product.image_group_key
+    variants, group = [], None
+    if key:
+        variants = db.execute(
+            select(Product).where(Product.image_group_key == key).order_by(Product.price.asc())
+        ).scalars().all()
+        group = db.execute(
+            select(ProductImageGroup).where(ProductImageGroup.key == key)
+        ).scalar_one_or_none()
+    effective = resolve_product_images(db, [product]).get(product.id, {"image": None, "images": []})
+    return {
+        "product_id": product.id,
+        "image_group_key": key,
+        "model_family": product.model_family,
+        "detached": bool(product.image_group_detached),
+        "brand": product.brand,
+        "color": product.color,
+        "variant_count": len(variants),
+        "variants": [
+            {"id": p.id, "sku": p.sku, "title": p.title, "in_stock": p.in_stock, "price": float(p.price)}
+            for p in variants[:50]
+        ],
+        "group_images": (group.images if group else []) or [],
+        "group_primary": group.image if group else None,
+        "effective_images": effective["images"],
+    }
 
 
 # ==================== Массовые действия и безопасное удаление ====================

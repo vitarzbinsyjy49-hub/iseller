@@ -484,3 +484,59 @@ async def batch_confirm(job_id: str, admin: str = Depends(get_current_admin),
                  f"update:{plan['summary']['update']} images:{len(image_report)} "
                  f"image_errors:{len(image_errors)}")
     return {"job_id": job_id, "status": "applied", **report}
+
+
+# ============================================================
+# MODEL_COLOR: галерея на группу модель+цвет (v5.2.6)
+# ZIP с manifest.json (matchMode=model_color) + фото. Галерея назначается ВСЕМ
+# вариантам модели одного цвета, а не одному SKU. Preview и confirm принимают
+# один и тот же ZIP (без job-состояния на сервере).
+# ============================================================
+
+
+@router.post("/import/image-groups/preview")
+async def image_groups_preview(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Dry-run: распознанные группы модель+цвет, ключи, затрагиваемые варианты
+    (id/sku), отсутствующие файлы, конфликты. БД и хранилище не трогаются."""
+    data = await file.read()
+    if len(data) > MAX_ZIP_BYTES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "ZIP больше 200 МБ")
+    try:
+        scan = ic.scan_zip(data)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    if not ic.normalize_group_specs(scan.manifest or {}):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "Нужен manifest.json с matchMode=model_color (или image_groups[])")
+    plan = ic.plan_image_group_import(db, scan.manifest, {img.name for img in scan.images})
+    plan["scan_errors"] = scan.errors
+    plan["scan_skipped"] = scan.skipped
+    return plan
+
+
+@router.post("/import/image-groups/confirm")
+async def image_groups_confirm(file: UploadFile = File(...),
+                               admin: str = Depends(get_current_admin),
+                               db: Session = Depends(get_db)):
+    """Тот же ZIP: сохраняет фото валидных групп и создаёт/обновляет их галереи.
+    Товары не изменяются — фото подтягиваются resolver'ом по image_group_key."""
+    data = await file.read()
+    if len(data) > MAX_ZIP_BYTES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "ZIP больше 200 МБ")
+    try:
+        scan = ic.scan_zip(data)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    if not ic.normalize_group_specs(scan.manifest or {}):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен manifest.json (matchMode=model_color)")
+    plan = ic.plan_image_group_import(db, scan.manifest, {img.name for img in scan.images})
+    by_name = {img.name: img for img in scan.images}
+    needed = {f for g in plan["groups"] if not g["errors"] for f in g["present"]}
+    url_by_filename = {
+        name: save_image(by_name[name].content_type, by_name[name].data)
+        for name in needed if name in by_name
+    }
+    result = ic.apply_image_group_import(db, plan, url_by_filename)
+    _audit_event(db, admin, "import_image_groups",
+                 f"groups:{result['groups_applied']} variants:{plan['summary']['variants_affected']}")
+    return {"applied": True, "summary": plan["summary"], **result, "groups": plan["groups"]}

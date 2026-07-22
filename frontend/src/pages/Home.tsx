@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
-import { track } from "../lib/analytics";
+import { track, trackProduct } from "../lib/analytics";
 import { useAuthStore } from "../store/auth";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
@@ -46,6 +46,16 @@ const FALLBACK_PROMOS: HomeBanner[] = [
   { id: -3, emoji: "🤖", title: "Подберём технику", subtitle: "Расскажите AI, что нужно", background_gradient: "linear-gradient(135deg,#1a7fd4,#6d5ae0)", action_type: "ai", action_value: "" },
 ];
 
+/** Быстрые категории hero до загрузки /api — мгновенно, без скелетона и сдвига. */
+const FALLBACK_CATEGORIES: { key: string; label: string }[] = [
+  { key: "смартфоны", label: "Смартфоны" },
+  { key: "ноутбуки", label: "Ноутбуки" },
+  { key: "наушники", label: "Наушники" },
+  { key: "консоли", label: "Консоли" },
+  { key: "планшеты", label: "Планшеты" },
+  { key: "dyson", label: "Dyson" },
+];
+
 export default function Home() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
@@ -64,6 +74,10 @@ export default function Home() {
   // Live-поиск: null — панель скрыта, [] — «ничего не нашлось», иначе подсказки
   const [results, setResults] = useState<TCard[] | null>(null);
   const [searching, setSearching] = useState(false);
+  // v5.2.6: персональные секции («Для вас», «Недавно смотрели»)
+  const [recs, setRecs] = useState<TCard[] | null>(null);
+  const [recsMode, setRecsMode] = useState<string>("cold");
+  const [recentlyViewed, setRecentlyViewed] = useState<TCard[] | null>(null);
 
   const loadFeed = useCallback(() => {
     setFeed(null);
@@ -78,6 +92,13 @@ export default function Home() {
       .catch(() => setHome({ banners: FALLBACK_PROMOS, categories: [] }));
     api<{ categories: Category[] }>("/catalog/categories").then((d) => setCategories(d.categories)).catch(() => {});
     loadFeed();
+    // Персональные рекомендации и «недавно смотрели» (v5.2.6)
+    api<{ cards?: TCard[]; mode?: string }>("/catalog/recommendations?limit=12")
+      .then((d) => { setRecs(d.cards ?? []); setRecsMode(d.mode ?? "cold"); })
+      .catch(() => setRecs([]));
+    api<{ cards?: TCard[] }>("/catalog/recently-viewed?limit=10")
+      .then((d) => setRecentlyViewed(d.cards ?? []))
+      .catch(() => setRecentlyViewed([]));
     // Секции desktop-главной; ошибки не критичны — секция просто не показывается
     Promise.all([
       api<{ cards?: TCard[] }>("/catalog/list?category=__sale__&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
@@ -105,34 +126,55 @@ export default function Home() {
     navigate(q ? `/catalog?query=${encodeURIComponent(q)}` : "/catalog");
   }
 
+  // Чипы категорий hero: приоритет админских категорий → каталог → фолбэк
+  // (та же логика, что была у прежней сетки категорий), максимум 6.
+  const heroChips: { key: string; label: string; route: string }[] = (
+    home && home.categories.length > 0
+      ? home.categories.map((c) => ({
+          key: String(c.id),
+          label: c.title,
+          route: actionRoute(c.action_type, c.action_value),
+        }))
+      : (categories.length ? categories : FALLBACK_CATEGORIES).map((c) => ({
+          key: c.key,
+          label: c.label,
+          route: `/catalog?category=${encodeURIComponent(c.key)}`,
+        }))
+  ).slice(0, 6);
+
+  // «Вам также может понравиться» = глобальная подборка МИНУС то, что уже в «Для
+  // вас»: две похожие секции не дублируются, показываем только при достатке РАЗНЫХ.
+  const forYouIds = new Set((recs ?? []).map((c) => c.id));
+  const alsoLike = (feed?.recommended ?? []).filter((c) => !forYouIds.has(c.id));
+
   return (
     <div className="mx-auto max-w-md lg:max-w-none">
-      {/* ===== Градиентный header (только mobile/tablet — на desktop есть DesktopHeader) ===== */}
-      <div className="-mx-4 -mt-3 rounded-b-3xl bg-gradient-to-br from-[#1a7fd4] via-[#2aabee] to-[#6d5ae0] px-4 pb-5 pt-4 text-white lg:hidden">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl2 bg-white/15 text-sm font-extrabold tracking-tight backdrop-blur">AI</div>
-            <div>
-              <p className="text-[15px] font-bold leading-4">AI Seller</p>
-              <p className="mt-0.5 flex items-center gap-1 text-xs text-white/80">
-                📍 Горбушка · Москва
-              </p>
-            </div>
+      {/* ===== Единый верх (v5.2.6): системная область Telegram + hero одного
+          цвета. .hero-top-inset докрашивает вырез статус-бара в fullscreen. ===== */}
+      <div aria-hidden className="hero-top-inset lg:hidden" />
+      <header className="app-hero -mx-4 -mt-3 rounded-b-[28px] px-4 pb-5 pt-4 text-white shadow-[0_14px_34px_-16px_rgba(9,23,41,0.6)] lg:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[17px] font-bold leading-5 tracking-tight">AI Seller</p>
+            <p className="mt-0.5 truncate text-[12px] font-medium text-white/75">Техника, которую легко найти</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
             <button
-              onClick={() => navigate("/ai")}
-              className="tap rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold backdrop-blur"
+              onClick={() => navigate("/favorites")}
+              aria-label="Избранное"
+              className="tap flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.12] backdrop-blur"
             >
-              ✨ AI-подбор
+              <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20.7 4.3 13a4.6 4.6 0 0 1 0-6.5 4.6 4.6 0 0 1 6.5 0l1.2 1.2 1.2-1.2a4.6 4.6 0 0 1 6.5 0 4.6 4.6 0 0 1 0 6.5z" />
+              </svg>
             </button>
             <ProfileChip user={user} variant="mobile" />
           </div>
         </div>
 
-        {/* Крупный белый поиск + AI (relative — под ним панель live-подсказок) */}
-        <div className="relative mt-4 flex gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl2 bg-white px-4 text-text shadow-soft">
+        {/* Крупный поиск — главный элемент верха (relative: под ним панель подсказок) */}
+        <div className="relative mt-3.5 flex gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl bg-white px-3.5 text-text shadow-[0_6px_18px_-8px_rgba(9,23,41,0.45)]">
             <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
             </svg>
@@ -140,19 +182,33 @@ export default function Home() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && goSearch()}
-              placeholder="Найти iPhone, MacBook, PlayStation..."
-              className="min-w-0 flex-1 bg-transparent py-3.5 text-sm outline-none placeholder:text-muted"
+              placeholder="Найти iPhone, MacBook, AirPods…"
+              aria-label="Поиск по каталогу"
+              className="h-12 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
             />
-            {/* Декоративная иконка сканера (как в marketplace-приложениях) */}
-            <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M7 12h10" />
-            </svg>
+            {search ? (
+              <button
+                onClick={() => { setSearch(""); setResults(null); }}
+                aria-label="Очистить поиск"
+                className="tap -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted hover:bg-mutedbg"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M6 6l12 12M18 6 6 18" />
+                </svg>
+              </button>
+            ) : (
+              // Декоративная иконка сканера (как в marketplace-приложениях)
+              <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-muted/80" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M7 12h10" />
+              </svg>
+            )}
           </div>
           <button
             onClick={() => navigate("/ai")}
-            className="tap shrink-0 rounded-xl2 bg-white px-4 text-sm font-bold text-accent shadow-soft"
+            aria-label="AI-подбор"
+            className="tap flex shrink-0 items-center rounded-2xl bg-white/[0.14] px-4 text-[13px] font-bold text-white backdrop-blur"
           >
-            AI
+            ✨ AI
           </button>
 
           {/* Панель live-подсказок */}
@@ -198,7 +254,28 @@ export default function Home() {
             </div>
           )}
         </div>
-      </div>
+
+        {/* Быстрые категории — светлые чипы на тёмном hero (сразу видно глубину
+            каталога). Данные: админские категории → каталог → фолбэк; максимум 6. */}
+        <div className="no-scrollbar -mx-4 mt-3.5 flex gap-2 overflow-x-auto px-4">
+          {heroChips.map((c) => (
+            <button
+              key={c.key}
+              onClick={() => navigate(c.route)}
+              className="tap shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-[color:var(--app-hero-chip-ink)]"
+              style={{ background: "var(--app-hero-chip)" }}
+            >
+              {c.label}
+            </button>
+          ))}
+          <button
+            onClick={() => navigate("/catalog")}
+            className="tap shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-white/90 ring-1 ring-inset ring-white/25"
+          >
+            Все категории →
+          </button>
+        </div>
+      </header>
 
       {/* ===== Desktop: сетка [sidebar 260px | контент] ===== */}
       <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8">
@@ -245,42 +322,26 @@ export default function Home() {
         )}
       </div>
 
-      {/* ===== Кнопки категорий (mobile/tablet; на desktop категории в sidebar) ===== */}
-      <div className="stagger mt-5 grid grid-cols-4 gap-2 lg:hidden">
-        {home && home.categories.length > 0
-          ? home.categories.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => navigate(actionRoute(c.action_type, c.action_value))}
-                className="card-appear tap flex flex-col items-center gap-1.5 rounded-xl2 py-3 shadow-soft"
-                style={{ background: c.background_gradient || "#fff" }}
-              >
-                {c.icon_url
-                  ? <img src={c.icon_url} alt="" className="h-8 w-8 rounded-lg object-cover" loading="lazy" />
-                  : <span className="text-2xl">{c.emoji || "🛍️"}</span>}
-                <span className="text-[11px] font-medium leading-3">{c.title}</span>
-              </button>
-            ))
-          : (categories.length ? categories : Array.from({ length: 8 }, () => null)).map((c, i) =>
-              c ? (
-                <button
-                  key={c.key}
-                  onClick={() => navigate(`/catalog?category=${encodeURIComponent(c.key)}`)}
-                  className="card-appear tap flex flex-col items-center gap-1.5 rounded-xl2 bg-surface py-3 shadow-soft"
-                >
-                  <span className="text-2xl">{c.icon}</span>
-                  <span className="text-[11px] font-medium leading-3">{c.label}</span>
-                </button>
-              ) : (
-                <div key={i} className="skeleton h-[74px] rounded-xl2" />
-              ),
-            )}
-      </div>
-
       {/* ===== Секции товаров: mobile — ленты/сетка 2, desktop — сетка 4 (5 на wide) =====
           Все три секции ниже (Хиты/Сегодня/Рекомендуем) читают один и тот же /catalog/feed —
           при его сбое раньше секции бесконечно показывали скелетон (feed оставался null
           навсегда). Теперь при ошибке — один явный блок с повтором вместо трёх немых. */}
+
+      {/* v5.2.6: персональные секции — «Недавно смотрели» (если есть история) и «Для вас» */}
+      {recentlyViewed && recentlyViewed.length >= 2 && (
+        <Section title="Вы недавно смотрели" cards={recentlyViewed} onLead={setLead}
+          onAll={() => navigate("/catalog")} />
+      )}
+      <Section
+        title="Для вас"
+        subtitle={recsMode === "cold" ? "Популярное и новое из разных категорий" : "Подобрали по вашим просмотрам"}
+        cards={recs ?? undefined}
+        onLead={setLead}
+        onAll={() => navigate("/catalog")}
+        onOpen={(c) => trackProduct("recommendation_click", { product_id: c.id, source: "for_you" })}
+        grid
+      />
+
       {feedError ? (
         <div className="mt-6"><ErrorState message="Не удалось загрузить подборки товаров" onRetry={loadFeed} /></div>
       ) : (
@@ -304,10 +365,18 @@ export default function Home() {
           onAll={() => navigate(`/catalog?category=${encodeURIComponent("консоли")}`)} grid />
       </div>
 
-      {!feedError && (
-        <Section title="Рекомендуем" cards={feed?.recommended} onLead={setLead}
+      {!feedError && alsoLike.length >= 3 && (
+        <Section title="Вам также может понравиться" cards={alsoLike} onLead={setLead}
           onAll={() => navigate("/catalog")} grid />
       )}
+
+      {/* Явный вход в полный каталог (mobile): главная ощущается как магазин с продолжением */}
+      <button
+        onClick={() => navigate("/catalog")}
+        className="tap mt-6 flex w-full items-center justify-center gap-1.5 rounded-xl2 bg-surface py-3.5 text-sm font-semibold text-accent shadow-soft lg:hidden"
+      >
+        Открыть весь каталог →
+      </button>
 
         </div>{/* /контент */}
       </div>{/* /desktop grid */}
@@ -323,25 +392,31 @@ export default function Home() {
 }
 
 function Section({
-  title, cards, onLead, onAll, grid,
-}: { title: string; cards?: TCard[]; onLead: (c: TCard) => void; onAll: () => void; grid?: boolean }) {
+  title, subtitle, cards, onLead, onAll, grid, onOpen,
+}: {
+  title: string; subtitle?: string; cards?: TCard[]; onLead: (c: TCard) => void;
+  onAll: () => void; grid?: boolean; onOpen?: (c: TCard) => void;
+}) {
   if (!cards) return <SectionSkeleton title={title} />;
   if (cards.length === 0) return null;
   return (
     <div className="mt-6">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-[17px] font-bold">{title}</h2>
-        <button onClick={onAll} className="text-xs font-medium text-accent">Смотреть все</button>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[17px] font-bold leading-5">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
+        </div>
+        <button onClick={onAll} className="shrink-0 text-xs font-medium text-accent">Смотреть все</button>
       </div>
       {grid ? (
         // mobile 2 кол -> tablet 3 -> desktop 4 -> wide 5
         <div className="stagger mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
-          {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} />)}
+          {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} onOpen={onOpen} />)}
         </div>
       ) : (
         // mobile — горизонтальная лента, desktop — та же сетка 4/5
         <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0 wide:grid-cols-5">
-          {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} compact />)}
+          {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} onOpen={onOpen} compact />)}
         </div>
       )}
     </div>

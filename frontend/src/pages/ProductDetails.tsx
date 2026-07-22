@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
-import { track } from "../lib/analytics";
+import { track, trackProduct } from "../lib/analytics";
 import { ProductDetail } from "../components/ai/types";
 import { formatPrice, discountPct } from "../lib/format";
 import { ProductImage, Badge, FavButton } from "../components/ProductCard";
@@ -27,7 +27,11 @@ export default function ProductDetails() {
     if (!id) return;
     setState("loading");
     api<ProductDetail>(`/catalog/product/${id}`)
-      .then((d) => { setP(d); setState("ready"); track("product_viewed", { product_id: d.id }); })
+      .then((d) => {
+        setP(d); setState("ready");
+        track("product_viewed", { product_id: d.id });
+        trackProduct("product_view", { product_id: d.id, category: d.category ?? undefined });
+      })
       .catch((e) => {
         // 404 от API — «не найден»; сеть/5xx — временная ошибка с повтором
         setState(e instanceof ApiError && e.status === 404 ? "not_found" : "error");

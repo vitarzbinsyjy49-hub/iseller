@@ -11,6 +11,8 @@ type Props = {
   card: TCard;
   onLead?: (card: TCard) => void;
   compact?: boolean;
+  /** Вызывается перед переходом на карточку (напр. лог recommendation_click). */
+  onOpen?: (card: TCard) => void;
 };
 
 /** Нейтральный силуэт категории для товара без фото. Спокойный серый, без
@@ -139,9 +141,10 @@ export function Badge({ color, children }: { color: "red" | "blue" | "green" | "
 }
 
 /** Карточка товара. Цена и наличие — из данных карточки (из БД), не пересчитываются. */
-export default function ProductCard({ card, onLead, compact }: Props) {
+export default function ProductCard({ card, onLead, compact, onOpen }: Props) {
   const navigate = useNavigate();
   const disc = discountPct(card.price, card.old_price);
+  const open = () => { onOpen?.(card); navigate(`/product/${card.id}`); };
 
   return (
     // h-full + flex-col: в сетке все карточки одной высоты, кнопка прижата вниз.
@@ -153,7 +156,7 @@ export default function ProductCard({ card, onLead, compact }: Props) {
     >
       {/* FavButton — сосед кнопки, не вложен в неё (валидный DOM) */}
       <div className="relative">
-        <button onClick={() => navigate(`/product/${card.id}`)} className="block w-full text-left">
+        <button onClick={open} className="block w-full text-left">
           {/* aspect-square: одинаковая высота image-area у всех карточек ряда,
               высота не меняется после загрузки фото (нет layout shift) */}
           <ProductImage src={card.image} title={card.title} category={card.category} className="aspect-square w-full" compact={compact} />
@@ -178,7 +181,7 @@ export default function ProductCard({ card, onLead, compact }: Props) {
             <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price!)}</span>
           )}
         </div>
-        <button onClick={() => navigate(`/product/${card.id}`)} className="block w-full text-left">
+        <button onClick={open} className="block w-full text-left">
           <p className="mt-0.5 line-clamp-2 min-h-[2.4rem] text-[13px] font-medium leading-5">
             {card.brand && !card.title.toLowerCase().includes(card.brand.toLowerCase())
               ? `${card.brand} ${card.title}`

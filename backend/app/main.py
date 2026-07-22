@@ -17,6 +17,8 @@ from app.models import favorite as _favorite  # noqa: F401
 from app.models import home as _home  # noqa: F401
 from app.models import lead as _lead  # noqa: F401
 from app.models import product as _product  # noqa: F401
+from app.models import product_image_group as _product_image_group  # noqa: F401
+from app.models import user_product_event as _user_product_event  # noqa: F401
 from app.models import post as _post  # noqa: F401
 
 setup_logging()
@@ -111,6 +113,12 @@ def _apply_demo_migrations() -> None:
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS ram VARCHAR(50)",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'manual'",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()",
+        # v5.2.6: канонические группы изображений (модель+цвет). Не удаляют
+        # существующие image/images — это дополнительный слой поверх них.
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS model_family VARCHAR(120)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS image_group_detached BOOLEAN DEFAULT false",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS image_group_key VARCHAR(255)",
+        "CREATE INDEX IF NOT EXISTS ix_products_image_group_key ON products (image_group_key)",
         "CREATE INDEX IF NOT EXISTS ix_products_sku ON products (sku)",
         # Перенос sku из specs (так его хранил старый импорт) в новую колонку
         "UPDATE products SET sku = specs->>'sku' WHERE sku IS NULL AND specs->>'sku' IS NOT NULL",
@@ -150,11 +158,31 @@ def _apply_demo_migrations() -> None:
         logger.warning("SKU unique index migration skipped", exc_info=True)
 
 
+def _backfill_image_group_keys() -> None:
+    """v5.2.6: заполнить image_group_key у товаров, где он пуст (после ALTER —
+    у всех существующих). Логика ключа — Python (title/цвет), не SQL. Идемпотентно:
+    при сохранении товара ключ и так пересчитывается ORM-событием."""
+    from app.db.session import SessionLocal
+    from app.models.product import Product
+    from app.services.image_groups import product_image_group_key
+    try:
+        with SessionLocal() as db:
+            rows = db.query(Product).filter(Product.image_group_key.is_(None)).all()
+            for p in rows:
+                p.image_group_key = product_image_group_key(p)
+            if rows:
+                db.commit()
+                logger.info("Backfilled image_group_key for %d products", len(rows))
+    except Exception:  # noqa: BLE001 — бэкофилл не должен ронять старт
+        logger.exception("image_group_key backfill failed")
+
+
 @app.on_event("startup")
 def on_startup():
     # Sprint 1: создаём таблицы напрямую. Начиная со Sprint 2 переходим на Alembic-миграции.
     Base.metadata.create_all(bind=engine)
     _apply_demo_migrations()
+    _backfill_image_group_keys()
     # v4: если баннеры/категории главной ещё не создавались — заполняем дефолтными
     from app.api.home import seed_home_defaults
     from app.db.session import SessionLocal
