@@ -147,11 +147,11 @@ describe("bottomNavStack (нижний стек CTA/навбар, v5.2.7)", () =
     expect(bottomNavStack(NaN).navHeight).toBe(64 + 8);
   });
 
-  it("контент не уходит под CTA: pb > позиция CTA + высота кнопки (~81px)", () => {
-    const CTA_HEIGHT = 81;
+  it("контент не уходит под панель: pb > низ кнопки + высота бара над кнопкой (~64px)", () => {
+    const BAR_ABOVE_BUTTON = 64;
     for (const safe of [0, 34]) {
       const s = bottomNavStack(safe);
-      expect(s.contentPadBottom).toBeGreaterThan(s.ctaBottomOffset + CTA_HEIGHT);
+      expect(s.contentPadBottom).toBeGreaterThan(s.ctaBottomOffset + BAR_ABOVE_BUTTON);
     }
   });
 });

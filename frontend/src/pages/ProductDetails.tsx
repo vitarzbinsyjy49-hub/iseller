@@ -104,11 +104,13 @@ export default function ProductDetails() {
           На desktop он скрыт: один общий sticky-бар с z-30 обслуживал оба
           брейкпоинта и при скролле наезжал на галерею (замер: 52px), а кнопки
           не имели зарезервированного места в сетке. */}
-      {/* Фон СОЛИДНЫЙ (bg-bg, без /90 и backdrop-blur): при скролле галерея уходит
-          строго ПОД непрозрачную панель — фото не просвечивает сквозь неё.
-          Примечание: bg-bg/90 у нас давал rgb(var(--app-bg)/.9) = невалидный цвет
-          → фон становился ПОЛНОСТЬЮ прозрачным, и сквозь blur просвечивало фото. */}
-      <div className="sticky top-0 z-30 -mx-4 -mt-3 mb-3 flex items-center gap-2 bg-bg px-4 py-2 lg:hidden">
+      {/* Фон СОЛИДНЫЙ (bg-bg, без /90 и backdrop-blur): галерея уходит строго ПОД
+          непрозрачную панель — фото не просвечивает сквозь неё.
+          -top-3 (не top-0): sticky-панель пиннится на -12px = −pt-3 у <main>, иначе
+          она вставала по КОНТЕНТ-краю main, и в 12px-полосе его padding-top над
+          панелью просвечивало фото (fullscreen, замер: IMG над баром). Теперь
+          панель кроет эту полосу; скачка нет (rest == stuck). */}
+      <div className="sticky -top-3 z-30 -mx-4 -mt-3 mb-3 flex items-center gap-2 bg-bg px-4 py-2 lg:hidden">
         <TopBtn onClick={() => navigate(-1)} label="Назад">
           <path d="M15 18l-6-6 6-6" />
         </TopBtn>
@@ -315,10 +317,11 @@ export default function ProductDetails() {
       )}
 
       {/* ===== Фиксированная CTA — ТОЛЬКО mobile (на desktop CTA в правой колонке) =====
-          above-bottom-nav (index.css): bottom = высота навбара + safe-area + 16px —
-          кнопка всегда стоит на 16px выше навигации, без наезда. Фон солидный
-          (bg-surface, без /95 и blur — прежний /95 давал прозрачный фон). */}
-      <div className="fixed inset-x-0 above-bottom-nav z-30 border-t border-border bg-surface px-4 py-2.5 lg:hidden">
+          cta-dock (index.css): панель прижата к низу, непрозрачный фон до самого низа
+          (за навбаром), кнопка поднята на высоту навбара + 16px. Между кнопкой и
+          навбаром — свой фон панели, а не сквозной скролл. Фон солидный (bg-surface,
+          pt-2.5 сверху; нижний паддинг задаёт cta-dock). */}
+      <div className="fixed inset-x-0 cta-dock z-30 border-t border-border bg-surface px-4 pt-2.5 lg:hidden">
         <div className="mx-auto max-w-md">
           <button
             onClick={() => setLead({ source: "product" })}

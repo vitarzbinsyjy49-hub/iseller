@@ -173,24 +173,23 @@ body {
   .pb-nav { padding-bottom: calc(76px + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))); }
 }
 
-/* ===== Нижний стек страницы товара (v5.2.7) =====
-   Фиксированная CTA «Оставить заявку» не должна перекрываться нижней навигацией.
-   Единый расчёт нижней позиции CTA:
-     контентная высота навбара (--bottom-nav-content)
-     + его нижний safe-inset (тот же max(0.5rem, …), что и .safe-bottom на самой
-       навигации — safe-area учтён РОВНО ОДИН раз)
-     + визуальный зазор 16px.
-   Раньше здесь стоял хардкод bottom:64px без safe-area — навбар выше 64px
-   (≈71px без выреза, ≈97px на iPhone с home indicator) наезжал на CTA. Тот же
-   --cta-bottom задаёт и нижний отступ контента (+ высота CTA), чтобы контент не
-   уходил под кнопку и не появлялось лишнего пустого экрана. */
+/* ===== Нижний стек страницы товара (v5.2.7 / фикс v5.2.7.1) =====
+   Фикс. нижняя панель (CTA «Оставить заявку» / строка ввода AI) не должна
+   перекрываться нижней навигацией И не должна открывать сквозную щель над ней.
+   --bottom-nav-height = контентная высота навбара + его нижний safe-inset (тот же
+   max(0.5rem,…), что и .safe-bottom на самой навигации — safe-area РОВНО ОДИН раз).
+   .cta-dock: панель прижата к низу (bottom:0), непрозрачный фон идёт ДО САМОГО НИЗА
+   (за навбаром — навбар z-40 сверху), а контент панели поднят на высоту навбара +
+   16px «воздуха». Эволюция: хардкод bottom:64px (навбар выше → наезд, дефект C) →
+   bottom:navbar+16 (между кнопкой и навбаром просвечивал скролл) → сплошной фон до
+   низа: щели нет, кнопка ровно на 16px выше навбара. */
 :root {
   --bottom-nav-content: 64px;
-  --cta-bottom: calc(var(--bottom-nav-content) + max(0.5rem, var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))) + 16px);
+  --bottom-nav-height: calc(var(--bottom-nav-content) + max(0.5rem, var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))));
 }
 @media (max-width: 1023.98px) {
-  .above-bottom-nav { bottom: var(--cta-bottom); }
-  .pb-cta { padding-bottom: calc(var(--cta-bottom) + 92px); } /* +92px ≈ высота CTA (~81px) + воздух */
+  .cta-dock { bottom: 0; padding-bottom: calc(var(--bottom-nav-height) + 16px); }
+  .pb-cta { padding-bottom: calc(var(--bottom-nav-height) + 96px); } /* + высота кнопки (~64px) + воздух */
 }
 
 /* Открыта клавиатура (JS вешает .kb-open на <html>): нижняя навигация
