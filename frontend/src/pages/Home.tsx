@@ -149,9 +149,9 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-md lg:max-w-none">
-      {/* ===== Единый верх (v5.2.6): системная область Telegram + hero одного
-          цвета. .hero-top-inset докрашивает вырез статус-бара в fullscreen. ===== */}
-      <div aria-hidden className="hero-top-inset lg:hidden" />
+      {/* ===== Единый верх: системная область Telegram + hero одного цвета. Тёмную
+          подложку выреза статус-бара даёт глобальный .hero-top-inset в Layout (на
+          всех экранах); здесь только сам hero. ===== */}
       <header className="app-hero -mx-4 -mt-3 rounded-b-hero px-4 pb-6 pt-4 text-white shadow-float lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
