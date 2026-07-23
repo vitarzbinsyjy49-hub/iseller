@@ -152,11 +152,11 @@ export default function Home() {
       {/* ===== Единый верх (v5.2.6): системная область Telegram + hero одного
           цвета. .hero-top-inset докрашивает вырез статус-бара в fullscreen. ===== */}
       <div aria-hidden className="hero-top-inset lg:hidden" />
-      <header className="app-hero -mx-4 -mt-3 rounded-b-[28px] px-4 pb-5 pt-4 text-white shadow-[0_14px_34px_-16px_rgba(9,23,41,0.6)] lg:hidden">
+      <header className="app-hero -mx-4 -mt-3 rounded-b-hero px-4 pb-6 pt-4 text-white shadow-float lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[17px] font-bold leading-5 tracking-tight">AI Seller</p>
-            <p className="mt-0.5 truncate text-[12px] font-medium text-white/75">Техника, которую легко найти</p>
+            <p className="text-[18px] font-bold leading-6 tracking-tight">AI Seller</p>
+            <p className="mt-0.5 truncate text-[12px] font-medium text-white/70">Техника, которую легко найти</p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
@@ -173,9 +173,9 @@ export default function Home() {
         </div>
 
         {/* Крупный поиск — главный элемент верха (relative: под ним панель подсказок) */}
-        <div className="relative mt-3.5 flex gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl bg-white px-3.5 text-text shadow-[0_6px_18px_-8px_rgba(9,23,41,0.45)]">
-            <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <div className="relative mt-4 flex gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-card bg-white px-4 text-text shadow-[0_4px_14px_-6px_rgba(9,23,41,0.28)]">
+            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
             </svg>
             <input
@@ -184,29 +184,26 @@ export default function Home() {
               onKeyDown={(e) => e.key === "Enter" && goSearch()}
               placeholder="Найти iPhone, MacBook, AirPods…"
               aria-label="Поиск по каталогу"
-              className="h-12 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
+              className="h-12 min-w-0 flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-muted"
             />
-            {search ? (
+            {/* Кнопка очистки — только когда есть текст. Иконка сканера убрана до
+                реализации сценария «наведи камеру → AI определил модель». */}
+            {search && (
               <button
                 onClick={() => { setSearch(""); setResults(null); }}
                 aria-label="Очистить поиск"
-                className="tap -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted hover:bg-mutedbg"
+                className="tap -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-mutedbg"
               >
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
                   <path d="M6 6l12 12M18 6 6 18" />
                 </svg>
               </button>
-            ) : (
-              // Декоративная иконка сканера (как в marketplace-приложениях)
-              <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-muted/80" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M7 12h10" />
-              </svg>
             )}
           </div>
           <button
             onClick={() => navigate("/ai")}
             aria-label="AI-подбор"
-            className="tap flex shrink-0 items-center rounded-2xl bg-white/[0.14] px-4 text-[13px] font-bold text-white backdrop-blur"
+            className="tap flex shrink-0 items-center gap-1 rounded-card bg-white/15 px-4 text-[13px] font-bold text-white ring-1 ring-inset ring-white/15 backdrop-blur transition-colors hover:bg-white/20"
           >
             ✨ AI
           </button>
@@ -257,20 +254,19 @@ export default function Home() {
 
         {/* Быстрые категории — светлые чипы на тёмном hero (сразу видно глубину
             каталога). Данные: админские категории → каталог → фолбэк; максимум 6. */}
-        <div className="no-scrollbar -mx-4 mt-3.5 flex gap-2 overflow-x-auto px-4">
+        <div className="no-scrollbar -mx-4 mt-4 flex gap-2 overflow-x-auto px-4">
           {heroChips.map((c) => (
             <button
               key={c.key}
               onClick={() => navigate(c.route)}
-              className="tap shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-[color:var(--app-hero-chip-ink)]"
-              style={{ background: "var(--app-hero-chip)" }}
+              className="tap shrink-0 whitespace-nowrap rounded-full bg-white/[0.13] px-4 py-2 text-[13px] font-semibold text-[color:var(--app-hero-chip-ink)] transition-colors hover:bg-white/20"
             >
               {c.label}
             </button>
           ))}
           <button
             onClick={() => navigate("/catalog")}
-            className="tap shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-white/90 ring-1 ring-inset ring-white/25"
+            className="tap shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-semibold text-white/90 ring-1 ring-inset ring-white/25 transition-colors hover:bg-white/10"
           >
             Все категории →
           </button>
@@ -300,7 +296,7 @@ export default function Home() {
                 if (b.action_type === "external" && b.action_value) { window.open(b.action_value, "_blank"); return; }
                 navigate(actionRoute(b.action_type, b.action_value));
               }}
-              className="tap relative h-[120px] w-[280px] shrink-0 snap-start overflow-hidden rounded-xl2 p-4 text-left text-white shadow-soft transition-shadow lg:h-[140px] lg:w-auto lg:hover:shadow-[0_10px_28px_rgba(17,24,39,0.18)]"
+              className="tap lift relative h-[152px] w-[300px] shrink-0 snap-start overflow-hidden rounded-hero p-5 text-left text-white shadow-float transition-shadow lg:h-[176px] lg:w-auto lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.32)]"
               style={{ background: b.background_gradient || "linear-gradient(135deg,#1a7fd4,#6d5ae0)" }}
             >
               {b.image_url && (
@@ -308,16 +304,16 @@ export default function Home() {
                   className="absolute inset-0 h-full w-full object-cover" />
               )}
               <div className="relative z-10 flex h-full flex-col justify-between">
-                <span className="text-2xl drop-shadow">{b.emoji}</span>
+                <span className="text-3xl drop-shadow">{b.emoji}</span>
                 <div>
-                  <p className="text-[15px] font-bold leading-5 drop-shadow">{b.title}</p>
-                  {b.subtitle && <p className="mt-0.5 text-xs text-white/85 drop-shadow">{b.subtitle}</p>}
+                  <p className="text-[17px] font-bold leading-6 drop-shadow">{b.title}</p>
+                  {b.subtitle && <p className="mt-1 text-[13px] font-medium text-white/85 drop-shadow">{b.subtitle}</p>}
                 </div>
               </div>
               {b.image_url && <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />}
             </button>
           ) : (
-            <div key={i} className="skeleton h-[120px] w-[280px] shrink-0 rounded-xl2 lg:h-[140px] lg:w-auto" />
+            <div key={i} className="skeleton h-[152px] w-[300px] shrink-0 rounded-hero lg:h-[176px] lg:w-auto" />
           ),
         )}
       </div>

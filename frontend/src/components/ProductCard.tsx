@@ -117,7 +117,7 @@ export function FavButton({ id, className = "" }: { id: number; className?: stri
       onClick={onClick}
       aria-pressed={fav}
       aria-label={fav ? "Убрать из избранного" : "В избранное"}
-      className={`tap flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-soft transition-transform duration-200 ${pop ? "scale-125" : ""} ${className}`}
+      className={`tap flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-card transition-transform duration-200 ${pop ? "scale-125" : ""} ${className}`}
     >
       <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-colors"
         fill={fav ? "#ff3b30" : "none"} stroke={fav ? "#ff3b30" : "#9aa1ab"}
@@ -150,7 +150,7 @@ export default function ProductCard({ card, onLead, compact, onOpen }: Props) {
     // h-full + flex-col: в сетке все карточки одной высоты, кнопка прижата вниз.
     // lg:hover — desktop-состояние; tap scale остаётся на mobile.
     <div
-      className={`card-appear tap flex h-full flex-col overflow-hidden rounded-xl2 bg-surface shadow-soft transition-shadow lg:hover:shadow-[0_10px_28px_rgba(17,24,39,0.12)] ${
+      className={`card-appear tap lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface shadow-card lg:hover:shadow-float ${
         compact ? "w-40 shrink-0 lg:w-auto" : ""
       }`}
     >
@@ -173,22 +173,22 @@ export default function ProductCard({ card, onLead, compact, onOpen }: Props) {
         <FavButton id={card.id} className="absolute right-2 top-2" />
       </div>
 
-      <div className="flex flex-1 flex-col p-2.5">
+      <div className="flex flex-1 flex-col p-3">
         <div className="flex items-baseline gap-1.5">
-          <span className="text-[16px] font-bold leading-5">{formatPrice(card.price)}</span>
+          <span className="text-[17px] font-bold leading-6 tracking-tight">{formatPrice(card.price)}</span>
           {/* old_price показываем только когда реально даёт скидку — иначе цифры вводят в заблуждение */}
           {disc !== null && (
             <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price!)}</span>
           )}
         </div>
         <button onClick={open} className="block w-full text-left">
-          <p className="mt-0.5 line-clamp-2 min-h-[2.4rem] text-[13px] font-medium leading-5">
+          <p className="mt-1 line-clamp-2 min-h-[2.35rem] text-[13px] font-medium leading-[1.35]">
             {card.brand && !card.title.toLowerCase().includes(card.brand.toLowerCase())
               ? `${card.brand} ${card.title}`
               : card.title}
           </p>
         </button>
-        <p className={`mt-0.5 text-[11px] font-medium ${card.in_stock ? "text-green" : "text-muted"}`}>
+        <p className={`mt-1 text-[11px] font-medium ${card.in_stock ? "text-green" : "text-muted"}`}>
           {card.in_stock ? (card.is_available_today ? "В наличии · Сегодня" : "В наличии") : "Под заказ"}
         </p>
         {card.in_stock && card.stock != null && card.stock > 0 && card.stock <= 5 && (
@@ -198,7 +198,7 @@ export default function ProductCard({ card, onLead, compact, onOpen }: Props) {
         <span aria-hidden className="flex-1" />
         <button
           onClick={() => onLead?.(card)}
-          className="tap mt-2 w-full rounded-xl bg-mutedbg py-2 text-xs font-semibold text-text transition-colors hover:bg-accent hover:text-white"
+          className="tap mt-2.5 w-full rounded-field bg-mutedbg py-2.5 text-[13px] font-semibold text-text transition-colors hover:bg-accent hover:text-white"
         >
           Заявка
         </button>
