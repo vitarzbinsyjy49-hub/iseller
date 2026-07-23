@@ -7,14 +7,27 @@ import ProductCard from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
 import { usePublicConfig } from "../lib/appConfig";
 import { openExternalLink } from "../lib/telegram";
+import { aiEntryAction, clearAiHistory, loadAiHistory, pushAiQuery } from "../lib/searchHistory";
 
-const QUICK = [
-  "iPhone до 90 000",
-  "Ноутбук для монтажа",
-  "Подарок до 30 000",
-  "PlayStation в наличии",
-  "MacBook для работы",
-  "Наушники до 20 000",
+/** Сценарные быстрые действия: понятная подпись + что произойдёт.
+ *  mode: submit — отправить готовый запрос; prefill — подставить шаблон в
+ *  строку (пользователь допишет детали); manager — диалог с менеджером. */
+type QuickAction = {
+  label: string;
+  hint: string;
+  mode: "submit" | "prefill" | "manager";
+  text?: string;
+};
+
+const QUICK_ACTIONS: QuickAction[] = [
+  { label: "Подобрать смартфон", hint: "Бюджет и задачи — предложим варианты", mode: "submit", text: "Подобрать смартфон под мои задачи и бюджет" },
+  { label: "Подобрать ноутбук", hint: "MacBook или другой — по задачам", mode: "submit", text: "Подобрать MacBook или ноутбук под мои задачи" },
+  { label: "Сравнить модели", hint: "Впишите, что сравнить", mode: "prefill", text: "Сравни " },
+  { label: "Вариант в бюджете", hint: "Впишите сумму и что ищете", mode: "prefill", text: "Ищу вариант до " },
+  { label: "Подобрать подарок", hint: "Расскажите, кому и на какой случай", mode: "submit", text: "Помоги подобрать подарок" },
+  { label: "Trade-In", hint: "Обменять или продать технику", mode: "submit", text: "Хочу сдать технику в Trade-In" },
+  { label: "Для офиса / компании", hint: "Поставка юрлицу, документы", mode: "submit", text: "Нужна техника для компании" },
+  { label: "Позвать менеджера", hint: "Живой диалог в Telegram", mode: "manager" },
 ];
 
 type ChatItem =
@@ -25,14 +38,19 @@ type ChatItem =
  *  Всё через backend POST /api/ai/chat (JWT). При недоступности AI backend сам
  *  вернёт fallback/mock — пользователь никогда не видит ошибку AI. */
 export default function AiSearch() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const config = usePublicConfig();
   const [value, setValue] = useState("");
   const [chat, setChat] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [lead, setLead] = useState<{ card?: TCard; source: string } | null>(null);
+  // Локальная история запросов к AI (localStorage, между сессиями)
+  const [aiHistory, setAiHistory] = useState<string[]>(() => loadAiHistory());
   const inputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  // Одноразовый guard авто-отправки (?q=…&auto=1): StrictMode/remount не должны
+  // отправить запрос дважды; после потребления параметры стираются из URL.
+  const autoConsumedRef = useRef(false);
 
   /** Кнопки-действия из ответа AI (v5.1): refine/manager/lead. */
   function handleAction(action: AiAction, answer: AiAnswer) {
@@ -59,9 +77,23 @@ export default function AiSearch() {
   }
 
   useEffect(() => { track("ai_chat_opened"); }, []);
+  // /ai?q=<text> — безопасный prefill: текст подставляется в строку, отправляет
+  // его САМ пользователь. Исключение — явный переход по кнопке «Спросить AI»
+  // (auto=1): тогда одна контролируемая отправка (guard от StrictMode/remount).
   useEffect(() => {
     const q = params.get("q");
-    if (q) submit(q);
+    const action = aiEntryAction(q, params.get("auto") === "1", autoConsumedRef.current);
+    if (action === "none") return;
+    autoConsumedRef.current = true;
+    track("ai_prefill_opened", { query_length: q!.length, auto: action === "submit" });
+    if (action === "submit") {
+      submit(q!);
+    } else {
+      setValue(q!);
+      inputRef.current?.focus();
+    }
+    // Потребили параметры — чистим URL, чтобы Back/remount не повторяли prefill
+    setParams(new URLSearchParams(), { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [chat, loading]);
@@ -90,9 +122,24 @@ export default function AiSearch() {
       .map((h) => ({ ...h, text: h.text.slice(0, 1000) }));
   }
 
+  /** Обработка сценарной карточки: submit/prefill/manager. */
+  function handleQuick(qa: QuickAction) {
+    if (qa.mode === "manager") {
+      handleAction({ type: "manager", label: qa.label, manager_role: "retail" }, { text: "", cards: [], actions: [], meta: {} });
+      return;
+    }
+    if (qa.mode === "prefill") {
+      setValue(qa.text ?? "");
+      inputRef.current?.focus();
+      return;
+    }
+    submit(qa.text ?? qa.label);
+  }
+
   async function submit(text: string) {
     const query = text.trim();
     if (!query || loading) return;
+    setAiHistory(pushAiQuery(query));
     setLoading(true);
     setValue("");
     const history = historyPayload(chat);
@@ -145,24 +192,56 @@ export default function AiSearch() {
     // Desktop: строка ввода sticky внутри pane, поэтому lg:pb-0.
     <div className="mx-auto max-w-md pb-cta lg:max-w-none lg:pb-0">
       <div className="lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start lg:gap-8">
-      {/* Desktop-sidebar: быстрые запросы + история сессии */}
-      <AiSidebar chat={chat} onPick={(q) => submit(q)} disabled={loading} />
+      {/* Desktop-sidebar: те же сценарии, что и на mobile, + постоянная история */}
+      <AiSidebar
+        history={aiHistory}
+        onQuick={handleQuick}
+        onPick={(q) => submit(q)}
+        onClearHistory={() => { clearAiHistory(); setAiHistory([]); }}
+        disabled={loading}
+      />
 
       <div className="flex min-w-0 flex-col lg:mx-auto lg:w-full lg:max-w-[860px]">
       <h1 className="text-2xl font-bold">AI-подбор техники</h1>
       <p className="mt-1 text-sm text-muted">Опишите, что вам нужно — подберём варианты из наличия</p>
 
-      {/* Быстрые кнопки (mobile/tablet; на desktop — в sidebar) */}
+      {/* Сценарные карточки (mobile/tablet; на desktop — в sidebar) */}
       {chat.length === 0 && (
         <div className="stagger mt-4 grid grid-cols-2 gap-2 lg:hidden">
-          {QUICK.map((q) => (
+          {QUICK_ACTIONS.map((qa) => (
             <button
-              key={q} onClick={() => submit(q)}
-              className="card-appear tap rounded-xl2 bg-surface px-3 py-3 text-left text-[13px] font-medium shadow-soft"
+              key={qa.label} onClick={() => handleQuick(qa)} disabled={loading}
+              className="card-appear tap rounded-xl2 bg-surface px-3 py-3 text-left shadow-soft disabled:opacity-50"
             >
-              {q}
+              <span className="block text-[13px] font-semibold leading-4">{qa.label}</span>
+              <span className="mt-0.5 block text-[11px] leading-4 text-muted">{qa.hint}</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* История прошлых запросов (localStorage, между сессиями) — mobile/tablet */}
+      {chat.length === 0 && aiHistory.length > 0 && (
+        <div className="fade-in mt-4 lg:hidden">
+          <div className="flex items-baseline justify-between px-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Вы спрашивали</p>
+            <button
+              onClick={() => { clearAiHistory(); setAiHistory([]); }}
+              className="text-xs font-medium text-muted transition-colors hover:text-text"
+            >
+              Очистить
+            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {aiHistory.map((h) => (
+              <button
+                key={h} onClick={() => submit(h)} disabled={loading}
+                className="tap max-w-full truncate rounded-full bg-surface px-3 py-1.5 text-[13px] font-medium shadow-soft disabled:opacity-50"
+              >
+                {h}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -269,34 +348,49 @@ export default function AiSearch() {
   );
 }
 
-/** Desktop-sidebar AI-подбора: быстрые запросы + история запросов текущей сессии. */
+/** Desktop-sidebar AI-подбора: сценарии (те же, что на mobile) + постоянная
+ *  история запросов (localStorage, между сессиями) с очисткой. */
 function AiSidebar({
-  chat, onPick, disabled,
-}: { chat: ChatItem[]; onPick: (q: string) => void; disabled: boolean }) {
-  const history = chat.filter((c): c is Extract<ChatItem, { role: "user" }> => c.role === "user").slice(-6).reverse();
+  history, onQuick, onPick, onClearHistory, disabled,
+}: {
+  history: string[];
+  onQuick: (qa: QuickAction) => void;
+  onPick: (q: string) => void;
+  onClearHistory: () => void;
+  disabled: boolean;
+}) {
   return (
     <aside className="hidden lg:block">
       <div className="rounded-xl2 bg-surface p-2 shadow-soft">
-        <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">Быстрые запросы</p>
-        {QUICK.map((q) => (
+        <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">Сценарии</p>
+        {QUICK_ACTIONS.map((qa) => (
           <button
-            key={q} onClick={() => onPick(q)} disabled={disabled}
-            className="block w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-mutedbg disabled:opacity-50"
+            key={qa.label} onClick={() => onQuick(qa)} disabled={disabled}
+            className="block w-full rounded-xl px-3 py-2 text-left transition-colors hover:bg-mutedbg disabled:opacity-50"
           >
-            {q}
+            <span className="block text-sm font-medium">{qa.label}</span>
+            <span className="block text-xs text-muted">{qa.hint}</span>
           </button>
         ))}
       </div>
 
       {history.length > 0 && (
         <div className="mt-4 rounded-xl2 bg-surface p-2 shadow-soft">
-          <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">История</p>
-          {history.map((h, i) => (
+          <div className="flex items-baseline justify-between px-3 pb-1 pt-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">История</p>
             <button
-              key={i} onClick={() => onPick(h.text)} disabled={disabled}
+              onClick={onClearHistory}
+              className="text-xs font-medium text-muted transition-colors hover:text-text"
+            >
+              Очистить
+            </button>
+          </div>
+          {history.map((h) => (
+            <button
+              key={h} onClick={() => onPick(h)} disabled={disabled}
               className="block w-full truncate rounded-xl px-3 py-2 text-left text-sm text-muted transition-colors hover:bg-mutedbg hover:text-text disabled:opacity-50"
             >
-              {h.text}
+              {h}
             </button>
           ))}
         </div>

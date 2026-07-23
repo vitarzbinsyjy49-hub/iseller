@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { track } from "../lib/analytics";
 import { formatPrice } from "../lib/format";
+import { ErrorState } from "../components/StateViews";
 
 type Lead = {
   id: number; product_id: number | null; product_title: string | null; product_price: number | null;
@@ -35,11 +37,17 @@ const FILTERS = [
 export default function Requests() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState<Lead[] | null>(null);
+  // Ошибка сети/сервера — НЕ то же самое, что «заявок нет»: раньше catch
+  // подменял её пустым списком, и пользователь видел ложное «пусто».
+  const [error, setError] = useState(false);
   const [filter, setFilter] = useState("");
 
-  useEffect(() => {
-    api<{ leads: Lead[] }>("/leads/my").then((d) => setLeads(d.leads)).catch(() => setLeads([]));
-  }, []);
+  const load = () => {
+    setLeads(null);
+    setError(false);
+    api<{ leads: Lead[] }>("/leads/my").then((d) => setLeads(d.leads)).catch(() => setError(true));
+  };
+  useEffect(() => { load(); }, []);
 
   const visible = useMemo(() => {
     if (!leads) return null;
@@ -66,19 +74,40 @@ export default function Requests() {
         ))}
       </div>
 
-      {!visible ? (
+      {error ? (
+        <div className="mt-6"><ErrorState message="Не удалось загрузить заявки" onRetry={load} /></div>
+      ) : !visible ? (
         <div className="mt-4 space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-28 rounded-xl2" />)}
         </div>
       ) : visible.length === 0 ? (
-        <div className="mt-14 text-center">
+        <div className="fade-in mt-14 text-center">
           <div className="text-4xl">📋</div>
-          <p className="mx-auto mt-3 max-w-[260px] text-sm text-muted">
-            Заявок пока нет. Найдите товар в каталоге или через AI-подбор и оставьте заявку.
+          <p className="mt-3 text-[15px] font-bold">Заявок пока нет</p>
+          <p className="mx-auto mt-1 max-w-[280px] text-sm text-muted">
+            Заявка создаётся из карточки товара («Оставить заявку») или из AI-подбора —
+            менеджер свяжется и всё уточнит.
           </p>
-          <button onClick={() => navigate("/catalog")} className="tap mt-4 rounded-xl2 bg-accent px-5 py-2.5 text-sm font-semibold text-white">
-            В каталог
-          </button>
+          <div className="mx-auto mt-4 flex max-w-xs flex-col gap-2 sm:max-w-none sm:flex-row sm:justify-center">
+            <button
+              onClick={() => {
+                track("empty_state_action_clicked", { source: "requests_catalog" });
+                navigate("/catalog");
+              }}
+              className="tap rounded-xl2 bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accentdark"
+            >
+              Открыть каталог
+            </button>
+            <button
+              onClick={() => {
+                track("empty_state_action_clicked", { source: "requests_ai" });
+                navigate("/ai");
+              }}
+              className="tap rounded-xl2 bg-surface px-5 py-2.5 text-sm font-semibold text-accent shadow-soft"
+            >
+              ✨ Подобрать через AI
+            </button>
+          </div>
         </div>
       ) : (
         // Desktop: 2 колонки компактных карточек; mobile — прежний список

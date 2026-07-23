@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
+import { loadSearchHistory, pushSearchQuery } from "../lib/searchHistory";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
-import { ErrorState, EmptyState } from "../components/StateViews";
+import { ErrorState } from "../components/StateViews";
 
 const CATS = [
   { key: "", label: "Все" },
@@ -40,6 +41,7 @@ function plural(n: number, one: string, few: string, many: string) {
 }
 
 export default function Catalog() {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [cards, setCards] = useState<TCard[] | null>(null);
   const [cardsError, setCardsError] = useState(false);
@@ -51,11 +53,17 @@ export default function Catalog() {
   const urlQuery = params.get("query") ?? "";
   const [q, setQ] = useState(urlQuery);
   const [sort, setSort] = useState("popularity");
-  const [priceMax, setPriceMax] = useState("");
+  // price_max/in_stock читаются из URL при входе (deep-link из поисковых чипов),
+  // как это уже делает today=1; при изменении в UI обратно в URL не пишутся —
+  // прежнее поведение фильтров не меняем.
+  const [priceMax, setPriceMax] = useState(params.get("price_max")?.replace(/\D/g, "") ?? "");
   const [brand, setBrand] = useState("");
   const [brands, setBrands] = useState<string[]>([]);
-  const [onlyStock, setOnlyStock] = useState(false);
+  const [onlyStock, setOnlyStock] = useState(params.get("in_stock") === "1");
   const [onlyToday, setOnlyToday] = useState(params.get("today") === "1");
+  // Чипы недавних запросов при пустом поиске (localStorage; читаем на фокусе)
+  const [recentQueries, setRecentQueries] = useState<string[]>([]);
+  const [searchFocused, setSearchFocused] = useState(false);
   const [condition, setCondition] = useState("");
   // Desktop: сворачиваемый sidebar фильтров (>=1024px)
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -179,9 +187,26 @@ export default function Catalog() {
           </svg>
           <input
             value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по каталогу"
+            aria-label="Поиск по каталогу"
+            onFocus={() => {
+              setSearchFocused(true);
+              setRecentQueries(loadSearchHistory());
+              track("search_focused", { source: "catalog" });
+            }}
+            onBlur={() => setSearchFocused(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const trimmed = q.trim();
+                if (trimmed.length >= 2) {
+                  pushSearchQuery(trimmed);
+                  track("search_query_submitted", { query_length: trimmed.length, source: "catalog_enter" });
+                }
+                e.currentTarget.blur(); // спрятать клавиатуру — результаты уже на экране
+              }
+            }}
             className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-muted"
           />
-          {q && <button onClick={() => setQ("")} className="text-muted">✕</button>}
+          {q && <button onClick={() => setQ("")} aria-label="Очистить поиск" className="text-muted">✕</button>}
         </div>
 
         {/* Desktop controls row: сортировки и «В наличии» слева, «Фильтры»
@@ -202,6 +227,24 @@ export default function Catalog() {
           </button>
         </div>
         </div>
+
+        {/* Недавние запросы при пустом фокусе поиска (история из localStorage).
+            onMouseDown + preventDefault: тап по чипу не блюрит инпут, значение
+            подставляется до закрытия ряда. */}
+        {searchFocused && !q.trim() && recentQueries.length > 0 && (
+          <div className="no-scrollbar fade-in -mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
+            <span className="shrink-0 text-[11px] font-medium text-muted">Вы искали:</span>
+            {recentQueries.map((h) => (
+              <button
+                key={h}
+                onMouseDown={(e) => { e.preventDefault(); setQ(h); }}
+                className="tap max-w-[180px] shrink-0 truncate rounded-full bg-surface px-3 py-1.5 text-xs font-medium shadow-soft"
+              >
+                {h}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
           {CATS.map((c) => (
@@ -242,7 +285,19 @@ export default function Catalog() {
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <div key={i} className="skeleton h-72 rounded-xl2" />)}
         </div>
       ) : cards.length === 0 ? (
-        <EmptyState message="Ничего не найдено. Попробуйте изменить фильтры." />
+        <NoResults
+          query={urlQuery}
+          onAskAi={() => {
+            track("search_ai_escalated", { source: "catalog_no_results", query_length: urlQuery.length });
+            navigate(urlQuery ? `/ai?q=${encodeURIComponent(urlQuery)}&auto=1` : "/ai");
+          }}
+          onReset={() => {
+            track("empty_state_action_clicked", { source: "catalog_no_results_reset" });
+            setQ(""); setCategory(""); setBrand(""); setPriceMax("");
+            setOnlyStock(false); setOnlyToday(false); setCondition("");
+            setParams(new URLSearchParams(), { replace: true });
+          }}
+        />
       ) : (
         <div className="stagger mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:mt-5 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
           {cards.map((c) => <ProductCard key={c.id} card={c} onLead={setLead} />)}
@@ -258,6 +313,34 @@ export default function Catalog() {
           source="catalog" onClose={() => setLead(null)}
         />
       )}
+    </div>
+  );
+}
+
+/** Пустая выдача каталога — не тупик: запрос сохранён в строке поиска, можно
+ *  изменить формулировку, спросить AI (с prefill) или сбросить фильтры. */
+function NoResults({ query, onAskAi, onReset }: {
+  query: string; onAskAi: () => void; onReset: () => void;
+}) {
+  return (
+    <div className="fade-in mt-6 rounded-xl2 bg-surface p-6 text-center shadow-soft">
+      <div className="text-3xl">🔍</div>
+      <p className="mt-2 text-[15px] font-bold">
+        {query ? <>По запросу «{query}» ничего не нашлось</> : "Ничего не найдено"}
+      </p>
+      <p className="mx-auto mt-1 max-w-xs text-[13px] text-muted">
+        Попробуйте изменить формулировку или фильтры — либо опишите задачу AI, он ищет по смыслу.
+      </p>
+      <div className="mx-auto mt-4 flex max-w-xs flex-col gap-2">
+        <button onClick={onAskAi}
+          className="tap rounded-field bg-accent px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-accentdark">
+          ✨ Спросить AI{query ? ` «${query.length > 24 ? `${query.slice(0, 24)}…` : query}»` : ""}
+        </button>
+        <button onClick={onReset}
+          className="tap rounded-field bg-mutedbg px-4 py-2.5 text-[13px] font-semibold text-text">
+          Сбросить фильтры
+        </button>
+      </div>
     </div>
   );
 }

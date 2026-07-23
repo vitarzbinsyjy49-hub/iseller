@@ -14,6 +14,7 @@ import AiSearch from "./pages/AiSearch";
 import Requests from "./pages/Requests";
 import Profile from "./pages/Profile";
 import Favorites from "./pages/Favorites";
+import History from "./pages/History";
 
 export default function App() {
   const { setTokens, setUser } = useAuthStore();
@@ -68,6 +69,7 @@ export default function App() {
           <Route path="/ai" element={<AiSearch />} />
           <Route path="/requests" element={<Requests />} />
           <Route path="/favorites" element={<Favorites />} />
+          <Route path="/history" element={<History />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="*" element={<Home />} />
         </Route>

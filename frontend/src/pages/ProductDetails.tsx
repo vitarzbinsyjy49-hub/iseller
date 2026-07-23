@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { track, trackProduct } from "../lib/analytics";
-import { ProductDetail } from "../components/ai/types";
+import { ProductCard as TCard, ProductDetail } from "../components/ai/types";
+import ProductCardView from "../components/ProductCard";
 import { formatPrice, discountPct } from "../lib/format";
 import { ProductImage, Badge, FavButton } from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
@@ -22,6 +23,10 @@ export default function ProductDetails() {
   const [tab, setTab] = useState<Tab>("desc");
   const [shared, setShared] = useState(false);
   const [lead, setLead] = useState<{ source: string; preset?: string } | null>(null);
+  // «Похожие варианты» — существующий каталог той же категории (без нового
+  // endpoint), текущий товар исключён. Это НЕ персональная подборка.
+  const [similar, setSimilar] = useState<TCard[]>([]);
+  const [similarLead, setSimilarLead] = useState<TCard | null>(null);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -39,6 +44,25 @@ export default function ProductDetails() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Похожие: та же категория, популярные, минус текущий товар; показываем от 3.
+  // AbortController отменяет запрос при уходе со страницы/смене товара.
+  useEffect(() => {
+    setSimilar([]);
+    const category = p?.category;
+    if (!p || !category) return;
+    const controller = new AbortController();
+    api<{ cards?: TCard[] }>(
+      `/catalog/list?category=${encodeURIComponent(category)}&sort=popularity`,
+      { signal: controller.signal },
+    )
+      .then((d) => {
+        const cards = (Array.isArray(d.cards) ? d.cards : []).filter((c) => c.id !== p.id).slice(0, 8);
+        setSimilar(cards.length >= 3 ? cards : []);
+      })
+      .catch(() => { /* секция просто не показывается */ });
+    return () => controller.abort();
+  }, [p?.id, p?.category]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function share() {
     if (!p) return;
@@ -213,7 +237,12 @@ export default function ProductDetails() {
       {/* Быстрые действия — в потоке контента, ниже цены (не в fixed-зоне) */}
       <div className="mt-3 flex gap-2">
         <button
-          onClick={() => navigate(`/ai?q=${encodeURIComponent("Расскажи про " + p.title)}`)}
+          onClick={() => {
+            // Prefill без авто-отправки: пользователь видит текст и жмёт сам.
+            // Цену в prompt не вставляем — факты AI получает через backend.
+            // ai_prefill_opened трекает сам AiSearch при потреблении ?q=.
+            navigate(`/ai?q=${encodeURIComponent(`Сравни ${p.title} с подходящими альтернативами и объясни, кому он подойдёт`)}`);
+          }}
           className="tap flex-1 rounded-xl2 border border-border bg-surface py-2.5 text-xs font-medium text-muted"
         >
           ✨ Спросить AI
@@ -316,6 +345,32 @@ export default function ProductDetails() {
         </div>
       )}
 
+      {/* ===== Похожие варианты: та же категория (существующий каталог), без
+          претензии на персональность. Показываем только при ≥3 товарах. ===== */}
+      {similar.length >= 3 && (
+        <div className="mt-6">
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-[17px] font-bold leading-5">Похожие варианты</h2>
+              <p className="mt-0.5 text-xs text-muted">Из той же категории</p>
+            </div>
+            {p.category && (
+              <button
+                onClick={() => navigate(`/catalog?category=${encodeURIComponent(p.category!)}`)}
+                className="shrink-0 text-xs font-medium text-accent"
+              >
+                Смотреть все
+              </button>
+            )}
+          </div>
+          <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0 wide:grid-cols-5">
+            {similar.map((c) => (
+              <ProductCardView key={c.id} card={c} compact onLead={setSimilarLead} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ===== Фиксированная CTA — ТОЛЬКО mobile (на desktop CTA в правой колонке) =====
           cta-dock (index.css): панель прижата к низу, непрозрачный фон до самого низа
           (за навбаром), кнопка поднята на высоту навбара + 16px. Между кнопкой и
@@ -338,6 +393,12 @@ export default function ProductDetails() {
           productId={p.id} productTitle={p.title} productPrice={p.price}
           source={lead.source} presetMessage={lead.preset}
           onClose={() => setLead(null)}
+        />
+      )}
+      {similarLead && (
+        <LeadForm
+          productId={similarLead.id} productTitle={similarLead.title} productPrice={similarLead.price}
+          source="product" onClose={() => setSimilarLead(null)}
         />
       )}
     </div>

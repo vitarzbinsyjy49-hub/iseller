@@ -3,7 +3,10 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { useAuthStore } from "../store/auth";
 import { usePublicConfig } from "../lib/appConfig";
 import { openExternalLink } from "../lib/telegram";
+import { track } from "../lib/analytics";
+import { pushSearchQuery } from "../lib/searchHistory";
 import { ProfileChip } from "./ProfileChip";
+import SearchPanel from "./SearchPanel";
 
 /** Desktop-шапка (>=1024px): логотип, навигация, поиск, действия.
  *  Видна только на lg+ — mobile UX (BottomNav + градиентный header) не трогаем.
@@ -29,6 +32,9 @@ export default function DesktopHeader() {
   const onCatalog = pathname.startsWith("/catalog");
   const urlQuery = onCatalog ? (params.get("query") ?? "") : "";
   const [q, setQ] = useState(urlQuery);
+  // Компактный popover при фокусе с пустым запросом: история + быстрые сценарии
+  // + «Спросить AI». Live-результаты на desktop рисует сам каталог (как раньше).
+  const [panelOpen, setPanelOpen] = useState(false);
 
   // Подхватить внешний query (переход на каталог с другим query) или сброс
   // при уходе со страницы каталога — шапка не должна хранить «чужой» текст.
@@ -80,19 +86,60 @@ export default function DesktopHeader() {
           })}
         </nav>
 
-        {/* Поиск — живой, с debounce, единственный на desktop */}
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl2 bg-mutedbg px-4 focus-within:ring-2 focus-within:ring-accent/40">
-          <SearchIcon />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Найти iPhone, MacBook, PlayStation…"
-            className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-muted"
-          />
-          {q && (
-            <button onClick={() => setQ("")} aria-label="Очистить поиск" className="shrink-0 text-muted hover:text-text">
-              ✕
-            </button>
+        {/* Поиск — живой, с debounce, единственный на desktop. relative — под ним
+            компактный popover с историей/сценариями при пустом фокусе; закрытие:
+            Escape, клик мимо (blur с contains-проверкой), навигация. */}
+        <div
+          className="relative min-w-0 flex-1"
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPanelOpen(false);
+          }}
+        >
+          <div className="flex min-w-0 items-center gap-2 rounded-xl2 bg-mutedbg px-4 focus-within:ring-2 focus-within:ring-accent/40">
+            <SearchIcon />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onFocus={() => {
+                if (!panelOpen) track("search_focused", { source: "desktop_header" });
+                setPanelOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") { setPanelOpen(false); e.currentTarget.blur(); }
+                if (e.key === "Enter") {
+                  const trimmed = q.trim();
+                  if (trimmed.length >= 2) {
+                    pushSearchQuery(trimmed);
+                    track("search_query_submitted", { query_length: trimmed.length, source: "desktop_enter" });
+                    navigate(`/catalog?query=${encodeURIComponent(trimmed)}`);
+                  }
+                  setPanelOpen(false);
+                }
+              }}
+              placeholder="Найти iPhone, MacBook, PlayStation…"
+              aria-label="Поиск по каталогу"
+              aria-expanded={panelOpen && !q.trim()}
+              className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-muted"
+            />
+            {q && (
+              <button onClick={() => setQ("")} aria-label="Очистить поиск" className="shrink-0 text-muted hover:text-text">
+                ✕
+              </button>
+            )}
+          </div>
+
+          {panelOpen && !q.trim() && (
+            <div
+              onMouseDown={(e) => e.preventDefault()}
+              className="fade-in absolute inset-x-0 top-full z-40 mt-2 w-full overflow-hidden rounded-xl2 border border-border bg-surface shadow-sheet"
+            >
+              <SearchPanel
+                query=""
+                withResults={false}
+                onNavigate={(to) => { setPanelOpen(false); navigate(to); }}
+                onPickQuery={(picked) => setQ(picked)}
+              />
+            </div>
           )}
         </div>
 

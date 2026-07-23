@@ -10,6 +10,8 @@ import { usePublicConfig } from "../lib/appConfig";
 import { openExternalLink } from "../lib/telegram";
 import { ProfileChip } from "../components/ProfileChip";
 import { ErrorState } from "../components/StateViews";
+import SearchPanel from "../components/SearchPanel";
+import { pushSearchQuery } from "../lib/searchHistory";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
@@ -70,10 +72,13 @@ export default function Home() {
   // Доп. секции desktop-главной (Скидки/Apple/Gaming) — те же API каталога
   const [extra, setExtra] = useState<{ sale: TCard[]; apple: TCard[]; gaming: TCard[] } | null>(null);
   const [lead, setLead] = useState<TCard | null>(null);
+  // Консультационная заявка без товара (fallback, когда ссылка менеджера пуста)
+  const [consult, setConsult] = useState(false);
   const [search, setSearch] = useState("");
-  // Live-поиск: null — панель скрыта, [] — «ничего не нашлось», иначе подсказки
-  const [results, setResults] = useState<TCard[] | null>(null);
-  const [searching, setSearching] = useState(false);
+  // Панель умного поиска: открыта по фокусу (полезное пустое состояние) или
+  // при вводе (live-результаты). Содержимое — SearchPanel; debounce и отмена
+  // запросов (AbortController) — в lib/liveSearch.
+  const [searchOpen, setSearchOpen] = useState(false);
   // v5.2.6: персональные секции («Для вас», «Недавно смотрели»)
   const [recs, setRecs] = useState<TCard[] | null>(null);
   const [recsMode, setRecsMode] = useState<string>("cold");
@@ -107,23 +112,22 @@ export default function Home() {
     ]).then(([sale, apple, gaming]) => setExtra({ sale, apple, gaming }));
   }, [loadFeed]);
 
-  // Debounce 250ms: ищем по мере ввода, без Enter
-  useEffect(() => {
-    const q = search.trim();
-    if (q.length < 2) { setResults(null); setSearching(false); return; }
-    setSearching(true);
-    const t = setTimeout(() => {
-      api<{ cards?: TCard[] }>(`/catalog/search?query=${encodeURIComponent(q)}&limit=5`)
-        .then((d) => setResults(Array.isArray(d.cards) ? d.cards : []))
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [search]);
-
   function goSearch() {
     const q = search.trim();
+    if (q) {
+      pushSearchQuery(q);
+      track("search_query_submitted", { query_length: q.length, source: "home_enter" });
+    }
     navigate(q ? `/catalog?query=${encodeURIComponent(q)}` : "/catalog");
+  }
+
+  /** Навигация из поисковой панели: сохранить осмысленный запрос в историю и уйти. */
+  function panelNavigate(to: string) {
+    const q = search.trim();
+    if (q.length >= 2) pushSearchQuery(q);
+    setSearch("");
+    setSearchOpen(false);
+    navigate(to);
   }
 
   // Чипы категорий hero: приоритет админских категорий → каталог → фолбэк
@@ -142,10 +146,13 @@ export default function Home() {
         }))
   ).slice(0, 6);
 
-  // «Вам также может понравиться» = глобальная подборка МИНУС то, что уже в «Для
-  // вас»: две похожие секции не дублируются, показываем только при достатке РАЗНЫХ.
-  const forYouIds = new Set((recs ?? []).map((c) => c.id));
-  const alsoLike = (feed?.recommended ?? []).filter((c) => !forYouIds.has(c.id));
+  // Дедуп соседних персональных секций: «Для вас» не повторяет «Недавно
+  // смотрели» (если та показана), а «Вам также может понравиться» — обе.
+  const recentShown = recentlyViewed && recentlyViewed.length >= 2 ? recentlyViewed : [];
+  const recentIds = new Set(recentShown.map((c) => c.id));
+  const forYou = (recs ?? []).filter((c) => !recentIds.has(c.id));
+  const forYouIds = new Set(forYou.map((c) => c.id));
+  const alsoLike = (feed?.recommended ?? []).filter((c) => !forYouIds.has(c.id) && !recentIds.has(c.id));
 
   return (
     <div className="mx-auto max-w-md lg:max-w-none">
@@ -172,8 +179,15 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Крупный поиск — главный элемент верха (relative: под ним панель подсказок) */}
-        <div className="relative mt-4 flex gap-2">
+        {/* Крупный поиск — главный элемент верха (relative: под ним панель подсказок).
+            onBlur на обёртке: закрываем панель, только если фокус ушёл наружу
+            (кнопки панели держат фокус через preventDefault на mousedown). */}
+        <div
+          className="relative mt-4 flex gap-2"
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSearchOpen(false);
+          }}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-card bg-white px-4 text-text shadow-[0_4px_14px_-6px_rgba(9,23,41,0.28)]">
             <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
@@ -181,16 +195,24 @@ export default function Home() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && goSearch()}
+              onFocus={() => {
+                if (!searchOpen) track("search_focused", { source: "home" });
+                setSearchOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") goSearch();
+                if (e.key === "Escape") { setSearchOpen(false); e.currentTarget.blur(); }
+              }}
               placeholder="Найти iPhone, MacBook, AirPods…"
               aria-label="Поиск по каталогу"
+              aria-expanded={searchOpen || search.trim().length >= 2}
               className="h-12 min-w-0 flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-muted"
             />
             {/* Кнопка очистки — только когда есть текст. Иконка сканера убрана до
                 реализации сценария «наведи камеру → AI определил модель». */}
             {search && (
               <button
-                onClick={() => { setSearch(""); setResults(null); }}
+                onClick={() => setSearch("")}
                 aria-label="Очистить поиск"
                 className="tap -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-mutedbg"
               >
@@ -208,46 +230,21 @@ export default function Home() {
             ✨ AI
           </button>
 
-          {/* Панель live-подсказок */}
-          {(results !== null || searching) && (
-            <div className="fade-in absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-xl2 bg-white text-text shadow-sheet">
-              {searching && results === null ? (
-                <p className="px-4 py-3.5 text-sm text-muted">Ищем…</p>
-              ) : results && results.length > 0 ? (
-                <>
-                  {results.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => { setSearch(""); setResults(null); navigate(`/product/${c.id}`); }}
-                      className="tap flex w-full items-center justify-between gap-3 border-b border-border px-4 py-3 text-left last:border-0"
-                    >
-                      <span className="min-w-0">
-                        <span className="line-clamp-1 block text-sm font-medium">{c.title}</span>
-                        <span className={`text-[11px] font-medium ${c.in_stock ? "text-green" : "text-muted"}`}>
-                          {c.in_stock ? "В наличии" : "Под заказ"}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-sm font-bold">
-                        {new Intl.NumberFormat("ru-RU").format(Math.round(c.price))} ₽
-                      </span>
-                    </button>
-                  ))}
-                  <button
-                    onClick={goSearch}
-                    className="tap w-full bg-mutedbg px-4 py-3 text-center text-xs font-semibold text-accent"
-                  >
-                    Все результаты в каталоге →
-                  </button>
-                </>
-              ) : (
-                <div className="px-4 py-5 text-center">
-                  <span className="text-2xl">🔍</span>
-                  <p className="mt-1.5 text-sm text-muted">
-                    По запросу «{search.trim()}» ничего не нашлось.
-                    Попробуйте иначе — например, «iPhone» или «MacBook».
-                  </p>
-                </div>
-              )}
+          {/* Умная поисковая панель: по фокусу — история/чипы/недавние/AI,
+              при вводе — live-результаты (debounce + AbortController внутри).
+              mousedown preventDefault: тап по панели не блюрит инпут, клик доходит. */}
+          {(searchOpen || search.trim().length >= 2) && (
+            <div
+              onMouseDown={(e) => e.preventDefault()}
+              className="fade-in absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-xl2 bg-white text-text shadow-sheet"
+            >
+              <SearchPanel
+                query={search}
+                onNavigate={panelNavigate}
+                onPickQuery={(q) => setSearch(q)}
+                chips={heroChips}
+                recentlyViewed={recentlyViewed}
+              />
             </div>
           )}
         </div>
@@ -272,6 +269,28 @@ export default function Home() {
           </button>
         </div>
       </header>
+
+      {/* ===== Быстрые сценарии (mobile): не категории, а намерения пользователя.
+          Товарные ведут в каталог, консультационные — к профильному менеджеру из
+          public config (пустая ссылка → существующий fallback: AI-консультант).
+          На desktop аналогичные действия уже есть в сайдбаре — не дублируем. ===== */}
+      <QuickScenarios
+        onCatalog={(route, scenario) => {
+          track("quick_scenario_clicked", { scenario });
+          navigate(route);
+        }}
+        onManager={(url, scenario) => {
+          track("quick_scenario_clicked", { scenario });
+          if (!openExternalLink(url || config.manager_retail_url)) navigate("/ai");
+        }}
+        onAi={(prefill, scenario) => {
+          track("quick_scenario_clicked", { scenario });
+          navigate(`/ai?q=${encodeURIComponent(prefill)}`);
+        }}
+        wholesaleUrl={config.manager_wholesale_url}
+        b2bUrl={config.manager_b2b_url}
+        tradeinUrl={config.manager_tradein_url}
+      />
 
       {/* ===== Desktop: сетка [sidebar 260px | контент] ===== */}
       <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8">
@@ -331,12 +350,34 @@ export default function Home() {
       <Section
         title="Для вас"
         subtitle={recsMode === "cold" ? "Популярное и новое из разных категорий" : "Подобрали по вашим просмотрам"}
-        cards={recs ?? undefined}
+        cards={recs === null ? undefined : forYou}
         onLead={setLead}
         onAll={() => navigate("/catalog")}
         onOpen={(c) => trackProduct("recommendation_click", { product_id: c.id, source: "for_you" })}
         grid
       />
+
+      {/* Единственный AI-консьерж CTA между товарными секциями (не плодим их) */}
+      <button
+        onClick={() => { track("search_ai_escalated", { source: "home_concierge" }); navigate("/ai"); }}
+        className="tap mt-6 flex w-full items-center gap-3.5 rounded-xl2 bg-surface p-4 text-left shadow-card"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4" />
+            <circle cx="12" cy="12" r="4" />
+          </svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-bold leading-5">Не уверены, что выбрать?</span>
+          <span className="mt-0.5 block text-[12px] leading-4 text-muted">
+            Ответьте на несколько вопросов — AI подберёт варианты из реального наличия
+          </span>
+        </span>
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </button>
 
       {feedError ? (
         <div className="mt-6"><ErrorState message="Не удалось загрузить подборки товаров" onRetry={loadFeed} /></div>
@@ -374,6 +415,24 @@ export default function Home() {
         Открыть весь каталог →
       </button>
 
+      {/* Финальный CTA: не нашли модель — менеджер найдёт под заказ.
+          Ссылка из public config; пустая → существующая форма заявки source=manager. */}
+      <div className="mt-4 rounded-xl2 bg-surface p-4 text-center shadow-soft lg:mt-8">
+        <p className="text-[15px] font-bold">Не нашли нужную модель?</p>
+        <p className="mx-auto mt-1 max-w-xs text-[13px] text-muted">
+          Напишите менеджеру — уточним наличие и привезём под заказ.
+        </p>
+        <button
+          onClick={() => {
+            track("empty_state_action_clicked", { source: "home_footer_manager" });
+            if (!openExternalLink(config.manager_retail_url)) setConsult(true);
+          }}
+          className="tap mt-3 rounded-field bg-mutedbg px-5 py-2.5 text-[13px] font-semibold text-text transition-colors hover:bg-accent hover:text-white"
+        >
+          💬 Написать менеджеру
+        </button>
+      </div>
+
         </div>{/* /контент */}
       </div>{/* /desktop grid */}
 
@@ -381,6 +440,13 @@ export default function Home() {
         <LeadForm
           productId={lead.id} productTitle={lead.title} productPrice={lead.price}
           source="home" onClose={() => setLead(null)}
+        />
+      )}
+      {consult && (
+        <LeadForm
+          productId={null} productTitle={null} productPrice={null}
+          source="manager" presetMessage="Ищу модель, которой нет в каталоге"
+          onClose={() => setConsult(false)}
         />
       )}
     </div>
@@ -483,6 +549,72 @@ function HomeSidebar({
         ))}
       </div>
     </aside>
+  );
+}
+
+/** Иконки быстрых сценариев: спокойные stroke-SVG в стиле BottomNav, не emoji. */
+function ScenarioIcon({ name }: { name: string }) {
+  const glyph = (() => {
+    switch (name) {
+      case "iphone":
+        return <><rect x="8" y="3" width="8" height="18" rx="2.2" /><path d="M11 18.5h2" /></>;
+      case "macbook":
+        return <><rect x="5" y="5" width="14" height="9" rx="1" /><path d="M3 17.5h18l-1.4 2.2H4.4z" /></>;
+      case "tradein":
+        return <><path d="M4 9a8 8 0 0 1 14-3l2 2" /><path d="M20 3v5h-5" /><path d="M20 15a8 8 0 0 1-14 3l-2-2" /><path d="M4 21v-5h5" /></>;
+      case "b2b":
+        return <><rect x="3.5" y="7.5" width="17" height="12" rx="2" /><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5M3.5 12.5h17" /></>;
+      case "wholesale":
+        return <><path d="M12 3 3.5 7.5v9L12 21l8.5-4.5v-9z" /><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" /></>;
+      default: // аксессуары
+        return <><path d="M9.5 3v4.5M14.5 3v4.5" /><rect x="7.5" y="7.5" width="9" height="6" rx="2" /><path d="M12 13.5V18a3 3 0 0 1-3 3" /></>;
+    }
+  })();
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor"
+      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {glyph}
+    </svg>
+  );
+}
+
+/** Быстрые сценарии на главной (mobile): намерения, а не категории.
+ *  Товарные → каталог; «Подобрать MacBook» → AI с prefill (без авто-отправки);
+ *  Trade-In/бизнес/опт → профильный менеджер из public config (fallback → AI). */
+function QuickScenarios({
+  onCatalog, onManager, onAi, wholesaleUrl, b2bUrl, tradeinUrl,
+}: {
+  onCatalog: (route: string, scenario: string) => void;
+  onManager: (url: string, scenario: string) => void;
+  onAi: (prefill: string, scenario: string) => void;
+  wholesaleUrl: string; b2bUrl: string; tradeinUrl: string;
+}) {
+  const items: { key: string; label: string; sub: string; onClick: () => void }[] = [
+    { key: "iphone", label: "Купить iPhone", sub: "Все модели", onClick: () => onCatalog("/catalog?query=iPhone", "buy_iphone") },
+    { key: "macbook", label: "Подобрать MacBook", sub: "AI поможет выбрать", onClick: () => onAi("Подобрать MacBook под мои задачи", "pick_macbook") },
+    { key: "tradein", label: "Trade-In", sub: "Обмен и выкуп", onClick: () => onManager(tradeinUrl, "trade_in") },
+    { key: "b2b", label: "Для бизнеса", sub: "Поставки юрлицам", onClick: () => onManager(b2bUrl, "b2b") },
+    { key: "wholesale", label: "Опт", sub: "Партии от 5 шт", onClick: () => onManager(wholesaleUrl, "wholesale") },
+    { key: "accessories", label: "Аксессуары", sub: "Кабели, чехлы, зарядки", onClick: () => onCatalog(`/catalog?category=${encodeURIComponent("аксессуары")}`, "accessories") },
+  ];
+  return (
+    <div className="stagger mt-4 grid grid-cols-2 gap-2 lg:hidden">
+      {items.map((s) => (
+        <button
+          key={s.key}
+          onClick={s.onClick}
+          className="card-appear tap flex items-center gap-2.5 rounded-xl2 bg-surface px-3 py-2.5 text-left shadow-card"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-mutedbg text-accent">
+            <ScenarioIcon name={s.key} />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] font-semibold leading-4">{s.label}</span>
+            <span className="mt-0.5 block truncate text-[11px] leading-4 text-muted">{s.sub}</span>
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 
