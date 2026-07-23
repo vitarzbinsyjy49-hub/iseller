@@ -140,9 +140,15 @@ body {
 .stagger > *:nth-child(7) { animation-delay: 180ms; }
 .stagger > *:nth-child(8) { animation-delay: 210ms; }
 
-/* Tap-анимация: лёгкое сжатие */
-.tap { transition: transform 120ms ease; }
-.tap:active { transform: scale(0.98); }
+/* Tap/press: мягкое сжатие с премиальным замедлением (v5.2.8) */
+.tap { transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1); }
+.tap:active { transform: scale(0.97); }
+
+/* Подъём карточки на hover (только desktop; на тач-устройствах ничего) */
+@media (hover: hover) and (pointer: fine) {
+  .lift { transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .lift:hover { transform: translateY(-2px); }
+}
 
 /* Скелетоны с мягким шиммером */
 .skeleton {

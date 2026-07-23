@@ -22,10 +22,22 @@ export default {
         green: "rgb(var(--app-green) / <alpha-value>)",
         orange: "rgb(var(--app-orange) / <alpha-value>)",
       },
-      borderRadius: { xl2: "1.25rem" },
+      // Единая шкала радиусов (v5.2.8): field → card → xl2 → hero. Без случайных значений.
+      borderRadius: {
+        field: "0.875rem", // 14px — инпуты, кнопки, чипы
+        card: "1rem",      // 16px — вторичные панели / поиск
+        xl2: "1.25rem",    // 20px — карточки товара
+        hero: "1.75rem",   // 28px — hero, промо-карточки
+      },
+      // Мягкие тени (v5.2.8): лёгкая глубина, без тяжёлых тёмных пятен.
       boxShadow: {
-        soft: "0 1px 3px rgba(17,24,39,0.05), 0 4px 14px rgba(17,24,39,0.05)",
-        sheet: "0 -8px 30px rgba(17,24,39,0.12)",
+        soft: "0 1px 2px rgba(16,24,40,0.04), 0 2px 8px rgba(16,24,40,0.05)",
+        card: "0 1px 2px rgba(16,24,40,0.04), 0 6px 16px -6px rgba(16,24,40,0.10)",
+        float: "0 10px 30px -12px rgba(16,24,40,0.22)",
+        sheet: "0 -8px 30px rgba(16,24,40,0.12)",
+      },
+      transitionTimingFunction: {
+        premium: "cubic-bezier(0.22, 1, 0.36, 1)", // ease-out-quint — мягкое замедление
       },
     },
   },
