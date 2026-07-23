@@ -94,11 +94,11 @@ export function enterFullscreen(): void {
    Вызывается РОВНО ОДИН РАЗ из App (useEffect с cleanup).
    ============================================================ */
 
-/** Светлый фон/низ приложения (Mini App без тёмного редизайна — держим
- *  светлыми в обеих темах). Верх (шапка) задаётся отдельно цветом hero
- *  (readHeaderColor): системная область Telegram и hero сливаются в единую
- *  композицию, а не читаются как две отдельные полосы. */
-const APP_BG = "#f6f7f9";
+/** Нижний бар приложения — светлый (Mini App без тёмного редизайна). А ВОТ ФОН
+ *  Telegram (setBackgroundColor) и шапку красим цветом hero (readHeaderColor):
+ *  системная область (в fullscreen — зона статус-бара) сливается с hero в единый
+ *  тёмный верх на весь экран, без белой полосы. Раньше фон был светлым (#f6f7f9),
+ *  из-за чего верх «светился белым». Тему/контент это НЕ трогает. */
 const APP_SURFACE = "#ffffff";
 // Дублирует --app-header-color из index.css — фолбэк, если переменная ещё не
 // посчитана (очень ранний вызов) или DOM недоступен (юнит-тесты).
@@ -209,7 +209,7 @@ export function initTelegramUi(): () => void {
   try { tg?.ready(); } catch {}
   enterFullscreen(); // expand + guarded requestFullscreen (без retry: отказ просто оставляет обычный режим)
   const paintChrome = (t: TelegramWebApp) =>
-    applyTelegramColors(t, { header: readHeaderColor(), background: APP_BG, bottomBar: APP_SURFACE });
+    applyTelegramColors(t, { header: readHeaderColor(), background: readHeaderColor(), bottomBar: APP_SURFACE });
   if (tg) paintChrome(tg);
 
   // rAF-коалесценция: сколько бы событий ни пришло за кадр — один пересчёт.

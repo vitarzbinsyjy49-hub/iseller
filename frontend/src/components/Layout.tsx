@@ -11,6 +11,11 @@ export default function Layout() {
   const location = useLocation();
   return (
     <div className="flex h-full flex-col">
+      {/* Тёмная подложка верхней зоны (статус-бар/Telegram-хром) на ВСЕХ экранах:
+          красит вырез safe-area цветом шапки (index.css .hero-top-inset), чтобы верх
+          был цельным тёмным, без белой полосы. Высота = --app-content-top-offset
+          (0 вне fullscreen → невидима, ничего не смещает). */}
+      <div aria-hidden className="hero-top-inset lg:hidden" />
       <DesktopHeader />
       <main
         key={location.pathname}
