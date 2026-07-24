@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { ProductCard as TCard } from "../components/ai/types";
-import ProductCard from "../components/ProductCard";
+import ProductCard, { ProductImage } from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
 import { ErrorState } from "../components/StateViews";
 import { useFavoriteIds } from "../lib/favorites";
+import { track } from "../lib/analytics";
 
 /** Экран «Избранное»: карточки серверного избранного. Удаление сердечком —
  *  карточка исчезает сразу (фильтр по актуальным id), без перезагрузки. */
@@ -44,7 +45,17 @@ export default function Favorites() {
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton aspect-[3/4] rounded-xl2" />)}
         </div>
       ) : visible.length === 0 ? (
-        <EmptyFavorites onCatalog={() => navigate("/catalog")} />
+        <EmptyFavorites
+          onCatalog={() => {
+            track("empty_state_action_clicked", { source: "favorites_catalog" });
+            navigate("/catalog");
+          }}
+          onAi={() => {
+            track("empty_state_action_clicked", { source: "favorites_ai" });
+            navigate("/ai");
+          }}
+          onProduct={(id) => navigate(`/product/${id}`)}
+        />
       ) : (
         <div className="stagger mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
           {visible.map((c) => <ProductCard key={c.id} card={c} onLead={setLead} />)}
@@ -61,7 +72,21 @@ export default function Favorites() {
   );
 }
 
-function EmptyFavorites({ onCatalog }: { onCatalog: () => void }) {
+/** Пустое избранное — не тупик: каталог, AI-подбор и «недавно смотрели»
+ *  (существующий endpoint; грузится только когда пустое состояние показано). */
+function EmptyFavorites({
+  onCatalog, onAi, onProduct,
+}: { onCatalog: () => void; onAi: () => void; onProduct: (id: number) => void }) {
+  const [recent, setRecent] = useState<TCard[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api<{ cards?: TCard[] }>("/catalog/recently-viewed?limit=8", { signal: controller.signal })
+      .then((d) => setRecent(Array.isArray(d.cards) ? d.cards : []))
+      .catch(() => { /* блок просто не показывается */ });
+    return () => controller.abort();
+  }, []);
+
   return (
     <div className="fade-in mt-10 flex flex-col items-center px-6 text-center">
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-mutedbg">
@@ -74,12 +99,35 @@ function EmptyFavorites({ onCatalog }: { onCatalog: () => void }) {
       <p className="mt-1.5 max-w-xs text-sm text-muted">
         Добавляйте понравившиеся товары, чтобы быстро вернуться к ним позже.
       </p>
-      <button
-        onClick={onCatalog}
-        className="tap mt-5 rounded-xl2 bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accentdark"
-      >
-        Перейти в каталог
-      </button>
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+        <button
+          onClick={onCatalog}
+          className="tap rounded-xl2 bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accentdark"
+        >
+          Перейти в каталог
+        </button>
+        <button
+          onClick={onAi}
+          className="tap rounded-xl2 bg-surface px-5 py-2.5 text-sm font-semibold text-accent shadow-soft"
+        >
+          ✨ Подобрать через AI
+        </button>
+      </div>
+
+      {recent.length >= 2 && (
+        <div className="mt-8 w-full max-w-md text-left">
+          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">Вы недавно смотрели</p>
+          <div className="no-scrollbar -mx-6 mt-2 flex gap-2 overflow-x-auto px-6">
+            {recent.map((c) => (
+              <button key={c.id} onClick={() => onProduct(c.id)} className="tap w-24 shrink-0 text-left">
+                <ProductImage src={c.image} title={c.title} category={c.category}
+                  className="aspect-square w-full rounded-xl" compact />
+                <span className="mt-1 line-clamp-2 block text-[11px] font-medium leading-[1.3]">{c.title}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

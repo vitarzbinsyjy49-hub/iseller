@@ -13,7 +13,18 @@ export type AppEvent =
   | "catalog_opened"
   | "product_viewed"
   | "lead_created"
-  | "admin_opened";
+  | "admin_opened"
+  // UX-патч (Лавка-адаптация): поиск/сценарии/история/пустые состояния.
+  // В payload передаём только метаданные (query_length, source) — не текст
+  // запроса (политика v5.1.1: сырые запросы в аналитику не пишем).
+  | "search_focused"
+  | "search_query_submitted"
+  | "search_result_clicked"
+  | "search_ai_escalated"
+  | "quick_scenario_clicked"
+  | "ai_prefill_opened"
+  | "history_opened"
+  | "empty_state_action_clicked";
 
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();

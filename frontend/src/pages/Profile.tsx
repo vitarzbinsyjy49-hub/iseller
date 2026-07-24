@@ -61,7 +61,8 @@ export default function Profile() {
           onClick={() => navigate("/favorites")} />
         <MenuRow icon="📋" title="Мои заявки" badge={leadCount === null ? "…" : String(leadCount)}
           onClick={() => navigate("/requests")} />
-        <MenuRow icon="🕐" title="История просмотров" subtitle="Скоро" />
+        <MenuRow icon="🕐" title="История просмотров" subtitle="Товары, которые вы открывали"
+          onClick={() => navigate("/history")} />
         <MenuRow icon="📍" title="Точка выдачи" subtitle="Горбушка, Москва — ежедневно 10:00–21:00" />
         <MenuRow icon="ℹ️" title="О магазине" subtitle="Техника с Горбушки: проверка при вас, гарантия" last />
       </div>
