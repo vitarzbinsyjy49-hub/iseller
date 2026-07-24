@@ -431,21 +431,23 @@ export default function Home() {
         Открыть весь каталог →
       </button>
 
-      {/* Финальный CTA: не нашли модель — менеджер найдёт под заказ.
-          Ссылка из public config; пустая → существующая форма заявки source=manager. */}
+      {/* Финальный CTA: не нашли модель — оставить заявку внутри приложения.
+          Всегда открывает встроенную форму LeadForm (source=manager) — заявка
+          попадает в «Заявки» и в админку; переход в Telegram — только вторичным
+          действием после успешной отправки, не первичным. */}
       <div className="mt-4 rounded-xl2 bg-surface p-4 text-center shadow-soft lg:mt-8">
         <p className="text-[15px] font-bold">Не нашли нужную модель?</p>
         <p className="mx-auto mt-1 max-w-xs text-[13px] text-muted">
-          Напишите менеджеру — уточним наличие и привезём под заказ.
+          Оставьте заявку — уточним наличие и привезём под заказ.
         </p>
         <button
           onClick={() => {
             track("empty_state_action_clicked", { source: "home_footer_manager" });
-            if (!openExternalLink(config.manager_retail_url)) setConsult(true);
+            setConsult(true);
           }}
           className="tap mt-3 rounded-field bg-mutedbg px-5 py-2.5 text-[13px] font-semibold text-text transition-colors hover:bg-accent hover:text-white"
         >
-          💬 Написать менеджеру
+          💬 Оставить заявку
         </button>
       </div>
 
