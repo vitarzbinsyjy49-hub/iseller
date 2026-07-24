@@ -6,7 +6,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, Numeric, String, Text, func
+from sqlalchemy import JSON, DateTime, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -14,6 +14,12 @@ from app.db.session import Base
 LEAD_STATUSES = ("new", "in_progress", "reserved", "completed", "cancelled")
 LEAD_SOURCES = ("ai", "product", "catalog", "home", "manager", "other")
 DELIVERY_METHODS = ("pickup", "delivery")
+
+# v5.4.0: тип сценарной заявки. Хранится ОТДЕЛЬНО от source (канал происхождения):
+# source остаётся "home"/"product"/"ai"/…, а lead_type задаёт продуктовый сценарий.
+# Обратная совместимость: старый POST без lead_type -> "general" (см. миграцию/схему).
+LEAD_TYPES = ("general", "product", "trade_in", "b2b", "wholesale")
+DEFAULT_LEAD_TYPE = "general"
 
 
 class Lead(Base):
@@ -30,6 +36,12 @@ class Lead(Base):
     product_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
     message: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(32), default="other", index=True)
+    # v5.4.0: продуктовый сценарий заявки (general/product/trade_in/b2b/wholesale).
+    # Атрибут назван lead_type; тип хранится отдельно от source.
+    lead_type: Mapped[str] = mapped_column(String(32), default=DEFAULT_LEAD_TYPE, index=True)
+    # v5.4.0: структурированные ответы сценария. Атрибут `meta`, т.к. `metadata`
+    # зарезервировано в declarative Base; DB-колонка и JSON-ключ ответа — "metadata".
+    meta: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     delivery_method: Mapped[str | None] = mapped_column(String(32))  # pickup | delivery
     status: Mapped[str] = mapped_column(String(32), default="new", index=True)
     assigned_to: Mapped[str | None] = mapped_column(String(200))
@@ -52,6 +64,8 @@ class Lead(Base):
             "product_price": float(self.product_price) if self.product_price is not None else None,
             "message": self.message,
             "source": self.source,
+            "lead_type": self.lead_type or DEFAULT_LEAD_TYPE,
+            "metadata": self.meta or {},
             "delivery_method": self.delivery_method,
             "status": self.status,
             "assigned_to": self.assigned_to,

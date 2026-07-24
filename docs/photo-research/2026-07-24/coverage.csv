@@ -1,0 +1,11 @@
+﻿product_id,sku,title,brand,category,model_family,color,image_group_key,in_stock,popularity,is_hot,current_effective_images,missing_to_target,coverage_status,priority,reason,source_page_url,candidate_asset_urls,source_domain,confidence,research_status,notes
+4,MBP14-M3,MacBook Pro 14 M3,Apple,ноутбуки,MacBook Pro 14,space gray,apple|macbook pro 14|space gray,True,30.0,True,0,3,none,P0,"нет фото · в наличии, хит, новинка",,,,,unresolved,
+5,DYS-SUP,Dyson Supersonic,Dyson,dyson,Supersonic,nickel,dyson|supersonic|nickel,False,8.0,False,0,3,none,P1,нет фото,,,,,unresolved,
+12,NOGRP,Товар без группы без фото,Misc,аксессуары,,,,False,0.0,False,0,3,none,P1,нет фото,,,,,unresolved,
+3,IP15P-256-WHT,iPhone 15 Pro 256 ГБ White,Apple,смартфоны,iPhone 15 Pro,white,apple|iphone 15 pro|white,True,15.0,False,1,2,one,P1,"только 1 фото · в наличии, новинка",,,,,unresolved,
+9,CROSS-A,Кросс-URL товар A,NoName,наушники,,blue,noname|cross a|blue,True,1.0,False,1,2,one,P1,только 1 фото · в наличии,,,,,unresolved,
+10,CROSS-B,Кросс-URL товар B,NoName,наушники,,red,noname|cross b|red,True,1.0,False,1,2,one,P1,только 1 фото · в наличии,,,,,unresolved,
+1,IP15P-256-BLK,iPhone 15 Pro 256 ГБ Black,Apple,смартфоны,iPhone 15 Pro,black,apple|iphone 15 pro|black,True,40.0,True,4,0,four_plus,P2,"4 фото · в наличии, хит, сегодня",,,,,unresolved,
+8,OVER-1,Товар с 12 фото,NoName,консоли,,black,noname|товар с 12 фото|black,True,5.0,False,10,0,four_plus,P2,10 фото · в наличии,,,,,unresolved,
+6,EXT-1,Товар с внешним фото,NoName,аксессуары,,black,noname|товар с внешним фото|black,True,3.0,False,2,1,two_three,P2,2 фото · в наличии,,,,,unresolved,
+7,DUP-1,Товар с дублем,NoName,аксессуары,,white,noname|товар с дублем|white,True,2.0,False,2,1,two_three,P2,2 фото · в наличии,,,,,unresolved,

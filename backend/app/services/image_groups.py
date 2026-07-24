@@ -145,12 +145,14 @@ def product_image_group_key(product) -> str | None:
 # ==================== resolver галерей (runtime) ====================
 
 def _own_images(obj) -> list[str]:
-    """Свои фото товара/группы: главная image впереди, без дублей."""
-    imgs = [u for u in (getattr(obj, "images", None) or []) if u]
-    main = getattr(obj, "image", None)
-    if main and main not in imgs:
-        imgs = [main, *imgs]
-    return imgs
+    """Свои фото товара/группы: главная image впереди, без дублей, не длиннее
+    лимита (resolver никогда не отдаёт >MAX_PRODUCT_IMAGES — даже если в БД
+    легаси-запись с большим числом URL)."""
+    from app.core.uploads import normalize_gallery
+    images, _excess = normalize_gallery(
+        getattr(obj, "images", None), main=getattr(obj, "image", None)
+    )
+    return images
 
 
 def resolve_product_images(db, products) -> dict[int, dict]:

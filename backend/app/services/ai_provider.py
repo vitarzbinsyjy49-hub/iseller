@@ -132,9 +132,15 @@ def build_demo_answer(db: Session, message: str, max_cards: int = 6, source: str
             text = ("Не совсем понял запрос. Опишите категорию и бюджет — например, "
                     "«ноутбук до 120 тысяч для работы», и я подберу варианты.")
 
+    # v5.4.0: карточки AI тоже получают эффективную групповую галерею (карусель),
+    # одним батчем через resolver — без N+1.
+    from app.services.image_groups import apply_group_images
+    cards = [p.to_card() for p in products]
+    apply_group_images(db, products, cards)
+
     return {
         "text": text,
-        "cards": [p.to_card() for p in products],
+        "cards": cards,
         "actions": [
             {"type": "refine", "label": "Уточнить запрос"},
             {"type": "manager", "label": "Позвать менеджера"},

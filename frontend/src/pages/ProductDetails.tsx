@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
+import { indexFromScroll } from "../lib/carousel";
 import { track, trackProduct } from "../lib/analytics";
 import { ProductCard as TCard, ProductDetail } from "../components/ai/types";
 import ProductCardView from "../components/ProductCard";
@@ -162,7 +163,7 @@ export default function ProductDetails() {
       <div className="lg:grid lg:grid-cols-[48fr_52fr] lg:items-start lg:gap-8 xl:gap-12">
       {/* Крупное изображение: карусель фото со свайпом + бейджи */}
       <Gallery
-        images={p.images && p.images.length ? p.images : p.image ? [p.image] : []}
+        images={(p.images && p.images.length ? p.images : p.image ? [p.image] : []).slice(0, 10)}
         title={p.title}
         category={p.category}
         badges={
@@ -405,19 +406,34 @@ export default function ProductDetails() {
   );
 }
 
-/** Карусель фото товара: горизонтальный свайп (scroll-snap) + точки-индикаторы. */
+/** Карусель фото товара: горизонтальный свайп (scroll-snap) + кликабельные точки.
+ *  Общая с ProductCard логика индекса (indexFromScroll). Максимум 10, битое фото
+ *  безопасно (ProductImage), главная — первая. Точки листают скроллом. */
 function Gallery({
   images, title, category, badges,
 }: { images: string[]; title: string; category?: string | null; badges: ReactNode }) {
   const [idx, setIdx] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const slides = images.length ? images : [""];
+
+  // Сброс при смене товара/набора фото (главная всегда первой).
+  useEffect(() => { setIdx(0); scrollRef.current?.scrollTo({ left: 0 }); }, [images[0], images.length]);
+
+  function goTo(i: number) {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+    setIdx(i);
+  }
+
   return (
     <div className="relative overflow-hidden rounded-xl2 shadow-soft">
       <div
+        ref={scrollRef}
         className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onScroll={(e) => {
           const el = e.currentTarget;
-          const i = Math.round(el.scrollLeft / el.clientWidth);
+          const i = indexFromScroll(el.scrollLeft, el.clientWidth, slides.length);
           if (i !== idx) setIdx(i);
         }}
       >
@@ -431,10 +447,14 @@ function Gallery({
       <div className="pointer-events-none absolute left-3 top-3 flex gap-1.5">{badges}</div>
 
       {slides.length > 1 && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
+        <div className="absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
           {slides.map((_, i) => (
-            <span
+            <button
               key={i}
+              type="button"
+              aria-label={`Показать фото ${i + 1} из ${slides.length}`}
+              aria-current={i === idx}
+              onClick={() => goTo(i)}
               className={`h-1.5 rounded-full shadow-soft transition-all ${
                 i === idx ? "w-4 bg-white" : "w-1.5 bg-white/60"
               }`}

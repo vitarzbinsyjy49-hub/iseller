@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
-from app.models.lead import DELIVERY_METHODS, LEAD_SOURCES, Lead
+from app.models.lead import DEFAULT_LEAD_TYPE, DELIVERY_METHODS, LEAD_SOURCES, Lead
 from app.models.product import Product
 from app.models.user import User
 from app.schemas.ai import LeadIn
@@ -45,6 +45,9 @@ def create_lead(body: LeadIn, user: User = Depends(get_current_user), db: Sessio
         product_price=product_price,
         message=body.message,
         source=body.source if body.source in LEAD_SOURCES else "other",
+        # lead_type/metadata уже нормализованы/очищены в схеме LeadIn.
+        lead_type=body.lead_type or DEFAULT_LEAD_TYPE,
+        meta=body.metadata or {},
         delivery_method=body.delivery_method if body.delivery_method in DELIVERY_METHODS else None,
         status="new",
     )
@@ -52,10 +55,12 @@ def create_lead(body: LeadIn, user: User = Depends(get_current_user), db: Sessio
     db.commit()
     db.refresh(lead)
 
-    # Событие воронки (не роняем запрос при ошибке аналитики)
+    # Событие воронки (не роняем запрос при ошибке аналитики).
+    # Payload — только безопасные метаданные: без телефона/имени/комментария/metadata.
     try:
         db.add(AnalyticsEvent(user_id=user.id, event="lead_created",
-                              payload={"lead_id": lead.id, "source": lead.source, "product_id": lead.product_id}))
+                              payload={"lead_id": lead.id, "source": lead.source,
+                                       "lead_type": lead.lead_type, "product_id": lead.product_id}))
         db.commit()
     except Exception:
         db.rollback()

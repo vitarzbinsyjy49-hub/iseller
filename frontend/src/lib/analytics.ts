@@ -24,7 +24,19 @@ export type AppEvent =
   | "quick_scenario_clicked"
   | "ai_prefill_opened"
   | "history_opened"
-  | "empty_state_action_clicked";
+  | "empty_state_action_clicked"
+  // v5.4.0: встроенные сценарные заявки + карусель фото карточек.
+  // Payload — только безопасные метаданные (scenario, source, product_id,
+  // image_count, from_index/to_index). НЕ телефон/имя/модель/комментарий.
+  | "scenario_sheet_opened"
+  | "scenario_option_selected"
+  | "scenario_lead_submitted"
+  | "scenario_lead_success"
+  | "scenario_lead_failed"
+  | "product_gallery_swiped"
+  | "product_gallery_dot_clicked"
+  | "photo_coverage_opened"
+  | "photo_coverage_exported";
 
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();

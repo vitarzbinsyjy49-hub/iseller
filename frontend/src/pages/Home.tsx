@@ -6,6 +6,8 @@ import { useAuthStore } from "../store/auth";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
+import { ScenarioRequestSheet, ScenarioChoiceSheet } from "../components/ScenarioSheet";
+import { MACBOOK_CHOICES, type ChoiceItem, type ScenarioKey } from "../lib/scenario";
 import { usePublicConfig } from "../lib/appConfig";
 import { openExternalLink } from "../lib/telegram";
 import { ProfileChip } from "../components/ProfileChip";
@@ -62,6 +64,31 @@ export default function Home() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const config = usePublicConfig();
+  // v5.4.0: встроенные сценарные заявки (Trade-In/бизнес/опт) и меню MacBook.
+  const [scenario, setScenario] = useState<ScenarioKey | null>(null);
+  const [macbookOpen, setMacbookOpen] = useState(false);
+  // Контакт обязателен, только если менеджеру некуда ответить в Telegram
+  // (у пользователя нет @username) — тогда просим телефон.
+  const requirePhone = !user?.username;
+  const managerUrlFor = (k: ScenarioKey): string =>
+    (k === "trade_in" ? config.manager_tradein_url
+      : k === "b2b" ? config.manager_b2b_url
+      : config.manager_wholesale_url) || config.manager_retail_url;
+
+  function openScenario(k: ScenarioKey) {
+    track("quick_scenario_clicked", { scenario: k });
+    setScenario(k);
+  }
+  function openMacbook() {
+    track("quick_scenario_clicked", { scenario: "pick_macbook" });
+    setMacbookOpen(true);
+  }
+  function pickMacbook(item: ChoiceItem) {
+    track("scenario_option_selected", { scenario: "macbook", field: item.key });
+    setMacbookOpen(false);
+    // prefill без авто-отправки: пользователь видит текст и жмёт «Отправить» сам.
+    navigate(`/ai?q=${encodeURIComponent(item.prefill)}`);
+  }
   const [categories, setCategories] = useState<Category[]>([]);
   const [home, setHome] = useState<HomeData | null>(null);
   const [feed, setFeed] = useState<Feed | null>(null);
@@ -275,21 +302,12 @@ export default function Home() {
           public config (пустая ссылка → существующий fallback: AI-консультант).
           На desktop аналогичные действия уже есть в сайдбаре — не дублируем. ===== */}
       <QuickScenarios
-        onCatalog={(route, scenario) => {
-          track("quick_scenario_clicked", { scenario });
+        onCatalog={(route, scenarioKey) => {
+          track("quick_scenario_clicked", { scenario: scenarioKey });
           navigate(route);
         }}
-        onManager={(url, scenario) => {
-          track("quick_scenario_clicked", { scenario });
-          if (!openExternalLink(url || config.manager_retail_url)) navigate("/ai");
-        }}
-        onAi={(prefill, scenario) => {
-          track("quick_scenario_clicked", { scenario });
-          navigate(`/ai?q=${encodeURIComponent(prefill)}`);
-        }}
-        wholesaleUrl={config.manager_wholesale_url}
-        b2bUrl={config.manager_b2b_url}
-        tradeinUrl={config.manager_tradein_url}
+        onScenario={openScenario}
+        onMacbook={openMacbook}
       />
 
       {/* ===== Desktop: сетка [sidebar 260px | контент] ===== */}
@@ -298,10 +316,8 @@ export default function Home() {
           categories={categories}
           homeCats={home?.categories ?? []}
           onCategory={(route) => navigate(route)}
-          onManager={(url) => { if (!openExternalLink(url || config.manager_retail_url)) navigate("/ai"); }}
-          wholesaleUrl={config.manager_wholesale_url}
-          b2bUrl={config.manager_b2b_url}
-          tradeinUrl={config.manager_tradein_url}
+          onScenario={openScenario}
+          onManager={() => { if (!openExternalLink(config.manager_retail_url)) navigate("/ai"); }}
         />
 
         <div className="min-w-0">
@@ -449,6 +465,25 @@ export default function Home() {
           onClose={() => setConsult(false)}
         />
       )}
+
+      {/* v5.4.0: встроенные сценарные заявки (Trade-In / Для бизнеса / Опт) */}
+      {scenario && (
+        <ScenarioRequestSheet
+          scenario={scenario}
+          managerUrl={managerUrlFor(scenario)}
+          requirePhone={requirePhone}
+          onClose={() => setScenario(null)}
+        />
+      )}
+      {/* v5.4.0: меню «Подобрать MacBook» (AI prefill, без заявки и авто-отправки) */}
+      {macbookOpen && (
+        <ScenarioChoiceSheet
+          title="Какой MacBook вам нужен?"
+          items={MACBOOK_CHOICES}
+          onClose={() => setMacbookOpen(false)}
+          onPick={pickMacbook}
+        />
+      )}
     </div>
   );
 }
@@ -488,15 +523,13 @@ function Section({
 /** Desktop-sidebar главной: категории + быстрые действия (Опт/B2B/Trade-In/менеджер).
  *  Данные те же, что и в mobile-версии; бизнес-логики нет. */
 function HomeSidebar({
-  categories, homeCats, onCategory, onManager, wholesaleUrl, b2bUrl, tradeinUrl,
+  categories, homeCats, onCategory, onScenario, onManager,
 }: {
   categories: Category[];
   homeCats: HomeCat[];
   onCategory: (route: string) => void;
-  onManager: (url: string) => void;
-  wholesaleUrl: string;
-  b2bUrl: string;
-  tradeinUrl: string;
+  onScenario: (k: ScenarioKey) => void;
+  onManager: () => void;
 }) {
   const cats: { key: string; label: string; icon: string; route: string }[] =
     homeCats.length > 0
@@ -509,11 +542,13 @@ function HomeSidebar({
           route: `/catalog?category=${encodeURIComponent(c.key)}`,
         }));
 
-  const actions = [
-    { icon: "📦", label: "Опт", sub: "Партии от 5 шт", url: wholesaleUrl },
-    { icon: "🏢", label: "Поставка для компании", sub: "Документы для юрлиц", url: b2bUrl },
-    { icon: "🔄", label: "Trade-In", sub: "Обмен и выкуп техники", url: tradeinUrl },
-    { icon: "💬", label: "Написать менеджеру", sub: "Ответим быстро", url: "" },
+  // Опт/бизнес/Trade-In открывают встроенную сценарную заявку; «Написать
+  // менеджеру» — прямой Telegram (fallback внутри onManager).
+  const actions: { icon: string; label: string; sub: string; onClick: () => void }[] = [
+    { icon: "📦", label: "Опт", sub: "Партии от 5 шт", onClick: () => onScenario("wholesale") },
+    { icon: "🏢", label: "Поставка для компании", sub: "Документы для юрлиц", onClick: () => onScenario("b2b") },
+    { icon: "🔄", label: "Trade-In", sub: "Обмен и выкуп техники", onClick: () => onScenario("trade_in") },
+    { icon: "💬", label: "Написать менеджеру", sub: "Ответим быстро", onClick: onManager },
   ];
 
   return (
@@ -537,7 +572,7 @@ function HomeSidebar({
         {actions.map((a) => (
           <button
             key={a.label}
-            onClick={() => onManager(a.url)}
+            onClick={a.onClick}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-mutedbg"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mutedbg text-lg">{a.icon}</span>
@@ -582,19 +617,20 @@ function ScenarioIcon({ name }: { name: string }) {
  *  Товарные → каталог; «Подобрать MacBook» → AI с prefill (без авто-отправки);
  *  Trade-In/бизнес/опт → профильный менеджер из public config (fallback → AI). */
 function QuickScenarios({
-  onCatalog, onManager, onAi, wholesaleUrl, b2bUrl, tradeinUrl,
+  onCatalog, onScenario, onMacbook,
 }: {
   onCatalog: (route: string, scenario: string) => void;
-  onManager: (url: string, scenario: string) => void;
-  onAi: (prefill: string, scenario: string) => void;
-  wholesaleUrl: string; b2bUrl: string; tradeinUrl: string;
+  onScenario: (k: ScenarioKey) => void;
+  onMacbook: () => void;
 }) {
+  // Товарные (iPhone/аксессуары) — прямой каталог; MacBook — меню выбора (AI);
+  // Trade-In/бизнес/опт — встроенная сценарная заявка (bottom sheet), НЕ менеджер.
   const items: { key: string; label: string; sub: string; onClick: () => void }[] = [
     { key: "iphone", label: "Купить iPhone", sub: "Все модели", onClick: () => onCatalog("/catalog?query=iPhone", "buy_iphone") },
-    { key: "macbook", label: "Подобрать MacBook", sub: "AI поможет выбрать", onClick: () => onAi("Подобрать MacBook под мои задачи", "pick_macbook") },
-    { key: "tradein", label: "Trade-In", sub: "Обмен и выкуп", onClick: () => onManager(tradeinUrl, "trade_in") },
-    { key: "b2b", label: "Для бизнеса", sub: "Поставки юрлицам", onClick: () => onManager(b2bUrl, "b2b") },
-    { key: "wholesale", label: "Опт", sub: "Партии от 5 шт", onClick: () => onManager(wholesaleUrl, "wholesale") },
+    { key: "macbook", label: "Подобрать MacBook", sub: "Поможем выбрать", onClick: onMacbook },
+    { key: "tradein", label: "Trade-In", sub: "Обмен и выкуп", onClick: () => onScenario("trade_in") },
+    { key: "b2b", label: "Для бизнеса", sub: "Поставки юрлицам", onClick: () => onScenario("b2b") },
+    { key: "wholesale", label: "Опт", sub: "Партии от 5 шт", onClick: () => onScenario("wholesale") },
     { key: "accessories", label: "Аксессуары", sub: "Кабели, чехлы, зарядки", onClick: () => onCatalog(`/catalog?category=${encodeURIComponent("аксессуары")}`, "accessories") },
   ];
   return (

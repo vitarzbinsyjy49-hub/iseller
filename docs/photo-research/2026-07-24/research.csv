@@ -1,0 +1,9 @@
+image_group_key,model,color,source_page_url,candidate_asset_urls,source_domain,model_color_match,confidence,research_status,notes
+apple|iphone 15 pro|,iPhone 15 Pro,,https://support.apple.com/en-us/111829,,support.apple.com,model,high,needs_review,Официальная страница спецификаций; выбор цветового ассета и права — ручной approve
+apple|iphone 15 pro max|,iPhone 15 Pro Max,,https://support.apple.com/en-us/111828,,support.apple.com,model,high,needs_review,Официальная страница спецификаций
+apple|iphone 15|,iPhone 15,,https://support.apple.com/en-us/111831,,support.apple.com,model,high,needs_review,Официальная страница спецификаций
+apple|macbook pro 14|space gray,MacBook Pro 14 M3,space gray,https://support.apple.com/en-us/117735,,support.apple.com,model,high,needs_review,M3 (Nov 2023) tech specs
+apple|macbook pro 14|silver,MacBook Pro 14 M3,silver,https://support.apple.com/en-us/117735,,support.apple.com,model,high,needs_review,M3 (Nov 2023) tech specs
+apple|macbook pro 14|space black,MacBook Pro 14 M3 Pro,space black,https://support.apple.com/en-us/117736,,support.apple.com,model,high,needs_review,M3 Pro/Max (Nov 2023) tech specs
+dyson|supersonic|,Dyson Supersonic,,https://www.dyson.com/hair-care/hair-dryers/supersonic,,dyson.com,model,high,needs_review,Официальная страница модели
+dyson|supersonic|nickel,Dyson Supersonic Origin,nickel,https://www.dyson.com/hair-care/hair-dryers/supersonic/origin-nickel-copper,,dyson.com,model_color,high,needs_review,Официальная страница цвета Nickel/Copper
