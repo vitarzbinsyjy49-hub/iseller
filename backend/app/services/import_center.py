@@ -702,8 +702,10 @@ def apply_product_plan(db: Session, plan: dict) -> dict:
             setattr(product, field_name, value)
         product.sku = entry["sku"]
         if images:
-            product.images = images
-            product.image = images[0]
+            from app.core.uploads import normalize_gallery
+            gallery, _excess = normalize_gallery(images)   # v5.4.0: единый лимит 10
+            product.images = gallery
+            product.image = gallery[0] if gallery else None
         product.in_stock = (product.stock or 0) > 0
         db.flush()
         sku_to_id[entry["sku"]] = product.id
@@ -808,6 +810,8 @@ def apply_image_group_import(db: Session, groups_plan: dict, url_by_filename: di
             if f in g["present"] and f not in ordered:
                 ordered.append(f)
         urls = [url_by_filename[f] for f in ordered if f in url_by_filename]
+        from app.core.uploads import normalize_gallery
+        urls, _excess = normalize_gallery(urls)   # v5.4.0: группа тоже ≤10 фото
         if not urls:
             continue
         grp = db.execute(

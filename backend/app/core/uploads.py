@@ -14,6 +14,34 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 URL_PREFIX = "/api/uploads"
 MAX_BYTES = 8 * 1024 * 1024  # 8 МБ на файл
 
+# v5.4.0: единый лимит числа фото на товар/эффективную группу. Enforced на
+# бэкенде во ВСЕХ путях (ручная загрузка, мультизагрузка, ZIP, импорт, reorder,
+# resolver), а не только в UI.
+MAX_PRODUCT_IMAGES = 10
+
+
+def normalize_gallery(
+    urls, *, main: str | None = None, limit: int = MAX_PRODUCT_IMAGES
+) -> tuple[list[str], list[str]]:
+    """Привести галерею к каноничному виду: без пустых, без дублей, главная —
+    первой, не длиннее limit. Возвращает (images, excess): excess — то, что не
+    влезло в лимит (для прозрачного отчёта, без «молчаливого» отбрасывания)."""
+    ordered: list[str] = []
+    if main:
+        ordered.append(main)
+    ordered.extend(urls or [])
+    seen: set[str] = set()
+    clean: list[str] = []
+    for u in ordered:
+        if not isinstance(u, str):
+            continue
+        u = u.strip()
+        if not u or u in seen:
+            continue
+        seen.add(u)
+        clean.append(u)
+    return clean[:limit], clean[limit:]
+
 # content-type -> расширение файла
 _EXT = {
     "image/jpeg": ".jpg",

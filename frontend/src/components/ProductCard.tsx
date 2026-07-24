@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ProductCard as TCard } from "./ai/types";
 import { formatPrice, discountPct } from "../lib/format";
@@ -6,6 +6,10 @@ import { imagePaddingClass } from "../lib/viewport";
 import { useFavorite } from "../lib/favorites";
 import { haptic } from "../lib/telegram";
 import { toast } from "../lib/toast";
+import { track } from "../lib/analytics";
+import { classifySwipe, isSlideMounted, movedBeyondTap, nextIndex } from "../lib/carousel";
+
+const MAX_CARD_IMAGES = 10;
 
 type Props = {
   card: TCard;
@@ -89,6 +93,133 @@ export function ProductImage({
   );
 }
 
+/** Карусель фото на карточке товара (как в Яндекс Лавке): горизонтальный свайп
+ *  + точки. Свайп НЕ открывает товар (подавляем клик), тап — открывает.
+ *  Вертикальный скролл страницы не блокируется (touch-action: pan-y). Монтируются
+ *  только активный слайд и соседи (lazy). 0–1 фото — обычная карточка без точек. */
+function CardCarousel({
+  id, images, title, category, compact, onOpen,
+}: {
+  id: number; images: string[]; title: string; category?: string | null;
+  compact?: boolean; onOpen: () => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const [dragPx, setDragPx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const movedRef = useRef(false);
+  const widthRef = useRef(1);
+  const viewportRef = useRef<HTMLDivElement>(null);
+
+  const n = images.length;
+  const hasCarousel = n >= 2;
+
+  // Сброс активного слайда при смене товара или набора фото.
+  useEffect(() => { setIndex(0); setDragPx(0); }, [id, n, images[0]]);
+
+  function go(to: number, reason: "swipe" | "dot") {
+    const clamped = Math.max(0, Math.min(n - 1, to));
+    if (clamped === index) return;
+    // Событие только при фактической смене активного слайда (не на каждый пиксель).
+    track(reason === "swipe" ? "product_gallery_swiped" : "product_gallery_dot_clicked",
+      { product_id: id, from_index: index, to_index: clamped, image_count: n });
+    setIndex(clamped);
+  }
+
+  function onPointerDown(e: ReactPointerEvent) {
+    if (!hasCarousel) return;
+    startRef.current = { x: e.clientX, y: e.clientY };
+    movedRef.current = false;
+    widthRef.current = viewportRef.current?.clientWidth || 1;
+  }
+  function onPointerMove(e: ReactPointerEvent) {
+    const s = startRef.current;
+    if (!s) return;
+    const dx = e.clientX - s.x;
+    const dy = e.clientY - s.y;
+    if (!movedRef.current && movedBeyondTap(dx, dy)) movedRef.current = true;
+    if (Math.abs(dx) > Math.abs(dy)) {   // горизонтальное намерение — тянем слайд
+      setDragging(true);
+      setDragPx(dx);
+      try { (e.currentTarget as Element).setPointerCapture?.(e.pointerId); } catch { /* noop */ }
+    }
+  }
+  function endGesture(e: ReactPointerEvent) {
+    const s = startRef.current;
+    startRef.current = null;
+    setDragging(false);
+    setDragPx(0);
+    if (!s) return;
+    const dx = e.clientX - s.x;
+    const dy = e.clientY - s.y;
+    const result = classifySwipe(dx, dy, widthRef.current);
+    if (result === "next" || result === "prev") go(nextIndex(index, result, n), "swipe");
+    // "tap"/"none" -> открытие обрабатывает onClick (с подавлением после свайпа)
+  }
+  function onClick() {
+    if (movedRef.current) { movedRef.current = false; return; } // свайп — не открываем
+    onOpen();
+  }
+
+  const trackStyle = {
+    transform: `translateX(calc(${-index * 100}% + ${dragPx}px))`,
+    transition: dragging ? "none" : "transform 260ms cubic-bezier(.2,.8,.25,1)",
+  };
+
+  return (
+    <div className="relative">
+      <div
+        ref={viewportRef}
+        role="button"
+        tabIndex={0}
+        aria-label={hasCarousel ? `${title}. Фото ${index + 1} из ${n}` : title}
+        onClick={onClick}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endGesture}
+        onPointerCancel={endGesture}
+        className="block w-full cursor-pointer overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        style={{ touchAction: "pan-y" }}
+      >
+        {hasCarousel ? (
+          <div className="flex" style={trackStyle}>
+            {images.map((src, i) => (
+              <div key={i} className="w-full flex-none">
+                <ProductImage
+                  src={isSlideMounted(i, index) ? src : undefined}
+                  title={title} category={category} className="aspect-square w-full" compact={compact}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <ProductImage src={images[0]} title={title} category={category} className="aspect-square w-full" compact={compact} />
+        )}
+      </div>
+
+      {/* Точки-индикаторы (как в Лавке): по центру внизу фото, до 10 шт. Кнопки —
+          отдельные от свайп-области (не вложенные), чтобы DOM был валиден. */}
+      {hasCarousel && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center gap-1.5">
+          {images.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`Показать фото ${i + 1}`}
+              aria-current={i === index}
+              onClick={(e) => { e.stopPropagation(); go(i, "dot"); }}
+              className={`pointer-events-auto h-1.5 rounded-full shadow-soft transition-all ${
+                i === index ? "w-4 bg-white" : "w-1.5 bg-white/60"
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Сердечко «в избранное»: серверное хранение, оптимистичный тоггл с откатом,
  *  тактильный отклик, toast и короткая scale-анимация. stopPropagation —
  *  тап по сердцу не открывает карточку товара. */
@@ -146,31 +277,37 @@ export default function ProductCard({ card, onLead, compact, onOpen }: Props) {
   const disc = discountPct(card.price, card.old_price);
   const open = () => { onOpen?.(card); navigate(`/product/${card.id}`); };
 
+  // Эффективная галерея карточки: images (из resolver групп), иначе одиночное
+  // image, иначе пусто. Лимит 10 (backend уже режет; здесь — защита).
+  const gallery = (card.images && card.images.length ? card.images : card.image ? [card.image] : [])
+    .filter(Boolean)
+    .slice(0, MAX_CARD_IMAGES);
+
   return (
     // h-full + flex-col: в сетке все карточки одной высоты, кнопка прижата вниз.
     // lg:hover — desktop-состояние; tap scale остаётся на mobile.
     <div
-      className={`card-appear tap lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface shadow-card lg:hover:shadow-float ${
+      className={`card-appear lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface shadow-card lg:hover:shadow-float ${
         compact ? "w-40 shrink-0 lg:w-auto" : ""
       }`}
     >
-      {/* FavButton — сосед кнопки, не вложен в неё (валидный DOM) */}
+      {/* Карусель + бейджи + избранное — соседи в relative-контейнере (валидный DOM,
+          вложенных кнопок нет). aspect-square: высота image-области стабильна. */}
       <div className="relative">
-        <button onClick={open} className="block w-full text-left">
-          {/* aspect-square: одинаковая высота image-area у всех карточек ряда,
-              высота не меняется после загрузки фото (нет layout shift) */}
-          <ProductImage src={card.image} title={card.title} category={card.category} className="aspect-square w-full" compact={compact} />
-          <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
-            {card.is_hot && <Badge color="orange">🔥 Хит</Badge>}
-            {disc && <Badge color="red">−{disc}%</Badge>}
-          </div>
-          {card.is_available_today && card.in_stock && (
-            <span className="absolute bottom-2 left-2">
-              <Badge color="green">Сегодня</Badge>
-            </span>
-          )}
-        </button>
-        <FavButton id={card.id} className="absolute right-2 top-2" />
+        <CardCarousel
+          id={card.id} images={gallery} title={card.title} category={card.category}
+          compact={compact} onOpen={open}
+        />
+        <div className="pointer-events-none absolute left-2 top-2 z-10 flex flex-col items-start gap-1">
+          {card.is_hot && <Badge color="orange">🔥 Хит</Badge>}
+          {disc && <Badge color="red">−{disc}%</Badge>}
+        </div>
+        {card.is_available_today && card.in_stock && (
+          <span className="pointer-events-none absolute bottom-2 left-2 z-10">
+            <Badge color="green">Сегодня</Badge>
+          </span>
+        )}
+        <FavButton id={card.id} className="absolute right-2 top-2 z-10" />
       </div>
 
       <div className="flex flex-1 flex-col p-3">

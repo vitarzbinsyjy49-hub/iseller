@@ -626,9 +626,168 @@ function CategoryList({ token }: { token: string }) {
 type ZipReport = {
   matched_products: { sku: string; product_id: number; title: string; images: number }[];
   unmatched_images: string[];
+  excess_images?: { sku: string; file: string; reason: string }[];
   products_without_images: { sku: string | null; id: number; title: string }[];
   errors: { file: string; error: string }[];
 };
+
+// ==================== Photo coverage (read-only аудит покрытия фото) ====================
+type CoverageSummary = {
+  total_active: number; no_photo: number; one_photo: number; two_three: number;
+  four_plus: number; placeholder: number; coverage_pct: number;
+};
+type CoverageItem = {
+  id: number; sku: string | null; title: string; brand: string | null; category: string | null;
+  image_group_key: string | null; in_stock: boolean; current_images: number;
+  placeholder: boolean; priority: string;
+};
+type CoverageResp = {
+  summary: CoverageSummary; items: CoverageItem[]; total: number; page: number; pages: number;
+  categories: string[]; brands: string[];
+};
+
+const PR_COLOR: Record<string, string> = { P0: C.red, P1: "#b57e00", P2: C.sub };
+
+function PhotoCoverage({ token }: { token: string }) {
+  const [data, setData] = useState<CoverageResp | null>(null);
+  const [filter, setFilter] = useState("");
+  const [category, setCategory] = useState("");
+  const [brand, setBrand] = useState("");
+  const [inStock, setInStock] = useState("");
+  const [err, setErr] = useState("");
+
+  function qs(pageSize: number) {
+    const q = new URLSearchParams();
+    if (filter) q.set("filter", filter);
+    if (category) q.set("category", category);
+    if (brand) q.set("brand", brand);
+    if (inStock) q.set("in_stock", inStock);
+    q.set("page_size", String(pageSize));
+    return q.toString();
+  }
+  function load() {
+    setErr("");
+    apiGet<CoverageResp>(`/admin/photo-coverage?${qs(50)}`, token).then(setData)
+      .catch((e) => setErr(e instanceof Error ? e.message : "Ошибка загрузки"));
+  }
+  useEffect(load, [filter, category, brand, inStock]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function exportCsv() {
+    const d = await apiGet<CoverageResp>(`/admin/photo-coverage?${qs(1000)}`, token);
+    const header = ["id", "sku", "title", "brand", "category", "image_group_key", "in_stock", "current_images", "priority"];
+    const rows = d.items.map((i) => [i.id, i.sku ?? "", i.title, i.brand ?? "", i.category ?? "",
+      i.image_group_key ?? "", i.in_stock, i.current_images, i.priority]);
+    const csv = [header, ...rows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `photo-coverage-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  const s = data?.summary;
+  const filterBtn = (key: string, label: string) => (
+    <button onClick={() => setFilter(filter === key ? "" : key)} style={chip(filter === key)}>{label}</button>
+  );
+
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <h3 style={{ marginTop: 0, marginBottom: 0 }}>Покрытие каталога фото (read-only)</h3>
+        <button style={{ ...btnGhost, padding: "6px 12px", fontSize: 13 }} onClick={exportCsv} disabled={!data}>
+          Экспорт CSV
+        </button>
+      </div>
+      {err && <p style={{ color: C.red, fontSize: 13 }}>{err}</p>}
+      {s && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10, marginTop: 12 }}>
+          <CovStat label="Активных" value={s.total_active} />
+          <CovStat label="Покрытие" value={`${s.coverage_pct}%`} accent />
+          <CovStat label="Без фото" value={s.no_photo} />
+          <CovStat label="Только 1" value={s.one_photo} />
+          <CovStat label="2–3" value={s.two_three} />
+          <CovStat label="4+" value={s.four_plus} />
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+        {filterBtn("no_photo", "Без фото")}
+        {filterBtn("one", "Только одно")}
+        {filterBtn("placeholder", "Плейсхолдер")}
+        <span style={{ width: 8 }} />
+        <select value={category} onChange={(e) => setCategory(e.target.value)} style={{ ...chip(category !== ""), appearance: "none" }}>
+          <option value="">Категория: все</option>
+          {(data?.categories ?? []).map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={brand} onChange={(e) => setBrand(e.target.value)} style={{ ...chip(brand !== ""), appearance: "none" }}>
+          <option value="">Бренд: все</option>
+          {(data?.brands ?? []).map((b) => <option key={b} value={b}>{b}</option>)}
+        </select>
+        <select value={inStock} onChange={(e) => setInStock(e.target.value)} style={{ ...chip(inStock !== ""), appearance: "none" }}>
+          <option value="">Наличие: все</option>
+          <option value="true">В наличии</option>
+          <option value="false">Нет в наличии</option>
+        </select>
+      </div>
+
+      {data && (
+        <div style={{ marginTop: 12, maxHeight: 360, overflowY: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ textAlign: "left", color: C.sub, position: "sticky", top: 0, background: C.surface }}>
+                <th style={{ padding: "6px 8px" }}>Приоритет</th>
+                <th style={{ padding: "6px 8px" }}>Товар</th>
+                <th style={{ padding: "6px 8px" }}>SKU</th>
+                <th style={{ padding: "6px 8px" }}>Группа</th>
+                <th style={{ padding: "6px 8px" }}>Фото</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map((it) => (
+                <tr key={it.id} style={{ borderTop: `1px solid ${C.border}` }}>
+                  <td style={{ padding: "6px 8px" }}>
+                    <span style={{ color: "#fff", background: PR_COLOR[it.priority] ?? C.sub, borderRadius: 999, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{it.priority}</span>
+                  </td>
+                  <td style={{ padding: "6px 8px", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.title}</td>
+                  <td style={{ padding: "6px 8px", color: C.sub }}>
+                    {it.sku ? <code>{it.sku}</code> : "—"}
+                    {it.sku && (
+                      <button title="Скопировать SKU (найти в «Товары»)" onClick={() => navigator.clipboard.writeText(it.sku!)}
+                        style={{ ...btnGhost, padding: "1px 6px", fontSize: 11, marginLeft: 6 }}>⧉</button>
+                    )}
+                  </td>
+                  <td style={{ padding: "6px 8px", color: C.sub, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {it.image_group_key || "—"}
+                  </td>
+                  <td style={{ padding: "6px 8px", fontWeight: 600 }}>{it.current_images}{it.placeholder ? " (плейсхолдер)" : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {data.total > data.items.length && (
+            <p style={{ fontSize: 12, color: C.sub, marginTop: 8 }}>
+              Показаны первые {data.items.length} из {data.total}. Уточните фильтр или выгрузите CSV.
+            </p>
+          )}
+        </div>
+      )}
+      <p style={{ fontSize: 12, color: C.sub, marginTop: 10 }}>
+        Считается по эффективным группам фото, без внешних URL-проверок. Полный аудит с MD/CSV/JSON —
+        скрипт <code>scripts/photo_coverage_audit.py</code>.
+      </p>
+    </div>
+  );
+}
+
+function CovStat({ label, value, accent }: { label: string; value: number | string; accent?: boolean }) {
+  return (
+    <div style={{ background: accent ? C.accent : C.muted, borderRadius: 10, padding: "10px 12px" }}>
+      <div style={{ fontSize: 12, color: accent ? "rgba(255,255,255,.85)" : C.sub }}>{label}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: accent ? "#fff" : C.text }}>{value}</div>
+    </div>
+  );
+}
 
 export function MediaTab({ token }: { token: string }) {
   const [report, setReport] = useState<ZipReport | null>(null);
@@ -653,7 +812,8 @@ export function MediaTab({ token }: { token: string }) {
 
   return (
     <div style={{ maxWidth: 860 }}>
-      <div style={card}>
+      <PhotoCoverage token={token} />
+      <div style={{ ...card, marginTop: 14 }}>
         <h3 style={{ marginTop: 0 }}>ZIP с фото товаров (авто-матчинг по SKU)</h3>
         <p style={{ color: C.sub, fontSize: 14, marginTop: 4 }}>
           Назовите файлы по артикулу: <code>IPH15PRO128BLACK.jpg</code> — главное фото,{" "}
@@ -683,6 +843,18 @@ export function MediaTab({ token }: { token: string }) {
           {report.unmatched_images.map((f) => (
             <p key={f} style={{ fontSize: 13, margin: "3px 0", color: "#b57e00" }}>⚠️ {f} — SKU не найден</p>
           ))}
+          {report.excess_images && report.excess_images.length > 0 && (
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ fontSize: 13, color: "#b57e00", cursor: "pointer" }}>
+                Не применено (лимит 10 фото): {report.excess_images.length}
+              </summary>
+              {report.excess_images.map((x, i) => (
+                <p key={i} style={{ fontSize: 13, margin: "3px 0", color: "#b57e00" }}>
+                  ↷ <code>{x.sku}</code> · {x.file} — {x.reason}
+                </p>
+              ))}
+            </details>
+          )}
           {report.errors.map((e, i) => (
             <p key={i} style={{ fontSize: 13, margin: "3px 0", color: C.red }}>✕ {e.file}: {e.error}</p>
           ))}

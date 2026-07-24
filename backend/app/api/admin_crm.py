@@ -11,7 +11,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip, get_current_admin
-from app.core.uploads import MAX_BYTES, delete_image, is_allowed, save_image
+from app.core.uploads import (
+    MAX_BYTES,
+    MAX_PRODUCT_IMAGES,
+    delete_image,
+    is_allowed,
+    normalize_gallery,
+    save_image,
+)
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
 from app.models.audit import AuditLog
@@ -29,6 +36,7 @@ def list_leads(
     db: Session = Depends(get_db),
     status_filter: str | None = None,
     source_filter: str | None = None,
+    type_filter: str | None = None,   # v5.4.0: фильтр по продуктовому сценарию (lead_type)
     limit: int = 100,
 ):
     limit = min(limit, 500)
@@ -37,6 +45,8 @@ def list_leads(
         stmt = stmt.where(Lead.status == status_filter)
     if source_filter:
         stmt = stmt.where(Lead.source == source_filter)
+    if type_filter:
+        stmt = stmt.where(Lead.lead_type == type_filter)
     rows = db.execute(stmt.limit(limit)).scalars().all()
     return {"leads": [l.to_dict() for l in rows]}
 
@@ -238,6 +248,13 @@ def _apply_product_fields(product: Product, body: dict) -> None:
     for field in _PRODUCT_EDITABLE:
         if field in body:
             setattr(product, field, body[field])
+    # v5.4.0: галерея из JSON-импорта тоже нормализуется до единого лимита 10
+    # (главная первой, без дублей/пустых). image синхронизируется с images[0].
+    if "images" in body:
+        gallery, _excess = normalize_gallery(body.get("images"), main=body.get("image") or product.image)
+        product.images = gallery
+        if gallery:
+            product.image = gallery[0]
     # in_stock авто-согласуем со stock, если пришёл только stock
     if "stock" in body and "in_stock" not in body:
         product.in_stock = int(body["stock"] or 0) > 0
@@ -322,6 +339,121 @@ def admin_product_image_group(product_id: int, db: Session = Depends(get_db)):
         "group_images": (group.images if group else []) or [],
         "group_primary": group.image if group else None,
         "effective_images": effective["images"],
+    }
+
+
+# ==================== Photo coverage (read-only) ====================
+_PLACEHOLDER_PREFIX = "/assets/placeholders/"
+
+
+def _coverage_priority(p: Product, current: int) -> tuple[str, int]:
+    """(bucket P0/P1/P2, числовой score) — что фотографировать первым."""
+    score = 0
+    if current == 0:
+        score += 1000
+    elif current == 1:
+        score += 200
+    if p.in_stock:
+        score += 100
+    if p.is_hot or p.is_new or p.is_available_today:
+        score += 50
+    score += min(int(p.popularity or 0), 50)
+    hot = p.is_hot or p.is_new or p.is_available_today
+    if current == 0 and (p.in_stock or hot):
+        return "P0", score
+    if current <= 1:
+        return "P1", score
+    return "P2", score
+
+
+@router.get("/photo-coverage")
+def photo_coverage(
+    db: Session = Depends(get_db),
+    filter: str | None = None,          # no_photo | one | placeholder
+    category: str | None = None,
+    brand: str | None = None,
+    in_stock: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+):
+    """Постоянный read-only аудит покрытия фото для админки (раздел «Медиа»).
+
+    Считает по ЭФФЕКТИВНОЙ галерее (группы модель+цвет) одним батчем (без N+1),
+    без внешних URL-проверок при открытии. Возвращает сводку + приоритетный,
+    отфильтрованный и пагинированный список товаров.
+    """
+    from app.services.image_groups import resolve_product_images
+
+    page = max(1, page)
+    page_size = max(1, min(page_size, 1000))
+
+    products = db.execute(
+        select(Product).where(Product.is_active.is_(True)).order_by(Product.id)
+    ).scalars().all()
+    resolved = resolve_product_images(db, products)   # батч: 1 запрос групп + ≤1 соседей
+
+    summary = {"total_active": len(products), "no_photo": 0, "one_photo": 0,
+               "two_three": 0, "four_plus": 0, "placeholder": 0}
+    items: list[dict] = []
+    for p in products:
+        eff = resolved.get(p.id, {}).get("images", [])
+        # Плейсхолдер-SVG сида НЕ считается реальным фото (как в audit-скрипте).
+        real = [u for u in eff if not u.startswith(_PLACEHOLDER_PREFIX)]
+        current = len(real)
+        if current == 0:
+            summary["no_photo"] += 1
+        elif current == 1:
+            summary["one_photo"] += 1
+        elif current <= 3:
+            summary["two_three"] += 1
+        else:
+            summary["four_plus"] += 1
+        is_placeholder = current == 0 and any(u.startswith(_PLACEHOLDER_PREFIX) for u in eff)
+        if is_placeholder:
+            summary["placeholder"] += 1
+
+        # фильтры
+        if filter == "no_photo" and current != 0:
+            continue
+        if filter == "one" and current != 1:
+            continue
+        if filter == "placeholder" and not is_placeholder:
+            continue
+        if category and p.category != category:
+            continue
+        if brand and p.brand != brand:
+            continue
+        if in_stock is not None and bool(p.in_stock) != in_stock:
+            continue
+
+        pr, score = _coverage_priority(p, current)
+        items.append({
+            "id": p.id, "sku": p.sku, "title": p.title, "brand": p.brand,
+            "category": p.category, "image_group_key": p.image_group_key,
+            "in_stock": p.in_stock, "current_images": current,
+            "placeholder": is_placeholder, "priority": pr, "priority_score": score,
+        })
+
+    summary["coverage_pct"] = round(
+        100 * (summary["total_active"] - summary["no_photo"]) / summary["total_active"], 1
+    ) if summary["total_active"] else 0.0
+
+    items.sort(key=lambda x: (-x["priority_score"], x["id"]))
+    total = len(items)
+    start = (page - 1) * page_size
+    page_items = items[start:start + page_size]
+
+    cats = sorted({p.category for p in products if p.category})
+    brands = sorted({p.brand for p in products if p.brand})
+    return {
+        "summary": summary,
+        "items": page_items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size if total else 0,
+        "categories": cats,
+        "brands": brands,
     }
 
 
@@ -463,40 +595,128 @@ def admin_bulk_action(
 
 
 # ==================== Product images (галерея) ====================
+# Инварианты галереи (v5.4.0), едины для всех эндпоинтов:
+#   • не больше MAX_PRODUCT_IMAGES фото;
+#   • главная image = images[0] (set main переставляет URL на индекс 0);
+#   • URL без дублей и пустых;
+#   • удаление главной делает главной первую оставшуюся;
+#   • пустая галерея -> image = None (или существующая заглушка при первой загрузке).
+def _is_placeholder(url: str | None) -> bool:
+    return bool(url) and url.startswith("/assets/placeholders/")
+
+
+def _sync_gallery(product: Product) -> None:
+    """Привести product.image/images к инвариантам после любого изменения."""
+    images, _excess = normalize_gallery(product.images, main=product.image)
+    product.images = images
+    product.image = images[0] if images else None
+
+
 @router.post("/products/{product_id}/images", status_code=status.HTTP_201_CREATED)
 async def admin_add_product_image(
     product_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)
 ):
-    """Загрузить фото к товару. Первое загруженное фото автоматически становится главным."""
+    """Загрузить одно фото к товару. Первое реальное фото становится главным.
+    11-е фото не принимается — 400 с текущим количеством и лимитом."""
     product = db.get(Product, product_id)
     if product is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    current = list(product.images or [])
+    if len(current) >= MAX_PRODUCT_IMAGES:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Достигнут лимит фотографий: {len(current)}/{MAX_PRODUCT_IMAGES}. Удалите лишние.",
+        )
     if not is_allowed(file.content_type):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Только изображения: jpg, png, webp, gif")
     data = await file.read()
     if len(data) > MAX_BYTES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Файл больше 8 МБ")
     url = save_image(file.content_type, data)
-    product.images = list(product.images or []) + [url]
-    # первая реальная картинка становится главной: если главной ещё нет
-    # или там демо-заглушка из сида (/assets/placeholders/...)
-    if not product.image or product.image.startswith("/assets/placeholders/"):
-        product.image = url
+    # главной делаем новую картинку, если её ещё нет или там демо-заглушка
+    keep_main = product.image if (product.image and not _is_placeholder(product.image)) else url
+    product.images, _ = normalize_gallery([*current, url], main=keep_main)
+    product.image = product.images[0] if product.images else url
     db.commit()
     db.refresh(product)
     return product.to_admin()
 
 
+@router.post("/products/{product_id}/images/bulk", status_code=status.HTTP_201_CREATED)
+async def admin_add_product_images_bulk(
+    product_id: int, files: list[UploadFile] = File(...), db: Session = Depends(get_db)
+):
+    """Мультизагрузка фото: принимает несколько файлов за раз. Загружает столько,
+    сколько влезает в оставшиеся слоты до лимита; остальные — в rejected с
+    причиной (лимит/формат/размер). Частичный успех не роняет весь запрос."""
+    product = db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    current = list(product.images or [])
+    keep_main = product.image if (product.image and not _is_placeholder(product.image)) else None
+    added: list[str] = []
+    rejected: list[dict] = []
+    for f in files:
+        remaining = MAX_PRODUCT_IMAGES - (len(current) + len(added))
+        if remaining <= 0:
+            rejected.append({"file": f.filename, "reason": f"лимит {MAX_PRODUCT_IMAGES} фото"})
+            continue
+        if not is_allowed(f.content_type):
+            rejected.append({"file": f.filename, "reason": "не изображение (jpg/png/webp/gif)"})
+            continue
+        data = await f.read()
+        if len(data) > MAX_BYTES:
+            rejected.append({"file": f.filename, "reason": "файл больше 8 МБ"})
+            continue
+        added.append(save_image(f.content_type, data))
+    if added and keep_main is None:
+        keep_main = added[0]
+    product.images, _ = normalize_gallery([*current, *added], main=keep_main)
+    product.image = product.images[0] if product.images else None
+    db.commit()
+    db.refresh(product)
+    result = product.to_admin()
+    result["_upload"] = {"added": len(added), "rejected": rejected,
+                         "count": len(product.images), "limit": MAX_PRODUCT_IMAGES}
+    return result
+
+
 @router.post("/products/{product_id}/images/main")
 def admin_set_main_image(product_id: int, body: dict = Body(...), db: Session = Depends(get_db)):
-    """Сделать одну из загруженных картинок главной."""
+    """Сделать одну из загруженных картинок главной — переставить её на индекс 0."""
     product = db.get(Product, product_id)
     if product is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
     url = (body or {}).get("url")
     if not url or url not in (product.images or []):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "url должен быть одной из загруженных картинок")
+    # главная переезжает на индекс 0 (не просто отдельное поле)
+    product.images, _ = normalize_gallery(product.images, main=url)
     product.image = url
+    db.commit()
+    db.refresh(product)
+    return product.to_admin()
+
+
+@router.post("/products/{product_id}/images/reorder")
+def admin_reorder_product_images(product_id: int, body: dict = Body(...), db: Session = Depends(get_db)):
+    """Сохранить новый порядок галереи. Тело: {"images": [url, ...]}.
+
+    Валидируется, что передан РОВНО тот же набор URL (без добавления, удаления и
+    дублей) — переупорядочивание, а не подмена. Первый URL становится главным."""
+    product = db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    new_order = (body or {}).get("images")
+    if not isinstance(new_order, list) or not all(isinstance(u, str) for u in new_order):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "images должен быть списком URL")
+    current = [u for u in (product.images or []) if u]
+    if len(new_order) != len(set(new_order)):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "В новом порядке есть дубли URL")
+    if set(new_order) != set(current):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Набор URL не совпадает с текущей галереей")
+    product.images = new_order
+    product.image = new_order[0] if new_order else None
     db.commit()
     db.refresh(product)
     return product.to_admin()
@@ -512,10 +732,12 @@ def admin_delete_product_image(product_id: int, body: dict = Body(...), db: Sess
     images = list(product.images or [])
     if url in images:
         images.remove(url)
-        product.images = images
         delete_image(url)
-        if product.image == url:
-            product.image = images[0] if images else None
+        was_main = product.image == url
+        product.images = images
+        # если удалили главную — новая главная = первая оставшаяся (индекс 0)
+        product.image = (images[0] if images else None) if was_main else product.image
+        _sync_gallery(product)
         db.commit()
         db.refresh(product)
     return product.to_admin()

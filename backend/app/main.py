@@ -100,6 +100,12 @@ def _apply_demo_migrations() -> None:
     statements = [
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS delivery_method VARCHAR(32)",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS product_price NUMERIC(12, 2)",
+        # v5.4.0: сценарные заявки. Обратносовместимо — у старых заявок lead_type
+        # проставится дефолтом 'general', metadata пустым объектом.
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS lead_type VARCHAR(32) DEFAULT 'general'",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS metadata JSON DEFAULT '{}'::json",
+        "CREATE INDEX IF NOT EXISTS ix_leads_lead_type ON leads (lead_type)",
+        "UPDATE leads SET lead_type = 'general' WHERE lead_type IS NULL",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSON DEFAULT '[]'::json",
         # v4: расширение карточки товара (импорт, характеристики, матчинг фото)
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS sku VARCHAR(64)",

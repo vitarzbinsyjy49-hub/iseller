@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { C, card, input, btn, btnGhost, apiGet, apiPatch, apiPost, apiSend, apiUpload } from "./ui";
+import { C, card, input, btn, btnGhost, apiGet, apiPatch, apiPost, apiSend, apiUploadMany, MAX_PRODUCT_IMAGES } from "./ui";
 
 /** Управление товарами: поиск, массовые действия, безопасное удаление,
  *  наличие, цены, флаги, редактирование, добавление. */
@@ -395,6 +395,8 @@ function ProductModal({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [group, setGroup] = useState<ImageGroupInfo | null>(null);
+  const [photoNote, setPhotoNote] = useState("");   // отчёт последней мультизагрузки
+  const [dragOver, setDragOver] = useState(false);
 
   useEffect(() => {
     if (!product) {
@@ -421,18 +423,54 @@ function ProductModal({
 
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })); }
 
-  // ---- Фотографии: загрузка / выбор главной / удаление (сохраняются сразу) ----
-  async function uploadPhoto(file: File) {
+  // ---- Фотографии: мультизагрузка / порядок / главная / удаление (сохраняются сразу) ----
+  const remainingSlots = Math.max(0, MAX_PRODUCT_IMAGES - images.length);
+
+  async function uploadPhotos(fileList: FileList | File[]) {
     if (!product) return;
-    setError(""); setUploading(true);
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    setError(""); setPhotoNote(""); setUploading(true);
     try {
-      const p = await apiUpload<ProdFull>(`/admin/products/${product.id}/images`, token, file);
+      if (remainingSlots <= 0) { setError(`Достигнут лимит ${MAX_PRODUCT_IMAGES} фото — удалите лишние`); return; }
+      type BulkResult = ProdFull & {
+        _upload?: { added: number; rejected: { file: string; reason: string }[]; count: number; limit: number };
+      };
+      const p = await apiUploadMany<BulkResult>(`/admin/products/${product.id}/images/bulk`, token, files);
       setImages(p.images ?? []);
       set("image", p.image ?? "");
+      const up = p._upload;
+      if (up) {
+        const parts = [`Добавлено: ${up.added}`];
+        if (up.rejected.length) {
+          parts.push(`отклонено ${up.rejected.length}: ` +
+            up.rejected.map((r) => `${r.file} — ${r.reason}`).join("; "));
+        }
+        setPhotoNote(parts.join(" · "));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось загрузить фото");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function movePhoto(url: string, dir: -1 | 1) {
+    if (!product) return;
+    const prev = images;
+    const order = [...images];
+    const i = order.indexOf(url);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    [order[i], order[j]] = [order[j], order[i]];
+    setImages(order);            // оптимистично
+    try {
+      const p = await apiPost<ProdFull>(`/admin/products/${product.id}/images/reorder`, token, { images: order });
+      setImages(p.images ?? []);
+      set("image", p.image ?? "");
+    } catch (e) {
+      setImages(prev);           // откат при ошибке
+      setError(e instanceof Error ? e.message : "Не удалось сохранить порядок");
     }
   }
 
@@ -582,53 +620,88 @@ function ProductModal({
             </div>
           )}
           <div style={{ gridColumn: "1 / -1" }}>
-            <div style={{ fontSize: 13, color: C.sub, marginBottom: 6 }}>
-              Фотографии{images.length > 0 ? ` · ${images.length}` : ""}
-              <span style={{ color: C.sub, fontWeight: 400 }}> — первая загруженная становится главной, можно выбрать другую</span>
+            <div style={{ fontSize: 13, color: C.sub, marginBottom: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <strong style={{ color: C.text }}>Фотографии · {images.length}/{MAX_PRODUCT_IMAGES}</strong>
+              <span style={{ fontWeight: 400 }}>
+                — первая (слева) главная; стрелками ← → меняйте порядок, «Главная» ставит фото первым
+              </span>
             </div>
             {isNew ? (
               <p style={{ fontSize: 13, color: C.sub, margin: 0 }}>
                 Сначала создайте товар (кнопка ниже) — затем откройте его и добавьте фото.
               </p>
             ) : (
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
-                {images.map((url) => {
-                  const isMain = url === form.image;
-                  return (
-                    <div key={url} style={{ width: 96 }}>
-                      <div style={{
-                        position: "relative", width: 96, height: 96, borderRadius: 10, overflow: "hidden",
-                        border: `2px solid ${isMain ? C.accent : C.border}`,
-                      }}>
-                        <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                        {isMain && (
-                          <span style={{
-                            position: "absolute", left: 4, top: 4, background: C.accent, color: "#fff",
-                            fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 999,
-                          }}>Главная</span>
-                        )}
+              <>
+                <div
+                  onDragOver={(e) => { e.preventDefault(); if (remainingSlots > 0) setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault(); setDragOver(false);
+                    if (e.dataTransfer.files?.length) uploadPhotos(e.dataTransfer.files);
+                  }}
+                  style={{
+                    display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start",
+                    padding: 10, borderRadius: 10,
+                    border: `1px dashed ${dragOver ? C.accent : "transparent"}`,
+                    background: dragOver ? "rgba(42,171,238,.06)" : "transparent",
+                  }}
+                >
+                  {images.map((url, i) => {
+                    const isMain = i === 0;
+                    return (
+                      <div key={url} style={{ width: 96 }}>
+                        <div style={{
+                          position: "relative", width: 96, height: 96, borderRadius: 10, overflow: "hidden",
+                          border: `2px solid ${isMain ? C.accent : C.border}`,
+                        }}>
+                          <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                          {isMain && (
+                            <span style={{
+                              position: "absolute", left: 4, top: 4, background: C.accent, color: "#fff",
+                              fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 999,
+                            }}>Главная</span>
+                          )}
+                        </div>
+                        {/* Переупорядочивание — кнопки (keyboard-accessible) */}
+                        <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                          <button style={{ ...btnGhost, padding: "3px 7px", fontSize: 11 }}
+                            onClick={() => movePhoto(url, -1)} disabled={i === 0}
+                            title="Левее" aria-label="Переместить левее">←</button>
+                          <button style={{ ...btnGhost, padding: "3px 7px", fontSize: 11 }}
+                            onClick={() => movePhoto(url, 1)} disabled={i === images.length - 1}
+                            title="Правее" aria-label="Переместить правее">→</button>
+                        </div>
+                        <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                          {!isMain && (
+                            <button style={{ ...btnGhost, padding: "3px 8px", fontSize: 11, flex: 1 }}
+                              onClick={() => makeMain(url)}>Главная</button>
+                          )}
+                          <button style={{ ...btnGhost, padding: "3px 8px", fontSize: 11, color: C.red }}
+                            onClick={() => removePhoto(url)} title="Удалить фото">✕</button>
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
-                        {!isMain && (
-                          <button style={{ ...btnGhost, padding: "3px 8px", fontSize: 11, flex: 1 }}
-                            onClick={() => makeMain(url)}>Главная</button>
-                        )}
-                        <button style={{ ...btnGhost, padding: "3px 8px", fontSize: 11, color: C.red }}
-                          onClick={() => removePhoto(url)} title="Удалить фото">✕</button>
-                      </div>
-                    </div>
-                  );
-                })}
-                <label style={{
-                  width: 96, height: 96, borderRadius: 10, border: `1px dashed ${C.border}`,
-                  display: "grid", placeItems: "center", cursor: uploading ? "wait" : "pointer",
-                  color: C.sub, fontSize: 12, textAlign: "center", background: C.muted,
-                }}>
-                  {uploading ? "Загрузка…" : "+ Фото"}
-                  <input type="file" accept="image/*" style={{ display: "none" }} disabled={uploading}
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); e.currentTarget.value = ""; }} />
-                </label>
-              </div>
+                    );
+                  })}
+                  {remainingSlots > 0 ? (
+                    <label style={{
+                      width: 96, height: 96, borderRadius: 10, border: `1px dashed ${C.border}`,
+                      display: "grid", placeItems: "center", cursor: uploading ? "wait" : "pointer",
+                      color: C.sub, fontSize: 11, textAlign: "center", background: C.muted, padding: 6,
+                    }}>
+                      {uploading ? "Загрузка…" : `+ Фото (ещё ${remainingSlots})`}
+                      <input type="file" accept="image/*" multiple style={{ display: "none" }} disabled={uploading}
+                        onChange={(e) => { if (e.target.files?.length) uploadPhotos(e.target.files); e.currentTarget.value = ""; }} />
+                    </label>
+                  ) : (
+                    <div style={{
+                      width: 96, height: 96, borderRadius: 10, border: `1px dashed ${C.border}`,
+                      display: "grid", placeItems: "center", color: C.sub, fontSize: 11, textAlign: "center",
+                      background: C.muted, padding: 6,
+                    }}>Лимит {MAX_PRODUCT_IMAGES}</div>
+                  )}
+                </div>
+                {photoNote && <p style={{ fontSize: 12, color: C.sub, margin: "6px 0 0" }}>{photoNote}</p>}
+              </>
             )}
           </div>
           <label style={{ gridColumn: "1 / -1", fontSize: 13, color: C.sub }}>

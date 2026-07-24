@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { C, card, input, btn, chip, apiGet, apiPatch, fmtPrice, STATUSES, STATUS_RU, SOURCE_RU } from "./ui";
+import {
+  C, card, input, btn, chip, apiGet, apiPatch, fmtPrice,
+  STATUSES, STATUS_RU, SOURCE_RU, LEAD_TYPES, LEAD_TYPE_RU, leadMetaRows,
+} from "./ui";
 import { Products } from "./Products";
 import { Analytics, AiLogs } from "./Analytics";
 import { ImportCenter, HomeContent, MediaTab } from "./HomeAdmin";
@@ -211,13 +214,33 @@ type Lead = {
   id: number; name: string | null; phone: string | null; username: string | null;
   product_title: string | null; product_price: number | null; message: string | null;
   source: string; delivery_method: string | null; status: string;
+  lead_type: string; metadata: Record<string, unknown> | null;
   manager_comment: string | null; created_at: string;
 };
+
+// Цвета pill-типа заявки (нейтральные, читаемые на светлой теме админки)
+const TYPE_PILL: Record<string, { bg: string; fg: string }> = {
+  general: { bg: C.muted, fg: C.sub },
+  product: { bg: "#e3f2fd", fg: C.accentDark },
+  trade_in: { bg: "#eafaf0", fg: "#0e9f6e" },
+  b2b: { bg: "#eef0ff", fg: "#5b5bd6" },
+  wholesale: { bg: "#fff3d6", fg: "#b57e00" },
+};
+
+function TypePill({ type }: { type: string }) {
+  const c = TYPE_PILL[type] ?? TYPE_PILL.general;
+  return (
+    <span style={{ background: c.bg, color: c.fg, borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
+      {LEAD_TYPE_RU[type] ?? type}
+    </span>
+  );
+}
 
 function Leads({ token }: { token: string }) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filter, setFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [loading, setLoading] = useState(true);
 
   function load() {
@@ -225,10 +248,11 @@ function Leads({ token }: { token: string }) {
     const qs = new URLSearchParams();
     if (filter) qs.set("status_filter", filter);
     if (sourceFilter) qs.set("source_filter", sourceFilter);
+    if (typeFilter) qs.set("type_filter", typeFilter);
     apiGet<{ leads: Lead[] }>(`/admin/leads?${qs.toString()}`, token)
       .then((d) => setLeads(d.leads)).finally(() => setLoading(false));
   }
-  useEffect(load, [filter, sourceFilter]);
+  useEffect(load, [filter, sourceFilter, typeFilter]);
 
   async function update(id: number, patch: Record<string, unknown>) {
     await apiPatch(`/admin/leads/${id}`, token, patch);
@@ -241,6 +265,11 @@ function Leads({ token }: { token: string }) {
         <button onClick={() => setFilter("")} style={chip(filter === "")}>Все</button>
         {STATUSES.map((s) => <button key={s} onClick={() => setFilter(s)} style={chip(filter === s)}>{STATUS_RU[s]}</button>)}
         <span style={{ width: 12 }} />
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+          style={{ ...chip(typeFilter !== ""), appearance: "none" as const }}>
+          <option value="">Тип: все</option>
+          {LEAD_TYPES.map((k) => <option key={k} value={k}>{LEAD_TYPE_RU[k]}</option>)}
+        </select>
         <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
           style={{ ...chip(sourceFilter !== ""), appearance: "none" as const }}>
           <option value="">Источник: все</option>
@@ -255,21 +284,38 @@ function Leads({ token }: { token: string }) {
               <div key={l.id} style={card}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div>
-                    <strong>{l.product_title || "Консультация"}</strong>
-                    {l.product_price != null && <span style={{ marginLeft: 8, fontWeight: 600 }}>{fmtPrice(l.product_price)}</span>}
-                    <span style={{ color: C.sub, marginLeft: 8, fontSize: 13 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <TypePill type={l.lead_type || "general"} />
+                      <strong>{l.product_title || "Консультация"}</strong>
+                      {l.product_price != null && <span style={{ fontWeight: 600 }}>{fmtPrice(l.product_price)}</span>}
+                    </div>
+                    <span style={{ color: C.sub, fontSize: 13 }}>
                       №{l.id} · {SOURCE_RU[l.source] ?? l.source}
                       {l.delivery_method && ` · ${l.delivery_method === "pickup" ? "самовывоз" : "доставка"}`}
                     </span>
                   </div>
                   <span style={{ fontSize: 13, color: C.sub }}>{new Date(l.created_at).toLocaleString("ru-RU")}</span>
                 </div>
+
+                {/* Структурированные ответы сценария — компактный человекочитаемый блок,
+                    а не сырой JSON. Пустые поля скрыты, неизвестные — нейтрально. */}
+                {leadMetaRows(l.metadata).length > 0 && (
+                  <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
+                    {leadMetaRows(l.metadata).map((r) => (
+                      <span key={r.label} style={{ fontSize: 13 }}>
+                        <span style={{ color: C.sub }}>{r.label}:</span>{" "}
+                        <span style={{ fontWeight: 600 }}>{r.value}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 <div style={{ marginTop: 8, fontSize: 14, color: C.sub }}>
                   {l.name && <span>{l.name} </span>}
                   {l.phone && <span>· <a href={`tel:${l.phone}`} style={{ color: C.accentDark }}>{l.phone}</a> </span>}
                   {l.username && <span>· @{l.username}</span>}
                 </div>
-                {l.message && <p style={{ marginTop: 8, fontSize: 14 }}>{l.message}</p>}
+                {l.message && <p style={{ marginTop: 8, fontSize: 14, wordBreak: "break-word" }}>{l.message}</p>}
                 <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
                   <select value={l.status} onChange={(e) => update(l.id, { status: e.target.value })}
                     style={{ ...input, width: "auto", marginTop: 0 }}>

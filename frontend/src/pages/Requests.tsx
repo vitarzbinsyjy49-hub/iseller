@@ -4,10 +4,12 @@ import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import { formatPrice } from "../lib/format";
 import { ErrorState } from "../components/StateViews";
+import { leadTitle, leadTypeLabel, leadMetadataRows } from "../lib/leads";
 
 type Lead = {
   id: number; product_id: number | null; product_title: string | null; product_price: number | null;
   message: string | null; status: string; source: string; delivery_method: string | null;
+  lead_type: string; metadata: Record<string, unknown> | null;
   manager_comment: string | null; created_at: string;
 };
 
@@ -116,7 +118,7 @@ export default function Requests() {
             <div key={l.id} className="card-appear rounded-xl2 bg-surface p-4 shadow-soft transition-shadow lg:hover:shadow-[0_8px_24px_rgba(17,24,39,0.10)]">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate text-[15px] font-semibold">{l.product_title || "Консультация"}</p>
+                  <p className="truncate text-[15px] font-semibold">{leadTitle(l)}</p>
                   {l.product_price != null && (
                     <p className="mt-0.5 text-sm font-bold text-text">{formatPrice(l.product_price)}</p>
                   )}
@@ -126,10 +128,28 @@ export default function Requests() {
                 </span>
               </div>
 
+              {/* Тип сценария (для не-обычных заявок) */}
+              {l.lead_type && l.lead_type !== "general" && (
+                <span className="mt-2 inline-block rounded-full bg-accent/10 px-2.5 py-0.5 text-[11px] font-semibold text-accent">
+                  {leadTypeLabel(l.lead_type)}
+                </span>
+              )}
+
+              {/* Краткое резюме сценария — локализованные поля metadata, не сырой JSON */}
+              {leadMetadataRows(l.metadata).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                  {leadMetadataRows(l.metadata).map((r) => (
+                    <span key={r.label} className="text-[12px] text-muted">
+                      <span className="text-text/70">{r.label}:</span> <span className="font-medium text-text">{r.value}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {l.delivery_method && (
                 <p className="mt-2 text-xs text-muted">{DELIVERY_LABEL[l.delivery_method] ?? l.delivery_method}</p>
               )}
-              {l.message && <p className="mt-1.5 line-clamp-2 text-[13px] text-muted">{l.message}</p>}
+              {l.message && <p className="mt-1.5 line-clamp-2 break-words text-[13px] text-muted">{l.message}</p>}
               {l.manager_comment && (
                 <p className="mt-2 rounded-xl bg-mutedbg px-3 py-2 text-xs text-muted">
                   <span className="font-semibold text-text">Менеджер:</span> {l.manager_comment}

@@ -128,6 +128,14 @@ class Product(Base):
             "url": self.url,
         }
 
+    def _card_gallery(self) -> list[str]:
+        """Собственная галерея товара для карточки: главная первой, без дублей и
+        пустых, не длиннее лимита. Обычно её перезаписывает эффективная галерея
+        группы (apply_group_images); это безопасный fallback до резолвера."""
+        from app.core.uploads import normalize_gallery
+        images, _excess = normalize_gallery(self.images, main=self.image)
+        return images
+
     def to_card(self) -> dict:
         """Карточка для ленты/AI-ответа/fallback — единый формат для фронтенда."""
         return {
@@ -143,6 +151,9 @@ class Product(Base):
             "stock": self.stock,
             "rating": self.rating,
             "image": self.image or "",
+            # v5.4.0: галерея карточки для карусели (Home/Catalog/History/…).
+            # apply_group_images заполнит её эффективной групповой галереей (≤10).
+            "images": self._card_gallery(),
             "url": self.url or "",
             "is_hot": self.is_hot,
             "is_available_today": self.is_available_today,
@@ -207,7 +218,9 @@ class Product(Base):
             "stock": self.stock,
             "on_sale": self.on_sale,
             "is_new": self.is_new,
-            "images": self.images or [],          # галерея для карусели на витрине
+            # галерея для карусели на витрине (главная первой, ≤10); эффективную
+            # групповую галерею проставит apply_group_images.
+            "images": self._card_gallery(),
         })
         return d
 

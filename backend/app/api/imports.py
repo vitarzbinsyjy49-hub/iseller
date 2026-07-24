@@ -27,7 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin
-from app.core.uploads import save_image
+from app.core.uploads import MAX_PRODUCT_IMAGES, save_image
 from app.db.session import get_db
 from app.models.product import Product
 
@@ -219,14 +219,21 @@ async def upload_images_zip(file: UploadFile = File(...), db: Session = Depends(
         matched.setdefault(product.sku, []).append((order, base, _IMG_EXT[ext], payload))
 
     matched_report = []
+    excess_images: list[dict] = []
     for sku, files in matched.items():
         product = products[sku.lower()]
         files.sort(key=lambda f: f[0])
-        urls = [save_image(ctype, payload) for _, _, ctype, payload in files]
+        # v5.4.0: применяем первые MAX_PRODUCT_IMAGES по текущему порядку сортировки,
+        # лишние НЕ теряем молча — попадают в excess_images отчёта (и на диск не пишутся).
+        keep = files[:MAX_PRODUCT_IMAGES]
+        overflow = files[MAX_PRODUCT_IMAGES:]
+        urls = [save_image(ctype, payload) for _, _, ctype, payload in keep]
         product.images = urls
         product.image = urls[0]
         matched_report.append({"sku": sku, "product_id": product.id,
                                "title": product.title, "images": len(urls)})
+        for _, base, _ctype, _payload in overflow:
+            excess_images.append({"sku": sku, "file": base, "reason": f"сверх лимита {MAX_PRODUCT_IMAGES}"})
     db.commit()
 
     without_images = [
@@ -237,6 +244,7 @@ async def upload_images_zip(file: UploadFile = File(...), db: Session = Depends(
     return {
         "matched_products": matched_report,
         "unmatched_images": unmatched,
+        "excess_images": excess_images,   # v5.4.0: фото сверх лимита 10 (не применены)
         "products_without_images": without_images[:100],
         "errors": errors,
     }
@@ -455,17 +463,21 @@ async def batch_confirm(job_id: str, admin: str = Depends(get_current_admin),
         canon, _order = ic.resolve_filename_to_sku(img.name, sku_index)
         if canon is not None:
             matched_paths.setdefault(canon, []).append(img)
+    excess_images: list[dict] = []
     for sku, imgs in matched_paths.items():
         try:
             imgs.sort(key=lambda im: ic.resolve_filename_to_sku(im.name, sku_index)[1])
-            urls = [save_image(im.content_type, im.data) for im in imgs]
+            keep, overflow = imgs[:MAX_PRODUCT_IMAGES], imgs[MAX_PRODUCT_IMAGES:]
+            urls = [save_image(im.content_type, im.data) for im in keep]
             product = db.get(Product, all_sku_to_id[sku])
             if product is not None:
                 product.images = urls
                 product.image = urls[0]
             db.commit()
             image_report.append({"sku": sku, "matched_images": len(urls),
-                                 "main_file": imgs[0].name, "files": [im.name for im in imgs]})
+                                 "main_file": keep[0].name, "files": [im.name for im in keep]})
+            for im in overflow:
+                excess_images.append({"sku": sku, "file": im.name, "reason": f"сверх лимита {MAX_PRODUCT_IMAGES}"})
         except Exception as e:  # noqa: BLE001
             db.rollback()
             image_errors.append({"sku": sku, "error": str(e)[:200]})
@@ -476,6 +488,7 @@ async def batch_confirm(job_id: str, admin: str = Depends(get_current_admin),
         "summary": plan["summary"],
         "images_applied": image_report,
         "image_errors": image_errors,
+        "excess_images": excess_images,   # v5.4.0: фото сверх лимита 10 (не применены)
         "took_ms": int((_time.monotonic() - t0) * 1000),
     }
     store.mark_applied(job_id, admin, report)
