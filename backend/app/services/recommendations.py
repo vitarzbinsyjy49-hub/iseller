@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models.product import Product
 from app.models.user_product_event import EVENT_TYPES, UserProductEvent
-from app.services.image_groups import dedupe_by_group
+from app.services.image_groups import dedupe_by_group, has_real_photo, resolve_product_images
 
 # Веса сигналов (прозрачные, объяснимые). Заявка/избранное — сильные, просмотр —
 # слабый, повторный просмотр накапливается суммой. Снятие из избранного — лёгкий
@@ -232,6 +232,10 @@ def recommend(db: Session, user_id: int, limit: int = 12) -> tuple[list[Product]
     candidates = db.execute(
         select(Product).where(Product.is_active.is_(True))
     ).scalars().all()
+    # v5.4.1: «Для вас» рендерится на главной — товары без реального фото туда
+    # не попадают вовсе (как и остальные секции /catalog/feed).
+    resolved = resolve_product_images(db, candidates)
+    candidates = [p for p in candidates if has_real_photo(resolved.get(p.id))]
 
     if aff.is_empty:
         mode = "cold"

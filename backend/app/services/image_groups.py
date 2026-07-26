@@ -219,6 +219,22 @@ def resolve_product_images(db, products) -> dict[int, dict]:
     return result
 
 
+# Нейтральный SVG-плейсхолдер сида — не считается реальным фото (как в
+# admin_crm.photo_coverage и scripts/photo_coverage_audit.py).
+PLACEHOLDER_PREFIX = "/assets/placeholders/"
+
+
+def real_images(resolved_entry: dict | None) -> list[str]:
+    """Эффективная галерея из resolve_product_images без плейсхолдера."""
+    imgs = (resolved_entry or {}).get("images") or []
+    return [u for u in imgs if u and not u.startswith(PLACEHOLDER_PREFIX)]
+
+
+def has_real_photo(resolved_entry: dict | None) -> bool:
+    """Есть ли у товара хотя бы одно настоящее фото (не плейсхолдер, не пусто)."""
+    return bool(real_images(resolved_entry))
+
+
 def apply_group_images(db, products, cards) -> list[dict]:
     """Проставить в готовые card/detail-словари эффективную галерею из resolver.
     Работает и для to_card (только image), и для to_detail (image + images)."""

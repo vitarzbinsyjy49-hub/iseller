@@ -18,7 +18,12 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.product import Product
 from app.models.user import User
-from app.services.image_groups import apply_group_images, dedupe_by_group
+from app.services.image_groups import (
+    apply_group_images,
+    dedupe_by_group,
+    has_real_photo,
+    resolve_product_images,
+)
 from app.services.recommendations import recently_viewed, recommend
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -73,8 +78,17 @@ def _alias(word: str) -> str:
     return word
 
 
+def _photo_last(db: Session, products: list[Product]) -> list[Product]:
+    """Стабильно переставить товары без реального фото (плейсхолдер/пусто) в
+    конец списка — остальной порядок (уже заданный SQL ORDER BY) сохраняется."""
+    resolved = resolve_product_images(db, products)
+    return sorted(products, key=lambda p: 0 if has_real_photo(resolved.get(p.id)) else 1)
+
+
 def search_products(db: Session, query: str, price_max: float | None = None, limit: int = 6) -> list[Product]:
-    """Простой поиск по словам. Общая функция для /catalog/search и AI-fallback."""
+    """Простой поиск по словам. Общая функция для /catalog/search и AI-fallback.
+
+    Товары без реального фото уходят в конец выдачи, но не исчезают из поиска."""
     stmt = select(Product).where(Product.is_active.is_(True))
     words = [_alias(w) for w in query.split() if len(w) >= 2][:5]
     for word in words:
@@ -87,8 +101,9 @@ def search_products(db: Session, query: str, price_max: float | None = None, lim
         ))
     if price_max:
         stmt = stmt.where(Product.price <= price_max)
-    stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc()).limit(limit)
-    return list(db.execute(stmt).scalars().all())
+    stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc())
+    products = list(db.execute(stmt).scalars().all())
+    return _photo_last(db, products)[:limit]
 
 
 @router.get("/search", dependencies=[Depends(get_current_user)])
@@ -195,7 +210,10 @@ def list_catalog(
     else:
         stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc())
 
-    products = db.execute(stmt.limit(limit)).scalars().all()
+    products = list(db.execute(stmt).scalars().all())
+    # Товары без реального фото — в конец выдачи (не пропадают из каталога),
+    # выбранная сортировка сохраняется внутри каждой из двух групп.
+    products = _photo_last(db, products)[:limit]
     cards = [p.to_card() for p in products]
     apply_group_images(db, products, cards)
     return {"cards": cards}
@@ -218,19 +236,34 @@ def feed(db: Session = Depends(get_db)):
     один representative), и «Рекомендуем» исключает уже показанные ГРУППЫ, а не
     только id. Фото проставляются из канонических групп одним батчем (без N+1).
     До 8 товаров в секции; при маленьком каталоге секция не остаётся пустой.
+
+    v5.4.1: товары без реального фото (плейсхолдер/пустая галерея) на главную не
+    попадают вовсе — исключаются из всех 4 секций до дедупа и добора.
     """
     def rows(stmt, n=32):
         return db.execute(stmt.limit(n)).scalars().all()
 
     base = select(Product).where(Product.is_active.is_(True))
-    hot = dedupe_by_group(rows(base.where(Product.is_hot.is_(True)).order_by(Product.popularity.desc())))[:8]
-    today = dedupe_by_group(rows(base.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
-                                 .order_by(Product.popularity.desc())))[:8]
+    hot_raw = rows(base.where(Product.is_hot.is_(True)).order_by(Product.popularity.desc()))
+    today_raw = rows(base.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
+                     .order_by(Product.popularity.desc()))
+    new_raw = rows(base.where(Product.is_new.is_(True)).order_by(Product.id.desc()))
+    recent_raw = rows(base.order_by(Product.id.desc()), n=64)
+    pool_raw = rows(base.order_by(Product.in_stock.desc(), Product.popularity.desc()), n=96)
 
-    new_items = dedupe_by_group(rows(base.where(Product.is_new.is_(True)).order_by(Product.id.desc())))
+    all_candidates = list({p.id: p for p in (*hot_raw, *today_raw, *new_raw, *recent_raw, *pool_raw)}.values())
+    resolved = resolve_product_images(db, all_candidates)
+
+    def with_photo(items):
+        return [p for p in items if has_real_photo(resolved.get(p.id))]
+
+    hot = dedupe_by_group(with_photo(hot_raw))[:8]
+    today = dedupe_by_group(with_photo(today_raw))[:8]
+
+    new_items = dedupe_by_group(with_photo(new_raw))
     if len(new_items) < 8:  # добираем недавними (id как надёжный прокси «добавлен позже»)
         seen_new = {p.id for p in new_items}
-        for p in dedupe_by_group(rows(base.order_by(Product.id.desc()), n=64)):
+        for p in dedupe_by_group(with_photo(recent_raw)):
             if p.id not in seen_new:
                 new_items.append(p)
                 seen_new.add(p.id)
@@ -240,7 +273,7 @@ def feed(db: Session = Depends(get_db)):
 
     shown_ids = {p.id for p in (*hot, *today, *new_items)}
     shown_keys = {p.image_group_key for p in (*hot, *today, *new_items) if p.image_group_key}
-    pool = dedupe_by_group(rows(base.order_by(Product.in_stock.desc(), Product.popularity.desc()), n=96))
+    pool = dedupe_by_group(with_photo(pool_raw))
     recommended = [p for p in pool
                    if p.id not in shown_ids
                    and (not p.image_group_key or p.image_group_key not in shown_keys)][:8] or pool[:8]
