@@ -160,8 +160,8 @@ def test_zip_preview_bare_numeric_sku_goes_to_owner(client, db):
 
 def test_zip_apply_binds_to_exact_sku(client, db):
     """Сквозная проверка: применение ZIP кладёт снимок ровно тому SKU."""
-    make_product(db, sku="APL-APD-4-2024", title="AirPods 4 (2024)", price=1000)
-    make_product(db, sku="APL-APD-4-2024-2", title="AirPods 4 (2024) ANC", price=1200)
+    make_product(db, sku="APL-APD-4-2024", title="AirPods 4 (2024)", price=1000, image=None, images=[])
+    make_product(db, sku="APL-APD-4-2024-2", title="AirPods 4 (2024) ANC", price=1200, image=None, images=[])
 
     r = client.post(
         "/api/admin/uploads/products/images-zip",

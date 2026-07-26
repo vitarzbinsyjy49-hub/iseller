@@ -43,20 +43,20 @@ def test_detached_uses_own_over_group(db):
 def test_sibling_fallback(db):
     withimg = make_product(db, title="iPhone 16 Pro 256 ГБ Black", color="Black",
                            image="/sib/m.webp", images=["/sib/m.webp"])
-    noimg = make_product(db, title="iPhone 16 Pro 128 ГБ Black", color="Black")
+    noimg = make_product(db, title="iPhone 16 Pro 128 ГБ Black", color="Black", image=None, images=[])
     assert withimg.image_group_key == noimg.image_group_key
     res = resolve_product_images(db, [noimg])
     assert res[noimg.id]["images"] == ["/sib/m.webp"]  # фото соседа той же модели+цвета
 
 
 def test_placeholder_when_nothing(db):
-    p = make_product(db, title="iPhone 16 Pro 128 ГБ Black", color="Black")
+    p = make_product(db, title="iPhone 16 Pro 128 ГБ Black", color="Black", image=None, images=[])
     res = resolve_product_images(db, [p])
     assert res[p.id] == {"image": None, "images": []}  # -> нейтральный placeholder на фронте
 
 
 def test_never_takes_other_color_photos(db):
-    black_noimg = make_product(db, title="iPhone 16 Pro 128 ГБ Black", color="Black")
+    black_noimg = make_product(db, title="iPhone 16 Pro 128 ГБ Black", color="Black", image=None, images=[])
     make_product(db, title="iPhone 16 Pro 256 ГБ White", color="White",
                  image="/white/m.webp", images=["/white/m.webp"])
     res = resolve_product_images(db, [black_noimg])

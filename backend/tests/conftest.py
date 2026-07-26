@@ -50,6 +50,10 @@ def make_product(db: Session, **kw) -> Product:
         title="iPhone 16 Pro 256 ГБ", brand="Apple", category="смартфоны",
         price=119990, in_stock=True, stock=5, popularity=10, rating=4.8,
         is_active=True, condition="new",
+        # v5.4.1: реальное фото по умолчанию — тесты, для которых фото не важно,
+        # не должны случайно попадать в категорию "без фото" (см. image_groups.
+        # has_real_photo). Тесты про сам no-photo передают image=None, images=[].
+        image="/api/uploads/test-default.jpg", images=["/api/uploads/test-default.jpg"],
     )
     defaults.update(kw)
     p = Product(**defaults)
