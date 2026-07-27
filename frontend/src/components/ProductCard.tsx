@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent, type ReactNode } from "react";
+import {
+  useEffect, useRef, useState,
+  type PointerEvent as ReactPointerEvent, type UIEvent as ReactUIEvent,
+  type MouseEvent, type ReactNode,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { ProductCard as TCard } from "./ai/types";
 import { formatPrice, discountPct } from "../lib/format";
@@ -7,7 +11,7 @@ import { useFavorite } from "../lib/favorites";
 import { haptic } from "../lib/telegram";
 import { toast } from "../lib/toast";
 import { track } from "../lib/analytics";
-import { classifySwipe, isSlideMounted, movedBeyondTap, nextIndex } from "../lib/carousel";
+import { indexFromScroll, isSlideMounted, isTapGesture } from "../lib/carousel";
 
 const MAX_CARD_IMAGES = 10;
 
@@ -95,8 +99,18 @@ export function ProductImage({
 
 /** Карусель фото на карточке товара (как в Яндекс Лавке): горизонтальный свайп
  *  + точки. Свайп НЕ открывает товар (подавляем клик), тап — открывает.
- *  Вертикальный скролл страницы не блокируется (touch-action: pan-y). Монтируются
- *  только активный слайд и соседи (lazy). 0–1 фото — обычная карточка без точек. */
+ *
+ *  Листание делает НАТИВНЫЙ горизонтальный скролл со scroll-snap, а не JS: раньше
+ *  на каждый pointermove вызывался setState со сдвигом в пикселях, и React
+ *  перерисовывал карусель на каждый пиксель движения пальца — при ленте из
+ *  десятка карточек это давало заметные рывки. Теперь во время жеста React не
+ *  рендерит вообще ничего: инерцию, снап и подтормаживание на краях считает
+ *  компоновщик браузера (та же механика, что в галерее ProductDetails).
+ *  onScroll меняет состояние только когда реально сменился активный слайд.
+ *
+ *  Вертикальный скролл страницы не блокируется: у overflow-x контейнера
+ *  вертикальный жест по умолчанию уходит родителю. Монтируются только активный
+ *  слайд и соседи (lazy). 0–1 фото — обычная карточка без точек и без скролла. */
 function CardCarousel({
   id, images, title, category, compact, onOpen,
 }: {
@@ -104,95 +118,94 @@ function CardCarousel({
   compact?: boolean; onOpen: () => void;
 }) {
   const [index, setIndex] = useState(0);
-  const [dragPx, setDragPx] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const startRef = useRef<{ x: number; y: number } | null>(null);
-  const movedRef = useRef(false);
-  const widthRef = useRef(1);
-  const viewportRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Начало жеста: позиция пальца + scrollLeft на тот момент. Только ref —
+  // ничего из этого не должно вызывать перерисовку.
+  const gestureRef = useRef<{ x: number; y: number; scroll: number } | null>(null);
+  const tapRef = useRef(false);
+  // Индекс, к которому мы сами проскроллили по клику на точку: приходящий следом
+  // onScroll не должен считаться свайпом пользователя.
+  const programmaticRef = useRef<number | null>(null);
 
   const n = images.length;
   const hasCarousel = n >= 2;
 
   // Сброс активного слайда при смене товара или набора фото.
-  useEffect(() => { setIndex(0); setDragPx(0); }, [id, n, images[0]]);
+  useEffect(() => {
+    setIndex(0);
+    scrollRef.current?.scrollTo({ left: 0 });
+  }, [id, n, images[0]]);
 
-  function go(to: number, reason: "swipe" | "dot") {
-    const clamped = Math.max(0, Math.min(n - 1, to));
-    if (clamped === index) return;
-    // Событие только при фактической смене активного слайда (не на каждый пиксель).
-    track(reason === "swipe" ? "product_gallery_swiped" : "product_gallery_dot_clicked",
-      { product_id: id, from_index: index, to_index: clamped, image_count: n });
-    setIndex(clamped);
+  function goToDot(to: number) {
+    const el = scrollRef.current;
+    if (!el || to === index) return;
+    track("product_gallery_dot_clicked",
+      { product_id: id, from_index: index, to_index: to, image_count: n });
+    programmaticRef.current = to;
+    el.scrollTo({ left: to * el.clientWidth, behavior: "smooth" });
+    setIndex(to);
+  }
+
+  function onScroll(e: ReactUIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    const i = indexFromScroll(el.scrollLeft, el.clientWidth, n);
+    if (i === index) return;
+    if (programmaticRef.current === i) programmaticRef.current = null;
+    else {
+      track("product_gallery_swiped",
+        { product_id: id, from_index: index, to_index: i, image_count: n });
+    }
+    setIndex(i);
   }
 
   function onPointerDown(e: ReactPointerEvent) {
-    if (!hasCarousel) return;
-    startRef.current = { x: e.clientX, y: e.clientY };
-    movedRef.current = false;
-    widthRef.current = viewportRef.current?.clientWidth || 1;
+    gestureRef.current = { x: e.clientX, y: e.clientY, scroll: scrollRef.current?.scrollLeft ?? 0 };
+    tapRef.current = false;
   }
-  function onPointerMove(e: ReactPointerEvent) {
-    const s = startRef.current;
+  function onPointerUp(e: ReactPointerEvent) {
+    const s = gestureRef.current;
+    gestureRef.current = null;
     if (!s) return;
-    const dx = e.clientX - s.x;
-    const dy = e.clientY - s.y;
-    if (!movedRef.current && movedBeyondTap(dx, dy)) movedRef.current = true;
-    if (Math.abs(dx) > Math.abs(dy)) {   // горизонтальное намерение — тянем слайд
-      setDragging(true);
-      setDragPx(dx);
-      try { (e.currentTarget as Element).setPointerCapture?.(e.pointerId); } catch { /* noop */ }
-    }
-  }
-  function endGesture(e: ReactPointerEvent) {
-    const s = startRef.current;
-    startRef.current = null;
-    setDragging(false);
-    setDragPx(0);
-    if (!s) return;
-    const dx = e.clientX - s.x;
-    const dy = e.clientY - s.y;
-    const result = classifySwipe(dx, dy, widthRef.current);
-    if (result === "next" || result === "prev") go(nextIndex(index, result, n), "swipe");
-    // "tap"/"none" -> открытие обрабатывает onClick (с подавлением после свайпа)
+    tapRef.current = isTapGesture(
+      e.clientX - s.x, e.clientY - s.y, (scrollRef.current?.scrollLeft ?? 0) - s.scroll,
+    );
   }
   function onClick() {
-    if (movedRef.current) { movedRef.current = false; return; } // свайп — не открываем
-    onOpen();
+    // Клавиатура/скринридер шлют click без pointer-жеста — там gestureRef пуст
+    // и tapRef false, поэтому открытие с клавиатуры отдельно в onKeyDown.
+    if (tapRef.current) { tapRef.current = false; onOpen(); }
   }
-
-  const trackStyle = {
-    transform: `translateX(calc(${-index * 100}% + ${dragPx}px))`,
-    transition: dragging ? "none" : "transform 260ms cubic-bezier(.2,.8,.25,1)",
-  };
 
   return (
     <div className="relative">
       <div
-        ref={viewportRef}
+        ref={scrollRef}
         role="button"
         tabIndex={0}
         aria-label={hasCarousel ? `${title}. Фото ${index + 1} из ${n}` : title}
         onClick={onClick}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
         onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endGesture}
-        onPointerCancel={endGesture}
-        className="block w-full cursor-pointer overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        style={{ touchAction: "pan-y" }}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => { gestureRef.current = null; tapRef.current = false; }}
+        onScroll={hasCarousel ? onScroll : undefined}
+        // display задаём в ветках, а не в общей части: block и flex — одно и то
+        // же CSS-свойство, и порядок в строке классов на победителя не влияет.
+        className={`w-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+          hasCarousel
+            ? "flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            : "block overflow-hidden"
+        }`}
       >
         {hasCarousel ? (
-          <div className="flex" style={trackStyle}>
-            {images.map((src, i) => (
-              <div key={i} className="w-full flex-none">
-                <ProductImage
-                  src={isSlideMounted(i, index) ? src : undefined}
-                  title={title} category={category} className="aspect-square w-full" compact={compact}
-                />
-              </div>
-            ))}
-          </div>
+          images.map((src, i) => (
+            <div key={i} className="w-full flex-none snap-center">
+              <ProductImage
+                src={isSlideMounted(i, index) ? src : undefined}
+                title={title} category={category} className="aspect-square w-full" compact={compact}
+              />
+            </div>
+          ))
         ) : (
           <ProductImage src={images[0]} title={title} category={category} className="aspect-square w-full" compact={compact} />
         )}
@@ -208,7 +221,7 @@ function CardCarousel({
               type="button"
               aria-label={`Показать фото ${i + 1}`}
               aria-current={i === index}
-              onClick={(e) => { e.stopPropagation(); go(i, "dot"); }}
+              onClick={(e) => { e.stopPropagation(); goToDot(i); }}
               className={`pointer-events-auto h-1.5 rounded-full shadow-soft transition-all ${
                 i === index ? "w-4 bg-white" : "w-1.5 bg-white/60"
               }`}
@@ -328,7 +341,9 @@ export default function ProductCard({ card, onLead, compact, onOpen }: Props) {
         <p className={`mt-1 text-[11px] font-medium ${card.in_stock ? "text-green" : "text-muted"}`}>
           {card.in_stock ? (card.is_available_today ? "В наличии · Сегодня" : "В наличии") : "Под заказ"}
         </p>
-        {card.in_stock && card.stock != null && card.stock > 0 && card.stock <= 5 && (
+        {/* Остаток — только у лимитированных товаров (флаг из админки), а не у
+            всего, где склад меньше пяти штук: иначе срочность ложная. */}
+        {card.is_limited && card.in_stock && card.stock != null && card.stock > 0 && (
           <p className="mt-0.5 text-[11px] font-medium text-orange">Осталось {card.stock} шт</p>
         )}
         {/* Спейсер прижимает кнопку к низу карточки при разной высоте контента */}

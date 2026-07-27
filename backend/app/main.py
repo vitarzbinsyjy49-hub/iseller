@@ -114,6 +114,11 @@ def _apply_demo_migrations() -> None:
         "CREATE INDEX IF NOT EXISTS ix_leads_lead_type ON leads (lead_type)",
         "UPDATE leads SET lead_type = 'general' WHERE lead_type IS NULL",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSON DEFAULT '[]'::json",
+        # v5.5.0: «Осталось N шт» показываем только у явно лимитированных товаров.
+        # Дефолт false => у существующих позиций подпись просто исчезает; сами
+        # складские остатки (stock) не меняются.
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS is_limited BOOLEAN DEFAULT false",
+        "UPDATE products SET is_limited = false WHERE is_limited IS NULL",
         # v4: расширение карточки товара (импорт, характеристики, матчинг фото)
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS sku VARCHAR(64)",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory VARCHAR(100)",

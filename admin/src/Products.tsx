@@ -9,6 +9,8 @@ export type Prod = {
   id: number; sku: string | null; title: string; brand: string | null; category: string | null;
   price: number; old_price: number | null; stock: number; in_stock: boolean;
   is_active: boolean; is_hot: boolean; is_available_today: boolean;
+  /** Лимитированный: только у таких витрина показывает «Осталось N шт». */
+  is_limited?: boolean;
   popularity: number; rating: number;
   // Полные поля (to_admin) — используются модалкой редактирования
   description?: string | null; specs?: Record<string, unknown>; tags?: string[];
@@ -226,6 +228,7 @@ export function Products({ token }: { token: string }) {
               <th style={thCell}>Активен</th>
               <th style={thCell}>Хит</th>
               <th style={thCell}>Сегодня</th>
+              <th style={thCell} title="Показывать на витрине «Осталось N шт»">Лимит</th>
               <th style={thCell}></th>
             </tr>
           </thead>
@@ -252,6 +255,9 @@ export function Products({ token }: { token: string }) {
                   <td style={tdCell}><Toggle on={p.is_active} onClick={() => patch(p.id, { is_active: !p.is_active })} /></td>
                   <td style={tdCell}><Toggle on={p.is_hot} color={C.yellow} onClick={() => patch(p.id, { is_hot: !p.is_hot })} /></td>
                   <td style={tdCell}><Toggle on={p.is_available_today} color={C.green} onClick={() => patch(p.id, { is_available_today: !p.is_available_today })} /></td>
+                  {/* Лимит: включает на витрине подпись «Осталось N шт». Без него
+                      остаток не показывается, каким бы маленьким склад ни был. */}
+                  <td style={tdCell}><Toggle on={!!p.is_limited} color={C.yellow} onClick={() => patch(p.id, { is_limited: !p.is_limited })} /></td>
                   <td style={tdCell}>
                     <button style={{ ...btnGhost, padding: "6px 10px", fontSize: 13 }} onClick={() => setEditing(p)}>Изменить</button>
                   </td>

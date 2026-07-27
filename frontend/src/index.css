@@ -120,10 +120,27 @@ body {
   40% { transform: translateY(-4px); opacity: 1; }
 }
 
+@keyframes pageFromRight {
+  from { opacity: .55; transform: translate3d(7%, 0, 0); }
+  to   { opacity: 1;   transform: translate3d(0, 0, 0); }
+}
+@keyframes pageFromLeft {
+  from { opacity: .55; transform: translate3d(-7%, 0, 0); }
+  to   { opacity: 1;   transform: translate3d(0, 0, 0); }
+}
+
 /* page-enter — только opacity, БЕЗ transform: fill-mode both оставляет
    transform на <main> навсегда, а transform-предок становится containing block
    для position:fixed — фиксированные CTA "прилипают" к контенту вместо viewport. */
 .page-enter   { animation: fadeIn 220ms ease-out both; }
+
+/* Направленный въезд страницы после свайпа (v5.5.0): страница приезжает с той
+   стороны, откуда её тянул палец. Здесь transform нужен, поэтому fill-mode НЕ
+   ставим — по той же причине, что описана выше: анимация доигрывает до
+   transform:none, и после неё на <main> не остаётся ни одного transform, так
+   что фиксированные CTA снова считаются от viewport. */
+.page-enter-right { animation: pageFromRight 240ms cubic-bezier(.2, .8, .25, 1); }
+.page-enter-left  { animation: pageFromLeft  240ms cubic-bezier(.2, .8, .25, 1); }
 .card-appear  { animation: fadeUp 240ms cubic-bezier(.2,.8,.3,1) both; }
 .fade-in      { animation: fadeIn 200ms ease-out both; }
 .pop-in       { animation: popIn 200ms cubic-bezier(.2,.8,.3,1) both; }

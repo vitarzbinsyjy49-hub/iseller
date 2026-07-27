@@ -26,6 +26,10 @@ export type ProductCard = {
   url: string;
   is_hot?: boolean;
   is_available_today?: boolean;
+  /** Товар помечен в админке как лимитированный: только у таких витрина
+   *  показывает «Осталось N шт». У обычных позиций малый складской остаток —
+   *  не повод изображать дефицит. */
+  is_limited?: boolean;
   tags?: string[];
   why: string[];
   buttons: CardButton[];

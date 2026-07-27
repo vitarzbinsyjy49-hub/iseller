@@ -104,6 +104,9 @@ ALLOWED_EVENTS = {
     "product_gallery_dot_clicked",
     "photo_coverage_opened",
     "photo_coverage_exported",
+    # v5.5.0: свайп-навигация между страницами. Payload — только маршрут,
+    # направление жеста и цель перехода; пользовательских данных нет.
+    "page_swiped",
 }
 
 

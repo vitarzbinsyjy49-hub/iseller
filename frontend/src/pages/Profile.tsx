@@ -5,6 +5,9 @@ import { useAuthStore } from "../store/auth";
 import { isInsideTelegram, openExternalLink } from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
 import { useFavoriteIds } from "../lib/favorites";
+import { ScenarioRequestSheet } from "../components/ScenarioSheet";
+import type { ScenarioKey } from "../lib/scenario";
+import { track } from "../lib/analytics";
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user);
@@ -12,6 +15,22 @@ export default function Profile() {
   const config = usePublicConfig();
   const [leadCount, setLeadCount] = useState<number | null>(null);
   const favCount = useFavoriteIds().length;  // из памяти, без лишнего запроса
+  // Опт / бизнес / Trade-In открывают ту же встроенную сценарную заявку, что и
+  // быстрые действия на Главной: один и тот же раздел не должен вести себя
+  // по-разному в зависимости от того, откуда в него зашли.
+  const [scenario, setScenario] = useState<ScenarioKey | null>(null);
+  // Контакт обязателен, только если менеджеру некуда ответить в Telegram.
+  const requirePhone = !user?.username;
+
+  const managerUrlFor = (k: ScenarioKey): string =>
+    (k === "trade_in" ? config.manager_tradein_url
+      : k === "b2b" ? config.manager_b2b_url
+      : config.manager_wholesale_url) || config.manager_retail_url;
+
+  function openScenario(k: ScenarioKey) {
+    track("quick_scenario_clicked", { scenario: k, from: "profile" });
+    setScenario(k);
+  }
 
   /** Открыть диалог с менеджером; если ссылка не настроена — AI-консультант. */
   function openManager(url: string) {
@@ -76,14 +95,23 @@ export default function Profile() {
         <MenuRow icon="💬" title="Написать менеджеру" subtitle="Вопросы по товарам и заказам — ответим быстро"
           onClick={() => openManager(config.manager_retail_url)} />
         <MenuRow icon="📦" title="Оптовая закупка" subtitle="Партии от 5 шт, спеццены"
-          onClick={() => openManager(config.manager_wholesale_url)} />
+          onClick={() => openScenario("wholesale")} />
         <MenuRow icon="🏢" title="Поставка для компании" subtitle="Техника для офиса, документы для юрлиц"
-          onClick={() => openManager(config.manager_b2b_url)} />
+          onClick={() => openScenario("b2b")} />
         <MenuRow icon="🔄" title="Trade-In / предложить технику" subtitle="Обменяйте старое устройство или продайте нам" last
-          onClick={() => openManager(config.manager_tradein_url)} />
+          onClick={() => openScenario("trade_in")} />
       </div>
       </div>{/* /правая колонка */}
       </div>{/* /desktop 2 колонки */}
+
+      {scenario && (
+        <ScenarioRequestSheet
+          scenario={scenario}
+          managerUrl={managerUrlFor(scenario)}
+          requirePhone={requirePhone}
+          onClose={() => setScenario(null)}
+        />
+      )}
     </div>
   );
 }

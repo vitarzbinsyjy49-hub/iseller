@@ -36,7 +36,10 @@ export type AppEvent =
   | "product_gallery_swiped"
   | "product_gallery_dot_clicked"
   | "photo_coverage_opened"
-  | "photo_coverage_exported";
+  | "photo_coverage_exported"
+  // v5.5.0: свайп-навигация между страницами. Payload — только маршруты и
+  // направление жеста (from, direction, target), ничего пользовательского.
+  | "page_swiped";
 
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();
