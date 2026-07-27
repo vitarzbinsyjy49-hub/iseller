@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     # @username or numeric -100... id. The bot must be a channel administrator.
     TELEGRAM_CHANNEL_ID: str = ""
+    # Общий секрет вебхука бота. Telegram присылает его в заголовке
+    # X-Telegram-Bot-Api-Secret-Token при каждом апдейте; без совпадения запрос
+    # отклоняется. Путь вебхука публичный (за Caddy), и это единственное, что
+    # отличает настоящий апдейт от подделки. Пусто => вебхук выключен целиком,
+    # чтобы незаданный секрет не превратился в открытый приём чего угодно.
+    TELEGRAM_WEBHOOK_SECRET: str = ""
     JWT_SECRET: str
     ACCESS_TOKEN_MINUTES: int = 30
     REFRESH_TOKEN_DAYS: int = 14
