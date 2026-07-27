@@ -271,3 +271,18 @@ def test_list_returns_facets(client, db):
     data = r.json()
     assert set(data["categories"]) == {"смартфоны"}
     assert set(data["brands"]) == {"Apple", "Samsung"}
+
+
+def test_is_limited_patchable_and_exposed_in_card(client, db):
+    """«Осталось N шт» на витрине — следствие флага is_limited, а не малого
+    склада: флаг ставится из админки и приезжает во фронтовую карточку."""
+    p = make_product(db, stock=3, in_stock=True)
+    assert p.is_limited is False           # по умолчанию дефицит не показываем
+    assert p.to_card()["is_limited"] is False
+
+    r = client.patch(f"/api/admin/products/{p.id}", json={"is_limited": True})
+    assert r.status_code == 200
+    db.refresh(p)
+    assert p.is_limited is True
+    assert p.to_card()["is_limited"] is True
+    assert p.to_admin()["is_limited"] is True

@@ -230,8 +230,9 @@ export default function ProductDetails() {
         )}
       </div>
 
-      {/* Наличие: остаток на складе */}
-      {p.in_stock && p.stock != null && p.stock > 0 && p.stock <= 5 && (
+      {/* Остаток — только у товаров, помеченных в админке как лимитированные
+          (is_limited). Малый складской остаток сам по себе дефицитом не считаем. */}
+      {p.is_limited && p.in_stock && p.stock != null && p.stock > 0 && (
         <p className="mt-1.5 text-[13px] font-medium text-orange">Осталось {p.stock} шт — успейте забрать</p>
       )}
 

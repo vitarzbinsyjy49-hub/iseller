@@ -63,6 +63,11 @@ class Product(Base):
     on_sale: Mapped[bool] = mapped_column(Boolean, default=False)
     is_hot: Mapped[bool] = mapped_column(Boolean, default=False)               # «горячее предложение»
     is_available_today: Mapped[bool] = mapped_column(Boolean, default=False)   # «можно забрать сегодня»
+    # Остаток («Осталось N шт») витрина показывает ТОЛЬКО у товаров с этим флагом.
+    # Раньше подпись включалась сама у всего, где stock <= 5, — то есть у обычных
+    # позиций с малым складским остатком, где срочность ложная. Теперь дефицит —
+    # осознанное решение контент-менеджера в админке, а не побочный эффект склада.
+    is_limited: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)             # вкл/выкл в каталоге (админка)
     warranty_months: Mapped[int] = mapped_column(Integer, default=12)
     condition: Mapped[str] = mapped_column(String(20), default="new")  # new / used / refurbished
@@ -157,6 +162,8 @@ class Product(Base):
             "url": self.url or "",
             "is_hot": self.is_hot,
             "is_available_today": self.is_available_today,
+            # Витрина показывает остаток только при is_limited (см. поле модели).
+            "is_limited": self.is_limited,
             "tags": self.tags or [],
             "why": [],
             "buttons": self._buttons(),
@@ -233,6 +240,7 @@ class Product(Base):
             "discount_percent": self.discount_percent,
             "in_stock": self.in_stock, "stock": self.stock, "is_active": self.is_active,
             "is_hot": self.is_hot, "is_available_today": self.is_available_today,
+            "is_limited": self.is_limited,
             "popularity": self.popularity, "rating": self.rating,
             # Полные поля для формы редактирования в админке (v2)
             "image": self.image, "images": self.images or [], "description": self.description,

@@ -234,6 +234,7 @@ def admin_products(
 _PRODUCT_EDITABLE = (
     "sku", "title", "brand", "category", "subcategory", "price", "old_price", "stock", "in_stock",
     "is_active", "is_hot", "is_available_today", "is_new", "on_sale",
+    "is_limited",   # v5.5.0: показывать «Осталось N шт» на витрине
     "warranty_months", "condition", "color", "memory", "storage", "screen_size", "cpu", "ram",
     "description", "specs", "tags", "image", "images", "url",
     "rating", "popularity", "margin_pct",

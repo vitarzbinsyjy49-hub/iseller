@@ -22,6 +22,12 @@ type TelegramWebApp = {
   openTelegramLink?: (url: string) => void;
   openLink?: (url: string) => void;
   HapticFeedback?: { impactOccurred: (style: string) => void };
+  BackButton?: {
+    show?: () => void;
+    hide?: () => void;
+    onClick?: (handler: () => void) => void;
+    offClick?: (handler: () => void) => void;
+  };
   viewportHeight?: number;
   viewportStableHeight?: number;
   isFullscreen?: boolean;
@@ -79,6 +85,32 @@ export function haptic(style: "light" | "medium" | "heavy" | "soft" | "rigid" = 
   } catch {
     /* нет Telegram/HapticFeedback — не мешаем */
   }
+}
+
+/** Нативная кнопка «Назад» в шапке Telegram.
+ *
+ *  Показываем её ровно на тех экранах, откуда есть куда вернуться (вложенные
+ *  экраны), и прячем на корневых вкладках — иначе кнопка обещает переход,
+ *  которого нет. Возвращает функцию снятия: обработчик обязательно нужно
+ *  отцеплять, иначе после нескольких переходов на одно нажатие сработает
+ *  несколько устаревших обработчиков.
+ *
+ *  handler = null => кнопку спрятать. Вне Telegram — тихий no-op. */
+export function setBackButton(handler: (() => void) | null): () => void {
+  const btn = getTelegram()?.BackButton;
+  if (!btn) return () => {};
+  if (!handler) {
+    try { btn.hide?.(); } catch {}
+    return () => {};
+  }
+  try {
+    btn.onClick?.(handler);
+    btn.show?.();
+  } catch {}
+  return () => {
+    try { btn.offClick?.(handler); } catch {}
+    try { btn.hide?.(); } catch {}
+  };
 }
 
 export function enterFullscreen(): void {
