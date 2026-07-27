@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qsl
 
@@ -52,9 +53,12 @@ def verify_telegram_init_data(init_data: str) -> dict:
     return json.loads(user_raw)
 
 
-def _create_token(subject: str, token_type: str, expires_delta: timedelta) -> str:
+def _create_token(subject: str, token_type: str, expires_delta: timedelta,
+                  *, jti: str | None = None) -> str:
     now = datetime.now(timezone.utc)
     payload = {"sub": subject, "type": token_type, "iat": now, "exp": now + expires_delta}
+    if jti:
+        payload["jti"] = jti
     return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 
 
@@ -63,15 +67,23 @@ def create_access_token(subject: str) -> str:
 
 
 def create_refresh_token(subject: str) -> str:
-    return _create_token(subject, "refresh", timedelta(days=settings.REFRESH_TOKEN_DAYS))
+    """Refresh-токен с уникальным jti — он одноразовый и отзывается при обмене
+    (см. app/api/auth.py::refresh и модель RevokedRefreshToken)."""
+    return _create_token(subject, "refresh", timedelta(days=settings.REFRESH_TOKEN_DAYS),
+                         jti=uuid.uuid4().hex)
 
 
 def decode_token(token: str, expected_type: str) -> str:
     """Возвращает subject токена или бросает jwt-исключение."""
+    return str(decode_token_payload(token, expected_type)["sub"])
+
+
+def decode_token_payload(token: str, expected_type: str) -> dict:
+    """Полный payload (нужен для jti/exp при ротации refresh-токенов)."""
     payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
     if payload.get("type") != expected_type:
         raise jwt.InvalidTokenError("wrong token type")
-    return str(payload["sub"])
+    return payload
 
 
 def verify_password(plain: str, hashed: str) -> bool:

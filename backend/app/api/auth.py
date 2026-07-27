@@ -12,8 +12,10 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    decode_token_payload,
     verify_telegram_init_data,
 )
+from app.services.token_revocation import is_refresh_token_revoked, revoke_refresh_token
 from app.db.audit import audit
 from app.db.session import get_db
 from app.models.user import User
@@ -87,9 +89,30 @@ def admin_login(body: AdminLoginIn, request: Request, db: Session = Depends(get_
 
 
 @router.post("/refresh", response_model=TokenPair)
-def refresh(body: RefreshIn):
+def refresh(body: RefreshIn, request: Request, db: Session = Depends(get_db)):
+    """Обмен refresh-токена на новую пару.
+
+    v5.4.2: refresh одноразовый. Предъявленный токен отзывается (его jti пишется
+    в revoked_refresh_tokens), повторное использование -> 401. Это ограничивает
+    окно украденного токена одним запросом вместо REFRESH_TOKEN_DAYS.
+
+    Совместимость: токены, выданные до этой версии, не содержат jti. Разлогинивать
+    из-за этого живых пользователей не нужно — такой токен принимается один раз и
+    меняется на новый (уже с jti). Легаси-окно закрывается само за
+    REFRESH_TOKEN_DAYS.
+    """
     try:
-        subject = decode_token(body.refresh_token, "refresh")
+        payload = decode_token_payload(body.refresh_token, "refresh")
     except jwt.PyJWTError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired refresh token")
+
+    subject = str(payload["sub"])
+    jti = payload.get("jti")
+    if jti:
+        if is_refresh_token_revoked(db, jti):
+            # токен уже был обменян: либо повтор, либо кража -> не продлеваем
+            audit(db, subject, "refresh_token_reuse_rejected", ip=client_ip(request))
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired refresh token")
+        revoke_refresh_token(db, jti=jti, subject=subject, exp=payload.get("exp"))
+
     return _token_pair(subject)

@@ -27,6 +27,7 @@ from app.models.product import Product  # noqa: F401 — регистрация 
 from app.models.user import User  # noqa: F401 — регистрация таблицы (FK избранного)
 from app.models.favorite import ProductFavorite  # noqa: F401 — регистрация таблицы
 from app.models.product_image_group import ProductImageGroup  # noqa: F401 — регистрация таблицы
+from app.models.revoked_token import RevokedRefreshToken  # noqa: F401 — регистрация таблицы
 from app.models.user_product_event import UserProductEvent  # noqa: F401 — регистрация таблицы
 
 

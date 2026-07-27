@@ -38,7 +38,18 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return res.json();
 }
 
+/** Идущий сейчас обмен токена. Refresh одноразовый (backend отзывает его jti),
+ *  поэтому параллельные 401 обязаны ждать ОДИН общий запрос: иначе второй
+ *  предъявит уже отозванный токен, получит 401 и разлогинит пользователя. */
+let refreshInFlight: Promise<boolean> | null = null;
+
 async function tryRefresh(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = doRefresh().finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+async function doRefresh(): Promise<boolean> {
   const { refreshToken, setTokens, clear } = useAuthStore.getState();
   if (!refreshToken) return false;
   const res = await fetch(`${BASE}/auth/refresh`, {
