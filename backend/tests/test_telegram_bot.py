@@ -235,3 +235,17 @@ def test_webhook_does_not_leak_internals(client, monkeypatch):
                     headers={"X-Telegram-Bot-Api-Secret-Token": SECRET})
     assert r.json() == {"ok": True}
     assert "секрет" not in r.text
+
+
+# ---------------------------------------------------------------- setup-скрипт
+
+def test_setup_script_never_prints_the_webhook_secret():
+    """Вывод скрипта попадает в логи деплоя и в переписку — секрета там быть не должно."""
+    from app.scripts.setup_bot import _redact
+
+    payload = {"url": "https://shop.example.com/api/telegram/webhook",
+               "secret_token": "s3cr3t-value", "allowed_updates": ["message"]}
+    printed = _redact(payload)
+    assert printed["secret_token"] == "<скрыто>"
+    assert "s3cr3t-value" not in str(printed)
+    assert printed["url"] == payload["url"]        # несекретные поля видны как есть

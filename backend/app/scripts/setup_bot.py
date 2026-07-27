@@ -27,9 +27,19 @@ from app.core.config import settings
 from app.services.telegram_bot import BOT_COMMANDS, MENU_BUTTON_TEXT, TELEGRAM_API
 
 
+#: Ключи payload, значения которых нельзя печатать. Вывод скрипта попадает в
+#: логи деплоя и в переписку, а secret_token — это то единственное, чем вебхук
+#: отличает настоящий апдейт Telegram от подделки.
+_SECRET_KEYS = frozenset({"secret_token"})
+
+
+def _redact(payload: dict) -> dict:
+    return {k: ("<скрыто>" if k in _SECRET_KEYS else v) for k, v in payload.items()}
+
+
 def _call(method: str, payload: dict, *, dry_run: bool) -> dict:
     if dry_run:
-        print(f"[dry-run] {method} <- {json.dumps(payload, ensure_ascii=False)}")
+        print(f"[dry-run] {method} <- {json.dumps(_redact(payload), ensure_ascii=False)}")
         return {"ok": True, "result": "dry-run"}
     response = httpx.post(
         f"{TELEGRAM_API}/bot{settings.TELEGRAM_BOT_TOKEN}/{method}",
