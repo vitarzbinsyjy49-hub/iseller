@@ -1,0 +1,181 @@
+"""Тесты слоя отправки/редактирования (v5.6.0).
+
+Прайс-посты обновляются пачкой по десятку сообщений, поэтому проверяется
+главным образом устойчивость: 429 с retry_after, сетевые сбои, отличие
+«нечего менять» от настоящей ошибки, и отсутствие секретов в логах.
+"""
+import httpx
+import pytest
+
+from app.core.config import settings
+from app.services import telegram_publisher as tp
+
+
+@pytest.fixture(autouse=True)
+def configured(monkeypatch):
+    monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "test-token", raising=False)
+    monkeypatch.setattr(settings, "TELEGRAM_CHANNEL_ID", "@channel", raising=False)
+    monkeypatch.setattr(settings, "TELEGRAM_PROXY_URL", "", raising=False)
+    # Сон подменяем, иначе тест на backoff ждал бы по-настоящему.
+    monkeypatch.setattr(tp, "_sleep", lambda seconds: None)
+
+
+class FakeResponse:
+    def __init__(self, payload: dict, status_code: int = 200):
+        self._payload = payload
+        self.status_code = status_code
+        self.is_success = status_code < 400
+
+    def json(self):
+        return self._payload
+
+
+def fake_post(responses: list):
+    """Отдаёт заготовленные ответы по очереди, записывая отправленные payload."""
+    sent: list[dict] = []
+
+    def _post(url, **kwargs):
+        sent.append(kwargs.get("json"))
+        item = responses[min(len(sent) - 1, len(responses) - 1)]
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    _post.sent = sent
+    return _post
+
+
+OK = FakeResponse({"ok": True, "result": {"message_id": 42}})
+
+
+# ---------------------------------------------------------------- отправка
+
+def test_send_message_with_keyboard(monkeypatch):
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    keyboard = [[{"text": "🛍 Открыть раздел", "web_app": {"url": "https://a/catalog"}}]]
+    message_id = tp.send_message(text="прайс", keyboard=keyboard)
+
+    assert message_id == 42
+    payload = post.sent[0]
+    assert payload["reply_markup"] == {"inline_keyboard": keyboard}
+    assert payload["parse_mode"] == "HTML"
+    assert payload["disable_web_page_preview"] is True
+
+
+def test_send_message_without_keyboard_omits_markup(monkeypatch):
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+    tp.send_message(text="прайс")
+    assert "reply_markup" not in post.sent[0]
+
+
+def test_publishing_requires_channel(monkeypatch):
+    monkeypatch.setattr(settings, "TELEGRAM_CHANNEL_ID", "", raising=False)
+    with pytest.raises(tp.TelegramPublishError):
+        tp.send_message(text="прайс")
+
+
+# ---------------------------------------------------------------- редактирование
+
+def test_edit_message_updates_existing_id(monkeypatch):
+    post = fake_post([FakeResponse({"ok": True, "result": {"message_id": 7}})])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    assert tp.edit_message(message_id=7, text="новый прайс") is True
+    assert post.sent[0]["message_id"] == 7
+
+
+def test_edit_returns_false_when_nothing_changed(monkeypatch):
+    """Повторное обновление без изменений — норма, а не сбой."""
+    post = fake_post([FakeResponse(
+        {"ok": False, "description": "Bad Request: message is not modified"}, 400)])
+    monkeypatch.setattr(tp.httpx, "post", post)
+    assert tp.edit_message(message_id=7, text="то же самое") is False
+
+
+def test_edit_raises_on_real_error(monkeypatch):
+    post = fake_post([FakeResponse(
+        {"ok": False, "description": "Bad Request: message to edit not found"}, 400)])
+    monkeypatch.setattr(tp.httpx, "post", post)
+    with pytest.raises(tp.TelegramPublishError, match="not found"):
+        tp.edit_message(message_id=999, text="прайс")
+
+
+def test_edit_reply_markup_only(monkeypatch):
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+    keyboard = [[{"text": "📱 iPhone", "url": "https://t.me/c/1/2"}]]
+
+    assert tp.edit_reply_markup(message_id=5, keyboard=keyboard) is True
+    payload = post.sent[0]
+    assert payload["reply_markup"] == {"inline_keyboard": keyboard}
+    assert "text" not in payload      # текст навигационного поста не трогаем
+
+
+# ---------------------------------------------------------------- 429 и сбои
+
+def test_rate_limit_is_retried_after_the_requested_pause(monkeypatch):
+    slept: list[float] = []
+    monkeypatch.setattr(tp, "_sleep", lambda s: slept.append(s))
+    post = fake_post([
+        FakeResponse({"ok": False, "description": "Too Many Requests",
+                      "parameters": {"retry_after": 3}}, 429),
+        OK,
+    ])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    assert tp.send_message(text="прайс") == 42
+    assert slept == [3]
+
+
+def test_long_rate_limit_surfaces_to_the_admin(monkeypatch):
+    """Держать запрос админки минутами хуже, чем честно сказать «повторите позже»."""
+    post = fake_post([FakeResponse(
+        {"ok": False, "description": "Too Many Requests",
+         "parameters": {"retry_after": tp.MAX_RETRY_AFTER + 5}}, 429)])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    with pytest.raises(tp.TelegramRateLimited) as exc:
+        tp.send_message(text="прайс")
+    assert exc.value.retry_after == tp.MAX_RETRY_AFTER + 5
+
+
+def test_network_failure_is_retried_then_reported(monkeypatch):
+    post = fake_post([httpx.ConnectError("нет сети")])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    with pytest.raises(tp.TelegramPublishError, match="unavailable"):
+        tp.send_message(text="прайс")
+    assert len(post.sent) == tp.MAX_ATTEMPTS
+
+
+def test_network_failure_recovers_if_a_retry_succeeds(monkeypatch):
+    post = fake_post([httpx.ConnectError("нет сети"), OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+    assert tp.send_message(text="прайс") == 42
+
+
+def test_business_errors_are_not_retried(monkeypatch):
+    """«chat not found» от повтора не исправится — только жжём лимит."""
+    post = fake_post([FakeResponse({"ok": False, "description": "Bad Request: chat not found"}, 400)])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    with pytest.raises(tp.TelegramPublishError):
+        tp.send_message(text="прайс")
+    assert len(post.sent) == 1
+
+
+def test_logs_do_not_contain_message_text_or_chat(monkeypatch, caplog):
+    post = fake_post([FakeResponse({"ok": False, "description": "Bad Request: chat not found"}, 400)])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    with caplog.at_level("WARNING"):
+        with pytest.raises(tp.TelegramPublishError):
+            tp.send_message(text="СЕКРЕТНЫЙ ТЕКСТ ПОСТА")
+
+    logged = caplog.text
+    assert "СЕКРЕТНЫЙ ТЕКСТ ПОСТА" not in logged
+    assert "test-token" not in logged
+    assert "chat not found" in logged      # причина сбоя видна

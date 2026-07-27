@@ -1,0 +1,421 @@
+"""Генерация постоянных прайс-постов канала (v5.6.0) — чистая логика без сети.
+
+Модель работы, ради которой всё и затевалось: прайс-пост публикуется в канал
+ОДИН раз, а дальше редактируется на том же message_id. Поэтому у каждого
+раздела есть стабильный slug: он переживает перегенерацию и связывает
+«раздел каталога» с «конкретным сообщением в Telegram». Никакая перестановка
+товаров, смена цен или деление длинного поста на части не должны менять slug —
+иначе система потеряет сообщение и опубликует дубль.
+
+Здесь нет ни одного обращения к Telegram и к БД: на вход — список товаров
+(обычные словари), на выход — готовые тексты и клавиатуры. Так всё поведение
+(группировка, форматирование, лимит 4096, escaping, diff) проверяется тестами.
+"""
+from __future__ import annotations
+
+import hashlib
+import re
+from dataclasses import dataclass, field
+from datetime import date
+from html import escape
+
+# Telegram режет сообщение на 4096 символах. Держим запас на служебные строки
+# («Часть 2 из 2», дата) и на неточности подсчёта entity — лучше лишний раз
+# разделить пост, чем получить отказ на публикации.
+TELEGRAM_TEXT_LIMIT = 4096
+SAFE_TEXT_LIMIT = 3900
+
+
+@dataclass(frozen=True)
+class Section:
+    """Раздел прайса: стабильный slug + правило отбора товаров."""
+    slug: str
+    emoji: str
+    title: str
+    #: (category, subcategory) — subcategory None означает «любая в категории».
+    match: tuple[tuple[str | None, str | None], ...]
+    brand: str | None = None
+    #: Подзаголовки внутри поста, в этом порядке; остальное уходит в конец.
+    subgroups: tuple[str, ...] = ()
+    #: Маршрут Mini App для кнопки «Открыть раздел».
+    route: str = "/catalog"
+
+
+#: Порядок разделов = порядок кнопок в навигационном посте.
+SECTIONS: tuple[Section, ...] = (
+    Section("price_iphone", "📱", "iPhone", ((("смартфоны", "iPhone"),)),
+            route="/catalog?category=смартфоны&subcategory=iPhone"),
+    Section("price_airpods", "🎧", "AirPods", ((("наушники", "AirPods"),)),
+            route="/catalog?category=наушники&subcategory=AirPods"),
+    Section("price_macbook_air", "💻", "MacBook Air", ((("ноутбуки", "MacBook Air"),)),
+            route="/catalog?category=ноутбуки&subcategory=MacBook%20Air"),
+    Section("price_macbook_pro", "💻", "MacBook Pro", ((("ноутбуки", "MacBook Pro"),)),
+            route="/catalog?category=ноутбуки&subcategory=MacBook%20Pro"),
+    Section("price_ipad", "📱", "iPad", ((("планшеты", None),)),
+            route="/catalog?category=планшеты"),
+    Section("price_watch", "⌚", "Apple Watch", ((("часы", None),)),
+            route="/catalog?category=часы"),
+    Section("price_playstation", "🎮", "PlayStation", ((("консоли", None),)),
+            subgroups=("Консоли", "Аксессуары PlayStation"),
+            route="/catalog?category=консоли"),
+    Section("price_dyson_hair", "💨", "Dyson для волос", ((("красота", None),)),
+            brand="Dyson", subgroups=("Стайлеры", "Фены", "Выпрямители"),
+            route="/catalog?brand=Dyson&category=красота"),
+    Section("price_dyson_vacuum", "🧹", "Dyson пылесосы",
+            ((("бытовая техника", "Пылесосы"),)), brand="Dyson",
+            route="/catalog?brand=Dyson&subcategory=Пылесосы"),
+    Section("price_dyson_climate", "🌬", "Dyson климат",
+            ((("бытовая техника", "Климатическая техника"),)), brand="Dyson",
+            route="/catalog?brand=Dyson&subcategory=Климатическая%20техника"),
+)
+
+SECTIONS_BY_SLUG = {s.slug: s for s in SECTIONS}
+
+NAVIGATION_SLUG = "price_navigation"
+
+DISCLAIMER = (
+    "Цены AI Seller.\n"
+    "Наличие, регион и комплектацию подтверждает менеджер."
+)
+
+
+# ---------------------------------------------------------------- форматирование
+
+def format_price(value: float | int) -> str:
+    """«89 500 ₽» — разряды отбиваются пробелом, копейки не показываем.
+
+    Используем ОБЫЧНЫЙ пробел, а не неразрывный: цену из канала часто копируют
+    в переписку и в поиск, и невидимый U+00A0 там ломает совпадение.
+    """
+    return f"{int(round(float(value))):,}".replace(",", " ") + " ₽"
+
+
+def shorten_title(title: str, brand: str | None, section: Section) -> str:
+    """Убрать из названия то, что уже сказано разделом.
+
+    Срезаем ТОЛЬКО ведущее имя бренда и дублирующее имя раздела: «Apple iPhone
+    17 Pro 256 Blue» в разделе iPhone читается как «iPhone 17 Pro 256 Blue».
+    Всё, что отличает товары друг от друга — память, размер, цвет, регион, SIM,
+    комплектация — не трогаем никогда: именно по этим словам покупатель и
+    выбирает, и потерять их значит слить разные позиции в одинаковые строки.
+    """
+    result = title.strip()
+    if brand and result.lower().startswith(brand.lower() + " "):
+        result = result[len(brand) + 1:]
+    return result.strip()
+
+
+def product_line(product: dict, section: Section) -> str:
+    """Одна строка прайса. Всё пользовательское — через HTML-escape."""
+    name = escape(shorten_title(product["title"], product.get("brand"), section))
+    price = escape(format_price(product["price"]))
+    line = f"• {name} — {price}"
+    old = product.get("old_price")
+    # Старую цену показываем ТОЛЬКО когда она реально выше текущей: иначе это
+    # выдуманная скидка, а её в прайсе быть не должно.
+    if old and float(old) > float(product["price"]):
+        line += f" <s>{escape(format_price(old))}</s>"
+    return line
+
+
+def sort_key(product: dict) -> tuple:
+    """Внутри подгруппы — по цене, затем по названию.
+
+    Порядок обязан быть детерминированным: пост сравнивается сам с собой между
+    прогонами, и «шевеление» строк от случайного порядка выдало бы ложный diff
+    и лишнее редактирование сообщения.
+    """
+    return (float(product["price"]), product["title"])
+
+
+# ---------------------------------------------------------------- отбор товаров
+
+def matches(product: dict, section: Section) -> bool:
+    if section.brand and (product.get("brand") or "") != section.brand:
+        return False
+    category = product.get("category")
+    subcategory = product.get("subcategory")
+    for want_cat, want_sub in section.match:
+        if category != want_cat:
+            continue
+        if want_sub is None or subcategory == want_sub:
+            return True
+    return False
+
+
+def select_products(products: list[dict], section: Section) -> list[dict]:
+    """Активные товары раздела. Выключенные в админке в прайс не попадают."""
+    return [p for p in products if p.get("is_active", True) and matches(p, section)]
+
+
+def group_by_subgroup(products: list[dict], section: Section) -> list[tuple[str | None, list[dict]]]:
+    """Разбить на подгруппы в заданном разделом порядке.
+
+    Подгруппы, которых нет в списке section.subgroups, идут в конце по алфавиту —
+    новая подкатегория в каталоге не должна потеряться из поста молча.
+    """
+    buckets: dict[str | None, list[dict]] = {}
+    for product in products:
+        buckets.setdefault(product.get("subcategory"), []).append(product)
+
+    ordered: list[tuple[str | None, list[dict]]] = []
+    for name in section.subgroups:
+        if name in buckets:
+            ordered.append((name, sorted(buckets.pop(name), key=sort_key)))
+    for name in sorted(buckets, key=lambda x: (x is None, x or "")):
+        ordered.append((name, sorted(buckets[name], key=sort_key)))
+
+    # Раздел без объявленных подгрупп и с единственной подкатегорией не должен
+    # получать бессмысленный подзаголовок, повторяющий заголовок поста.
+    if not section.subgroups and len(ordered) == 1:
+        return [(None, ordered[0][1])]
+    return ordered
+
+
+# ---------------------------------------------------------------- сборка постов
+
+@dataclass
+class RenderedPost:
+    """Готовый пост: slug привязывает его к сообщению в Telegram навсегда."""
+    slug: str
+    section_slug: str
+    title: str
+    text: str
+    item_count: int
+    part: int = 1
+    parts_total: int = 1
+    keyboard: list[list[dict]] = field(default_factory=list)
+
+
+def _header(section: Section, on_date: date) -> str:
+    return (
+        f"{section.emoji} <b>{escape(section.title.upper())} — АКТУАЛЬНЫЙ ПРАЙС</b>\n"
+        f"\n{DISCLAIMER}\n"
+    )
+
+
+def _footer(on_date: date) -> str:
+    return f"\n\nАктуально на: {on_date.strftime('%d.%m.%Y')}"
+
+
+def render_section(
+    products: list[dict], section: Section, on_date: date, mini_app_url: str,
+    manager_url: str = "",
+) -> list[RenderedPost]:
+    """Собрать пост(ы) раздела. Длинный раздел делится по границам подгрупп.
+
+    Деление идёт ТОЛЬКО между подгруппами и никогда не режет товарную строку.
+    Если одна подгруппа сама по себе не влезает — делим её по товарам, но
+    строку по-прежнему оставляем целой: обрезанное название с половиной цены
+    хуже, чем лишнее сообщение.
+    """
+    selected = select_products(products, section)
+    if not selected:
+        return []
+
+    header = _header(section, on_date)
+    footer = _footer(on_date)
+    groups = group_by_subgroup(selected, section)
+
+    # Собираем «блоки» — подзаголовок со своими строками; блок неделим по
+    # умолчанию и режется только если сам по себе превышает лимит.
+    blocks: list[list[str]] = []
+    for name, items in groups:
+        lines = [product_line(p, section) for p in items]
+        block: list[str] = ([f"\n<b>{escape(name)}</b>\n"] if name else [])
+        for line in lines:
+            candidate = block + [line]
+            if len("\n".join(candidate)) > SAFE_TEXT_LIMIT - len(header) - len(footer):
+                blocks.append(block)
+                block = ([f"\n<b>{escape(name)} (продолжение)</b>\n"] if name else []) + [line]
+            else:
+                block = candidate
+        if block:
+            blocks.append(block)
+
+    # Складываем блоки в посты, пока помещаются.
+    pages: list[list[str]] = []
+    current: list[str] = []
+    for block in blocks:
+        candidate = current + block
+        body = "\n".join(candidate)
+        if current and len(header) + len(body) + len(footer) + 40 > SAFE_TEXT_LIMIT:
+            pages.append(current)
+            current = block
+        else:
+            current = candidate
+    if current:
+        pages.append(current)
+
+    total = len(pages)
+    posts: list[RenderedPost] = []
+    for index, page in enumerate(pages, start=1):
+        # slug части: базовый slug у первой части, чтобы уже опубликованный
+        # раздел не «переехал» на новый идентификатор, когда пост впервые
+        # перерос лимит и разделился надвое.
+        slug = section.slug if index == 1 else f"{section.slug}_p{index}"
+        part_note = f"\n<i>Часть {index} из {total}</i>\n" if total > 1 else ""
+        text = header + part_note + "\n".join(page) + footer
+        posts.append(RenderedPost(
+            slug=slug,
+            section_slug=section.slug,
+            title=f"{section.title}" + (f" (часть {index})" if total > 1 else ""),
+            text=text,
+            item_count=sum(1 for line in page if line.startswith("•")),
+            part=index,
+            parts_total=total,
+            keyboard=section_keyboard(section, mini_app_url, manager_url),
+        ))
+    return posts
+
+
+def render_all(
+    products: list[dict], on_date: date, mini_app_url: str, manager_url: str = "",
+) -> list[RenderedPost]:
+    posts: list[RenderedPost] = []
+    for section in SECTIONS:
+        posts.extend(render_section(products, section, on_date, mini_app_url, manager_url))
+    return posts
+
+
+# ---------------------------------------------------------------- клавиатуры
+
+def _web_app_button(text: str, mini_app_url: str, route: str) -> dict | None:
+    base = (mini_app_url or "").strip().rstrip("/")
+    if not base.startswith("https://"):
+        return None
+    return {"text": text, "web_app": {"url": f"{base}{route}"}}
+
+
+def _url_button(text: str, url: str) -> dict | None:
+    u = (url or "").strip()
+    return {"text": text, "url": u} if u.startswith("https://") else None
+
+
+def _rows(*rows: list[dict]) -> list[list[dict]]:
+    return [[b for b in row if b] for row in rows if any(row)]
+
+
+def section_keyboard(section: Section, mini_app_url: str, manager_url: str = "") -> list[list[dict]]:
+    return _rows(
+        [_web_app_button("🛍 Открыть раздел", mini_app_url, section.route)],
+        [
+            _web_app_button("✨ Подобрать с AI", mini_app_url, "/ai"),
+            _url_button("💬 Менеджер", manager_url),
+        ],
+    )
+
+
+def message_link(channel_id: int | str, message_id: int) -> str:
+    """Ссылка на сообщение канала для кнопки навигации.
+
+    Приватные каналы адресуются как t.me/c/<id без -100>/<message_id>;
+    у публичного канала с @username работает t.me/<username>/<message_id>.
+    """
+    raw = str(channel_id)
+    if raw.startswith("@"):
+        return f"https://t.me/{raw[1:]}/{message_id}"
+    internal = raw[4:] if raw.startswith("-100") else raw.lstrip("-")
+    return f"https://t.me/c/{internal}/{message_id}"
+
+
+def navigation_text(on_date: date) -> str:
+    return (
+        "⬇️ <b>ПРАЙС AI SELLER</b> ⬇️\n"
+        f"Актуально на {on_date.strftime('%d.%m.%Y')}\n"
+        "\nВыберите нужный раздел:"
+    )
+
+
+def navigation_keyboard(
+    published: dict[str, int], channel_id: int | str, mini_app_url: str, manager_url: str = "",
+) -> list[list[dict]]:
+    """Кнопки навигации ведут на КОНКРЕТНЫЕ опубликованные посты.
+
+    Раздел без message_id пропускаем: кнопка, ведущая в никуда, хуже её
+    отсутствия. Поэтому навигацию всегда обновляют ПОСЛЕ публикации разделов.
+    """
+    rows: list[list[dict]] = []
+    for section in SECTIONS:
+        message_id = published.get(section.slug)
+        if not message_id:
+            continue
+        rows.append([{
+            "text": f"{section.emoji} {section.title}",
+            "url": message_link(channel_id, message_id),
+        }])
+    tail = _rows(
+        [_web_app_button("🛍 Весь каталог", mini_app_url, "/catalog")],
+        [
+            _web_app_button("✨ Подобрать с AI", mini_app_url, "/ai"),
+            _url_button("💬 Менеджер", manager_url),
+        ],
+    )
+    return rows + tail
+
+
+# ---------------------------------------------------------------- diff и хэш
+
+def catalog_fingerprint(products: list[dict]) -> str:
+    """Отпечаток каталога: меняется ровно тогда, когда меняется прайс.
+
+    В него входит только то, что видно в посте (sku, название, цена, старая
+    цена, активность). Правки описания или фото пост не меняют и не должны
+    провоцировать перепубликацию.
+    """
+    parts = sorted(
+        f"{p.get('sku') or p.get('id')}|{p['title']}|{p['price']}|{p.get('old_price') or ''}|{int(bool(p.get('is_active', True)))}"
+        for p in products
+    )
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+@dataclass
+class PriceDiff:
+    """Что изменится в разделе, если его обновить."""
+    slug: str
+    price_changes: list[tuple[str, float, float]] = field(default_factory=list)
+    added: list[str] = field(default_factory=list)
+    removed: list[str] = field(default_factory=list)
+    text_changed: bool = False
+    over_limit: bool = False
+
+    @property
+    def has_changes(self) -> bool:
+        return bool(self.price_changes or self.added or self.removed or self.text_changed)
+
+
+_LINE_RE = re.compile(r"^• (?P<name>.+?) — (?P<price>[\d  ]+) ₽", re.MULTILINE)
+
+
+def parse_lines(text: str) -> dict[str, float]:
+    """Разобрать опубликованный текст обратно в {название: цена}.
+
+    Нужно, чтобы показать администратору настоящий diff против того, что
+    ЛЕЖИТ В КАНАЛЕ, а не против нашей прошлой генерации: между прогонами пост
+    могли поправить руками, и сравнение с собственным кэшем это скрыло бы.
+    """
+    result: dict[str, float] = {}
+    for match in _LINE_RE.finditer(text):
+        price = match.group("price").replace(" ", "").replace(" ", "")
+        try:
+            result[match.group("name").strip()] = float(price)
+        except ValueError:
+            continue
+    return result
+
+
+def diff_posts(old_text: str, new: RenderedPost) -> PriceDiff:
+    old_lines = parse_lines(old_text or "")
+    new_lines = parse_lines(new.text)
+    diff = PriceDiff(slug=new.slug)
+
+    for name, price in new_lines.items():
+        if name not in old_lines:
+            diff.added.append(name)
+        elif old_lines[name] != price:
+            diff.price_changes.append((name, old_lines[name], price))
+    diff.removed = [name for name in old_lines if name not in new_lines]
+    diff.text_changed = (old_text or "").strip() != new.text.strip()
+    diff.over_limit = len(new.text) > TELEGRAM_TEXT_LIMIT
+    return diff
