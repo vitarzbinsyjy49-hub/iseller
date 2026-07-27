@@ -24,6 +24,18 @@ from app.core.config import settings
 
 TELEGRAM_API = "https://api.telegram.org"
 
+
+def telegram_http_kwargs() -> dict:
+    """Аргументы httpx для обращений к Telegram: прокси, если он настроен.
+
+    Единая точка на весь проект, чтобы ответы бота и публикация постов в канал
+    не разъехались: если Telegram доступен только через прокси, это верно для
+    ВСЕХ исходящих обращений к нему, а не для какого-то одного места.
+    """
+    proxy = (settings.TELEGRAM_PROXY_URL or "").strip()
+    return {"proxy": proxy} if proxy else {}
+
+
 WELCOME = (
     "Добро пожаловать в AI Seller 👋\n"
     "\n"
@@ -197,6 +209,7 @@ def send_reply(chat_id: int | str, reply: Reply) -> None:
         f"{TELEGRAM_API}/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage",
         json=payload,
         timeout=15,
+        **telegram_http_kwargs(),
     )
     data = response.json()
     if not data.get("ok"):

@@ -24,7 +24,12 @@ import sys
 import httpx
 
 from app.core.config import settings
-from app.services.telegram_bot import BOT_COMMANDS, MENU_BUTTON_TEXT, TELEGRAM_API
+from app.services.telegram_bot import (
+    BOT_COMMANDS,
+    MENU_BUTTON_TEXT,
+    TELEGRAM_API,
+    telegram_http_kwargs,
+)
 
 
 #: Ключи payload, значения которых нельзя печатать. Вывод скрипта попадает в
@@ -45,6 +50,7 @@ def _call(method: str, payload: dict, *, dry_run: bool) -> dict:
         f"{TELEGRAM_API}/bot{settings.TELEGRAM_BOT_TOKEN}/{method}",
         json=payload,
         timeout=20,
+        **telegram_http_kwargs(),
     )
     data = response.json()
     if not data.get("ok"):
@@ -111,6 +117,7 @@ def main() -> int:
     if not args.dry_run:
         info = httpx.get(
             f"{TELEGRAM_API}/bot{settings.TELEGRAM_BOT_TOKEN}/getWebhookInfo", timeout=20,
+            **telegram_http_kwargs(),
         ).json().get("result", {})
         # Токен в URL не печатаем — в нашей схеме его там нет, но подстрахуемся.
         safe = {k: v for k, v in info.items() if k != "url"}

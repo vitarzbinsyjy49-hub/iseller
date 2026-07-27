@@ -249,3 +249,44 @@ def test_setup_script_never_prints_the_webhook_secret():
     assert printed["secret_token"] == "<скрыто>"
     assert "s3cr3t-value" not in str(printed)
     assert printed["url"] == payload["url"]        # несекретные поля видны как есть
+
+
+# ---------------------------------------------------------------- прокси
+
+def test_no_proxy_by_default(monkeypatch):
+    from app.services.telegram_bot import telegram_http_kwargs
+
+    monkeypatch.setattr(settings, "TELEGRAM_PROXY_URL", "", raising=False)
+    assert telegram_http_kwargs() == {}
+
+
+def test_proxy_is_used_when_configured(monkeypatch):
+    """Сеть некоторых хостингов не пропускает Telegram: входящий вебхук доходит,
+    а исходящие ответы бота — нет. Тогда обращения идут через прокси."""
+    from app.services.telegram_bot import telegram_http_kwargs
+
+    monkeypatch.setattr(settings, "TELEGRAM_PROXY_URL", " socks5://127.0.0.1:40000 ", raising=False)
+    assert telegram_http_kwargs() == {"proxy": "socks5://127.0.0.1:40000"}
+
+
+def test_channel_publishing_uses_the_same_proxy(monkeypatch):
+    """Публикация постов в канал ходит в тот же api.telegram.org — если он
+    доступен только через прокси, это верно и для неё."""
+    import app.services.telegram_publisher as publisher
+
+    monkeypatch.setattr(settings, "TELEGRAM_PROXY_URL", "socks5://127.0.0.1:40000", raising=False)
+    monkeypatch.setattr(settings, "TELEGRAM_CHANNEL_ID", "@channel", raising=False)
+    seen: dict = {}
+
+    class FakeResponse:
+        is_success = True
+        def json(self):
+            return {"ok": True, "result": {"message_id": 1}}
+
+    def fake_post(url, **kwargs):
+        seen.update(kwargs)
+        return FakeResponse()
+
+    monkeypatch.setattr(publisher.httpx, "post", fake_post)
+    publisher.publish_post(title="t", body="b", image_url=None)
+    assert seen.get("proxy") == "socks5://127.0.0.1:40000"

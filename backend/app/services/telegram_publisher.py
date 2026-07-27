@@ -3,6 +3,7 @@ from html import escape
 import httpx
 
 from app.core.config import settings
+from app.services.telegram_bot import telegram_http_kwargs
 
 
 class TelegramPublishError(RuntimeError):
@@ -34,7 +35,8 @@ def publish_post(*, title: str, body: str, image_url: str | None) -> int:
         payload = {"chat_id": settings.TELEGRAM_CHANNEL_ID, "text": text[:4096], "parse_mode": "HTML"}
 
     try:
-        response = httpx.post(f"{base}/{method}", json=payload, timeout=20)
+        response = httpx.post(f"{base}/{method}", json=payload, timeout=20,
+                              **telegram_http_kwargs())
         data = response.json()
     except (httpx.HTTPError, ValueError) as exc:
         raise TelegramPublishError("Telegram is unavailable") from exc
