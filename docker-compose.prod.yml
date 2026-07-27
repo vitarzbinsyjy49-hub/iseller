@@ -40,6 +40,25 @@ services:
     # порт наружу не пробрасываем — Caddy ходит к backend:8000 по внутренней сети
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
+  # Telegram-бот: long polling вместо вебхука.
+  #
+  # Сеть хостинга режет трафик Telegram В ОБЕ СТОРОНЫ (подтверждено поддержкой
+  # HOSTKEY — региональное ограничение). Исходящие лечатся прокси
+  # (TELEGRAM_PROXY_URL), а входящие соединения от серверов Telegram до нас не
+  # доходят: вебхук получал «Connection timed out», сообщения зависали в очереди
+  # Telegram недоставленными. При polling соединение инициируем мы — тем же
+  # исходящим каналом, который уже работает.
+  #
+  # Экземпляр строго ОДИН: два параллельных getUpdates по одному токену Telegram
+  # отвергает с 409 Conflict. Никаких реплик и никакого scale для этого сервиса.
+  bot:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - backend
+    command: python -m app.scripts.bot_polling
+
   frontend:
     build:
       context: ./frontend
