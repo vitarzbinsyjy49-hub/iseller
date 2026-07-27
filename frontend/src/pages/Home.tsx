@@ -14,6 +14,7 @@ import { ProfileChip } from "../components/ProfileChip";
 import { ErrorState } from "../components/StateViews";
 import SearchPanel from "../components/SearchPanel";
 import { pushSearchQuery } from "../lib/searchHistory";
+import { safeExternalUrl, safeInternalRoute } from "../lib/route";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
@@ -30,13 +31,15 @@ type HomeCat = {
 };
 type HomeData = { banners: HomeBanner[]; categories: HomeCat[] };
 
-/** Куда ведёт клик по баннеру/категории (общая маршрутизация action-ов). */
+/** Куда ведёт клик по баннеру/категории (общая маршрутизация action-ов).
+ * Значения приходят из админки, поэтому результат проходит через
+ * safeInternalRoute: наружу увести переходом нельзя (см. lib/route.ts). */
 function actionRoute(type: string, value?: string | null): string {
   const v = (value ?? "").trim();
   switch (type) {
     case "category": return `/catalog?category=${encodeURIComponent(v)}`;
     case "search": return `/catalog?query=${encodeURIComponent(v)}`;
-    case "product": return `/product/${v}`;
+    case "product": return safeInternalRoute(`/product/${encodeURIComponent(v)}`);
     case "collection": return `/catalog?collection=${encodeURIComponent(v)}`;
     case "ai": return v ? `/ai?q=${encodeURIComponent(v)}` : "/ai";
     default: return "/catalog";
@@ -282,7 +285,7 @@ export default function Home() {
           {heroChips.map((c) => (
             <button
               key={c.key}
-              onClick={() => navigate(c.route)}
+              onClick={() => navigate(safeInternalRoute(c.route))}
               className="tap shrink-0 whitespace-nowrap rounded-full bg-white/[0.13] px-4 py-2 text-[13px] font-semibold text-[color:var(--app-hero-chip-ink)] transition-colors hover:bg-white/20"
             >
               {c.label}
@@ -304,7 +307,7 @@ export default function Home() {
       <QuickScenarios
         onCatalog={(route, scenarioKey) => {
           track("quick_scenario_clicked", { scenario: scenarioKey });
-          navigate(route);
+          navigate(safeInternalRoute(route));
         }}
         onScenario={openScenario}
         onMacbook={openMacbook}
@@ -315,7 +318,7 @@ export default function Home() {
         <HomeSidebar
           categories={categories}
           homeCats={home?.categories ?? []}
-          onCategory={(route) => navigate(route)}
+          onCategory={(route) => navigate(safeInternalRoute(route))}
           onScenario={openScenario}
           onManager={() => { if (!openExternalLink(config.manager_retail_url)) navigate("/ai"); }}
         />
@@ -328,8 +331,13 @@ export default function Home() {
             <button
               key={b.id}
               onClick={() => {
-                if (b.action_type === "external" && b.action_value) { window.open(b.action_value, "_blank"); return; }
-                navigate(actionRoute(b.action_type, b.action_value));
+                if (b.action_type === "external" && b.action_value) {
+                  // только http/https: `javascript:`/`data:` из админки не исполняем
+                  const ext = safeExternalUrl(b.action_value);
+                  if (ext) window.open(ext, "_blank", "noopener,noreferrer");
+                  return;
+                }
+                navigate(safeInternalRoute(actionRoute(b.action_type, b.action_value)));
               }}
               className="tap lift relative h-[152px] w-[300px] shrink-0 snap-start overflow-hidden rounded-hero p-5 text-left text-white shadow-float transition-shadow lg:h-[176px] lg:w-auto lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.32)]"
               style={{ background: b.background_gradient || "linear-gradient(135deg,#1a7fd4,#6d5ae0)" }}

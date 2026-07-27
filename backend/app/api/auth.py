@@ -1,9 +1,12 @@
+import secrets
+
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.rate_limit import check_rate_limit
 from app.core.security import (
     TelegramAuthError,
     create_access_token,
@@ -61,8 +64,23 @@ def auth_dev(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/admin/login", response_model=TokenPair)
 def admin_login(body: AdminLoginIn, request: Request, db: Session = Depends(get_db)):
-    ok = body.email == settings.ADMIN_EMAIL and body.password == settings.ADMIN_PASSWORD
-    audit(db, f"admin:{body.email}", "admin_login" if ok else "admin_login_failed", ip=client_ip(request))
+    """Вход администратора.
+
+    v5.4.2: (1) rate limit по IP — пароль нельзя перебирать бесконечно; лимит
+    считается ДО проверки пароля, поэтому верный пароль не обходит блокировку;
+    (2) сравнение email/пароля через compare_digest — без утечки по времени.
+    """
+    ip = client_ip(request)
+    if not check_rate_limit(f"admin_login:{ip}", settings.ADMIN_LOGIN_RATE_LIMIT_PER_MINUTE):
+        audit(db, f"admin:{body.email}", "admin_login_rate_limited", ip=ip)
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Слишком много попыток входа. Попробуйте через минуту.",
+        )
+    email_ok = secrets.compare_digest(body.email or "", settings.ADMIN_EMAIL)
+    password_ok = secrets.compare_digest(body.password or "", settings.ADMIN_PASSWORD)
+    ok = email_ok and password_ok
+    audit(db, f"admin:{body.email}", "admin_login" if ok else "admin_login_failed", ip=ip)
     if not ok:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
     return _token_pair(f"admin:{body.email}")

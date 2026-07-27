@@ -1,5 +1,6 @@
 /** Тонкая обёртка над Telegram WebApp SDK. */
 
+import { safeExternalUrl } from "./route";
 import {
   computeSafeArea,
   formatCssVars,
@@ -54,7 +55,10 @@ export function isInsideTelegram(): boolean {
  *  откроется в самом Telegram, а не во внешнем браузере. Иначе window.open.
  *  Возвращает false, если url пустой (вызывающий код показывает fallback). */
 export function openExternalLink(url: string | null | undefined): boolean {
-  const u = (url ?? "").trim();
+  // v5.4.2: пропускаем только http/https. Ссылка приходит из конфигурации
+  // (MANAGER_*), и `javascript:`/`data:` тут исполняться не должны; невалидная
+  // ссылка ведёт себя как пустая -> вызывающий код показывает свой fallback.
+  const u = safeExternalUrl(url);
   if (!u) return false;
   const tg = getTelegram();
   try {

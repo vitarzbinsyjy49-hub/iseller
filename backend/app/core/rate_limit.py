@@ -89,7 +89,7 @@ def _allow_redis(key: str, limit: int) -> bool:
     """Фиксированное окно на 60с через INCR+EXPIRE. Ошибка -> сигнал перейти на in-memory."""
     global _redis
     try:
-        redis_key = f"ai_chat_rl:{key}:{int(time.time() // _WINDOW_SECONDS)}"
+        redis_key = f"rl:{key}:{int(time.time() // _WINDOW_SECONDS)}"
         pipe = _redis.pipeline()
         pipe.incr(redis_key, 1)
         pipe.expire(redis_key, _WINDOW_SECONDS)
@@ -101,15 +101,18 @@ def _allow_redis(key: str, limit: int) -> bool:
         raise
 
 
-def check_rate_limit(key: str) -> bool:
+def check_rate_limit(key: str, limit: int | None = None) -> bool:
     """True — запрос разрешён, False — превышен лимит.
+
+    key   — пространство имён вызывающего + идентификатор клиента ("admin_login:1.2.3.4").
+    limit — запросов в минуту; None = дефолт AI-чата (обратная совместимость).
 
     fail-open: при любой внутренней ошибке возвращает True (не блокируем пользователя
     из-за проблем самого лимитера).
     """
     try:
         _init_redis()
-        limit = _limit_per_minute()
+        limit = _limit_per_minute() if limit is None else max(1, int(limit))
         if _redis is not None:
             try:
                 return _allow_redis(key, limit)

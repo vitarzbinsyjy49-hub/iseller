@@ -54,6 +54,8 @@ class Settings(BaseSettings):
 
     # ==== Rate limit на /api/ai/chat (v2) ====
     AI_CHAT_RATE_LIMIT_PER_MINUTE: int = 10
+    # Попыток входа в админку с одного IP в минуту (v5.4.2, защита от перебора пароля).
+    ADMIN_LOGIN_RATE_LIMIT_PER_MINUTE: int = 5
     # Необязательный Redis для распределённого лимита. Пусто => in-memory (per-process),
     # чего достаточно для одного инстанса backend. Недоступность Redis => мягкая
     # деградация на in-memory, backend не падает (см. core/rate_limit.py).

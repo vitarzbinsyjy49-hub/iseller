@@ -24,7 +24,13 @@ from app.models import post as _post  # noqa: F401
 setup_logging()
 logger = logging.getLogger("techshop")
 
-app = FastAPI(title="AI Seller API", version="1.0.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
+# Swagger/OpenAPI — только в DEV_MODE. В проде схема API наружу не публикуется:
+# она перечисляет все админские маршруты и формы тел запросов, что упрощает
+# разведку. Внутри контейнера схема по-прежнему доступна коду (app.openapi()).
+_DOCS = {"docs_url": "/api/docs", "openapi_url": "/api/openapi.json", "redoc_url": "/api/redoc"} \
+    if settings.DEV_MODE else {"docs_url": None, "openapi_url": None, "redoc_url": None}
+
+app = FastAPI(title="AI Seller API", version="1.0.0", **_DOCS)
 
 
 def _build_cors_kwargs() -> dict:
