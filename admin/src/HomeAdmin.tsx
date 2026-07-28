@@ -390,7 +390,7 @@ type HomeCat = {
 };
 
 const ACTION_LABELS: Record<string, string> = {
-  category: "Категория", search: "Поиск", product: "Товар (id)",
+  category: "Категория", brand: "Бренд", search: "Поиск", product: "Товар (id)",
   collection: "Подборка (hot/today/sale)", ai: "AI-запрос", external: "Внешняя ссылка",
 };
 
@@ -446,7 +446,7 @@ function EditFields({ obj, set, kind }: {
         </label>
         <label style={half}>
           <span style={lbl}>Значение действия</span>
-          <input style={input} placeholder="напр. iphone / смартфоны / hot"
+          <input style={input} placeholder="напр. iphone / смартфоны / Dyson / hot"
             value={(obj.action_value as string) ?? ""} onChange={(e) => set({ action_value: e.target.value })} />
         </label>
         <label style={half}>
