@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, ai, auth, catalog, config as config_api, events, favorites, health, home, imports, leads, posts, telegram, users
+from app.api import admin, admin_crm, ai, auth, catalog, config as config_api, events, favorites, health, home, imports, leads, posts, price_posts, telegram, users
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import analytics_event as _analytics_event  # noqa: F401
@@ -88,6 +88,8 @@ app.include_router(home.admin_router, prefix="/api")
 app.include_router(imports.router, prefix="/api")
 app.include_router(config_api.router, prefix="/api")
 app.include_router(posts.router, prefix="/api")
+# v5.6.0: постоянные прайс-посты канала (генерация, diff, публикация, навигация)
+app.include_router(price_posts.router, prefix="/api")
 # v5.5.0: приём апдейтов Telegram-бота (вебхук, защищён secret_token)
 app.include_router(telegram.router, prefix="/api")
 
@@ -115,6 +117,18 @@ def _apply_demo_migrations() -> None:
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS metadata JSON DEFAULT '{}'::json",
         "CREATE INDEX IF NOT EXISTS ix_leads_lead_type ON leads (lead_type)",
         "UPDATE leads SET lead_type = 'general' WHERE lead_type IS NULL",
+        # v5.6.0: постоянные прайс-посты канала. Все поля необязательные —
+        # существующие новостные посты продолжают работать без изменений.
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS slug VARCHAR(64)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_channel_posts_slug ON channel_posts (slug)",
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS channel_id VARCHAR(64)",
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS catalog_fingerprint VARCHAR(64)",
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS last_generated_at TIMESTAMPTZ",
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMPTZ",
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS item_count INTEGER DEFAULT 0",
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS reply_markup JSON",
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS last_error TEXT",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSON DEFAULT '[]'::json",
         # v5.5.0: «Осталось N шт» показываем только у явно лимитированных товаров.
         # Дефолт false => у существующих позиций подпись просто исчезает; сами
