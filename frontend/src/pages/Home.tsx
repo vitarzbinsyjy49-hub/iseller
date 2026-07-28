@@ -16,6 +16,9 @@ import SearchPanel from "../components/SearchPanel";
 import { pushSearchQuery } from "../lib/searchHistory";
 import { actionRoute, safeExternalUrl, safeInternalRoute } from "../lib/route";
 import { loadCachedCategories, saveCachedCategories } from "../lib/categoryCache";
+import { SegmentedToggle } from "../components/SegmentedToggle";
+import { navTiles, type NavAxis, type NavChip } from "../lib/navTiles";
+import { searchRoute, type SearchMode } from "../lib/searchMode";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
@@ -30,7 +33,7 @@ type HomeCat = {
   id: number; title: string; emoji?: string | null; icon_url?: string | null;
   background_gradient?: string | null; action_type: string; action_value?: string | null;
 };
-type HomeData = { banners: HomeBanner[]; categories: HomeCat[] };
+type HomeData = { banners: HomeBanner[]; categories: HomeCat[]; brands?: HomeCat[] };
 
 
 /** Запасные промо-блоки, если /api/home недоступен (backend старой версии). */
@@ -77,6 +80,10 @@ export default function Home() {
   // без сдвига вёрстки и без выдуманных категорий.
   const [categories, setCategories] = useState<Category[]>(() => loadCachedCategories());
   const [home, setHome] = useState<HomeData | null>(null);
+  // Ось навигации общая для hero-чипов и desktop-сайдбара: если развести их по
+  // разным состояниям, hero покажет бренды, а сайдбар рядом — категории.
+  // Между визитами не сохраняется намеренно: по умолчанию всегда «Категории».
+  const [axis, setAxis] = useState<NavAxis>("category");
   const [feed, setFeed] = useState<Feed | null>(null);
   // Раньше ошибка /catalog/feed молча проглатывалась и feed оставался null
   // навсегда — секции показывали скелетон бесконечно, никогда не сообщая
@@ -145,21 +152,18 @@ export default function Home() {
     navigate(to);
   }
 
-  // Чипы категорий hero: приоритет админских категорий → каталог → фолбэк
-  // (та же логика, что была у прежней сетки категорий), максимум 6.
-  const heroChips: { key: string; label: string; route: string }[] = (
-    home && home.categories.length > 0
-      ? home.categories.map((c) => ({
-          key: String(c.id),
-          label: c.title,
-          route: actionRoute(c.action_type, c.action_value),
-        }))
-      : categories.map((c) => ({
-          key: c.key,
-          label: c.label,
-          route: `/catalog?category=${encodeURIComponent(c.key)}`,
-        }))
-  ).slice(0, 6);
+  // Чипы навигации: источник и приоритет теперь в navTiles (чистая функция,
+  // покрыта тестами). Считаем один раз — hero режет ряд до 6, сайдбар берёт всё.
+  const navChips = navTiles(axis, home, categories);
+  const heroChips = navChips.slice(0, 6);
+  // Ось брендов существует только когда бренды реально пришли: переключатель во
+  // вкладку без содержимого — та же мёртвая плитка, только в виде тумблера.
+  const hasBrandAxis = (home?.brands ?? []).length > 0;
+
+  function switchAxis(next: NavAxis) {
+    setAxis(next);
+    track("home_axis_switched", { axis: next });
+  }
 
   // Дедуп соседних персональных секций: «Для вас» не повторяет «Недавно
   // смотрели» (если та показана), а «Вам также может понравиться» — обе.
@@ -264,9 +268,26 @@ export default function Home() {
           )}
         </div>
 
+        {/* Ось навигации: категории или бренды. Тумблера нет, пока бренды не
+            пришли — переключатель в пустую вкладку хуже отсутствующего. */}
+        {hasBrandAxis && (
+          <div className="mt-4 flex items-center">
+            <SegmentedToggle
+              value={axis}
+              onChange={switchAxis}
+              options={[
+                { value: "category", label: "Категории" },
+                { value: "brand", label: "Бренды" },
+              ] as const}
+              ariaLabel="Навигация по каталогу"
+              variant="on-dark"
+            />
+          </div>
+        )}
+
         {/* Быстрые категории — светлые чипы на тёмном hero (сразу видно глубину
-            каталога). Данные: админские категории → каталог → фолбэк; максимум 6. */}
-        <div className="no-scrollbar -mx-4 mt-4 flex gap-2 overflow-x-auto px-4">
+            каталога). Данные: админские плитки → каталог → кэш; максимум 6. */}
+        <div className={`no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 ${hasBrandAxis ? "mt-3" : "mt-4"}`}>
           {heroChips.map((c) => (
             <button
               key={c.key}
@@ -280,7 +301,7 @@ export default function Home() {
             onClick={() => navigate("/catalog")}
             className="tap shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-semibold text-white/90 ring-1 ring-inset ring-white/25 transition-colors hover:bg-white/10"
           >
-            Все категории →
+            {axis === "brand" ? "Все бренды →" : "Все категории →"}
           </button>
         </div>
       </header>
@@ -301,8 +322,9 @@ export default function Home() {
       {/* ===== Desktop: сетка [sidebar 260px | контент] ===== */}
       <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8">
         <HomeSidebar
-          categories={categories}
-          homeCats={home?.categories ?? []}
+          tiles={navChips}
+          axis={axis}
+          onAxis={hasBrandAxis ? switchAxis : null}
           onCategory={(route) => navigate(safeInternalRoute(route))}
           onScenario={openScenario}
           onManager={() => { if (!openExternalLink(config.manager_retail_url)) navigate("/ai"); }}
@@ -518,25 +540,15 @@ function Section({
 /** Desktop-sidebar главной: категории + быстрые действия (Опт/B2B/Trade-In/менеджер).
  *  Данные те же, что и в mobile-версии; бизнес-логики нет. */
 function HomeSidebar({
-  categories, homeCats, onCategory, onScenario, onManager,
+  tiles, axis, onAxis, onCategory, onScenario, onManager,
 }: {
-  categories: Category[];
-  homeCats: HomeCat[];
+  tiles: NavChip[];
+  axis: NavAxis;
+  onAxis: ((next: NavAxis) => void) | null;
   onCategory: (route: string) => void;
   onScenario: (k: ScenarioKey) => void;
   onManager: () => void;
 }) {
-  const cats: { key: string; label: string; icon: string; route: string }[] =
-    homeCats.length > 0
-      ? homeCats.map((c) => ({
-          key: String(c.id), label: c.title, icon: c.emoji || "🛍️",
-          route: actionRoute(c.action_type, c.action_value),
-        }))
-      : categories.map((c) => ({
-          key: c.key, label: c.label, icon: c.icon,
-          route: `/catalog?category=${encodeURIComponent(c.key)}`,
-        }));
-
   // Опт/бизнес/Trade-In открывают встроенную сценарную заявку; «Написать
   // менеджеру» — прямой Telegram (fallback внутри onManager).
   const actions: { icon: string; label: string; sub: string; onClick: () => void }[] = [
@@ -549,8 +561,22 @@ function HomeSidebar({
   return (
     <aside className="hidden lg:block">
       <div className="rounded-xl2 bg-surface p-2 shadow-soft">
-        <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">Категории</p>
-        {(cats.length ? cats : [{ key: "_", label: "Каталог", icon: "🛍️", route: "/catalog" }]).map((c) => (
+        {onAxis ? (
+          <div className="px-2 pb-1 pt-2">
+            <SegmentedToggle
+              value={axis}
+              onChange={onAxis}
+              options={[
+                { value: "category", label: "Категории" },
+                { value: "brand", label: "Бренды" },
+              ] as const}
+              ariaLabel="Навигация по каталогу"
+            />
+          </div>
+        ) : (
+          <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">Категории</p>
+        )}
+        {(tiles.length ? tiles : [{ key: "_", label: "Каталог", icon: "🛍️", route: "/catalog" }]).map((c) => (
           <button
             key={c.key}
             onClick={() => onCategory(c.route)}

@@ -39,7 +39,11 @@ export type AppEvent =
   | "photo_coverage_exported"
   // v5.5.0: свайп-навигация между страницами. Payload — только маршруты и
   // направление жеста (from, direction, target), ничего пользовательского.
-  | "page_swiped";
+  | "page_swiped"
+  // v5.9: тумблеры навигации. Payload — только выбранное положение (axis, mode)
+  // и место переключения (source); текста запроса здесь нет и быть не должно.
+  | "home_axis_switched"
+  | "search_mode_switched";
 
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();
