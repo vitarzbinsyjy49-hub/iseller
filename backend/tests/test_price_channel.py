@@ -326,3 +326,40 @@ def test_api_preview_single_section(client, catalog, telegram):
     assert "IPHONE — АКТУАЛЬНЫЙ ПРАЙС" in body["text"]
     assert body["over_limit"] is False
     assert client.get("/api/admin/price-posts/price_unknown/preview").status_code == 404
+
+
+def test_navigation_keeps_sections_whose_slug_contains_underscore_p(db, telegram):
+    """Регресс: фильтр частей длинного поста не должен есть обычные разделы.
+
+    Части второй и далее называются price_<раздел>_p2. Первая версия фильтра
+    искала подстроку «_p» и вычёркивала из навигации price_macbook_pro и
+    price_playstation — в канале это выглядело как пропавшие кнопки.
+    """
+    db.add(Product(title="Apple MacBook Pro 14 M5", brand="Apple", category="ноутбуки",
+                   subcategory="MacBook Pro", price=250000, is_active=True, sku="MBP-1"))
+    db.add(Product(title="Sony DualSense", brand="Sony", category="консоли",
+                   subcategory="Аксессуары PlayStation", price=6500, is_active=True, sku="PS-1"))
+    db.commit()
+
+    price_channel.apply_plan(db, on_date=TODAY)
+    price_channel.sync_navigation(db, on_date=TODAY)
+
+    labels = [row[0]["text"] for row in telegram.sent[-1]["keyboard"]]
+    assert any("MacBook Pro" in label for label in labels)
+    assert any("PlayStation" in label for label in labels)
+
+
+def test_navigation_skips_continuation_parts(db, telegram):
+    """А вот вторая часть длинного раздела в навигации не нужна."""
+    from app.models.post import ChannelPost as CP
+
+    db.add(CP(slug="price_iphone", kind=price_channel.PRICE_KIND,
+              title="iPhone", body="x", telegram_message_id=1))
+    db.add(CP(slug="price_iphone_p2", kind=price_channel.PRICE_KIND,
+              title="iPhone (часть 2)", body="y", telegram_message_id=2))
+    db.commit()
+
+    price_channel.sync_navigation(db, on_date=TODAY)
+    links = [b["url"] for row in telegram.sent[-1]["keyboard"] for b in row]
+    assert any(link.endswith("/1") for link in links)
+    assert not any(link.endswith("/2") for link in links)

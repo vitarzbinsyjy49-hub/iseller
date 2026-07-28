@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 
@@ -49,6 +50,9 @@ logger = logging.getLogger("techshop.price")
 
 PRICE_KIND = "price"
 NAVIGATION_KIND = "price_nav"
+
+#: Суффикс второй и следующих частей длинного раздела: price_iphone_p2.
+_PART_SUFFIX = re.compile(r"_p\d+$")
 
 
 def channel_id() -> str:
@@ -285,9 +289,13 @@ def sync_navigation(db: Session, *, on_date: date | None = None, dry_run: bool =
         for slug, row in existing.items()
         if row.kind == PRICE_KIND and row.telegram_message_id
     }
-    # Части длинного раздела ведут на первую часть: навигация показывает
-    # разделы, а не сообщения.
-    published = {slug: mid for slug, mid in published.items() if "_p" not in slug}
+    # Части длинного раздела в навигацию не выносим: она показывает разделы, а
+    # не сообщения, и вторая часть лежит сразу под первой.
+    # Проверяем именно СУФФИКС _p<число>, а не вхождение «_p»: подстрока «_p»
+    # встречается внутри обычных слагов (price_macbook_pro, price_playstation),
+    # и поиск по вхождению вычёркивал эти разделы из навигации целиком.
+    published = {slug: mid for slug, mid in published.items()
+                 if not _PART_SUFFIX.search(slug)}
 
     keyboard = navigation_keyboard(
         published, channel_id() or "@isellerhub",
