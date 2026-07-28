@@ -52,10 +52,12 @@ export default function AiSearch() {
   // отправить запрос дважды; после потребления параметры стираются из URL.
   const autoConsumedRef = useRef(false);
 
-  /** Кнопки-действия из ответа AI (v5.1): refine/manager/lead. */
+  /** Кнопки-действия из ответа AI (v5.1): quick_reply/manager/lead. */
   function handleAction(action: AiAction, answer: AiAnswer) {
-    if (action.type === "refine") {
-      inputRef.current?.focus();
+    if (action.type === "quick_reply") {
+      // Нажатие = обычное сообщение от покупателя: диалог продолжается без
+      // печати, и модель видит ровно тот текст, который написан на кнопке.
+      void submit(action.label);
       return;
     }
     if (action.type === "manager") {
@@ -284,11 +286,19 @@ export default function AiSearch() {
               {/* Кнопки-действия (v5.1): только у последнего ответа, чтобы старые не путали */}
               {i === chat.length - 1 && (item.answer.actions ?? []).length > 0 && (
                 <div className="fade-in mt-2.5 flex flex-wrap gap-2">
+                  {/* Быстрые ответы — реплики ПОКУПАТЕЛЯ, поэтому обведены
+                      акцентом: визуально это продолжение его стороны диалога,
+                      а не системное действие вроде «Позвать менеджера». */}
                   {(item.answer.actions ?? []).map((a) => (
                     <button
                       key={`${a.type}-${a.label}`}
                       onClick={() => handleAction(a, item.answer)}
-                      className="tap rounded-full bg-surface px-3.5 py-2 text-xs font-medium text-text shadow-soft transition-colors hover:bg-accent hover:text-white"
+                      disabled={loading}
+                      className={
+                        a.type === "quick_reply"
+                          ? "tap rounded-full border border-accent bg-transparent px-3.5 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent hover:text-white disabled:opacity-50"
+                          : "tap rounded-full bg-surface px-3.5 py-2 text-xs font-medium text-text shadow-soft transition-colors hover:bg-accent hover:text-white disabled:opacity-50"
+                      }
                     >
                       {a.label}
                     </button>

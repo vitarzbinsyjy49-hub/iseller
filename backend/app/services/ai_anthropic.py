@@ -47,7 +47,7 @@ ANSWER_SCHEMA: dict = {
     "additionalProperties": False,
     "required": [
         "intent", "answer", "follow_up_question", "recommended_product_ids",
-        "comparison", "filters", "next_action", "confidence",
+        "comparison", "filters", "quick_replies", "next_action", "confidence",
     ],
     "properties": {
         "intent": {"type": "string", "enum": sorted(INTENTS)},
@@ -85,6 +85,7 @@ ANSWER_SCHEMA: dict = {
                 "excluded_features": _STR_LIST,
             },
         },
+        "quick_replies": {"type": "array", "items": {"type": "string"}},
         "next_action": {"type": "string", "enum": sorted(NEXT_ACTIONS)},
         "confidence": {"type": "number"},
     },

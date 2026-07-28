@@ -216,3 +216,49 @@ def test_any_price_in_text_removed_even_if_real(db, monkeypatch):
     assert "119 990" not in ans["text"]
     assert "Отличный вариант" in ans["text"]
     assert ans["cards"][0]["price"] == 119990.0   # цена — только в карточке из БД
+
+
+# ---------- быстрые ответы вместо мёртвой кнопки «Уточнить запрос» (v5.9) ----------
+
+def test_quick_replies_become_actions(db, monkeypatch):
+    p = make_product(db, title="Dyson HD16", category="красота", subcategory="Фены", brand="Dyson")
+    monkeypatch.setattr(orch, "call_gateway", _gw_response({
+        "answer": "Вот варианты фенов.",
+        "follow_up_question": "Что важнее — скорость сушки или бережность?",
+        "quick_replies": ["Скорость сушки", "Бережность к волосам"],
+        "recommended_product_ids": [p.id],
+    }))
+    ans = run(orch.answer_via_local_ai(db, "посоветуй фен", []))
+    chips = [a["label"] for a in ans["actions"] if a["type"] == "quick_reply"]
+    assert chips == ["Скорость сушки", "Бережность к волосам"]
+
+
+def test_no_quick_replies_no_empty_buttons(db, monkeypatch):
+    """Нет уточняющего вопроса — нет и чипов: пустых кнопок не рисуем."""
+    monkeypatch.setattr(orch, "call_gateway", _gw_response({"answer": "Готово.", "quick_replies": []}))
+    ans = run(orch.answer_via_local_ai(db, "ноутбук до 150 тысяч", []))
+    assert [a for a in ans["actions"] if a["type"] == "quick_reply"] == []
+
+
+def test_dead_refine_action_is_gone(db, monkeypatch):
+    """Кнопка «Уточнить запрос» только фокусировала поле ввода — на десктопе
+    это неотличимо от бездействия. Её не должно быть ни в одной ветке."""
+    monkeypatch.setattr(orch, "call_gateway", _gw_response({"answer": "ок"}))
+    ai = run(orch.answer_via_local_ai(db, "ноутбук до 150 тысяч", []))
+    assert all(a["type"] != "refine" for a in ai["actions"])
+
+    async def down(**kwargs):
+        raise AIGatewayError("unreachable")
+    monkeypatch.setattr(orch, "call_gateway", down)
+    fb = run(orch.answer_via_local_ai(db, "ноутбук до 150 тысяч", []))
+    assert all(a["type"] != "refine" for a in fb["actions"])
+
+    rules = run(orch.answer_via_local_ai(db, "что ты умеешь?", []))
+    assert all(a["type"] != "refine" for a in rules["actions"])
+
+
+def test_general_help_offers_example_queries(db, monkeypatch):
+    """На «что ты умеешь» полезнее показать, КАК спросить."""
+    ans = run(orch.answer_via_local_ai(db, "что ты умеешь?", []))
+    assert ans["meta"]["intent"] == "general_help"
+    assert [a["label"] for a in ans["actions"] if a["type"] == "quick_reply"]

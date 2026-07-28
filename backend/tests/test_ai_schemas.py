@@ -47,3 +47,48 @@ def test_bad_ids_are_skipped():
 def test_unrepairable_raises(raw):
     with pytest.raises(AiAnswerParseError):
         parse_structured_answer(raw)
+
+
+# ---------- быстрые ответы (v5.9) ----------
+
+from app.services.ai_schemas import (  # noqa: E402
+    QUICK_REPLY_LIMIT, QUICK_REPLY_MAX_LEN, AiStructuredAnswer,
+)
+
+
+def _answer(**kw):
+    return AiStructuredAnswer.model_validate({"answer": "ок", **kw})
+
+
+def test_quick_replies_pass_through():
+    assert _answer(quick_replies=["Для сухих волос", "До 40 тысяч"]).quick_replies == \
+        ["Для сухих волос", "До 40 тысяч"]
+
+
+def test_quick_replies_default_empty():
+    assert _answer().quick_replies == []
+
+
+def test_quick_replies_limited():
+    got = _answer(quick_replies=[f"вариант {i}" for i in range(10)]).quick_replies
+    assert len(got) == QUICK_REPLY_LIMIT
+
+
+def test_quick_replies_truncated_not_wrapped():
+    """Длинный вариант режется: в чип он всё равно не влезет."""
+    got = _answer(quick_replies=["о" * 200]).quick_replies
+    assert len(got[0]) == QUICK_REPLY_MAX_LEN
+
+
+def test_quick_replies_drop_empty_and_duplicates():
+    got = _answer(quick_replies=["Да", "  ", "", "да", None, "Нет"]).quick_replies
+    assert got == ["Да", "Нет"]
+
+
+def test_quick_replies_collapse_whitespace():
+    assert _answer(quick_replies=["  для   сухих \n волос "]).quick_replies == ["для сухих волос"]
+
+
+@pytest.mark.parametrize("bad", [None, "строка", 42, {"a": 1}])
+def test_quick_replies_survive_garbage(bad):
+    assert _answer(quick_replies=bad).quick_replies == []

@@ -135,8 +135,10 @@ def build_demo_answer(db: Session, message: str, max_cards: int = 6, source: str
     return {
         "text": text,
         "cards": cards,
+        # «Уточнить запрос» здесь больше нет: кнопка только фокусировала поле
+        # ввода, то есть на десктопе не делала ничего. Быстрых ответов в
+        # fallback тоже нет — их формулирует модель, а её тут нет.
         "actions": [
-            {"type": "refine", "label": "Уточнить запрос"},
             {"type": "manager", "label": "Позвать менеджера"},
         ],
         "meta": {

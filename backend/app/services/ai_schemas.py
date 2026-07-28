@@ -16,6 +16,11 @@ INTENTS = {
 }
 NEXT_ACTIONS = {"ask_question", "show_products", "create_lead", "open_manager", "none"}
 
+# Быстрые ответы: больше четырёх чипов не помещаются в ряд, длинный текст
+# превращает кнопку в абзац. Режем здесь, а не в вёрстке.
+QUICK_REPLY_LIMIT = 4
+QUICK_REPLY_MAX_LEN = 40
+
 
 class AiComparisonItem(BaseModel):
     product_id: int
@@ -47,6 +52,10 @@ class AiStructuredAnswer(BaseModel):
     recommended_product_ids: list[int] = Field(default_factory=list)
     comparison: list[AiComparisonItem] = Field(default_factory=list)
     filters: AiFilters = Field(default_factory=AiFilters)
+    # Быстрые ответы (v5.9): готовые реплики покупателя на follow_up_question.
+    # Нужны, чтобы диалог продолжался нажатием, а не печатью — раньше на месте
+    # этой кнопки была «Уточнить запрос», которая только фокусировала поле.
+    quick_replies: list[str] = Field(default_factory=list)
     next_action: str = "none"
     confidence: float = 0.0
 
@@ -73,6 +82,27 @@ class AiStructuredAnswer(BaseModel):
                 out.append(int(str(item).strip()))
             except (TypeError, ValueError):
                 continue
+        return out
+
+    @field_validator("quick_replies", mode="before")
+    @classmethod
+    def _clean_quick_replies(cls, v):
+        """Короткие, непустые, без дублей, не больше четырёх.
+
+        Длинные варианты не помещаются в чип и превращают ряд кнопок в стену
+        текста, поэтому режем по длине, а не переносим."""
+        if not isinstance(v, list):
+            return []
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in v:
+            text = " ".join(str(item or "").split())[:QUICK_REPLY_MAX_LEN].strip()
+            key = text.lower()
+            if text and key not in seen:
+                seen.add(key)
+                out.append(text)
+            if len(out) >= QUICK_REPLY_LIMIT:
+                break
         return out
 
     @field_validator("confidence", mode="before")

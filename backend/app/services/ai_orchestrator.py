@@ -89,7 +89,13 @@ def _deterministic_answer(message: str) -> dict | None:
     if _ABOUT_RE.search(low) and not substantive:
         return {
             "text": _ABOUT_ANSWER, "cards": [],
-            "actions": [{"type": "refine", "label": "Подобрать технику"}],
+            # Готовые примеры запросов вместо кнопки, которая ничего не делала:
+            # на «что ты умеешь» полезнее показать, КАК спросить.
+            "actions": [
+                {"type": "quick_reply", "label": "Ноутбук для работы"},
+                {"type": "quick_reply", "label": "Фен или стайлер"},
+                {"type": "quick_reply", "label": "Что есть в наличии"},
+            ],
             "meta": {"source": "rules", "intent": "general_help"},
         }
     for intent, role, keywords, answer in _DETERMINISTIC:
@@ -212,7 +218,13 @@ async def answer_via_local_ai(db: Session, message: str, history: list[dict]) ->
     if removed_claims:
         logger.warning("Sanitized %d unverified money claim sentence(s) from LLM answer", removed_claims)
 
-    actions = [{"type": "refine", "label": "Уточнить запрос"}]
+    # Быстрые ответы (v5.9) вместо прежней кнопки «Уточнить запрос»: та лишь
+    # ставила курсор в поле — на десктопе это неотличимо от бездействия, хотя
+    # кнопка выглядела основным действием. Теперь ряд чипов продолжает диалог
+    # нажатием. Нет уточняющего вопроса — нет и чипов, пустых кнопок не рисуем.
+    actions: list[dict] = [
+        {"type": "quick_reply", "label": reply} for reply in structured.quick_replies
+    ]
     if structured.next_action == "open_manager" or structured.intent in ("wholesale", "b2b", "trade_in", "manager"):
         role = structured.intent if structured.intent in ("wholesale", "b2b", "trade_in") else "retail"
         actions.append({"type": "manager", "label": _MANAGER_LABEL[role], "manager_role": role})

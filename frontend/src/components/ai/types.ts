@@ -59,7 +59,10 @@ export type ProductDetail = ProductCard & {
 export type ManagerRole = "retail" | "wholesale" | "b2b" | "trade_in";
 
 export type AiAction = {
-  type: "compare" | "refine" | "manager" | "lead";
+  /** quick_reply — готовый ответ покупателя на уточняющий вопрос: нажатие
+   *  отправляет label как обычное сообщение. Заменил кнопку "refine", которая
+   *  только фокусировала поле ввода и выглядела бездействующей. */
+  type: "compare" | "quick_reply" | "manager" | "lead";
   label: string;
   product_ids?: number[];
   product_id?: number;        // для type="lead": проверенный backend'ом товар
