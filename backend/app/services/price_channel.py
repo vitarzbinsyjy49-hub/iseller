@@ -100,7 +100,8 @@ def build_plan(db: Session, on_date: date | None = None) -> list[PostPlan]:
     """Посчитать план изменений. Ничего не отправляет и не пишет в БД."""
     on_date = on_date or date.today()
     products = load_catalog(db)
-    rendered = render_all(products, on_date, settings.MINI_APP_URL, settings.MANAGER_RETAIL_URL)
+    rendered = render_all(products, on_date, settings.MINI_APP_URL,
+                            settings.MANAGER_RETAIL_URL, settings.BOT_USERNAME)
     existing = _existing(db)
 
     plans: list[PostPlan] = []
@@ -136,7 +137,8 @@ def save_preview(db: Session, on_date: date | None = None) -> list[ChannelPost]:
     on_date = on_date or date.today()
     products = load_catalog(db)
     fingerprint = catalog_fingerprint(products)
-    rendered = render_all(products, on_date, settings.MINI_APP_URL, settings.MANAGER_RETAIL_URL)
+    rendered = render_all(products, on_date, settings.MINI_APP_URL,
+                            settings.MANAGER_RETAIL_URL, settings.BOT_USERNAME)
     existing = _existing(db)
     now = datetime.now(timezone.utc)
     order = {section.slug: index for index, section in enumerate(SECTIONS)}
@@ -289,7 +291,7 @@ def sync_navigation(db: Session, *, on_date: date | None = None, dry_run: bool =
 
     keyboard = navigation_keyboard(
         published, channel_id() or "@isellerhub",
-        settings.MINI_APP_URL, settings.MANAGER_RETAIL_URL)
+        settings.MINI_APP_URL, settings.MANAGER_RETAIL_URL, settings.BOT_USERNAME)
     text = navigation_text(on_date)
     row = existing.get(NAVIGATION_SLUG)
 

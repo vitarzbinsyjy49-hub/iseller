@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     MANAGER_TRADEIN_URL: str = ""     # trade-in / выкуп (пусто => fallback на retail)
     TELEGRAM_CHANNEL_URL: str = ""
     MINI_APP_URL: str = ""
+    # @username бота без «@». Нужен для кнопок в КАНАЛЕ: web_app-кнопки Telegram
+    # разрешает только в личных чатах с ботом, в каналах они отвергаются целиком
+    # (BUTTON_TYPE_INVALID), поэтому посты канала ведут в Mini App через
+    # deep link t.me/<bot>?start=<раздел>.
+    BOT_USERNAME: str = ""
 
     DATABASE_URL: str
     TELEGRAM_BOT_TOKEN: str = ""

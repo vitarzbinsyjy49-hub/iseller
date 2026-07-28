@@ -290,3 +290,43 @@ def test_channel_publishing_uses_the_same_proxy(monkeypatch):
     monkeypatch.setattr(publisher.httpx, "post", fake_post)
     publisher.publish_post(title="t", body="b", image_url=None)
     assert seen.get("proxy") == "socks5://127.0.0.1:40000"
+
+
+# ------------------------------------------------- deep link из канала
+
+def test_start_payload_is_parsed():
+    from app.services.telegram_bot import parse_start_payload
+
+    assert parse_start_payload("/start price_iphone") == "price_iphone"
+    assert parse_start_payload("/start@isellerAIbot ai") == "ai"
+    assert parse_start_payload("/start") is None
+    assert parse_start_payload("привет") is None
+
+
+def test_deep_link_from_channel_opens_that_section():
+    """Кнопка «Открыть раздел» в канале обязана открыть ИМЕННО этот раздел.
+
+    В канале web_app-кнопки запрещены, поэтому переход идёт через
+    t.me/<bot>?start=<slug>. Если payload проигнорировать, кнопка раздела
+    превратится в обычное «открыть магазин», и связь с постом потеряется.
+    """
+    reply = build_reply(private_message("/start price_iphone"))
+    assert "iPhone" in reply.text
+    urls = [b["web_app"]["url"] for row in reply.keyboard for b in row if "web_app" in b]
+    assert any("category=%D1%81%D0%BC" in u or "смартфоны" in u for u in urls)
+
+
+@pytest.mark.parametrize("payload,expected", [
+    ("catalog", "/catalog"),
+    ("ai", "/ai"),
+])
+def test_generic_payloads_open_expected_screens(payload, expected):
+    reply = build_reply(private_message(f"/start {payload}"))
+    urls = [b["web_app"]["url"] for row in reply.keyboard for b in row if "web_app" in b]
+    assert any(u.endswith(expected) for u in urls)
+
+
+def test_unknown_payload_falls_back_to_the_main_menu():
+    """Устаревшая ссылка из старого поста не должна упираться в тишину."""
+    reply = build_reply(private_message("/start price_deleted_section"))
+    assert reply.text.startswith("Добро пожаловать")

@@ -16,6 +16,7 @@ from app.services.price_posts import (
     SECTIONS_BY_SLUG,
     TELEGRAM_TEXT_LIMIT,
     catalog_fingerprint,
+    deep_link,
     diff_posts,
     format_price,
     group_by_subgroup,
@@ -32,6 +33,7 @@ from app.services.price_posts import (
 TODAY = date(2026, 7, 28)
 MINI_APP = "https://shop.example.com"
 MANAGER = "https://t.me/iseller77"
+BOT = "isellerAIbot"
 
 
 def product(**kw) -> dict:
@@ -229,19 +231,52 @@ def test_single_post_has_no_part_marker():
 
 def test_section_keyboard_layout_and_routes():
     section = SECTIONS_BY_SLUG["price_iphone"]
-    post = render_section([product()], section, TODAY, MINI_APP, MANAGER)[0]
+    post = render_section([product()], section, TODAY, MINI_APP, MANAGER, BOT)[0]
     rows = post.keyboard
     assert [len(r) for r in rows] == [1, 2]
     assert rows[0][0]["text"] == "🛍 Открыть раздел"
-    assert rows[0][0]["web_app"]["url"] == f"{MINI_APP}/catalog?category=смартфоны&subcategory=iPhone"
-    assert rows[1][0]["web_app"]["url"] == f"{MINI_APP}/ai"
+    assert rows[0][0]["url"] == f"https://t.me/{BOT}?start=price_iphone"
+    assert rows[1][0]["url"] == f"https://t.me/{BOT}?start=ai"
     assert rows[1][1]["url"] == MANAGER
+
+
+def test_channel_posts_never_use_web_app_buttons():
+    """Telegram отвергает web_app-кнопки в КАНАЛЕ (BUTTON_TYPE_INVALID).
+
+    Причём отклоняется не кнопка, а всё сообщение целиком — то есть пост
+    просто не публикуется. Регресс здесь стоит дорого, поэтому проверяем все
+    разделы и навигацию разом.
+    """
+    products = []
+    for section in SECTIONS:
+        category, subcategory = section.match[0]
+        products.append(product(
+            sku=f"X-{section.slug}", title=f"{section.brand or 'Apple'} Товар",
+            brand=section.brand or "Apple", category=category,
+            subcategory=subcategory or (section.subgroups[0] if section.subgroups else None)))
+
+    for post in render_all(products, TODAY, MINI_APP, MANAGER, BOT):
+        for row in post.keyboard:
+            for button in row:
+                assert "web_app" not in button, f"{post.slug}: {button['text']}"
+                assert button["url"].startswith("https://")
+
+    nav = navigation_keyboard({s.slug: 1 for s in SECTIONS}, -100123, MINI_APP, MANAGER, BOT)
+    for row in nav:
+        for button in row:
+            assert "web_app" not in button
+
+
+def test_deep_link_points_at_the_section():
+    assert deep_link(BOT, "price_iphone") == f"https://t.me/{BOT}?start=price_iphone"
+    assert deep_link("@" + BOT, "ai") == f"https://t.me/{BOT}?start=ai"
+    assert deep_link("", "ai") is None
 
 
 def test_buttons_disappear_when_urls_are_not_configured():
     """Пустой url Telegram отвергает вместе со ВСЕМ сообщением."""
     section = SECTIONS_BY_SLUG["price_iphone"]
-    post = render_section([product()], section, TODAY, "", "")[0]
+    post = render_section([product()], section, TODAY, "", "", "")[0]
     assert post.keyboard == []
 
 
@@ -265,7 +300,7 @@ def test_navigation_lists_only_published_sections():
 
 def test_navigation_keeps_section_order_and_tail_buttons():
     published = {s.slug: i + 1 for i, s in enumerate(SECTIONS)}
-    rows = navigation_keyboard(published, -1003998743702, MINI_APP, MANAGER)
+    rows = navigation_keyboard(published, -1003998743702, MINI_APP, MANAGER, BOT)
     section_labels = [row[0]["text"] for row in rows[:len(SECTIONS)]]
     assert section_labels == [f"{s.emoji} {s.title}" for s in SECTIONS]
     tail = [b["text"] for row in rows[len(SECTIONS):] for b in row]

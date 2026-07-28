@@ -116,6 +116,24 @@ def main_keyboard() -> list[list[dict]]:
     )
 
 
+def parse_start_payload(text: str | None) -> str | None:
+    """Аргумент deep link: «/start price_iphone» -> «price_iphone».
+
+    Кнопки в канале не могут быть web_app (Telegram отвергает такое сообщение
+    целиком), поэтому они ведут на t.me/<bot>?start=<раздел>. Пользователь
+    попадает в чат с ботом, и вот здесь мы обязаны открыть именно тот раздел,
+    ради которого он нажал кнопку, — иначе кнопка «Открыть раздел» превратится
+    в обычное «Открыть магазин».
+    """
+    if not text:
+        return None
+    parts = text.strip().split(maxsplit=1)
+    if len(parts) < 2 or not parts[0].startswith("/start"):
+        return None
+    payload = parts[1].strip()
+    return payload if payload else None
+
+
 def parse_command(text: str | None) -> str | None:
     """Имя команды без слэша и без @упоминания бота, или None.
 
@@ -130,6 +148,35 @@ def parse_command(text: str | None) -> str | None:
         return None
     name = head[1:].split("@", 1)[0]
     return name.lower() or None
+
+
+def reply_for_payload(payload: str) -> Reply | None:
+    """Ответ на deep link из канала: раздел прайса, каталог или AI-подбор.
+
+    Здесь web_app-кнопки уже законны — это личный чат с ботом, а не канал.
+    """
+    from app.services.price_posts import SECTIONS_BY_SLUG   # локально: избегаем цикла
+
+    if payload == "catalog":
+        return build_reply({"message": {"chat": {"type": "private"}, "text": "/catalog"}})
+    if payload == "ai":
+        return build_reply({"message": {"chat": {"type": "private"}, "text": "/ai"}})
+
+    section = SECTIONS_BY_SLUG.get(payload)
+    if section is None:
+        return None
+    button = _web_app_button(f"🛍 Открыть раздел «{section.title}»", section.route)
+    return Reply(
+        f"{section.emoji} <b>{section.title}</b>\n"
+        "\nОткройте раздел в каталоге — там актуальные цены, фото и наличие.",
+        _keyboard(
+            _row(button),
+            _row(
+                _web_app_button("✨ Подобрать с AI", "/ai"),
+                _url_button("💬 Менеджер", settings.MANAGER_RETAIL_URL),
+            ),
+        ),
+    )
 
 
 def build_reply(update: dict) -> Reply | None:
@@ -151,6 +198,13 @@ def build_reply(update: dict) -> Reply | None:
         return None
 
     command = parse_command(text)
+
+    # Переход по кнопке из канала: открываем ровно тот раздел, который нажали.
+    payload = parse_start_payload(text)
+    if command == "start" and payload:
+        reply = reply_for_payload(payload)
+        if reply is not None:
+            return reply
 
     if command in (None, "start", "menu"):
         if command is None:
