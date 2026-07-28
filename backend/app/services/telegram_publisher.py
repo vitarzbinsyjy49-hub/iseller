@@ -196,3 +196,23 @@ def publish_post(*, title: str, body: str, image_url: str | None) -> int:
             "parse_mode": "HTML",
         })
     return int(result["message_id"])
+
+
+def delete_message(*, message_id: int, channel_id: str | int | None = None) -> bool:
+    """Удалить сообщение канала.
+
+    Операция необратима, поэтому в обычном потоке публикации её нет: система
+    умеет создавать и править, но не удалять. Функция нужна для разовых
+    перестроек структуры разделов, когда несколько постов схлопываются в один и
+    лишние сообщения обязаны исчезнуть, а не остаться висеть без навигации.
+
+    «message to delete not found» — не ошибка: сообщение уже удалено, цель
+    достигнута.
+    """
+    try:
+        call("deleteMessage", {"chat_id": _channel(channel_id), "message_id": message_id})
+        return True
+    except TelegramPublishError as exc:
+        if "not found" in str(exc).lower():
+            return False
+        raise

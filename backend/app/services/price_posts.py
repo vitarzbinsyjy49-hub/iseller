@@ -58,15 +58,17 @@ SECTIONS: tuple[Section, ...] = (
     Section("price_playstation", "🎮", "PlayStation", ((("консоли", None),)),
             subgroups=("Консоли", "Аксессуары PlayStation"),
             route="/catalog?category=консоли"),
-    Section("price_dyson_hair", "💨", "Dyson для волос", ((("красота", None),)),
-            brand="Dyson", subgroups=("Стайлеры", "Фены", "Выпрямители"),
-            route="/catalog?brand=Dyson&category=красота"),
-    Section("price_dyson_vacuum", "🧹", "Dyson пылесосы",
-            ((("бытовая техника", "Пылесосы"),)), brand="Dyson",
-            route="/catalog?brand=Dyson&subcategory=Пылесосы"),
-    Section("price_dyson_climate", "🌬", "Dyson климат",
-            ((("бытовая техника", "Климатическая техника"),)), brand="Dyson",
-            route="/catalog?brand=Dyson&subcategory=Климатическая%20техника"),
+    # Dyson — ОДИН раздел и одна кнопка в навигации. Раньше их было три
+    # (волосы / пылесосы / климат), и меню из-за этого выглядело
+    # несбалансированным: три кнопки одного бренда против одной у Apple по
+    # каждой линейке. Подгруппы никуда не делись — они стали подзаголовками
+    # внутри поста, и весь Dyson помещается в один пост с запасом.
+    Section("price_dyson", "💨", "Dyson",
+            (("красота", None), ("бытовая техника", None)),
+            brand="Dyson",
+            subgroups=("Стайлеры", "Фены", "Выпрямители", "Пылесосы",
+                       "Климатическая техника"),
+            route="/catalog?brand=Dyson"),
 )
 
 SECTIONS_BY_SLUG = {s.slug: s for s in SECTIONS}
@@ -90,6 +92,76 @@ def format_price(value: float | int) -> str:
     return f"{int(round(float(value))):,}".replace(",", " ") + " ₽"
 
 
+#: Коды стран поставки, которые встречаются в названиях товаров. Регион важен
+#: покупателю (гарантия, комплект, замок SIM), но кодом «HK-KR» он читается
+#: плохо — во всех прайсах этого рынка вместо кода ставят флаг.
+REGION_FLAGS: dict[str, str] = {
+    "US": "🇺🇸", "HK": "🇭🇰", "IN": "🇮🇳", "JP": "🇯🇵", "KR": "🇰🇷",
+    "EU": "🇪🇺", "GB": "🇬🇧", "KW": "🇰🇼", "CN": "🇨🇳", "SG": "🇸🇬",
+    "RU": "🇷🇺", "AE": "🇦🇪", "TR": "🇹🇷", "VN": "🇻🇳", "UA": "🇺🇦",
+}
+
+_PARENS_RE = re.compile(r"\s*\(([^)]*)\)")
+
+
+def _flags_for(token: str) -> str | None:
+    """Флаги для «HK» или «HK-KR», иначе None (значит это не регион)."""
+    parts = [p.strip().upper() for p in token.split("-") if p.strip()]
+    if not parts or not all(p in REGION_FLAGS for p in parts):
+        return None
+    return "".join(REGION_FLAGS[p] for p in parts)
+
+
+def split_region(title: str) -> tuple[str, str]:
+    """Вынести флаги страны из названия: («🇭🇰🇰🇷», «iPhone 17 Pro (SIM+eSIM)»).
+
+    В скобках у товара может лежать и регион, и важное уточнение
+    (SIM+eSIM, Case, конфигурация памяти). Флагом заменяем ТОЛЬКО то, что
+    целиком является кодом страны; всё остальное остаётся в названии как было —
+    потерять «SIM+eSIM» или «16GB/512GB» значит слить разные позиции в одну.
+    """
+    flags: list[str] = []
+
+    def replace(match: re.Match) -> str:
+        kept: list[str] = []
+        for part in match.group(1).split(","):
+            token = part.strip()
+            if not token:
+                continue
+            found = _flags_for(token)
+            if found:
+                flags.append(found)
+            else:
+                kept.append(token)
+        return f" ({', '.join(kept)})" if kept else ""
+
+    cleaned = _PARENS_RE.sub(replace, title).strip()
+    return "".join(flags), cleaned
+
+
+_MEMORY_RE = re.compile(r"^\d+\s*(ГБ|ТБ|GB|TB)$", re.IGNORECASE)
+
+
+def model_key(title: str) -> str:
+    """Ключ модели для визуальной группировки строк внутри подгруппы.
+
+    Берём название до первого указания памяти: «iPhone 17 Pro 256 ГБ Blue» ->
+    «iPhone 17 Pro». Сплошной список из 46 айфонов читать тяжело, а пустая
+    строка между моделями превращает его в короткие блоки — так устроены все
+    прайс-каналы этого рынка.
+    """
+    tokens = title.split()
+    head: list[str] = []
+    for index, token in enumerate(tokens):
+        pair = f"{token} {tokens[index + 1]}" if index + 1 < len(tokens) else token
+        if _MEMORY_RE.match(pair) or _MEMORY_RE.match(token) or re.match(r"^\d+/\d+", token):
+            break
+        head.append(token)
+        if len(head) >= 4:
+            break
+    return " ".join(head) if head else title
+
+
 def shorten_title(title: str, brand: str | None, section: Section) -> str:
     """Убрать из названия то, что уже сказано разделом.
 
@@ -106,10 +178,15 @@ def shorten_title(title: str, brand: str | None, section: Section) -> str:
 
 
 def product_line(product: dict, section: Section) -> str:
-    """Одна строка прайса. Всё пользовательское — через HTML-escape."""
-    name = escape(shorten_title(product["title"], product.get("brand"), section))
+    """Одна строка прайса: «🇭🇰 iPhone 17 Pro 256 ГБ Blue — 96 000 ₽».
+
+    Флаг заменяет маркер списка: он и так стоит в начале строки, и две метки
+    подряд («• 🇭🇰 …») только зашумляют. У товара без региона маркер остаётся.
+    """
+    flags, cleaned = split_region(product["title"])
+    name = escape(shorten_title(cleaned, product.get("brand"), section))
     price = escape(format_price(product["price"]))
-    line = f"• {name} — {price}"
+    line = f"{flags} {name} — {price}" if flags else f"• {name} — {price}"
     old = product.get("old_price")
     # Старую цену показываем ТОЛЬКО когда она реально выше текущей: иначе это
     # выдуманная скидка, а её в прайсе быть не должно.
@@ -119,13 +196,21 @@ def product_line(product: dict, section: Section) -> str:
 
 
 def sort_key(product: dict) -> tuple:
-    """Внутри подгруппы — по цене, затем по названию.
+    """Сначала модель, внутри модели — по цене, затем по названию.
+
+    Модель первым ключом нужна, чтобы позиции одной модели шли подряд: строки
+    группируются пустой строкой по этому же признаку, и при сортировке только
+    по цене блоки распались бы на одиночные строки с пустотами между ними.
 
     Порядок обязан быть детерминированным: пост сравнивается сам с собой между
     прогонами, и «шевеление» строк от случайного порядка выдало бы ложный diff
-    и лишнее редактирование сообщения.
+    и лишнее редактирование боевого сообщения.
     """
-    return (float(product["price"]), product["title"])
+    _flags, cleaned = split_region(product["title"])
+    brand = product.get("brand")
+    if brand and cleaned.lower().startswith(brand.lower() + " "):
+        cleaned = cleaned[len(brand) + 1:]
+    return (model_key(cleaned), float(product["price"]), product["title"])
 
 
 # ---------------------------------------------------------------- отбор товаров
@@ -187,10 +272,30 @@ class RenderedPost:
     keyboard: list[list[dict]] = field(default_factory=list)
 
 
+def _lines_with_model_breaks(items: list[dict], section: Section) -> list[str]:
+    """Строки товаров с пустой строкой между разными моделями.
+
+    Сорок шесть айфонов подряд читаются как стена текста; разбивка по модели
+    («iPhone 17», «iPhone 17 Pro», «iPhone Air») превращает её в короткие
+    блоки, которые видно с одного взгляда. Пустая строка — единственный
+    разделитель: подзаголовок на каждую модель раздул бы пост вдвое.
+    """
+    lines: list[str] = []
+    previous: str | None = None
+    for item in items:
+        _flags, cleaned = split_region(item["title"])
+        key = model_key(shorten_title(cleaned, item.get("brand"), section))
+        if previous is not None and key != previous:
+            lines.append("")
+        lines.append(product_line(item, section))
+        previous = key
+    return lines
+
+
 def _header(section: Section, on_date: date) -> str:
     return (
         f"{section.emoji} <b>{escape(section.title.upper())} — АКТУАЛЬНЫЙ ПРАЙС</b>\n"
-        f"\n{DISCLAIMER}\n"
+        f"\n{DISCLAIMER}\n\n"
     )
 
 
@@ -221,7 +326,7 @@ def render_section(
     # умолчанию и режется только если сам по себе превышает лимит.
     blocks: list[list[str]] = []
     for name, items in groups:
-        lines = [product_line(p, section) for p in items]
+        lines = _lines_with_model_breaks(items, section)
         block: list[str] = ([f"\n<b>{escape(name)}</b>\n"] if name else [])
         for line in lines:
             candidate = block + [line]
@@ -261,7 +366,7 @@ def render_section(
             section_slug=section.slug,
             title=f"{section.title}" + (f" (часть {index})" if total > 1 else ""),
             text=text,
-            item_count=sum(1 for line in page if line.startswith("•")),
+            item_count=sum(1 for line in page if _IS_PRODUCT_LINE.match(line)),
             part=index,
             parts_total=total,
             keyboard=section_keyboard(section, mini_app_url, manager_url, bot_username),
@@ -412,7 +517,12 @@ class PriceDiff:
         return bool(self.price_changes or self.added or self.removed or self.text_changed)
 
 
-_LINE_RE = re.compile(r"^• (?P<name>.+?) — (?P<price>[\d  ]+) ₽", re.MULTILINE)
+#: Товарная строка: начинается с маркера или флага, заканчивается ценой.
+_IS_PRODUCT_LINE = re.compile(r"^(?:•|[🇦-🇿]{2,}) .+ — [\d  ]+ ₽")
+
+_LINE_RE = re.compile(
+    r"^(?:•|[🇦-🇿]{2,})\s+(?P<name>.+?) — (?P<price>[\d  ]+) ₽",
+    re.MULTILINE)
 
 
 def parse_lines(text: str) -> dict[str, float]:

@@ -21,12 +21,15 @@ from app.services.price_posts import (
     format_price,
     group_by_subgroup,
     message_link,
+    model_key,
     navigation_keyboard,
     navigation_text,
     parse_lines,
+    product_line,
     render_all,
     render_section,
     select_products,
+    split_region,
     shorten_title,
 )
 
@@ -99,7 +102,7 @@ def test_section_matches_only_its_own_products():
 
 
 def test_dyson_sections_require_the_brand():
-    section = SECTIONS_BY_SLUG["price_dyson_hair"]
+    section = SECTIONS_BY_SLUG["price_dyson"]
     products = [
         product(brand="Dyson", category="красота", subcategory="Стайлеры"),
         product(brand="Другой", category="красота", subcategory="Стайлеры"),
@@ -110,7 +113,7 @@ def test_dyson_sections_require_the_brand():
 # ---------------------------------------------------------------- группировка
 
 def test_subgroups_follow_declared_order():
-    section = SECTIONS_BY_SLUG["price_dyson_hair"]
+    section = SECTIONS_BY_SLUG["price_dyson"]
     products = [
         product(brand="Dyson", category="красота", subcategory="Выпрямители", title="В", price=30000),
         product(brand="Dyson", category="красота", subcategory="Стайлеры", title="С", price=40000),
@@ -122,7 +125,7 @@ def test_subgroups_follow_declared_order():
 
 def test_unknown_subgroup_is_not_silently_dropped():
     """Новая подкатегория в каталоге обязана появиться в посте, а не исчезнуть."""
-    section = SECTIONS_BY_SLUG["price_dyson_hair"]
+    section = SECTIONS_BY_SLUG["price_dyson"]
     products = [
         product(brand="Dyson", category="красота", subcategory="Стайлеры", title="С"),
         product(brand="Dyson", category="красота", subcategory="Новинки", title="Н"),
@@ -138,7 +141,15 @@ def test_products_are_sorted_deterministically():
     first = render_section(products, section, TODAY, MINI_APP)[0].text
     second = render_section(list(reversed(products)), section, TODAY, MINI_APP)[0].text
     assert first == second
-    assert first.index("70 000") < first.index("80 000") < first.index("90 000")
+
+
+def test_within_one_model_products_are_sorted_by_price():
+    """Порядок внутри модели — по цене; сами модели идут блоками (см. sort_key)."""
+    section = SECTIONS_BY_SLUG["price_iphone"]
+    products = [product(sku=f"S{p}", title=f"Apple iPhone 17 Pro {p // 1000} ГБ Blue", price=p)
+                for p in (90000, 70000, 80000)]
+    text = render_section(products, section, TODAY, MINI_APP)[0].text
+    assert text.index("70 000") < text.index("80 000") < text.index("90 000")
 
 
 # ---------------------------------------------------------------- текст поста
@@ -396,3 +407,112 @@ def test_render_all_covers_every_section_with_data():
         ))
     posts = render_all(products, TODAY, MINI_APP, MANAGER)
     assert {p.section_slug for p in posts} == {s.slug for s in SECTIONS}
+
+
+# ---------------------------------------------------------------- флаги регионов
+
+@pytest.mark.parametrize("title,flags,cleaned", [
+    ("Apple iPhone 17 Pro 256 Blue (HK)", "🇭🇰", "Apple iPhone 17 Pro 256 Blue"),
+    ("Apple iPhone 17 256 Black (IN, SIM+eSIM)", "🇮🇳", "Apple iPhone 17 256 Black (SIM+eSIM)"),
+    ("Apple iPhone 17 Pro 1 ТБ Blue (HK-KR, SIM+eSIM)", "🇭🇰🇰🇷",
+     "Apple iPhone 17 Pro 1 ТБ Blue (SIM+eSIM)"),
+    ("Dyson HD16 Amber Silk (Case) (HK)", "🇭🇰", "Dyson HD16 Amber Silk (Case)"),
+    ("Apple MacBook Air 13 M5 (US-IN)", "🇺🇸🇮🇳", "Apple MacBook Air 13 M5"),
+])
+def test_region_is_replaced_with_flags(title, flags, cleaned):
+    assert split_region(title) == (flags, cleaned)
+
+
+def test_non_region_parentheses_survive():
+    """SIM, комплектация и конфигурация отличают позиции — их терять нельзя."""
+    _flags, cleaned = split_region("Apple MacBook Pro 14 (M5 16GB 512GB)")
+    assert cleaned == "Apple MacBook Pro 14 (M5 16GB 512GB)"
+
+
+def test_product_without_region_keeps_the_bullet():
+    section = SECTIONS_BY_SLUG["price_iphone"]
+    line = product_line(product(title="Apple iPhone 17 Pro"), section)
+    assert line.startswith("• ")
+
+
+def test_product_with_region_starts_with_the_flag_and_has_no_bullet():
+    section = SECTIONS_BY_SLUG["price_iphone"]
+    line = product_line(product(title="Apple iPhone 17 Pro 256 Blue (HK)"), section)
+    assert line.startswith("🇭🇰 ")
+    assert "•" not in line
+    assert "(HK)" not in line
+
+
+# ---------------------------------------------------------------- блоки моделей
+
+@pytest.mark.parametrize("title,expected", [
+    ("iPhone 17 Pro 256 ГБ Blue", "iPhone 17 Pro"),
+    ("iPhone 17 256 ГБ Black", "iPhone 17"),
+    ("MacBook Air 13 M5 512GB", "MacBook Air 13 M5"),
+])
+def test_model_key(title, expected):
+    assert model_key(title) == expected
+
+
+def test_models_are_separated_by_a_blank_line():
+    """46 айфонов подряд читаются как стена текста; блоки по модели её ломают."""
+    section = SECTIONS_BY_SLUG["price_iphone"]
+    products = [
+        product(sku="A", title="Apple iPhone 17 256 ГБ Black (HK)", price=80000),
+        product(sku="B", title="Apple iPhone 17 512 ГБ Black (HK)", price=90000),
+        product(sku="C", title="Apple iPhone 17 Pro 256 ГБ Blue (HK)", price=120000),
+    ]
+    text = render_section(products, section, TODAY, MINI_APP)[0].text
+    body = text.split("менеджер.")[1]
+    # Внутри «iPhone 17» пустых строк нет, перед «iPhone 17 Pro» — есть.
+    assert "17 256 ГБ Black — 80 000 ₽\n🇭🇰 iPhone 17 512" in body
+    assert "\n\n🇭🇰 iPhone 17 Pro" in body
+
+
+def test_item_count_survives_the_flag_format():
+    """Счётчик раньше искал «•» — с флагами он бы обнулился."""
+    section = SECTIONS_BY_SLUG["price_iphone"]
+    products = [product(sku=f"S{i}", title=f"Apple iPhone 17 {i} ГБ Black (HK)", price=80000 + i)
+                for i in range(5)]
+    post = render_section(products, section, TODAY, MINI_APP)[0]
+    assert post.item_count == 5
+
+
+def test_diff_still_parses_lines_with_flags():
+    section = SECTIONS_BY_SLUG["price_iphone"]
+    post = render_section([product(title="Apple iPhone 17 Pro 256 Blue (HK)", price=96000)],
+                          section, TODAY, MINI_APP)[0]
+    assert parse_lines(post.text) == {"iPhone 17 Pro 256 Blue": 96000.0}
+
+
+# ---------------------------------------------------------------- один Dyson
+
+def test_dyson_is_a_single_section_with_all_subgroups():
+    """Одна кнопка на бренд вместо трёх — и всё помещается в один пост."""
+    section = SECTIONS_BY_SLUG["price_dyson"]
+    products = [
+        product(sku="1", brand="Dyson", category="красота", subcategory="Стайлеры",
+                title="Dyson HS08 Ceramic Pink (HK)", price=36500),
+        product(sku="2", brand="Dyson", category="красота", subcategory="Фены",
+                title="Dyson HD16 Blue Copper (HK)", price=27600),
+        product(sku="3", brand="Dyson", category="красота", subcategory="Выпрямители",
+                title="Dyson HT01 Ceramic Pink (HK)", price=28100),
+        product(sku="4", brand="Dyson", category="бытовая техника", subcategory="Пылесосы",
+                title="Dyson V12s Detect Slim (HK)", price=53500),
+        product(sku="5", brand="Dyson", category="бытовая техника",
+                subcategory="Климатическая техника", title="Dyson PH05 (HK)", price=78000),
+    ]
+    posts = render_section(products, section, TODAY, MINI_APP, MANAGER, BOT)
+    assert len(posts) == 1
+    text = posts[0].text
+    for name in ("Стайлеры", "Фены", "Выпрямители", "Пылесосы", "Климатическая техника"):
+        assert f"<b>{name}</b>" in text
+    assert posts[0].item_count == 5
+    assert posts[0].slug == "price_dyson"
+
+
+def test_dyson_navigation_has_exactly_one_button():
+    published = {s.slug: i + 1 for i, s in enumerate(SECTIONS)}
+    rows = navigation_keyboard(published, -100123, MINI_APP, MANAGER, BOT)
+    dyson_buttons = [b for row in rows for b in row if "Dyson" in b["text"]]
+    assert len(dyson_buttons) == 1
