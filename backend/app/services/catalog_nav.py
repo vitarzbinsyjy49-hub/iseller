@@ -40,6 +40,15 @@ FALLBACK_ICON = "🛍️"
 SALE_ICON = "🏷️"
 SALE_LABEL = "Скидки"
 
+# Оформление известных брендов. Это НЕ список брендов — только внешний вид для
+# тех, что реально есть в каталоге: незнакомый бренд попадает в навигацию и без
+# записи здесь, просто с нейтральной иконкой.
+BRAND_ICONS: dict[str, str] = {
+    "apple": "🍏",
+    "dyson": "🌀",
+    "sony": "🎮",
+}
+
 
 def category_label(raw: str) -> str:
     """«бытовая техника» -> «Бытовая техника». Регистр остальных букв не трогаем:
@@ -98,6 +107,27 @@ def list_categories(db: Session) -> list[dict]:
     if sale:
         out.append({"key": SALE_KEY, "label": SALE_LABEL, "icon": SALE_ICON, "count": sale})
     return out
+
+
+def brand_icon(raw: str) -> str:
+    return BRAND_ICONS.get((raw or "").strip().lower(), FALLBACK_ICON)
+
+
+def list_brands(db: Session) -> list[dict]:
+    """Бренды для навигации: только непустые, крупные первыми.
+
+    Зеркало list_categories(). Ключ — значение Product.brand как оно лежит в
+    БД: фильтр `?brand=` сравнивает точным равенством, поэтому нормализация
+    ключа увела бы плитку в пустой каталог. Подпись — тот же ключ: у брендов
+    собственный регистр, и category_label() здесь только испортил бы имя.
+
+    Виртуальной записи вроде SALE_KEY у брендов нет — скидка не бренд.
+    """
+    counts = brand_counts(db)
+    return [
+        {"key": key, "label": key, "icon": brand_icon(key), "count": n}
+        for key, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
 
 
 # Разговорные слова -> слово, которое реально встречается в названии категории

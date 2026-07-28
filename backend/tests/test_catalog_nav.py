@@ -16,8 +16,8 @@ from app.main import app
 from app.models.home import ACTION_TYPES, HomeBanner, HomeCategory
 from app.models.user import User
 from app.services.catalog_nav import (
-    FALLBACK_ICON, SALE_KEY, category_label, has_products, list_categories,
-    resolve_category,
+    BRAND_ICONS, FALLBACK_ICON, SALE_KEY, category_label, has_products,
+    list_brands, list_categories, resolve_category,
 )
 from tests.conftest import make_product
 
@@ -130,6 +130,52 @@ def test_sale_appears_with_discounts(db):
     cats = list_categories(db)
     assert SALE_KEY in _keys(cats)
     assert next(c for c in cats if c["key"] == SALE_KEY)["count"] == 1
+
+
+# ---------- бренды: та же ось навигации, тот же источник правды ----------
+
+def test_empty_catalog_has_no_brands(db):
+    assert list_brands(db) == []
+
+
+def test_only_brands_with_active_products(db):
+    make_product(db, brand="Apple")
+    make_product(db, brand="Sony", category="консоли", is_active=False)
+    assert [b["key"] for b in list_brands(db)] == ["Apple"]
+
+
+def test_brands_order_biggest_first_then_name(db):
+    make_product(db, brand="Dyson", category="красота")
+    make_product(db, brand="Dyson", category="бытовая техника")
+    make_product(db, brand="Apple")
+    make_product(db, brand="Sony", category="консоли")
+    # Dyson 2 товара -> первый; Apple и Sony по одному -> по алфавиту
+    assert [b["key"] for b in list_brands(db)] == ["Dyson", "Apple", "Sony"]
+
+
+def test_brand_key_keeps_original_case(db):
+    make_product(db, brand="Dyson", category="красота")
+    # ?brand= сравнивает точным равенством: нормализация ключа сломала бы переход
+    assert list_brands(db)[0]["key"] == "Dyson"
+    assert list_brands(db)[0]["label"] == "Dyson"
+
+
+def test_known_brand_gets_its_icon(db):
+    make_product(db, brand="Dyson", category="красота")
+    assert list_brands(db)[0]["icon"] == BRAND_ICONS["dyson"]
+
+
+def test_unknown_brand_gets_fallback_icon_but_stays_in_nav(db):
+    make_product(db, brand="Zanussi", category="бытовая техника")
+    brands = list_brands(db)
+    assert [b["key"] for b in brands] == ["Zanussi"]
+    assert brands[0]["icon"] == FALLBACK_ICON
+
+
+def test_brand_counts_are_real(db):
+    make_product(db, brand="Dyson", category="красота")
+    make_product(db, brand="Dyson", category="бытовая техника")
+    assert list_brands(db)[0]["count"] == 2
 
 
 # ---------- правило видимости плитки ----------
