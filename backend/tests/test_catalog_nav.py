@@ -264,10 +264,77 @@ def test_home_keeps_brand_tile_when_brand_exists(client, db):
                      action_value="Samsung", position=2),        # такого бренда нет
     ])
     db.commit()
-    titles = [c["title"] for c in client.get("/api/home").json()["categories"]]
-    assert titles[0] == "Dyson"          # бренд с товарами — первым, как задан админом
-    assert "Samsung" not in titles       # бренда нет в каталоге -> плитки нет
-    assert "Красота" in titles           # категория без плитки добавилась сама
+    body = client.get("/api/home").json()
+    brands = [b["title"] for b in body["brands"]]
+    assert brands[0] == "Dyson"          # бренд с товарами — первым, как задан админом
+    assert "Samsung" not in brands       # бренда нет в каталоге -> плитки нет
+    # Категория без плитки добавилась сама — на свою ось, не на ось брендов
+    assert "Красота" in [c["title"] for c in body["categories"]]
+
+
+# ---------- /home: две оси навигации ----------
+
+def test_home_returns_brand_axis_from_catalog(client, db):
+    make_product(db, brand="Dyson", category="красота")
+    make_product(db, brand="Dyson", category="бытовая техника")
+    body = client.get("/api/home").json()
+    assert [b["action_value"] for b in body["brands"]] == ["Dyson"]
+    assert all(b["action_type"] == "brand" for b in body["brands"])
+
+
+def test_home_brand_axis_is_empty_without_products(client, db):
+    body = client.get("/api/home").json()
+    assert body["brands"] == []
+
+
+def test_home_hides_brand_tile_without_products(client, db):
+    make_product(db, brand="Apple")
+    db.add(HomeCategory(title="Dyson", action_type="brand", action_value="Dyson",
+                        position=1, is_active=True))
+    db.commit()
+    body = client.get("/api/home").json()
+    # Курируемая плитка бренда, у которого нет товаров, на главную не выходит
+    assert [b["action_value"] for b in body["brands"]] == ["Apple"]
+
+
+def test_home_respects_explicitly_disabled_brand_tile(client, db):
+    make_product(db, brand="Dyson", category="красота")
+    db.add(HomeCategory(title="Dyson", action_type="brand", action_value="Dyson",
+                        position=1, is_active=False))
+    db.commit()
+    body = client.get("/api/home").json()
+    # Выключенная плитка — осознанное «скрыть», автодобавление её не воскрешает
+    assert body["brands"] == []
+
+
+def test_home_does_not_duplicate_curated_brand(client, db):
+    make_product(db, brand="Dyson", category="красота")
+    db.add(HomeCategory(title="Дайсон", emoji="🌀", action_type="brand",
+                        action_value="Dyson", position=1, is_active=True))
+    db.commit()
+    body = client.get("/api/home").json()
+    assert [b["action_value"] for b in body["brands"]] == ["Dyson"]
+    assert body["brands"][0]["title"] == "Дайсон"   # оформление админа сохраняется
+
+
+def test_brand_tile_does_not_leak_into_category_axis(client, db):
+    make_product(db, brand="Dyson", category="красота")
+    db.add(HomeCategory(title="Dyson", action_type="brand", action_value="Dyson",
+                        position=1, is_active=True))
+    db.commit()
+    body = client.get("/api/home").json()
+    assert all(c["action_type"] != "brand" for c in body["categories"])
+
+
+def test_uncountable_tiles_stay_on_category_axis(client, db):
+    make_product(db, brand="Apple")
+    db.add(HomeCategory(title="Спросить AI", action_type="ai", action_value="",
+                        position=1, is_active=True))
+    db.commit()
+    body = client.get("/api/home").json()
+    # Поиск/подборка/AI не переезжают на ось брендов и не образуют третью ось
+    assert "Спросить AI" in [c["title"] for c in body["categories"]]
+    assert "Спросить AI" not in [b["title"] for b in body["brands"]]
 
 
 def test_home_keeps_uncountable_tiles(client, db):

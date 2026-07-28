@@ -12,13 +12,28 @@ from app.api.deps import get_current_admin, get_current_user
 from app.db.session import get_db
 from app.models.home import ACTION_TYPES, HomeBanner, HomeCategory
 from app.services.catalog_nav import (
-    brand_counts, category_counts, has_products, list_categories, sale_count,
+    brand_counts, category_counts, has_products, list_brands, list_categories,
+    sale_count,
 )
 
 router = APIRouter(prefix="/home", tags=["home"])
 admin_router = APIRouter(
     prefix="/admin/home", tags=["admin-home"], dependencies=[Depends(get_current_admin)]
 )
+
+
+def _auto_tile(item: dict, *, action_type: str, index: int,
+               id_offset: int, position_base: int) -> dict:
+    """Плитка, которой админ ещё не занимался, — собирается из данных каталога.
+
+    id отрицательный и разведён по осям смещением: он используется только как
+    React-ключ на фронте и не должен совпадать у категории и бренда."""
+    return {
+        "id": -(id_offset + index + 1), "title": item["label"], "emoji": item["icon"],
+        "icon_url": None, "background_gradient": None,
+        "action_type": action_type, "action_value": item["key"],
+        "position": position_base + index, "is_active": True,
+    }
 
 
 @router.get("", dependencies=[Depends(get_current_user)])
@@ -38,24 +53,38 @@ def get_home(db: Session = Depends(get_db)):
     # 1) Плитка, за которой нет товаров, на главную не выходит: пустой экран
     #    после нажатия хуже отсутствующей плитки. Скрываем только посчитанное
     #    (категория/бренд) — поиск, подборки и AI не трогаем.
-    visible = [c.to_dict() for c in managed
-               if c.is_active
-               and has_products(c.action_type, c.action_value,
-                                categories=cats, brands=brands, sale=sale)]
+    def shown(rows: list[HomeCategory]) -> list[dict]:
+        return [c.to_dict() for c in rows
+                if c.is_active
+                and has_products(c.action_type, c.action_value,
+                                 categories=cats, brands=brands, sale=sale)]
 
-    # 2) Категория, которой админ ещё не занимался, показывается сама. Так новый
+    # 2) Две оси навигации: бренды отдельной вкладкой, всё остальное — включая
+    #    непосчитаемые промо-плитки (поиск, подборка, AI) — на оси категорий.
+    #    Третьей корзины нет намеренно: промо некуда переезжать.
+    managed_brands = [c for c in managed if c.action_type == "brand"]
+    managed_rest = [c for c in managed if c.action_type != "brand"]
+
+    # 3) Категория, которой админ ещё не занимался, показывается сама. Так новый
     #    раздел (импорт прайса, товар из админки) появляется в навигации без
-    #    правок кода и без ручного создания плитки.
-    curated = {(c.action_value or "").strip() for c in managed if c.action_type == "category"}
-    auto = [c for c in list_categories(db) if c["key"] not in curated]
-    visible += [
-        {"id": -(i + 1), "title": c["label"], "emoji": c["icon"], "icon_url": None,
-         "background_gradient": None, "action_type": "category",
-         "action_value": c["key"], "position": 1000 + i, "is_active": True}
-        for i, c in enumerate(auto)
+    #    правок кода и без ручного создания плитки. С брендами — то же правило.
+    curated_cats = {(c.action_value or "").strip() for c in managed if c.action_type == "category"}
+    categories = shown(managed_rest) + [
+        _auto_tile(c, action_type="category", index=i, id_offset=0, position_base=1000)
+        for i, c in enumerate(c for c in list_categories(db) if c["key"] not in curated_cats)
     ]
 
-    return {"banners": [b.to_dict() for b in banners], "categories": visible}
+    curated_brands = {(c.action_value or "").strip() for c in managed_brands}
+    brand_tiles = shown(managed_brands) + [
+        _auto_tile(b, action_type="brand", index=i, id_offset=1000, position_base=2000)
+        for i, b in enumerate(b for b in list_brands(db) if b["key"] not in curated_brands)
+    ]
+
+    return {
+        "banners": [b.to_dict() for b in banners],
+        "categories": categories,
+        "brands": brand_tiles,
+    }
 
 
 # ==================== Admin CRUD ====================
