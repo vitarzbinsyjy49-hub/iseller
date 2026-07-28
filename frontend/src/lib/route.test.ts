@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { safeExternalUrl, safeInternalRoute } from "./route";
+import { actionRoute, safeExternalUrl, safeInternalRoute } from "./route";
 
 describe("safeInternalRoute", () => {
   it("пропускает обычные внутренние маршруты без изменений", () => {
@@ -56,5 +56,28 @@ describe("safeExternalUrl", () => {
     expect(safeExternalUrl("")).toBeNull();
     expect(safeExternalUrl(null)).toBeNull();
     expect(safeExternalUrl(undefined)).toBeNull();
+  });
+});
+
+describe("actionRoute", () => {
+  it("категория ведёт в каталог с фильтром категории", () => {
+    expect(actionRoute("category", "смартфоны")).toBe(
+      "/catalog?category=%D1%81%D0%BC%D0%B0%D1%80%D1%82%D1%84%D0%BE%D0%BD%D1%8B",
+    );
+  });
+
+  it("бренд ведёт в каталог с фильтром бренда", () => {
+    // Dyson — бренд, а не категория: его товары лежат в «красота» и
+    // «бытовая техника», плитка по категории вела в пустоту
+    expect(actionRoute("brand", "Dyson")).toBe("/catalog?brand=Dyson");
+  });
+
+  it("AI без запроса ведёт в чат, с запросом — с предзаполнением", () => {
+    expect(actionRoute("ai", "")).toBe("/ai");
+    expect(actionRoute("ai", "макбук")).toBe("/ai?q=%D0%BC%D0%B0%D0%BA%D0%B1%D1%83%D0%BA");
+  });
+
+  it("неизвестный тип не роняет навигацию", () => {
+    expect(actionRoute("нечто", "x")).toBe("/catalog");
   });
 });

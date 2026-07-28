@@ -14,7 +14,7 @@ import { ProfileChip } from "../components/ProfileChip";
 import { ErrorState } from "../components/StateViews";
 import SearchPanel from "../components/SearchPanel";
 import { pushSearchQuery } from "../lib/searchHistory";
-import { safeExternalUrl, safeInternalRoute } from "../lib/route";
+import { actionRoute, safeExternalUrl, safeInternalRoute } from "../lib/route";
 import { loadCachedCategories, saveCachedCategories } from "../lib/categoryCache";
 
 type Category = { key: string; label: string; icon: string; count: number };
@@ -32,23 +32,6 @@ type HomeCat = {
 };
 type HomeData = { banners: HomeBanner[]; categories: HomeCat[] };
 
-/** Куда ведёт клик по баннеру/категории (общая маршрутизация action-ов).
- * Значения приходят из админки, поэтому результат проходит через
- * safeInternalRoute: наружу увести переходом нельзя (см. lib/route.ts). */
-function actionRoute(type: string, value?: string | null): string {
-  const v = (value ?? "").trim();
-  switch (type) {
-    case "category": return `/catalog?category=${encodeURIComponent(v)}`;
-    // brand: «Dyson» — это бренд, а не категория (его товары лежат в «красота»
-    // и «бытовая техника»), поэтому плитка по категории вела в пустоту.
-    case "brand": return `/catalog?brand=${encodeURIComponent(v)}`;
-    case "search": return `/catalog?query=${encodeURIComponent(v)}`;
-    case "product": return safeInternalRoute(`/product/${encodeURIComponent(v)}`);
-    case "collection": return `/catalog?collection=${encodeURIComponent(v)}`;
-    case "ai": return v ? `/ai?q=${encodeURIComponent(v)}` : "/ai";
-    default: return "/catalog";
-  }
-}
 
 /** Запасные промо-блоки, если /api/home недоступен (backend старой версии). */
 const FALLBACK_PROMOS: HomeBanner[] = [

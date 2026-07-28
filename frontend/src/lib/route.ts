@@ -23,6 +23,29 @@ export function safeInternalRoute(to: unknown, fallback: string = SAFE_FALLBACK)
   return normalized;
 }
 
+/** Куда ведёт клик по баннеру/плитке главной (общая маршрутизация action-ов).
+ *
+ * Значения приходят из админки, поэтому результат проходит через
+ * safeInternalRoute: наружу увести переходом нельзя.
+ *
+ * Живёт здесь, а не в Home: маршрут нужен и навигации главной (navTiles), и
+ * самой странице, а как чистая функция он ещё и проверяется тестами. */
+export function actionRoute(type: string, value?: string | null): string {
+  const v = (value ?? "").trim();
+  switch (type) {
+    case "category": return `/catalog?category=${encodeURIComponent(v)}`;
+    // brand: «Dyson» — это бренд, а не категория (его товары лежат в «красота»
+    // и «бытовая техника»), поэтому плитка по категории вела в пустоту.
+    case "brand": return `/catalog?brand=${encodeURIComponent(v)}`;
+    case "search": return `/catalog?query=${encodeURIComponent(v)}`;
+    case "product": return safeInternalRoute(`/product/${encodeURIComponent(v)}`);
+    case "collection": return `/catalog?collection=${encodeURIComponent(v)}`;
+    case "ai": return v ? `/ai?q=${encodeURIComponent(v)}` : "/ai";
+    default: return "/catalog";
+  }
+}
+
+
 /** Разрешённые схемы для ВНЕШНИХ ссылок баннеров (остальное — не открываем).
  * Разбираем без base: внешняя ссылка обязана быть абсолютной http/https. */
 export function safeExternalUrl(url: unknown): string | null {
