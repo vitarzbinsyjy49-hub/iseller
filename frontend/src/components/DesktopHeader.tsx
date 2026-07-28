@@ -7,6 +7,8 @@ import { track } from "../lib/analytics";
 import { pushSearchQuery } from "../lib/searchHistory";
 import { ProfileChip } from "./ProfileChip";
 import SearchPanel from "./SearchPanel";
+import { SegmentedToggle } from "./SegmentedToggle";
+import { searchRoute, type SearchMode } from "../lib/searchMode";
 
 /** Desktop-шапка (>=1024px): логотип, навигация, поиск, действия.
  *  Видна только на lg+ — mobile UX (BottomNav + градиентный header) не трогаем.
@@ -35,6 +37,8 @@ export default function DesktopHeader() {
   // Компактный popover при фокусе с пустым запросом: история + быстрые сценарии
   // + «Спросить AI». Live-результаты на desktop рисует сам каталог (как раньше).
   const [panelOpen, setPanelOpen] = useState(false);
+  // Режим строки поиска: каталог или AI-подбор. Не сохраняется между визитами.
+  const [mode, setMode] = useState<SearchMode>("catalog");
 
   // Подхватить внешний query (переход на каталог с другим query) или сброс
   // при уходе со страницы каталога — шапка не должна хранить «чужой» текст.
@@ -110,14 +114,16 @@ export default function DesktopHeader() {
                   const trimmed = q.trim();
                   if (trimmed.length >= 2) {
                     pushSearchQuery(trimmed);
-                    track("search_query_submitted", { query_length: trimmed.length, source: "desktop_enter" });
-                    navigate(`/catalog?query=${encodeURIComponent(trimmed)}`);
+                    track("search_query_submitted", {
+                      query_length: trimmed.length, source: "desktop_enter", mode,
+                    });
+                    navigate(searchRoute(mode, trimmed));
                   }
                   setPanelOpen(false);
                 }
               }}
-              placeholder="Найти iPhone, MacBook, PlayStation…"
-              aria-label="Поиск по каталогу"
+              placeholder={mode === "ai" ? "Опишите, что нужно — подберём" : "Найти iPhone, MacBook, PlayStation…"}
+              aria-label={mode === "ai" ? "AI-подбор" : "Поиск по каталогу"}
               aria-expanded={panelOpen && !q.trim()}
               className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-muted"
             />
@@ -126,6 +132,18 @@ export default function DesktopHeader() {
                 ✕
               </button>
             )}
+            <SegmentedToggle
+              value={mode}
+              onChange={(next) => {
+                setMode(next);
+                track("search_mode_switched", { mode: next, source: "desktop_header" });
+              }}
+              options={[
+                { value: "catalog", label: "Каталог" },
+                { value: "ai", label: "✨ AI" },
+              ] as const}
+              ariaLabel="Режим поиска"
+            />
           </div>
 
           {panelOpen && !q.trim() && (

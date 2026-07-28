@@ -99,6 +99,9 @@ export default function Home() {
   // при вводе (live-результаты). Содержимое — SearchPanel; debounce и отмена
   // запросов (AbortController) — в lib/liveSearch.
   const [searchOpen, setSearchOpen] = useState(false);
+  // Режим строки поиска. Между визитами не сохраняется: по умолчанию всегда
+  // каталог, AI — осознанное переключение.
+  const [searchMode, setSearchMode] = useState<SearchMode>("catalog");
   // v5.2.6: персональные секции («Для вас», «Недавно смотрели»)
   const [recs, setRecs] = useState<TCard[] | null>(null);
   const [recsMode, setRecsMode] = useState<string>("cold");
@@ -138,9 +141,11 @@ export default function Home() {
     const q = search.trim();
     if (q) {
       pushSearchQuery(q);
-      track("search_query_submitted", { query_length: q.length, source: "home_enter" });
+      track("search_query_submitted", {
+        query_length: q.length, source: "home_enter", mode: searchMode,
+      });
     }
-    navigate(q ? `/catalog?query=${encodeURIComponent(q)}` : "/catalog");
+    navigate(searchRoute(searchMode, search));
   }
 
   /** Навигация из поисковой панели: сохранить осмысленный запрос в историю и уйти. */
@@ -222,8 +227,8 @@ export default function Home() {
                 if (e.key === "Enter") goSearch();
                 if (e.key === "Escape") { setSearchOpen(false); e.currentTarget.blur(); }
               }}
-              placeholder="Найти iPhone, MacBook, AirPods…"
-              aria-label="Поиск по каталогу"
+              placeholder={searchMode === "ai" ? "Опишите, что нужно — подберём" : "Найти iPhone, MacBook, AirPods…"}
+              aria-label={searchMode === "ai" ? "AI-подбор" : "Поиск по каталогу"}
               aria-expanded={searchOpen || search.trim().length >= 2}
               className="h-12 min-w-0 flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-muted"
             />
@@ -241,13 +246,22 @@ export default function Home() {
               </button>
             )}
           </div>
-          <button
-            onClick={() => navigate("/ai")}
-            aria-label="AI-подбор"
-            className="tap flex shrink-0 items-center gap-1 rounded-card bg-white/15 px-4 text-[13px] font-bold text-white ring-1 ring-inset ring-white/15 backdrop-blur transition-colors hover:bg-white/20"
-          >
-            ✨ AI
-          </button>
+          {/* Тумблер режима вместо прежней кнопки «✨ AI»: та уводила в чат
+              без запроса, тумблер делает то же самое и вдобавок переносит уже
+              введённый текст — держать оба смысла нет. */}
+          <SegmentedToggle
+            value={searchMode}
+            onChange={(next) => {
+              setSearchMode(next);
+              track("search_mode_switched", { mode: next, source: "home" });
+            }}
+            options={[
+              { value: "catalog", label: "Каталог" },
+              { value: "ai", label: "✨ AI" },
+            ] as const}
+            ariaLabel="Режим поиска"
+            variant="on-dark"
+          />
 
           {/* Умная поисковая панель: по фокусу — история/чипы/недавние/AI,
               при вводе — live-результаты (debounce + AbortController внутри).
