@@ -129,6 +129,8 @@ def _apply_demo_migrations() -> None:
         "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS item_count INTEGER DEFAULT 0",
         "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS reply_markup JSON",
         "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS last_error TEXT",
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS published_body TEXT",
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS button_spec JSON",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSON DEFAULT '[]'::json",
         # v5.5.0: «Осталось N шт» показываем только у явно лимитированных товаров.
         # Дефолт false => у существующих позиций подпись просто исчезает; сами

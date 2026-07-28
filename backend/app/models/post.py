@@ -42,6 +42,16 @@ class ChannelPost(Base):
     # Inline-клавиатура в формате Bot API; хранится, чтобы обновлять разметку
     # (например у навигационного поста) без перепубликации текста.
     reply_markup: Mapped[list | None] = mapped_column(JSON)
+    # Текст, который РЕАЛЬНО отправлен в канал. Для инфо-постов body — это то,
+    # что человек написал в админке, и без отдельной копии отправленного нельзя
+    # честно ответить «изменилось ли что-то»: полагаться на статус нельзя,
+    # текст могли поправить и мимо API.
+    published_body: Mapped[str | None] = mapped_column(Text)
+    # Описание кнопок в понятном админке виде: [{"text", "kind", "value"}].
+    # Хранится ИМЕННО описание, а не готовая клавиатура Bot API: ссылка на
+    # менеджера или канал живёт в настройках и может смениться — тогда все
+    # посты должны подхватить новую, а не тащить вмороженный старый URL.
+    button_spec: Mapped[list | None] = mapped_column(JSON)
     last_error: Mapped[str | None] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

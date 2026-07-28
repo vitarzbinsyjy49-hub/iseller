@@ -39,6 +39,10 @@ from app.services.price_posts import (
     navigation_text,
     render_all,
 )
+from app.services.info_posts import (
+    DEFAULT_BUTTONS, INFO_BY_SLUG, INFO_KIND, INFO_POSTS,
+    build_keyboard, has_placeholders,
+)
 from app.services.telegram_publisher import (
     TelegramPublishError,
     edit_message,
@@ -76,8 +80,112 @@ def load_catalog(db: Session) -> list[dict]:
 
 def _existing(db: Session) -> dict[str, ChannelPost]:
     rows = db.query(ChannelPost).filter(
-        ChannelPost.kind.in_([PRICE_KIND, NAVIGATION_KIND])).all()
+        ChannelPost.kind.in_([PRICE_KIND, NAVIGATION_KIND, INFO_KIND])).all()
     return {row.slug: row for row in rows if row.slug}
+
+
+# ---------------------------------------------------------------- инфо-посты
+
+def ensure_info_drafts(db: Session) -> list[ChannelPost]:
+    """Создать черновики инфо-постов из заготовок, НЕ трогая уже написанные.
+
+    Текст инфо-поста пишет человек, поэтому повторный вызов не должен
+    затирать правки: заготовка ставится только тем разделам, которых ещё нет.
+    """
+    existing = _existing(db)
+    created: list[ChannelPost] = []
+    for index, info in enumerate(INFO_POSTS):
+        if info.slug in existing:
+            continue
+        row = ChannelPost(
+            slug=info.slug, kind=INFO_KIND, status="draft",
+            title=info.title, body=info.default_text,
+            button_spec=list(DEFAULT_BUTTONS),
+            sort_order=1000 + index,
+        )
+        db.add(row)
+        created.append(row)
+    db.commit()
+    return created
+
+
+def section_links(db: Session) -> dict[str, str]:
+    """Ссылки на уже опубликованные прайс-посты — для кнопок «Раздел прайса»."""
+    from app.services.price_posts import message_link
+
+    return {
+        slug: message_link(row.channel_id or channel_id(), row.telegram_message_id)
+        for slug, row in _existing(db).items()
+        if row.kind == PRICE_KIND and row.telegram_message_id
+    }
+
+
+def apply_info_posts(
+    db: Session, *, slugs: list[str] | None = None, dry_run: bool = False,
+) -> ApplyResult:
+    """Опубликовать или обновить инфо-посты (текст берётся из БД, как есть)."""
+    result = ApplyResult()
+    if not dry_run and not channel_id():
+        raise TelegramPublishError("TELEGRAM_CHANNEL_ID не настроен")
+
+    now = datetime.now(timezone.utc)
+    rows = [r for r in _existing(db).values() if r.kind == INFO_KIND]
+    if slugs is not None:
+        rows = [r for r in rows if r.slug in set(slugs)]
+
+    for row in sorted(rows, key=lambda r: r.sort_order):
+        # Незаполненная заготовка в канал не уходит: «[уточнить] — впишите
+        # ваши условия» читается как забытый черновик и бьёт по доверию
+        # сильнее, чем отсутствие поста.
+        if has_placeholders(row.body):
+            result.failed.append((row.slug, "в тексте остались незаполненные места"))
+            continue
+
+        keyboard = build_keyboard(
+            row.button_spec if row.button_spec is not None else DEFAULT_BUTTONS,
+            bot_username=settings.BOT_USERNAME,
+            manager_url=settings.MANAGER_RETAIL_URL,
+            channel_url=settings.TELEGRAM_CHANNEL_URL,
+            section_links=section_links(db),
+        )
+        # Сравниваем с тем, что РЕАЛЬНО в канале, а не со статусом: статус
+        # мог не обновиться, если текст правили мимо API.
+        if (row.telegram_message_id and row.published_body == row.body
+                and row.reply_markup == keyboard):
+            result.unchanged.append(row.slug)
+            continue
+        if dry_run:
+            (result.updated if row.telegram_message_id else result.created).append(row.slug)
+            continue
+
+        try:
+            if row.telegram_message_id:
+                edit_message(message_id=row.telegram_message_id, text=row.body,
+                             keyboard=keyboard, channel_id=channel_id())
+                result.updated.append(row.slug)
+            else:
+                row.telegram_message_id = send_message(
+                    text=row.body, keyboard=keyboard, channel_id=channel_id())
+                row.published_at = now
+                result.created.append(row.slug)
+            row.status = "published"
+            row.channel_id = str(channel_id())
+            row.reply_markup = keyboard
+            row.published_body = row.body
+            row.last_synced_at = now
+            row.last_error = None
+            db.commit()
+        except TelegramPublishError as exc:
+            db.rollback()
+            row = _existing(db).get(row.slug)
+            if row is not None:
+                row.status = "error"
+                row.last_error = str(exc)[:500]
+                db.commit()
+            logger.warning("инфо-пост %s: %s", row.slug if row else "?", exc)
+            result.failed.append((row.slug if row else "?", str(exc)))
+
+    return result
 
 
 # ---------------------------------------------------------------- превью и diff
@@ -287,7 +395,7 @@ def sync_navigation(db: Session, *, on_date: date | None = None, dry_run: bool =
     published = {
         slug: row.telegram_message_id
         for slug, row in existing.items()
-        if row.kind == PRICE_KIND and row.telegram_message_id
+        if row.kind in (PRICE_KIND, INFO_KIND) and row.telegram_message_id
     }
     # Части длинного раздела в навигацию не выносим: она показывает разделы, а
     # не сообщения, и вторая часть лежит сразу под первой.
@@ -299,7 +407,8 @@ def sync_navigation(db: Session, *, on_date: date | None = None, dry_run: bool =
 
     keyboard = navigation_keyboard(
         published, channel_id() or "@isellerhub",
-        settings.MINI_APP_URL, settings.MANAGER_RETAIL_URL, settings.BOT_USERNAME)
+        settings.MINI_APP_URL, settings.MANAGER_RETAIL_URL, settings.BOT_USERNAME,
+        info=tuple((i.slug, f"{i.emoji} {i.title}", i.title) for i in INFO_POSTS))
     text = navigation_text(on_date)
     row = existing.get(NAVIGATION_SLUG)
 

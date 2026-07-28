@@ -18,11 +18,26 @@ from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.post import ChannelPost
 from app.services import price_channel
+from app.services.info_posts import INFO_BY_SLUG, INFO_KIND, has_placeholders
 from app.services.price_posts import NAVIGATION_SLUG, SECTIONS
 from app.services.telegram_publisher import TelegramPublishError, TelegramRateLimited
 
 router = APIRouter(prefix="/admin/price-posts", tags=["admin:price-posts"],
                    dependencies=[Depends(get_current_admin)])
+
+
+class InfoTextRequest(BaseModel):
+    """Правка поста: текст и/или кнопки. Не переданное поле не трогаем."""
+    title: str | None = None
+    body: str | None = None
+    buttons: list[dict] | None = None
+
+
+class CreatePostRequest(BaseModel):
+    slug: str
+    title: str
+    body: str
+    buttons: list[dict] | None = None
 
 
 class ConfirmRequest(BaseModel):
@@ -50,6 +65,10 @@ def _out(row: ChannelPost) -> dict:
         "last_error": row.last_error,
         "length": len(row.body or ""),
         "sort_order": row.sort_order,
+        "body": row.body if row.kind == INFO_KIND else None,
+        "buttons": row.button_spec if row.kind == INFO_KIND else None,
+        "has_placeholders": has_placeholders(row.body) if row.kind == INFO_KIND else False,
+        "editable": row.kind == INFO_KIND,
     }
 
 
@@ -67,6 +86,98 @@ def list_price_posts(db: Session = Depends(get_db)):
         ],
         "channel_id": price_channel.channel_id() or None,
         "navigation_slug": NAVIGATION_SLUG,
+    }
+
+
+@router.post("/info/generate")
+def generate_info(db: Session = Depends(get_db), admin: str = Depends(get_current_admin)):
+    """Создать черновики инфо-постов из заготовок. Написанное не затирает."""
+    created = price_channel.ensure_info_drafts(db)
+    _audit(db, admin, "info_posts_generated", f"{len(created)}")
+    db.commit()
+    return {"created": [row.slug for row in created]}
+
+
+@router.get("/info/button-kinds")
+def button_kinds():
+    """Справочник типов кнопок для конструктора в админке."""
+    from app.services.info_posts import BUTTON_KIND_LABELS
+
+    return {
+        "kinds": [{"kind": k, "label": v} for k, v in BUTTON_KIND_LABELS.items()],
+        "sections": [{"slug": s.slug, "title": s.title} for s in SECTIONS],
+    }
+
+
+@router.post("/info")
+def create_info(payload: CreatePostRequest, db: Session = Depends(get_db),
+                admin: str = Depends(get_current_admin)):
+    """Создать свой пост канала (текст + кнопки). Публикацию не выполняет."""
+    from app.services.info_posts import DEFAULT_BUTTONS
+
+    slug = payload.slug.strip().lower().replace(" ", "_")
+    if not slug or not slug.replace("_", "").isalnum():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "Идентификатор: латиница, цифры и подчёркивание")
+    if db.query(ChannelPost).filter_by(slug=slug).first():
+        raise HTTPException(status.HTTP_409_CONFLICT, "Пост с таким идентификатором уже есть")
+    last = db.query(ChannelPost).filter_by(kind=INFO_KIND).count()
+    row = ChannelPost(
+        slug=slug, kind=INFO_KIND, status="draft", title=payload.title,
+        body=payload.body, button_spec=payload.buttons or list(DEFAULT_BUTTONS),
+        sort_order=2000 + last,
+    )
+    db.add(row)
+    _audit(db, admin, "info_post_created", slug)
+    db.commit()
+    db.refresh(row)
+    return _out(row)
+
+
+@router.patch("/info/{slug}")
+def edit_info(slug: str, payload: InfoTextRequest, db: Session = Depends(get_db),
+              admin: str = Depends(get_current_admin)):
+    """Изменить текст и кнопки поста. В канал само по себе не уходит."""
+    row = db.query(ChannelPost).filter_by(slug=slug, kind=INFO_KIND).one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Инфо-пост не найден")
+    if payload.title is not None:
+        row.title = payload.title
+    if payload.body is not None:
+        row.body = payload.body
+    if payload.buttons is not None:
+        row.button_spec = payload.buttons
+    if row.telegram_message_id:
+        row.status = "outdated"
+    _audit(db, admin, "info_post_edited", slug)
+    db.commit()
+    db.refresh(row)
+    return _out(row)
+
+
+@router.post("/info/publish")
+def publish_info(payload: ConfirmRequest, db: Session = Depends(get_db),
+                 admin: str = Depends(get_current_admin)):
+    """Опубликовать или обновить инфо-посты (только с подтверждением)."""
+    if not payload.dry_run and not payload.confirm:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "Требуется явное подтверждение публикации")
+    try:
+        result = price_channel.apply_info_posts(db, slugs=payload.slugs,
+                                                dry_run=payload.dry_run)
+    except TelegramRateLimited as exc:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(exc)) from exc
+    except TelegramPublishError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+    if not payload.dry_run:
+        _audit(db, admin, "info_posts_published",
+               f"created={len(result.created)} updated={len(result.updated)}")
+        db.commit()
+    return {
+        "dry_run": payload.dry_run,
+        "created": result.created, "updated": result.updated,
+        "unchanged": result.unchanged,
+        "failed": [{"slug": s, "error": e} for s, e in result.failed],
     }
 
 

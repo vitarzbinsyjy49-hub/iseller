@@ -461,6 +461,7 @@ def navigation_text(on_date: date) -> str:
 def navigation_keyboard(
     published: dict[str, int], channel_id: int | str, mini_app_url: str,
     manager_url: str = "", bot_username: str = "",
+    info: tuple[tuple[str, str, str], ...] = (),
 ) -> list[list[dict]]:
     """Кнопки навигации ведут на КОНКРЕТНЫЕ опубликованные посты.
 
@@ -476,6 +477,13 @@ def navigation_keyboard(
             "text": f"{section.emoji} {section.title}",
             "url": message_link(channel_id, message_id),
         }])
+    # Инфо-разделы (гарантия, доставка, оплата) идут ПОСЛЕ прайса: человек
+    # приходит в канал за ценой, а условия читает вторым шагом.
+    for slug, label, _title in info:
+        message_id = published.get(slug)
+        if message_id:
+            rows.append([{"text": label, "url": message_link(channel_id, message_id)}])
+
     tail = _rows(
         [_deep_link_button("🛍 Весь каталог", bot_username, "catalog")],
         [
