@@ -45,7 +45,12 @@ export default function DesktopHeader() {
   useEffect(() => { setQ(urlQuery); }, [urlQuery, onCatalog]);
 
   // Live-поиск с debounce 250ms — единственная точка входа в поиск на desktop.
+  //
+  // В режиме AI живой поиск выключен: он свойство каталожного режима. Иначе
+  // набранный запрос уезжал бы в /catalog через 250мс после ввода — раньше,
+  // чем пользователь нажмёт Enter, и до AI-подбора было бы не добраться.
   useEffect(() => {
+    if (mode === "ai") return;
     const t = setTimeout(() => {
       const trimmed = q.trim();
       if (onCatalog) {
@@ -58,7 +63,7 @@ export default function DesktopHeader() {
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [q, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <header className="hidden border-b border-border bg-surface/95 backdrop-blur-lg lg:block">
