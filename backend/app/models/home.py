@@ -16,7 +16,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
 
-ACTION_TYPES = ("category", "search", "product", "collection", "ai", "external")
+# brand (v5.8): плитка по бренду. Нужна, потому что «Dyson» — это бренд, а не
+# категория: его товары лежат в «красота» и «бытовая техника», и плитка с
+# action_type=category вела в пустоту.
+ACTION_TYPES = ("category", "brand", "search", "product", "collection", "ai", "external")
 
 
 class HomeBanner(Base):

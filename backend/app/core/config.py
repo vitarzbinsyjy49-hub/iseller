@@ -81,9 +81,21 @@ class Settings(BaseSettings):
     # ==== Режим AI для демо ====
     # fallback | mock — не обращаться к AI Engine, отвечать по каталогу (быстро, без ключей);
     # ai            — legacy AI Engine (docker profile ai);
-    # ollama_remote — локальный AI-консультант через AI Gateway на Mac mini (v5).
+    # ollama_remote — локальный AI-консультант через AI Gateway на Mac mini (v5);
+    # anthropic     — Anthropic Messages API напрямую (v5.7), см. блок ниже.
     # Демо по умолчанию = fallback, чтобы не зависеть от Ollama/ключей.
     AI_PROVIDER: str = "fallback"
+
+    # ==== Anthropic Messages API (v5.7) ====
+    # Включение: AI_PROVIDER=anthropic. Пайплайн тот же, что у ollama_remote
+    # (retrieval из БД -> кандидаты -> модель -> строгая валидация), меняется
+    # только транспорт. Пустой ключ => оркестратор сразу уходит в fallback.
+    # ВНИМАНИЕ: api.anthropic.com доступен не из любого региона — прод-VPS
+    # получает 403 forbidden ещё до проверки ключа (см. CLAUDE.md).
+    AI_ANTHROPIC_API_KEY: str = ""
+    AI_ANTHROPIC_MODEL: str = "claude-haiku-4-5"
+    AI_ANTHROPIC_MAX_TOKENS: int = 2000     # ответ короткий: текст + JSON-обвязка
+    AI_ANTHROPIC_TIMEOUT_SECONDS: float = 30.0
 
     # ==== Локальный AI-консультант через AI Gateway (v5) ====
     # Gateway живёт на Mac mini (Ollama), доступен по приватной сети (Tailscale и т.п.).

@@ -68,8 +68,9 @@ async def chat(
     answer: dict
     ai_error: str | None = None
     mode = (settings.AI_PROVIDER or "fallback").lower()
-    if mode == "ollama_remote":
+    if mode in ("ollama_remote", "anthropic"):
         # v5: локальный AI-консультант (Mac mini + Ollama через AI Gateway).
+        # v5.7: он же, но транспорт — Anthropic Messages API (AI_PROVIDER=anthropic).
         # Оркестратор сам деградирует в fallback — сюда ошибки не долетают,
         # кроме случая AI_FALLBACK_ENABLED=false (тогда честный 503).
         from app.services.ai_orchestrator import answer_via_local_ai

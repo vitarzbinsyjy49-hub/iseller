@@ -15,7 +15,9 @@ const SCENARIO_CHIPS: { label: string; route: string }[] = [
   { label: "MacBook", route: "/catalog?query=MacBook" },
   { label: "AirPods", route: "/catalog?query=AirPods" },
   { label: "Забрать сегодня", route: "/catalog?today=1" },
-  { label: "Аксессуары", route: `/catalog?category=${encodeURIComponent("аксессуары")}` },
+  // Чипа «Аксессуары» здесь больше нет: он вёл в несуществующую категорию.
+  // Оставшиеся — поисковые запросы по реальным моделям, они не могут протухнуть
+  // так же, как ссылка на категорию. Настоящие категории приходят в prop chips.
 ];
 
 type Props = {

@@ -42,10 +42,12 @@ function CategorySilhouette({ category }: { category?: string | null }) {
         return <><path d="M5 13v-1a7 7 0 0 1 14 0v1" /><rect x="3.5" y="12.5" width="3.4" height="6.5" rx="1.6" /><rect x="17.1" y="12.5" width="3.4" height="6.5" rx="1.6" /></>;
       case "консоли":
         return <><rect x="3" y="8" width="18" height="8" rx="4" /><path d="M6.5 11v2M5.5 12h2" /><circle cx="16.5" cy="11.4" r=".7" /><circle cx="18.2" cy="13" r=".7" /></>;
-      case "dyson":
+      case "часы":
+        return <><rect x="7.5" y="7.5" width="9" height="9" rx="2.4" /><path d="M12 10.2V12l1.6 1M9.5 7.5 10 4h4l.5 3.5M9.5 16.5 10 20h4l.5-3.5" /></>;
+      case "красота":  // фены, стайлеры, выпрямители
         return <><path d="M4 9h8.5A2.75 2.75 0 1 0 9.75 6" /><path d="M4 13h11a2.75 2.75 0 1 1-2.75 3" /></>;
-      case "аксессуары":
-        return <><path d="M9.5 3v4.5M14.5 3v4.5" /><rect x="7.5" y="7.5" width="9" height="6" rx="2" /><path d="M12 13.5V18a3 3 0 0 1-3 3" /></>;
+      case "бытовая техника":  // пылесосы, климат
+        return <><path d="M5 20V9.5a4.5 4.5 0 0 1 4.5-4.5H12" /><rect x="12" y="3.5" width="7" height="5" rx="1.6" /><rect x="3" y="16" width="6" height="4.5" rx="1.4" /></>;
       default:
         return <><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><circle cx="8.8" cy="10" r="1.5" /><path d="m5 18 4.6-4.4L13 17l2.8-2.7L20 18" /></>;
     }

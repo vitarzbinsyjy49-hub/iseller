@@ -3,22 +3,17 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import { loadSearchHistory, pushSearchQuery } from "../lib/searchHistory";
+import { loadCachedCategories, saveCachedCategories, sanitizeCategories, NavCategory } from "../lib/categoryCache";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
 import { ErrorState } from "../components/StateViews";
 
-const CATS = [
-  { key: "", label: "Все" },
-  { key: "смартфоны", label: "Смартфоны" },
-  { key: "ноутбуки", label: "Ноутбуки" },
-  { key: "планшеты", label: "Планшеты" },
-  { key: "наушники", label: "Наушники" },
-  { key: "консоли", label: "Консоли" },
-  { key: "dyson", label: "Dyson" },
-  { key: "аксессуары", label: "Аксессуары" },
-  { key: "__sale__", label: "Скидки" },
-];
+/** Вкладка «Все» — единственная, что не приходит с сервера: она снимает фильтр,
+ *  а не выбирает категорию. Сам список категорий строится из каталога
+ *  (/catalog/categories), поэтому вкладок без товаров не бывает: раньше здесь
+ *  был захардкоженный список, и вкладки «Dyson»/«Аксессуары» открывали пустоту. */
+const ALL_TAB = { key: "", label: "Все" };
 const SORTS = [
   { key: "popularity", label: "Популярные" },
   { key: "price_asc", label: "Дешевле" },
@@ -57,8 +52,14 @@ export default function Catalog() {
   // как это уже делает today=1; при изменении в UI обратно в URL не пишутся —
   // прежнее поведение фильтров не меняем.
   const [priceMax, setPriceMax] = useState(params.get("price_max")?.replace(/\D/g, "") ?? "");
-  const [brand, setBrand] = useState("");
+  // brand читается из URL наравне с category: по нему приходит плитка бренда
+  // с главной (action_type=brand -> /catalog?brand=Dyson). Без этого ссылка
+  // открывала каталог вообще без фильтра.
+  const [brand, setBrand] = useState(params.get("brand") ?? "");
   const [brands, setBrands] = useState<string[]>([]);
+  // Категории — из каталога, с мгновенным стартом из кэша прошлого ответа.
+  const [cats, setCats] = useState<NavCategory[]>(() => loadCachedCategories());
+  const tabs = [ALL_TAB, ...cats.map((c) => ({ key: c.key, label: c.label }))];
   const [onlyStock, setOnlyStock] = useState(params.get("in_stock") === "1");
   const [onlyToday, setOnlyToday] = useState(params.get("today") === "1");
   // Чипы недавних запросов при пустом поиске (localStorage; читаем на фокусе)
@@ -73,6 +74,9 @@ export default function Catalog() {
   useEffect(() => { track("catalog_opened", { category }); }, []);
   useEffect(() => {
     api<{ brands: string[] }>("/catalog/brands").then((d) => setBrands(d.brands)).catch(() => {});
+    api<{ categories: NavCategory[] }>("/catalog/categories")
+      .then((d) => { setCats(sanitizeCategories(d.categories)); saveCachedCategories(d.categories); })
+      .catch(() => {});
   }, []);
 
   // Подхватить внешнее изменение URL (переход из шапки/баннера/подсказки на главной).
@@ -125,7 +129,7 @@ export default function Catalog() {
     }`;
 
   // Заголовок раздела и счётчик — из фактического ответа API, без хардкода.
-  const sectionTitle = category ? CATS.find((c) => c.key === category)?.label ?? "Каталог" : "Каталог";
+  const sectionTitle = category ? tabs.find((c) => c.key === category)?.label ?? "Каталог" : "Каталог";
   const total = cards?.length ?? null;
   const countLabel =
     total === null
@@ -145,7 +149,7 @@ export default function Catalog() {
       <div className={`lg:mt-0 lg:grid lg:items-start lg:gap-8 ${sidebarOpen ? "lg:grid-cols-[260px_minmax(0,1fr)]" : ""}`}>
         {sidebarOpen && (
           <FilterSidebar
-            category={category} onCategory={pickCategory}
+            category={category} onCategory={pickCategory} tabs={tabs}
             brands={brands} brand={brand} onBrand={setBrand}
             priceMax={priceMax} onPriceMax={setPriceMax}
             onlyStock={onlyStock} onOnlyStock={setOnlyStock}
@@ -247,7 +251,7 @@ export default function Catalog() {
         )}
 
         <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
-          {CATS.map((c) => (
+          {tabs.map((c) => (
             <button key={c.key} onClick={() => pickCategory(c.key)} className={chip(category === c.key)}>
               {c.label}
             </button>
@@ -355,10 +359,13 @@ const CONDITIONS = [
 /** Desktop-sidebar фильтров каталога (>=1024px). Только представление —
  *  вся логика фильтрации остаётся в Catalog (те же state/эффекты, что и mobile). */
 function FilterSidebar({
-  category, onCategory, brands, brand, onBrand, priceMax, onPriceMax,
+  category, onCategory, tabs, brands, brand, onBrand, priceMax, onPriceMax,
   onlyStock, onOnlyStock, onlyToday, onOnlyToday, condition, onCondition,
 }: {
   category: string; onCategory: (k: string) => void;
+  /** Вкладки категорий приходят сверху: список строится из каталога,
+   *  а не из константы — своего источника у сайдбара быть не должно. */
+  tabs: { key: string; label: string }[];
   brands: string[]; brand: string; onBrand: (v: string) => void;
   priceMax: string; onPriceMax: (v: string) => void;
   onlyStock: boolean; onOnlyStock: (v: boolean) => void;
@@ -370,7 +377,7 @@ function FilterSidebar({
       <div className="rounded-xl2 bg-surface p-4 shadow-soft">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Категория</p>
         <div className="mt-2 space-y-0.5">
-          {CATS.map((c) => (
+          {tabs.map((c) => (
             <button
               key={c.key}
               onClick={() => onCategory(c.key)}

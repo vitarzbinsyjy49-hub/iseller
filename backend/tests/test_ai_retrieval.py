@@ -1,14 +1,25 @@
 """Извлечение фильтров и retrieval кандидатов: только реальные товары из БД."""
 from app.services.ai_retrieval import candidate_payload, extract_filters, retrieve_candidates
+from app.services.catalog_nav import category_vocabulary
 from tests.conftest import make_product
 
 
-def test_extract_budget_and_category():
-    f = extract_filters("Нужен ноутбук до 150 тысяч для монтажа, желательно лёгкий")
+def test_extract_budget_and_category(db):
+    """Категория определяется по словарю каталога, поэтому тесту нужен товар:
+    раньше словарь был захардкожен и «знал» разделы, которых в БД нет."""
+    make_product(db, title="MacBook Air 13", category="ноутбуки", subcategory="MacBook Air")
+    f = extract_filters("Нужен ноутбук до 150 тысяч для монтажа, желательно лёгкий",
+                        vocab=category_vocabulary(db))
     assert f.budget_max == 150000
     assert f.category == "ноутбуки"
     assert "video_editing" in f.use_cases
     assert "travel" in f.use_cases  # «лёгкий»
+
+
+def test_category_not_guessed_without_catalog():
+    """Без каталога категория не выдумывается — молчаливая подстановка
+    устаревшего списка и была причиной ссылок в пустоту."""
+    assert extract_filters("нужен ноутбук до 150 тысяч").category is None
 
 
 def test_extract_brand_and_condition():
@@ -18,8 +29,10 @@ def test_extract_brand_and_condition():
     assert f.budget_max == 60000
 
 
-def test_history_merge_newer_wins():
-    f = extract_filters("а до 100 тысяч?", history=["нужен ноутбук до 150 тысяч"])
+def test_history_merge_newer_wins(db):
+    make_product(db, title="MacBook Air 13", category="ноутбуки", subcategory="MacBook Air")
+    f = extract_filters("а до 100 тысяч?", history=["нужен ноутбук до 150 тысяч"],
+                        vocab=category_vocabulary(db))
     assert f.category == "ноутбуки"   # категория из истории сохранилась
     assert f.budget_max == 100000     # бюджет перекрыт новым сообщением
 

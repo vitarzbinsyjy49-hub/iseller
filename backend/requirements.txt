@@ -11,6 +11,9 @@ python-multipart==0.0.20
 # [socks] — поддержка socks5:// для TELEGRAM_PROXY_URL. Нужна там, где сеть
 # хостинга не пропускает api.telegram.org и выход даёт локальный SOCKS-прокси.
 httpx[socks]==0.28.1
+# v5.7: официальный SDK Anthropic (AI_PROVIDER=anthropic). Не требуется, когда
+# провайдер fallback/mock/ollama_remote — но ставится всегда, чтобы образ был один.
+anthropic==0.120.0
 # v4 Import Center: чтение XLSX-прайсов (чистый Python, без бинарных зависимостей)
 openpyxl==3.1.5
 # Опционально: только если задан RATE_LIMIT_REDIS_URL (распределённый rate limit).

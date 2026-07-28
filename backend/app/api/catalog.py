@@ -24,6 +24,7 @@ from app.services.image_groups import (
     has_real_photo,
     resolve_product_images,
 )
+from app.services.catalog_nav import list_categories
 from app.services.recommendations import recently_viewed, recommend
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -121,31 +122,14 @@ def catalog_search(
 
 # ==================== Демо: витрина каталога ====================
 
-# Фиксированный порядок категорий для Home (иконка + подпись)
-CATEGORIES = [
-    {"key": "смартфоны", "label": "Смартфоны", "icon": "📱"},
-    {"key": "ноутбуки", "label": "Ноутбуки", "icon": "💻"},
-    {"key": "планшеты", "label": "Планшеты", "icon": "📲"},
-    {"key": "наушники", "label": "Наушники", "icon": "🎧"},
-    {"key": "консоли", "label": "Консоли", "icon": "🎮"},
-    {"key": "dyson", "label": "Dyson", "icon": "💨"},
-    {"key": "аксессуары", "label": "Аксессуары", "icon": "🔌"},
-    {"key": "__sale__", "label": "Скидки", "icon": "🏷️"},  # виртуальная: фильтр on_sale
-]
-
-
 @router.get("/categories", dependencies=[Depends(get_current_user)])
 def categories(db: Session = Depends(get_db)):
-    # Считаем товары в каждой категории (только активные)
-    rows = db.execute(
-        select(Product.category, func.count()).where(Product.is_active.is_(True)).group_by(Product.category)
-    ).all()
-    counts = {c: n for c, n in rows}
-    sale_count = db.execute(
-        select(func.count()).select_from(Product).where(Product.is_active.is_(True), Product.on_sale.is_(True))
-    ).scalar_one()
-    counts["__sale__"] = sale_count
-    return {"categories": [{**c, "count": counts.get(c["key"], 0)} for c in CATEGORIES]}
+    """Категории для навигации — из самих товаров, а не из списка в коде.
+
+    Пустых категорий здесь не бывает: раньше список был захардкожен, и плитки
+    «Dyson»/«Аксессуары» вели в пустой каталог, потому что таких категорий в БД
+    нет. Новая категория (импорт, правка в админке) появляется сама."""
+    return {"categories": list_categories(db)}
 
 
 @router.get("/list", dependencies=[Depends(get_current_user)])

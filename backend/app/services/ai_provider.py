@@ -17,24 +17,15 @@ import time
 from sqlalchemy.orm import Session
 
 from app.api.catalog import search_products
+from app.services.catalog_nav import category_vocabulary, resolve_category
 
 # Приоритетно: число рядом с «до …» или с суффиксом тыс/к/000.
 _PRICE_CTX_RE = re.compile(r"до\s*(\d[\d\s]*)\s*(тыс|т\.|k|к|000)?|(\d[\d\s]*)\s*(тыс|т\.|k|к|000)", re.IGNORECASE)
 
-# Ключевые слова -> категория каталога
-_CATEGORY_HINTS = {
-    "ноутбук": "ноутбуки", "ноут": "ноутбуки", "макбук": "ноутбуки", "macbook": "ноутбуки",
-    "laptop": "ноутбуки", "монтаж": "ноутбуки", "игровой": "ноутбуки",
-    "смартфон": "смартфоны", "телефон": "смартфоны", "айфон": "смартфоны", "iphone": "смартфоны",
-    "samsung": "смартфоны", "самсунг": "смартфоны", "xiaomi": "смартфоны",
-    "планшет": "планшеты", "ipad": "планшеты", "айпад": "планшеты",
-    "наушник": "наушники", "airpods": "наушники", "аирподс": "наушники", "гарнитур": "наушники",
-    "консол": "консоли", "playstation": "консоли", "ps5": "консоли", "xbox": "консоли",
-    "приставка": "консоли", "switch": "консоли", "нинтендо": "консоли",
-    "dyson": "dyson", "дайсон": "dyson", "фен": "dyson", "стайлер": "dyson", "airwrap": "dyson",
-    "часы": "аксессуары", "watch": "аксессуары", "зарядк": "аксессуары", "кабел": "аксессуары",
-    "чехол": "аксессуары", "powerbank": "аксессуары", "павербанк": "аксессуары",
-}
+# Захардкоженного словаря категорий здесь больше нет. Он мапил «фен» и «стайлер»
+# в категорию `dyson`, а «часы» — в `аксессуары`; ни той, ни другой в каталоге не
+# существует, поэтому AI отвечал «нет в наличии» про товары, лежащие на витрине.
+# Словарь строится из самих категорий и подкатегорий — см. catalog_nav.
 
 _USE_CASE_HINTS = {
     "монтаж": "для монтажа видео важны производительный процессор и хороший экран",
@@ -67,12 +58,15 @@ def _extract_price_max(text: str) -> float | None:
     return value
 
 
-def _detect_category(text: str) -> str | None:
-    low = text.lower()
-    for kw, cat in _CATEGORY_HINTS.items():
-        if kw in low:
-            return cat
-    return None
+def _detect_category(text: str, vocab: dict[str, str] | None = None) -> str | None:
+    """Категория из текста по словарю каталога.
+
+    vocab=None означает «каталог недоступен» (чистый вызов без БД) — тогда
+    категория не определяется вовсе. Молча подставлять устаревший список нельзя:
+    именно так и появлялись ссылки на несуществующие категории."""
+    if not vocab:
+        return None
+    return resolve_category(text, vocab)
 
 
 def _use_case_note(text: str) -> str | None:
@@ -90,7 +84,7 @@ def build_demo_answer(db: Session, message: str, max_cards: int = 6, source: str
     логика одна, отличается только meta.source и тон ответа."""
     t0 = time.monotonic()
     price_max = _extract_price_max(message)
-    category = _detect_category(message)
+    category = _detect_category(message, category_vocabulary(db))
 
     # Ищем: сначала пробуем по всему запросу, отсекаем по бюджету/категории
     products = search_products(db, message, price_max, limit=max_cards)

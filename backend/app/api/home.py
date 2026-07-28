@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin, get_current_user
 from app.db.session import get_db
 from app.models.home import ACTION_TYPES, HomeBanner, HomeCategory
+from app.services.catalog_nav import (
+    brand_counts, category_counts, has_products, list_categories, sale_count,
+)
 
 router = APIRouter(prefix="/home", tags=["home"])
 admin_router = APIRouter(
@@ -23,13 +26,36 @@ def get_home(db: Session = Depends(get_db)):
     banners = db.execute(
         select(HomeBanner).where(HomeBanner.is_active.is_(True)).order_by(HomeBanner.position, HomeBanner.id)
     ).scalars().all()
-    categories = db.execute(
-        select(HomeCategory).where(HomeCategory.is_active.is_(True)).order_by(HomeCategory.position, HomeCategory.id)
+    # Берём и выключенные тоже: выключенная плитка — это осознанное «не
+    # показывать», и автодобавление не должно её воскрешать.
+    managed = db.execute(
+        select(HomeCategory).order_by(HomeCategory.position, HomeCategory.id)
     ).scalars().all()
-    return {
-        "banners": [b.to_dict() for b in banners],
-        "categories": [c.to_dict() for c in categories],
-    }
+
+    # Счётчики — один раз на запрос, а не на плитку.
+    cats, brands, sale = category_counts(db), brand_counts(db), sale_count(db)
+
+    # 1) Плитка, за которой нет товаров, на главную не выходит: пустой экран
+    #    после нажатия хуже отсутствующей плитки. Скрываем только посчитанное
+    #    (категория/бренд) — поиск, подборки и AI не трогаем.
+    visible = [c.to_dict() for c in managed
+               if c.is_active
+               and has_products(c.action_type, c.action_value,
+                                categories=cats, brands=brands, sale=sale)]
+
+    # 2) Категория, которой админ ещё не занимался, показывается сама. Так новый
+    #    раздел (импорт прайса, товар из админки) появляется в навигации без
+    #    правок кода и без ручного создания плитки.
+    curated = {(c.action_value or "").strip() for c in managed if c.action_type == "category"}
+    auto = [c for c in list_categories(db) if c["key"] not in curated]
+    visible += [
+        {"id": -(i + 1), "title": c["label"], "emoji": c["icon"], "icon_url": None,
+         "background_gradient": None, "action_type": "category",
+         "action_value": c["key"], "position": 1000 + i, "is_active": True}
+        for i, c in enumerate(auto)
+    ]
+
+    return {"banners": [b.to_dict() for b in banners], "categories": visible}
 
 
 # ==================== Admin CRUD ====================
@@ -146,16 +172,23 @@ DEFAULT_BANNERS = [
          action_value="hot", position=5),
 ]
 
-DEFAULT_CATEGORIES = [
-    dict(title="Смартфоны", emoji="📱", background_gradient="#e3f2fd", action_type="category", action_value="смартфоны", position=1),
-    dict(title="Ноутбуки", emoji="💻", background_gradient="#efe9fb", action_type="category", action_value="ноутбуки", position=2),
-    dict(title="Планшеты", emoji="📲", background_gradient="#e0f4f3", action_type="category", action_value="планшеты", position=3),
-    dict(title="Наушники", emoji="🎧", background_gradient="#fff3d6", action_type="category", action_value="наушники", position=4),
-    dict(title="Консоли", emoji="🎮", background_gradient="#ffe9ec", action_type="category", action_value="консоли", position=5),
-    dict(title="Dyson", emoji="💨", background_gradient="#eaf7ea", action_type="category", action_value="dyson", position=6),
-    dict(title="Аксессуары", emoji="🔌", background_gradient="#f1f5f9", action_type="category", action_value="аксессуары", position=7),
-    dict(title="Скидки", emoji="🏷️", background_gradient="#fde8e8", action_type="category", action_value="__sale__", position=8),
-]
+_TILE_TINTS = ["#e3f2fd", "#efe9fb", "#e0f4f3", "#fff3d6", "#ffe9ec",
+               "#eaf7ea", "#f1f5f9", "#fde8e8"]
+
+
+def default_categories(db: Session) -> list[dict]:
+    """Стартовые плитки — из реального каталога, а не из списка в коде.
+
+    Раньше здесь был захардкожен список, и он же засеял прод плитками «Dyson» и
+    «Аксессуары», которых в каталоге нет: пользователь жал и попадал в пустоту.
+    Теперь сид повторяет то, что реально лежит в БД; пустой каталог => плиток
+    нет, они появятся при следующем старте после наполнения."""
+    return [
+        dict(title=c["label"], emoji=c["icon"],
+             background_gradient=_TILE_TINTS[i % len(_TILE_TINTS)],
+             action_type="category", action_value=c["key"], position=i + 1)
+        for i, c in enumerate(list_categories(db))
+    ]
 
 
 def seed_home_defaults(db: Session) -> bool:
@@ -168,9 +201,11 @@ def seed_home_defaults(db: Session) -> bool:
             db.add(HomeBanner(**b))
         seeded = True
     if db.execute(select(HomeCategory).limit(1)).scalar_one_or_none() is None:
-        for c in DEFAULT_CATEGORIES:
+        # Пустой каталог => плиток не создаём: пересоздадутся при следующем
+        # старте, когда товары появятся. Пустая плитка хуже её отсутствия.
+        for c in default_categories(db):
             db.add(HomeCategory(**c))
-        seeded = True
+            seeded = True
     if seeded:
         db.commit()
     return seeded

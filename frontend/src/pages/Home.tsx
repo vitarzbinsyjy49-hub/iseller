@@ -15,6 +15,7 @@ import { ErrorState } from "../components/StateViews";
 import SearchPanel from "../components/SearchPanel";
 import { pushSearchQuery } from "../lib/searchHistory";
 import { safeExternalUrl, safeInternalRoute } from "../lib/route";
+import { loadCachedCategories, saveCachedCategories } from "../lib/categoryCache";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
@@ -38,6 +39,9 @@ function actionRoute(type: string, value?: string | null): string {
   const v = (value ?? "").trim();
   switch (type) {
     case "category": return `/catalog?category=${encodeURIComponent(v)}`;
+    // brand: «Dyson» — это бренд, а не категория (его товары лежат в «красота»
+    // и «бытовая техника»), поэтому плитка по категории вела в пустоту.
+    case "brand": return `/catalog?brand=${encodeURIComponent(v)}`;
     case "search": return `/catalog?query=${encodeURIComponent(v)}`;
     case "product": return safeInternalRoute(`/product/${encodeURIComponent(v)}`);
     case "collection": return `/catalog?collection=${encodeURIComponent(v)}`;
@@ -53,15 +57,9 @@ const FALLBACK_PROMOS: HomeBanner[] = [
   { id: -3, emoji: "🤖", title: "Подберём технику", subtitle: "Расскажите AI, что нужно", background_gradient: "linear-gradient(135deg,#1a7fd4,#6d5ae0)", action_type: "ai", action_value: "" },
 ];
 
-/** Быстрые категории hero до загрузки /api — мгновенно, без скелетона и сдвига. */
-const FALLBACK_CATEGORIES: { key: string; label: string }[] = [
-  { key: "смартфоны", label: "Смартфоны" },
-  { key: "ноутбуки", label: "Ноутбуки" },
-  { key: "наушники", label: "Наушники" },
-  { key: "консоли", label: "Консоли" },
-  { key: "планшеты", label: "Планшеты" },
-  { key: "dyson", label: "Dyson" },
-];
+// Захардкоженного списка категорий здесь больше нет: он разъезжался с базой и
+// показывал плитки, которых в каталоге не существует. Мгновенная отрисовка до
+// ответа /api идёт из кэша последнего реального ответа (см. lib/categoryCache).
 
 export default function Home() {
   const user = useAuthStore((s) => s.user);
@@ -92,7 +90,9 @@ export default function Home() {
     // prefill без авто-отправки: пользователь видит текст и жмёт «Отправить» сам.
     navigate(`/ai?q=${encodeURIComponent(item.prefill)}`);
   }
-  const [categories, setCategories] = useState<Category[]>([]);
+  // Стартуем с кэша последнего реального ответа — hero-чипы рисуются мгновенно,
+  // без сдвига вёрстки и без выдуманных категорий.
+  const [categories, setCategories] = useState<Category[]>(() => loadCachedCategories());
   const [home, setHome] = useState<HomeData | null>(null);
   const [feed, setFeed] = useState<Feed | null>(null);
   // Раньше ошибка /catalog/feed молча проглатывалась и feed оставался null
@@ -125,7 +125,9 @@ export default function Home() {
     api<HomeData>("/home")
       .then((d) => setHome(d))
       .catch(() => setHome({ banners: FALLBACK_PROMOS, categories: [] }));
-    api<{ categories: Category[] }>("/catalog/categories").then((d) => setCategories(d.categories)).catch(() => {});
+    api<{ categories: Category[] }>("/catalog/categories")
+      .then((d) => { setCategories(d.categories); saveCachedCategories(d.categories); })
+      .catch(() => {});
     loadFeed();
     // Персональные рекомендации и «недавно смотрели» (v5.2.6)
     api<{ cards?: TCard[]; mode?: string }>("/catalog/recommendations?limit=12")
@@ -169,7 +171,7 @@ export default function Home() {
           label: c.title,
           route: actionRoute(c.action_type, c.action_value),
         }))
-      : (categories.length ? categories : FALLBACK_CATEGORIES).map((c) => ({
+      : categories.map((c) => ({
           key: c.key,
           label: c.label,
           route: `/catalog?category=${encodeURIComponent(c.key)}`,
@@ -611,7 +613,7 @@ function ScenarioIcon({ name }: { name: string }) {
         return <><rect x="3.5" y="7.5" width="17" height="12" rx="2" /><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5M3.5 12.5h17" /></>;
       case "wholesale":
         return <><path d="M12 3 3.5 7.5v9L12 21l8.5-4.5v-9z" /><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" /></>;
-      default: // аксессуары
+      default: // нейтральный силуэт для незнакомого сценария
         return <><path d="M9.5 3v4.5M14.5 3v4.5" /><rect x="7.5" y="7.5" width="9" height="6" rx="2" /><path d="M12 13.5V18a3 3 0 0 1-3 3" /></>;
     }
   })();
@@ -641,7 +643,9 @@ function QuickScenarios({
     { key: "tradein", label: "Trade-In", sub: "Обмен и выкуп", onClick: () => onScenario("trade_in") },
     { key: "b2b", label: "Для бизнеса", sub: "Поставки юрлицам", onClick: () => onScenario("b2b") },
     { key: "wholesale", label: "Опт", sub: "Партии от 5 шт", onClick: () => onScenario("wholesale") },
-    { key: "accessories", label: "Аксессуары", sub: "Кабели, чехлы, зарядки", onClick: () => onCatalog(`/catalog?category=${encodeURIComponent("аксессуары")}`, "accessories") },
+    // Плитки «Аксессуары» здесь больше нет: она вела в категорию «аксессуары»,
+    // которой в каталоге не существует (кабелей/чехлов/зарядок нет вовсе).
+    // Реальные категории показывает блок категорий — он строится из данных.
   ];
   return (
     <div className="stagger mt-4 grid grid-cols-2 gap-2 lg:hidden">

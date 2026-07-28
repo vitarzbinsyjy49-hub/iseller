@@ -6,6 +6,7 @@
 Никогда не отправляем весь каталог и описания товаров (описания — недоверенный
 текст, лишние токены и поверхность для injection).
 """
+import logging
 import re
 from dataclasses import dataclass, field
 
@@ -15,6 +16,8 @@ from sqlalchemy.orm import Session
 from app.api.catalog import _alias, search_products  # переиспользуем алиасы live-поиска
 from app.models.product import Product
 from app.services.ai_provider import _extract_price_max, _detect_category
+
+logger = logging.getLogger("techshop.ai.retrieval")
 
 # Бренды каталога: расширяемый словарь «как пишут -> как в БД»
 _BRAND_HINTS = {
@@ -71,7 +74,8 @@ class ExtractedFilters:
         }
 
 
-def extract_filters(message: str, history: list[str] | None = None) -> ExtractedFilters:
+def extract_filters(message: str, history: list[str] | None = None,
+                    vocab: dict[str, str] | None = None) -> ExtractedFilters:
     """Извлечь фильтры из текущего сообщения + истории (свежие сообщения главнее).
 
     history — только тексты пользователя, от старых к новым. Более новое
@@ -84,7 +88,7 @@ def extract_filters(message: str, history: list[str] | None = None) -> Extracted
         budget = _extract_price_max(text)
         if budget:
             f.budget_max = budget
-        category = _detect_category(text)
+        category = _detect_category(text, vocab)
         if category:
             f.category = category
         # Сначала исключения («без apple»), потом позитивный бренд по остатку текста,
@@ -215,7 +219,15 @@ def retrieve_candidates(db: Session, message: str, f: ExtractedFilters, limit: i
     # 2) структурный запрос по извлечённым фильтрам
     stmt = select(Product).where(Product.is_active.is_(True))
     if f.category:
-        stmt = stmt.where(Product.category == f.category)
+        # Мягкое совпадение вместо жёсткого равенства: категория могла быть
+        # извлечена как подкатегория («Фены») или как разговорное слово. Раньше
+        # промах давал ноль строк молча — и вся структурная ветка умирала.
+        stmt = stmt.where(or_(
+            Product.category == f.category,
+            Product.subcategory == f.category,
+            Product.category.ilike(f"%{f.category}%"),
+            Product.subcategory.ilike(f"%{f.category}%"),
+        ))
     if f.budget_max:
         stmt = stmt.where(Product.price <= f.budget_max)
     if f.brand:
@@ -230,6 +242,12 @@ def retrieve_candidates(db: Session, message: str, f: ExtractedFilters, limit: i
     # в пул до Python-ranking попадёт случайный срез.
     stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc(), Product.id).limit(limit * 3)
     structural = list(db.execute(stmt).scalars().all())
+    # Пустая структурная ветка при извлечённой категории — сигнал, что словарь
+    # разъехался с каталогом. Молчать здесь нельзя: именно так баг с «феном»
+    # прожил до прода. Текстовая ветка при этом продолжает работать.
+    if f.category and not structural:
+        logger.warning("Структурная выдача пуста: категория %r не дала товаров (запрос: %r)",
+                       f.category, message[:120])
 
     # 3) объединяем без дублей; исключённые бренды фильтруем и в текстовой ветке
     excluded_low = {b.lower() for b in f.excluded_brands}
