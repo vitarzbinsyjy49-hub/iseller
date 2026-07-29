@@ -262,3 +262,85 @@ def test_general_help_offers_example_queries(db, monkeypatch):
     ans = run(orch.answer_via_local_ai(db, "что ты умеешь?", []))
     assert ans["meta"]["intent"] == "general_help"
     assert [a["label"] for a in ans["actions"] if a["type"] == "quick_reply"]
+
+
+# ---------- экономия: простой просмотр каталога отвечается без LLM ----------
+
+def _vocab_and_brands(db):
+    from app.services.catalog_nav import brand_counts, category_vocabulary
+    return category_vocabulary(db), brand_counts(db)
+
+
+@pytest.mark.parametrize("q", ["айфон", "наушники", "dyson", "фены dyson"])
+def test_plain_browse_detected(db, q):
+    # subcategory обязателен: синоним «айфон» разрешается через слово «iphone»,
+    # а оно попадает в словарь из названий категорий и ПОДкатегорий каталога.
+    make_product(db, title="iPhone 16 Pro", category="смартфоны", subcategory="iPhone", brand="Apple")
+    make_product(db, title="AirPods Pro 2", category="наушники", brand="Apple")
+    make_product(db, title="Dyson HD16", category="красота", subcategory="Фены", brand="Dyson")
+    vocab, brands = _vocab_and_brands(db)
+    assert orch._is_plain_browse(q, [], vocab, brands) is True
+
+
+@pytest.mark.parametrize("q", [
+    "посоветуй фен",                        # просьба совета
+    "какой ноутбук лучше для монтажа",      # вопрос + задача
+    "сравни iphone 16 и 15",                # сравнение
+    "нужен фен для тонких волос",           # задача
+    "ноутбук до 150 тысяч для работы дома",  # длинный запрос с задачей
+])
+def test_advice_requests_still_go_to_llm(db, q):
+    make_product(db, title="Dyson HD16", category="красота", subcategory="Фены", brand="Dyson")
+    make_product(db, title="MacBook Air", category="ноутбуки", brand="Apple")
+    vocab, brands = _vocab_and_brands(db)
+    assert orch._is_plain_browse(q, [], vocab, brands) is False
+
+
+def test_browse_in_dialog_goes_to_llm(db):
+    """В продолжении диалога даже короткое «айфон» — уточнение к предыдущему
+    ответу, без модели оно теряет смысл."""
+    # subcategory обязателен: синоним «айфон» разрешается через слово «iphone»,
+    # а оно попадает в словарь из названий категорий и ПОДкатегорий каталога.
+    make_product(db, title="iPhone 16 Pro", category="смартфоны", subcategory="iPhone", brand="Apple")
+    vocab, brands = _vocab_and_brands(db)
+    history = [{"role": "user", "text": "нужен телефон"},
+               {"role": "assistant", "text": "какой бюджет?"}]
+    assert orch._is_plain_browse("айфон", history, vocab, brands) is False
+
+
+def test_unknown_words_go_to_llm(db):
+    """Незнакомое слово не притворяется просмотром каталога."""
+    # subcategory обязателен: синоним «айфон» разрешается через слово «iphone»,
+    # а оно попадает в словарь из названий категорий и ПОДкатегорий каталога.
+    make_product(db, title="iPhone 16 Pro", category="смартфоны", subcategory="iPhone", brand="Apple")
+    vocab, brands = _vocab_and_brands(db)
+    assert orch._is_plain_browse("бензопила", [], vocab, brands) is False
+
+
+def test_plain_browse_answers_without_calling_llm(db, monkeypatch):
+    make_product(db, title="iPhone 16 Pro 256", category="смартфоны", subcategory="iPhone",
+                 brand="Apple", price=119990)
+
+    async def boom(**kwargs):
+        raise AssertionError("LLM must not be called for plain browse")
+
+    monkeypatch.setattr(orch, "call_gateway", boom)
+    ans = run(orch.answer_via_local_ai(db, "айфон", []))
+    assert ans["meta"]["skipped_llm"] is True
+    assert ans["meta"]["source"] == "catalog"
+    assert ans["cards"], "просмотр каталога обязан вернуть товары"
+    assert ans["text"]
+
+
+def test_skip_can_be_disabled(db, monkeypatch):
+    """Выключатель обязан работать: с ним запрос идёт в модель как раньше."""
+    make_product(db, title="iPhone 16 Pro 256", category="смартфоны", subcategory="iPhone",
+                 brand="Apple", price=119990)
+    monkeypatch.setattr(orch.settings, "AI_SKIP_LLM_FOR_BROWSE", False, raising=False)
+    monkeypatch.setattr(orch, "call_gateway", _gw_response({
+        "intent": "product_search", "answer": "Вот варианты", "follow_up_question": None,
+        "recommended_product_ids": [], "comparison": [], "filters": {},
+        "quick_replies": [], "next_action": "none", "confidence": 0.9,
+    }))
+    ans = run(orch.answer_via_local_ai(db, "айфон", []))
+    assert ans["meta"].get("skipped_llm") is not True

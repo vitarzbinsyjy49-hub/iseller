@@ -83,6 +83,55 @@ def _is_substantive(low: str, vocab: dict[str, str] | None = None) -> bool:
     return bool(_detect_category(low, vocab) or _extract_price_max(low) or len(low) > 40)
 
 
+# Запрос перестаёт быть «просто посмотреть каталог», если в нём есть просьба
+# совета, сравнение или задача: там ценность именно в модели, а не в списке.
+# Держим широко и с запасом — ошибка в эту сторону стоит один вызов LLM, ошибка
+# в другую портит ответ покупателю.
+_ADVICE_RE = re.compile(
+    r"(посовет|подскаж|подбер|помог|сравн|лучш|разниц|отлича|стоит ли|выбра|"
+    r"подойд|какой|какая|какие|каком|чем |для |под |нужен|нужна|нужно|хочу|ищу|"
+    r"можно|дешев|мощн|тише|легч)",
+    re.IGNORECASE,
+)
+# Порог «короткого» запроса: «фены dyson» — просмотр, «фен для тонких волос
+# недорого» — уже задача. Три слова покрывают бренд + категорию + число.
+_MAX_BROWSE_WORDS = 3
+_MAX_BROWSE_CHARS = 30
+
+
+def _is_plain_browse(
+    message: str, history: list[dict], vocab: dict[str, str], brands: dict[str, int],
+) -> bool:
+    """Простой просмотр каталога — отвечаем из БД, без вызова модели.
+
+    Чистая функция (словарь и бренды готовит caller), поэтому проверяется
+    тестами без БД и без сети.
+
+    Условие намеренно узкое. Пропустить сюда сложный запрос дороже, чем лишний
+    раз позвать модель: покупатель получит список товаров там, где ждал совета.
+    Поэтому требуется всё сразу: начало диалога, короткий текст, отсутствие
+    слов-маркеров совета и явное попадание в категорию или бренд каталога.
+
+    Пустая история обязательна: в продолжении диалога даже «а подешевле» —
+    уточнение к предыдущему ответу, и без модели оно теряет смысл.
+    """
+    if history:
+        return False
+    low = (message or "").strip().lower()
+    if not low or len(low) > _MAX_BROWSE_CHARS:
+        return False
+    if len(low.split()) > _MAX_BROWSE_WORDS:
+        return False
+    if _ADVICE_RE.search(low):
+        return False
+    from app.services.ai_provider import _detect_category
+    if _detect_category(low, vocab):
+        return True
+    # Бренд отдельной ветвью: он не входит в словарь категорий намеренно
+    # (см. catalog_nav.category_vocabulary), иначе «apple» уводил бы в часы.
+    return any(brand.lower() in low for brand in brands)
+
+
 def _deterministic_answer(message: str) -> dict | None:
     low = message.lower().strip()
     substantive = _is_substantive(low)
@@ -145,11 +194,26 @@ async def answer_via_local_ai(db: Session, message: str, history: list[dict]) ->
         det["meta"]["latency_ms"] = int((time.monotonic() - t0) * 1000)
         return det
 
+    # Словарь категорий строится из каталога — см. catalog_nav. Считаем один
+    # раз: он нужен и для дешёвой ветки ниже, и для извлечения фильтров.
+    from app.services.catalog_nav import brand_counts, category_vocabulary
+    vocab = category_vocabulary(db)
+
+    # 0.5) простой просмотр каталога («айфоны», «dyson») — отвечаем из БД.
+    # Список товаров модель не улучшает, а стоит он как полный запрос: сюда
+    # уходит и системный промпт, и схема, и все кандидаты.
+    if settings.AI_SKIP_LLM_FOR_BROWSE and _is_plain_browse(message, history, vocab, brand_counts(db)):
+        answer = build_demo_answer(db, message, source="catalog")
+        answer["meta"].update({
+            "skipped_llm": True,
+            "latency_ms": int((time.monotonic() - t0) * 1000),
+        })
+        logger.info("Plain browse answered from catalog, LLM skipped")
+        return answer
+
     # 1) фильтры + retrieval (только наша БД)
     user_history_texts = [h["text"] for h in history if h["role"] == "user"]
-    # Словарь категорий строится из каталога — см. catalog_nav.
-    from app.services.catalog_nav import category_vocabulary
-    filters = extract_filters(message, user_history_texts, category_vocabulary(db))
+    filters = extract_filters(message, user_history_texts, vocab)
     candidates = retrieve_candidates(db, message, filters, limit=max(1, settings.AI_MAX_PRODUCT_CANDIDATES))
     retrieval_ms = int((time.monotonic() - t0) * 1000)
 

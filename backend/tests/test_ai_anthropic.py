@@ -244,6 +244,12 @@ def test_error_text_has_no_secrets(monkeypatch, anthropic_key):
 @pytest.fixture()
 def provider_anthropic(monkeypatch):
     monkeypatch.setattr(settings, "AI_PROVIDER", "anthropic", raising=False)
+    # Этот файл проверяет сам транспорт к модели: лимит кандидатов, что описания
+    # товаров не уезжают в контекст, что имя модели не видно покупателю. Значит
+    # запрос обязан дойти до модели, а экономия на простом просмотре каталога
+    # («планшет», «ноутбук») его бы перехватила — она проверяется отдельно, в
+    # test_ai_orchestrator.py.
+    monkeypatch.setattr(settings, "AI_SKIP_LLM_FOR_BROWSE", False, raising=False)
 
 
 def _fake_call(payload: dict):
