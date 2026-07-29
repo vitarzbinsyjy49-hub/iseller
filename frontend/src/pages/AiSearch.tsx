@@ -8,6 +8,7 @@ import LeadForm from "../components/LeadForm";
 import { usePublicConfig } from "../lib/appConfig";
 import { openExternalLink } from "../lib/telegram";
 import { aiEntryAction, clearAiHistory, loadAiHistory, pushAiQuery } from "../lib/searchHistory";
+import { prefersReducedMotion, revealDurationMs, revealedChars } from "../lib/answerReveal";
 
 /** Сценарные быстрые действия: понятная подпись + что произойдёт.
  *  mode: submit — отправить готовый запрос; prefill — подставить шаблон в
@@ -113,6 +114,53 @@ export default function AiSearch() {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [loading]);
 
+  // Набор текста последнего ответа. null — «набирать нечего»: либо ответ уже
+  // показан целиком, либо это старое сообщение в истории диалога.
+  // Число — сколько символов показано прямо сейчас; по нему же решается,
+  // пора ли прикладывать карточки (они ждут конца набора).
+  const [revealChars, setRevealChars] = useState<number | null>(null);
+  const revealRaf = useRef<number | null>(null);
+
+  // Момент, когда набор закончился и появились карточки: высота выросла, нужен
+  // доскролл. Отдельным эффектом, а не вместе с [chat, loading]: там пришлось бы
+  // добавить revealChars в зависимости, и скролл дёргался бы на каждом кадре.
+  useEffect(() => {
+    if (revealChars === null) endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [revealChars]);
+
+  /** Запустить набор текста только что полученного ответа.
+   *
+   *  rAF, а не setInterval: интервал не синхронизирован с кадрами и на слабом
+   *  устройстве даёт рваный набор. Кадр пропущен — ничего не сломается, число
+   *  символов считается от реального времени, а не накоплением шагов. */
+  function startReveal(text: string) {
+    if (revealRaf.current !== null) cancelAnimationFrame(revealRaf.current);
+    const length = text.length;
+    // Пустой текст и reduced-motion: показываем сразу, без промежуточных кадров.
+    if (!length || prefersReducedMotion()) { setRevealChars(null); return; }
+    const startedAt = performance.now();
+    setRevealChars(0);
+    const step = () => {
+      const elapsed = performance.now() - startedAt;
+      const shown = revealedChars(length, elapsed);
+      if (elapsed >= revealDurationMs(length)) {
+        // null вместо length: «набор закончен» и «набирать нечего» — одно
+        // состояние для рендера, поэтому не держим два разных признака.
+        setRevealChars(null);
+        revealRaf.current = null;
+        return;
+      }
+      setRevealChars(shown);
+      revealRaf.current = requestAnimationFrame(step);
+    };
+    revealRaf.current = requestAnimationFrame(step);
+  }
+
+  // Уход с экрана посреди набора не должен оставлять висящий кадр.
+  useEffect(() => () => {
+    if (revealRaf.current !== null) cancelAnimationFrame(revealRaf.current);
+  }, []);
+
   /** Нормализация ответа AI: даже если backend/движок вернул неполный объект
    *  (нет cards/meta/actions), UI не должен падать — рисуем что есть. */
   function normalizeAnswer(raw: Partial<AiAnswer> | null | undefined): AiAnswer {
@@ -151,6 +199,14 @@ export default function AiSearch() {
     submit(qa.text ?? qa.label);
   }
 
+  /** Добавить ответ ассистента и начать его набор. Единая точка: ответов три
+   *  вида (AI, fallback-поиск, недоступный каталог), и набор должен вести себя
+   *  одинаково у всех — иначе fallback появлялся бы рывком на фоне плавного AI. */
+  function pushAnswer(answer: AiAnswer) {
+    setChat((c) => [...c, { role: "assistant", answer }]);
+    startReveal(answer.text ?? "");
+  }
+
   async function submit(text: string) {
     const query = text.trim();
     if (!query || loading) return;
@@ -170,30 +226,24 @@ export default function AiSearch() {
         signal: controller.signal,
       });
       const data = normalizeAnswer(raw);
-      setChat((c) => [...c, { role: "assistant", answer: data }]);
+      pushAnswer(data);
       data.cards.forEach((card) => track("ai_product_card_viewed", { product_id: card.id, source: data.meta?.source }));
     } catch {
       // Даже при отказе AI-роута — тихий fallback на прямой поиск по каталогу
       try {
         const data = await api<{ cards?: TCard[] }>(`/catalog/search?query=${encodeURIComponent(query)}`);
         const cards = Array.isArray(data.cards) ? data.cards : [];
-        setChat((c) => [...c, {
-          role: "assistant",
-          answer: {
-            text: cards.length
-              ? "Вот что нашлось в каталоге:"
-              : "По запросу ничего не нашлось — попробуйте изменить бюджет или категорию.",
-            cards, actions: [], meta: { source: "fallback" },
-          },
-        }]);
+        pushAnswer({
+          text: cards.length
+            ? "Вот что нашлось в каталоге:"
+            : "По запросу ничего не нашлось — попробуйте изменить бюджет или категорию.",
+          cards, actions: [], meta: { source: "fallback" },
+        });
       } catch {
-        setChat((c) => [...c, {
-          role: "assistant",
-          answer: {
-            text: "Каталог сейчас недоступен. Попробуйте ещё раз через минуту или напишите менеджеру.",
-            cards: [], actions: [], meta: { source: "fallback" },
-          },
-        }]);
+        pushAnswer({
+          text: "Каталог сейчас недоступен. Попробуйте ещё раз через минуту или напишите менеджеру.",
+          cards: [], actions: [], meta: { source: "fallback" },
+        });
       }
     } finally {
       clearTimeout(timer);
@@ -273,20 +323,36 @@ export default function AiSearch() {
 
       {/* Чат */}
       <div className="mt-4 space-y-3">
-        {chat.map((item, i) =>
-          item.role === "user" ? (
-            <div key={i} className="card-appear flex justify-end">
-              <div className="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-sm text-white lg:max-w-[560px]">
-                {item.text}
+        {chat.map((item, i) => {
+          if (item.role === "user") {
+            return (
+              <div key={i} className="card-appear flex justify-end">
+                <div className="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-sm text-white lg:max-w-[560px]">
+                  {item.text}
+                </div>
               </div>
-            </div>
-          ) : (
+            );
+          }
+          // Набирается только последний ответ: старые в истории диалога всегда
+          // показаны целиком, иначе прокрутка назад запускала бы анимацию заново.
+          const isRevealing = revealChars !== null && i === chat.length - 1;
+          const fullText = item.answer.text ?? "";
+          const shownText = isRevealing ? fullText.slice(0, revealChars ?? 0) : fullText;
+          const restText = isRevealing ? fullText.slice(revealChars ?? 0) : "";
+          return (
             <div key={i} className="card-appear">
               {/* max-w текста ответа на desktop ~760px — не растягиваем на всю ширину */}
               <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-sm leading-relaxed shadow-soft lg:max-w-[760px]">
-                {item.answer.text}
+                {shownText}
+                {/* Ненабранный хвост остаётся в разметке прозрачным: он держит
+                    финальный размер пузыря. Без него текст перевёрстывался на
+                    каждом кадре, пузырь рос скачками, а карточки под ним
+                    дёргались. Скринридеру при этом сразу доступен весь ответ. */}
+                {restText && <span className="opacity-0">{restText}</span>}
               </div>
-              {(item.answer.cards ?? []).length > 0 && (
+              {/* Карточки и кнопки прикладываются ПОСЛЕ набора текста: сначала
+                  читаешь ответ, потом появляются варианты. */}
+              {!isRevealing && (item.answer.cards ?? []).length > 0 && (
                 <div className="stagger mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4 wide:grid-cols-4">
                   {(item.answer.cards ?? []).slice(0, 6).map((c) => (
                     <ProductCard
@@ -297,7 +363,7 @@ export default function AiSearch() {
                 </div>
               )}
               {/* Кнопки-действия (v5.1): только у последнего ответа, чтобы старые не путали */}
-              {i === chat.length - 1 && (item.answer.actions ?? []).length > 0 && (
+              {!isRevealing && i === chat.length - 1 && (item.answer.actions ?? []).length > 0 && (
                 <div className="fade-in mt-2.5 flex flex-wrap gap-2">
                   {/* Быстрые ответы — реплики ПОКУПАТЕЛЯ, поэтому обведены
                       акцентом: визуально это продолжение его стороны диалога,
@@ -319,8 +385,8 @@ export default function AiSearch() {
                 </div>
               )}
             </div>
-          ),
-        )}
+          );
+        })}
 
         {/* Typing indicator: пузырь растёт по контенту, а не фиксированной
             ширины — подпись ожидания (см. waitLabel выше) не должна обрезаться. */}
