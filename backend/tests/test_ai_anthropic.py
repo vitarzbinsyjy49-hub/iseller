@@ -360,3 +360,31 @@ def test_product_descriptions_never_sent(db, monkeypatch, provider_anthropic):
     monkeypatch.setattr(ai_anthropic, "call_anthropic", capture)
     run(orch.answer_via_local_ai(db, "ноутбук", []))
     assert "СЕКРЕТНАЯ" not in json.dumps(captured["candidates"], ensure_ascii=False)
+
+
+# ---------- точка входа в API: прямая или через прокси ----------
+
+def test_default_base_url_is_anthropic(monkeypatch):
+    """Пустой AI_ANTHROPIC_BASE_URL => ходим напрямую (локальная разработка)."""
+    monkeypatch.setattr(settings, "AI_ANTHROPIC_API_KEY", "sk-ant-test", raising=False)
+    monkeypatch.setattr(settings, "AI_ANTHROPIC_BASE_URL", "", raising=False)
+    ai_anthropic._client.cache_clear()
+    try:
+        assert "api.anthropic.com" in str(ai_anthropic._client().base_url)
+    finally:
+        ai_anthropic._client.cache_clear()
+
+
+def test_base_url_override_is_applied(monkeypatch):
+    """Прод ходит через прокси в открытом регионе: прямой доступ даёт 403.
+
+    Проверяем именно применение настройки — без неё запрос молча ушёл бы на
+    api.anthropic.com и снова упёрся в регион."""
+    monkeypatch.setattr(settings, "AI_ANTHROPIC_API_KEY", "gateway-secret", raising=False)
+    monkeypatch.setattr(settings, "AI_ANTHROPIC_BASE_URL",
+                        "https://iseller-ai-gateway.vercel.app/api", raising=False)
+    ai_anthropic._client.cache_clear()
+    try:
+        assert "iseller-ai-gateway.vercel.app" in str(ai_anthropic._client().base_url)
+    finally:
+        ai_anthropic._client.cache_clear()

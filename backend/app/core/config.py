@@ -96,6 +96,17 @@ class Settings(BaseSettings):
     AI_ANTHROPIC_MODEL: str = "claude-haiku-4-5"
     AI_ANTHROPIC_MAX_TOKENS: int = 2000     # ответ короткий: текст + JSON-обвязка
     AI_ANTHROPIC_TIMEOUT_SECONDS: float = 30.0
+    # Точка входа в Messages API. Пусто => api.anthropic.com напрямую (локальная
+    # разработка). На проде сюда ставится прокси в открытом регионе
+    # (gateway-vercel/), потому что прямой доступ отдаёт 403 по региону.
+    #
+    # Прокси прозрачный: промпт, схема ответа и модель остаются здесь, в Python,
+    # и не дублируются на его стороне — иначе получили бы вторую копию схемы,
+    # которая разъедется с валидатором.
+    #
+    # При работе через прокси AI_ANTHROPIC_API_KEY — это секрет ПРОКСИ, а не
+    # ключ Anthropic: настоящий ключ живёт только на прокси, на VPS его нет.
+    AI_ANTHROPIC_BASE_URL: str = ""
 
     # ==== Локальный AI-консультант через AI Gateway (v5) ====
     # Gateway живёт на Mac mini (Ollama), доступен по приватной сети (Tailscale и т.п.).

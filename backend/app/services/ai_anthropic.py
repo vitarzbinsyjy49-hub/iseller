@@ -115,11 +115,17 @@ def build_user_message(*, message: str, context: str, candidates: list[dict]) ->
 def _client() -> AsyncAnthropic:
     """Клиент переиспользуется процессом ради пула соединений.
     Настройки читаются один раз; в тестах сбрасывать через _client.cache_clear()."""
-    return AsyncAnthropic(
-        api_key=settings.AI_ANTHROPIC_API_KEY,
-        timeout=settings.AI_ANTHROPIC_TIMEOUT_SECONDS,
-        max_retries=2,  # SDK сам ретраит 429/5xx/сетевые с экспоненциальной паузой
-    )
+    kwargs: dict = {
+        "api_key": settings.AI_ANTHROPIC_API_KEY,
+        "timeout": settings.AI_ANTHROPIC_TIMEOUT_SECONDS,
+        "max_retries": 2,  # SDK сам ретраит 429/5xx/сетевые с экспоненциальной паузой
+    }
+    # Пусто => api.anthropic.com. На проде — прокси в открытом регионе: прямой
+    # доступ оттуда отдаёт 403 ещё до проверки ключа. SDK сам допишет
+    # /v1/messages, поэтому base_url задаётся без этого хвоста.
+    if settings.AI_ANTHROPIC_BASE_URL:
+        kwargs["base_url"] = settings.AI_ANTHROPIC_BASE_URL
+    return AsyncAnthropic(**kwargs)
 
 
 async def call_anthropic(*, system: str, message: str, context: str, candidates: list[dict]) -> dict:
