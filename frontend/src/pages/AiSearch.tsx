@@ -100,6 +100,19 @@ export default function AiSearch() {
   }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [chat, loading]);
 
+  // Подпись под точками «печатает»: обычный ответ укладывается в 3-15с, но при
+  // сетевом сбое на пути к гейтвею SDK делает до двух ретраев по 30с каждый —
+  // тогда пузырь неотличимо висит до минуты. Без текста это читается как
+  // «зависло», хотя запрос всё ещё выполняется. Подпись даём по реальным
+  // порогам ожидания, не выдумывая проценты и таймер.
+  const [waitLabel, setWaitLabel] = useState<string | null>(null);
+  useEffect(() => {
+    if (!loading) { setWaitLabel(null); return; }
+    const t1 = setTimeout(() => setWaitLabel("Подбираем варианты в каталоге"), 4000);
+    const t2 = setTimeout(() => setWaitLabel("Ещё немного — сверяем наличие и цену"), 16000);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [loading]);
+
   /** Нормализация ответа AI: даже если backend/движок вернул неполный объект
    *  (нет cards/meta/actions), UI не должен падать — рисуем что есть. */
   function normalizeAnswer(raw: Partial<AiAnswer> | null | undefined): AiAnswer {
@@ -309,12 +322,16 @@ export default function AiSearch() {
           ),
         )}
 
-        {/* Typing indicator */}
+        {/* Typing indicator: пузырь растёт по контенту, а не фиксированной
+            ширины — подпись ожидания (см. waitLabel выше) не должна обрезаться. */}
         {loading && (
-          <div className="fade-in flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-surface px-4 py-3.5 shadow-soft" style={{ width: 72 }}>
-            <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
-            <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
-            <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
+          <div className="fade-in flex flex-col items-start gap-1.5 rounded-2xl rounded-bl-md bg-surface px-4 py-3.5 shadow-soft">
+            <div className="flex items-center gap-1.5">
+              <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
+              <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
+              <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
+            </div>
+            {waitLabel && <span className="fade-in text-xs text-muted">{waitLabel}</span>}
           </div>
         )}
         {/* scroll-mb-40: автоскролл оставляет последнюю карточку над фикс-строкой ввода */}

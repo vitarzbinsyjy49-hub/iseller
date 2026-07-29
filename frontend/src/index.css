@@ -174,10 +174,12 @@ body {
   animation: shimmer 1.4s linear infinite;
 }
 
-/* AI typing indicator */
-.typing-dot { animation: typingDot 1.1s ease-in-out infinite; }
-.typing-dot:nth-child(2) { animation-delay: .15s; }
-.typing-dot:nth-child(3) { animation-delay: .3s; }
+/* AI typing indicator. Цикл и сдвиг чуть шире прежних (1.1s/.15s) — на таком
+   шаге точки читались почти синхронно и воспринимались как общее подмигивание
+   вместо бегущей волны. */
+.typing-dot { animation: typingDot 1.3s ease-in-out infinite; }
+.typing-dot:nth-child(2) { animation-delay: .18s; }
+.typing-dot:nth-child(3) { animation-delay: .36s; }
 
 /* Отступ под нижнюю навигацию с safe-area: в Telegram — значение Telegram,
    вне Telegram — env(). Один источник, без двойной компенсации.
