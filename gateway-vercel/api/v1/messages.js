@@ -41,15 +41,25 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: { type: "method_not_allowed" } });
   }
 
-  const gatewaySecret = process.env.GATEWAY_API_KEY;
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  // trim обязателен: секрет и ключ вставляют в веб-форму Vercel руками, и
+  // хвостовой перенос строки там появляется постоянно. Без trim он давал бы
+  // вечный 401 без единой подсказки, почему.
+  const gatewaySecret = (process.env.GATEWAY_API_KEY || "").trim();
+  const anthropicKey = (process.env.ANTHROPIC_API_KEY || "").trim();
   if (!gatewaySecret || !anthropicKey) {
     // Не пишем в ответ, какой именно переменной нет: наружу это не нужно.
     console.error("[gateway] missing env: GATEWAY_API_KEY and/or ANTHROPIC_API_KEY");
     return res.status(503).json({ error: { type: "gateway_not_configured" } });
   }
 
-  if (!secretMatches(req.headers["x-api-key"], gatewaySecret)) {
+  const presented = String(req.headers["x-api-key"] || "").trim();
+  if (!secretMatches(presented, gatewaySecret)) {
+    // Только длины и только в лог Vercel (он приватный) — по ним сразу видно
+    // и оборванную кавычку в curl (длина в разы больше), и лишний пробел.
+    // В ответ наружу не уходит ничего, кроме факта отказа.
+    console.warn(
+      `[gateway] unauthorized: presented ${presented.length} chars, expected ${gatewaySecret.length} chars`,
+    );
     return res.status(401).json({ error: { type: "unauthorized" } });
   }
 
