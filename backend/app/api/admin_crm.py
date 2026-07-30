@@ -27,6 +27,8 @@ from app.models.product import Product
 from app.models.user import User
 from app.schemas.ai import LeadStatusIn
 from app.services.availability import EXPLICIT_MODES
+from app.services.notification_templates import lead_status_message
+from app.services.notifications import enqueue, notifications_enabled
 
 router = APIRouter(prefix="/admin", tags=["admin-crm"], dependencies=[Depends(get_current_admin)])
 
@@ -114,6 +116,38 @@ def _status_history(db: Session, lead_id: int) -> list[dict]:
     return history
 
 
+def _notify_status_change(db: Session, lead: Lead, new_status: str) -> None:
+    """Поставить уведомление автору заявки в очередь (патч 1.1).
+
+    Сети здесь нет и быть не должно: менеджер меняет статус в админке, и этот
+    запрос не имеет права ждать Telegram — тем более падать вместе с ним. Строка
+    уходит в outbox ТОЙ ЖЕ транзакцией, что и сам статус с записью в журнал:
+    статус сменился => уведомление гарантированно поставлено, и наоборот.
+
+    Отправкой займётся сервис `bot` (services/notifications.drain).
+    """
+    if not notifications_enabled():
+        return
+    message = lead_status_message(
+        status=new_status,
+        public_number=lead.public_number,
+        items_count=lead.items_count or 0,
+        estimated_total=float(lead.estimated_total) if lead.estimated_total is not None else None,
+        currency=lead.currency or "RUB",
+        product_title=lead.product_title,
+    )
+    enqueue(
+        db,
+        chat_id=lead.telegram_id,
+        kind="lead_status",
+        message=message,
+        # «Об этом статусе этой заявки мы уже писали». Возврат назад и повторный
+        # перевод в тот же статус второго сообщения не породит — для покупателя
+        # это выглядело бы как сбой, а не как забота.
+        dedupe_key=f"lead:{lead.id}:status:{new_status}",
+    )
+
+
 @router.patch("/leads/{lead_id}")
 def update_lead(
     lead_id: int,
@@ -136,6 +170,7 @@ def update_lead(
                 action="lead_status_changed",
                 detail=f"lead={lead_id};from={previous};to={body.status}",
             ))
+            _notify_status_change(db, lead, body.status)
     if body.assigned_to is not None:
         lead.assigned_to = body.assigned_to
     if body.manager_comment is not None:

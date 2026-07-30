@@ -44,7 +44,48 @@ LONG_POLL_SECONDS = 30
 BACKOFF_START = 2
 BACKOFF_MAX = 60
 
+#: Сколько уведомлений отправляем за один тик. Ограничение не техническое, а
+#: против лимитов Telegram: пачка в сотню сообщений упрётся в 429 на середине.
+#: Остаток уедет следующим тиком через ≤30 секунд — очередь никуда не денется.
+OUTBOX_BATCH = 20
+
 _running = True
+
+
+def _tick(state: dict) -> None:
+    """Фоновая работа между опросами Telegram (патч 1.1).
+
+    Отдельного планировщика (cron / celery / APScheduler) в проекте нет и не
+    заводится: этот процесс УЖЕ крутится постоянно с шагом ≤30 секунд, а каждый
+    новый постоянный процесс — это ещё одна точка отказа и ещё один повод
+    поймать 409 Conflict вторым экземпляром бота.
+
+    Ошибки не выпускаем наружу: фоновые задачи не имеют права остановить приём
+    сообщений — иначе уведомления сломают сам бот.
+    """
+    from app.core.config import settings
+    from app.db.session import SessionLocal
+    from app.services import cart_reminders
+    from app.services.notifications import drain
+
+    now = time.monotonic()
+
+    try:
+        with SessionLocal() as db:
+            # Скан корзин реже, чем опрос: корзина не «протухает» за 30 секунд,
+            # а лишние проходы по базе бесполезны.
+            interval = max(1, settings.CART_REMINDER_SCAN_MINUTES) * 60
+            if now - state.get("last_scan", 0.0) >= interval:
+                state["last_scan"] = now
+                stats = cart_reminders.scan(db)
+                if stats["queued"]:
+                    logger.info("скан корзин: %s", stats)
+
+            stats = drain(db, limit=OUTBOX_BATCH)
+            if stats["sent"] or stats["failed"]:
+                logger.info("уведомления: %s", stats)
+    except Exception:  # noqa: BLE001 — фон не роняет polling
+        logger.exception("фоновая задача завершилась ошибкой")
 
 
 def _stop(signum: int, _frame: FrameType | None) -> None:
@@ -85,8 +126,13 @@ def run() -> int:
 
         offset: int | None = None
         backoff = BACKOFF_START
+        # Состояние фоновых задач живёт в локальной переменной, а не в модуле:
+        # так его видно из сигнатуры и его нельзя случайно разделить между
+        # двумя run() в тестах.
+        tick_state: dict = {"last_scan": 0.0}
 
         while _running:
+            _tick(tick_state)
             try:
                 params = {"timeout": LONG_POLL_SECONDS, "allowed_updates": '["message"]'}
                 if offset is not None:
