@@ -248,6 +248,23 @@ body {
   html.has-cart-bar .pb-nav { padding-bottom: calc(3rem + var(--cart-bar-space)); }
 }
 
+/* ===== Стек toast'ов =====
+   Toast встаёт НАД панелью корзины, а не поверх неё: раньше он висел на той же
+   высоте (76px + safe ≈ позиция .cart-dock) и закрывал сумму заявки ровно в тот
+   момент, когда сообщал «Добавлено в корзину». Подъём берём из того же
+   --cart-bar-space, что даёт нижний отступ контенту, и по тому же признаку
+   html.has-cart-bar — три величины не разъедутся. */
+@media (max-width: 1023.98px) {
+  .toast-dock { bottom: calc(76px + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))); }
+  html.has-cart-bar .toast-dock {
+    bottom: calc(76px + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)) + var(--cart-bar-space));
+  }
+}
+@media (min-width: 1024px) {
+  .toast-dock { bottom: 2rem; }
+  html.has-cart-bar .toast-dock { bottom: calc(2rem + var(--cart-bar-space)); }
+}
+
 /* Открыта клавиатура (JS вешает .kb-open на <html>): нижняя навигация
    скрывается, чтобы не всплывать над клавиатурой и не прыгать; после
    закрытия возвращается (класс снимается на viewport-событии). */

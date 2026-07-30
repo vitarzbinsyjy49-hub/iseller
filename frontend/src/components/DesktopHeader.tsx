@@ -69,7 +69,13 @@ export default function DesktopHeader() {
   }, [q, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <header className="hidden border-b border-border bg-surface/95 backdrop-blur-lg lg:block">
+    // relative z-50 обязателен: backdrop-blur создаёт на шапке собственный
+    // контекст наложения, поэтому z-40 у выпадающей панели поиска действует
+    // только ВНУТРИ шапки. Без z-index сама шапка (не позиционированная)
+    // рисуется раньше контента <main>, и панель уходила под hero-баннеры.
+    // 50 — ниже модалок (ScenarioSheet/LeadForm тоже z-50, но они в DOM позже
+    // и потому остаются сверху) и ниже toast'ов (z-60).
+    <header className="relative z-50 hidden border-b border-border bg-surface/95 backdrop-blur-lg lg:block">
       <div className="mx-auto flex h-16 w-full max-w-[1320px] items-center gap-6 px-8">
         {/* Логотип */}
         <Link to="/" className="flex shrink-0 items-center gap-2.5">

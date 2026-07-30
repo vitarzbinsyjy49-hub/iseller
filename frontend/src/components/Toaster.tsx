@@ -3,7 +3,8 @@ import { TOAST_EVENT, type ToastKind } from "../lib/toast";
 
 type Item = { id: number; message: string; kind: ToastKind };
 
-/** Стек toast'ов над нижней навигацией (учёт safe-area). Автоскрытие 2.2с. */
+/** Стек toast'ов над нижней навигацией и панелью корзины (учёт safe-area).
+ *  Автоскрытие 2.2с. Позиционирование — класс .toast-dock в index.css. */
 export default function Toaster() {
   const [items, setItems] = useState<Item[]>([]);
 
@@ -22,10 +23,11 @@ export default function Toaster() {
 
   if (!items.length) return null;
   return (
-    <div
-      className="pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-2 px-4 lg:bottom-8"
-      style={{ bottom: "calc(76px + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)))" }}
-    >
+    // Позиция — в .toast-dock (index.css), а не инлайном: только CSS видит
+    // html.has-cart-bar и поднимает стек над панелью корзины. Инлайновый style
+    // ещё и перебивал lg:bottom-8, поэтому на desktop toast стоял на мобильной
+    // высоте.
+    <div className="toast-dock pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-2 px-4">
       {items.map((t) => (
         <div
           key={t.id}

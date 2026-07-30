@@ -375,7 +375,11 @@ export default function Home() {
           на экран целиком, третья (если админ её завёл) подсказывает прокрутку
           краем. Раньше карточка была 300px шириной — на 390px экране вторая
           пряталась почти полностью, и лента читалась как одиночный баннер. */}
-      <div className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0">
+      {/* scroll-px-4 обязателен вместе со snap-mandatory: снап выравнивает карточку
+          по границе ПАДДИНГ-БОКСА контейнера, а не по контентной. Без scroll-padding
+          браузер сам доводил ленту до snap-позиции ещё на первой отрисовке и съедал
+          левые 16px — первый баннер вставал вплотную к краю экрана. */}
+      <div className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:scroll-px-0 lg:px-0 lg:pb-0">
         {(home ? home.banners : Array.from({ length: 2 }, () => null)).map((b, i) =>
           b ? (
             <HeroBanner
