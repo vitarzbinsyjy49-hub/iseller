@@ -98,7 +98,7 @@ def _tick(state: dict) -> None:
     """
     from app.core.config import settings
     from app.db.session import SessionLocal
-    from app.services import cart_reminders
+    from app.services import cart_reminders, favorite_watch
     from app.services.notifications import drain
 
     now = time.monotonic()
@@ -107,14 +107,19 @@ def _tick(state: dict) -> None:
         if not _schema_ready(state):
             return
         with SessionLocal() as db:
-            # Скан корзин реже, чем опрос: корзина не «протухает» за 30 секунд,
-            # а лишние проходы по базе бесполезны.
+            # Сканы реже, чем опрос: ни корзина, ни цена не «протухают» за 30
+            # секунд, а лишние проходы по базе бесполезны.
             interval = max(1, settings.CART_REMINDER_SCAN_MINUTES) * 60
             if now - state.get("last_scan", 0.0) >= interval:
                 state["last_scan"] = now
                 stats = cart_reminders.scan(db)
                 if stats["queued"]:
                     logger.info("скан корзин: %s", stats)
+
+            interval = max(1, settings.FAVORITE_WATCH_SCAN_MINUTES) * 60
+            if now - state.get("last_favorite_scan", 0.0) >= interval:
+                state["last_favorite_scan"] = now
+                favorite_watch.scan(db)
 
             stats = drain(db, limit=OUTBOX_BATCH)
             if stats["sent"] or stats["failed"]:

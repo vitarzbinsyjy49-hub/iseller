@@ -140,6 +140,11 @@ def _apply_demo_migrations() -> None:
         # Режим доступности товара. NULL = выводится из in_stock/is_limited,
         # то есть поведение существующих 217 товаров не меняется ни на шаг.
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS availability_mode VARCHAR(20)",
+        # Патч 1.1: отметки «что про этот товар пользователь уже слышал».
+        # NULL у существующих строк — сознательно: первый скан их заполнит и
+        # промолчит, иначе выкладка разослала бы всем всё про всё избранное.
+        "ALTER TABLE product_favorites ADD COLUMN IF NOT EXISTS notified_price NUMERIC(12, 2)",
+        "ALTER TABLE product_favorites ADD COLUMN IF NOT EXISTS notified_in_stock BOOLEAN",
         # v5.6.0: постоянные прайс-посты канала. Все поля необязательные —
         # существующие новостные посты продолжают работать без изменений.
         "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS slug VARCHAR(64)",

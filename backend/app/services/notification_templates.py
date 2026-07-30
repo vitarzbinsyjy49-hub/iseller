@@ -166,3 +166,49 @@ def cart_reminder_message(
             _row(_url_button("💬 Менеджер", settings.MANAGER_RETAIL_URL)),
         ),
     )
+
+
+# ========================= Избранное =========================
+def favorite_message(
+    *, product_id: int, title: str, price: float, currency: str = "RUB",
+    previous_price: float | None = None, back_in_stock: bool = False,
+) -> Message | None:
+    """Новость про товар из избранного: подешевел и/или снова в наличии.
+
+    ОДНО сообщение на товар, даже когда произошло и то, и другое. Два сообщения
+    подряд про один и тот же телефон читаются как сбой рассылки, а не как забота:
+    возвращение в наличие и так показывает актуальную цену.
+
+    Заголовок выбирается по важности: «снова в наличии» — это про возможность
+    купить вообще, снижение цены — про условия. Если товара не было, главная
+    новость именно первая.
+
+    None означает «новости нет» — это нормальный исход, а не ошибка.
+    """
+    if not back_in_stock and previous_price is None:
+        return None
+
+    if back_in_stock:
+        headline = "Снова в наличии"
+        # Про снижение упоминаем строкой ниже, отдельным сообщением — нет.
+        tail = "Товар из вашего избранного снова можно заказать."
+    else:
+        headline = "Цена снизилась"
+        tail = "Товар из вашего избранного."
+
+    lines = [f"<b>{headline}</b>", "", title]
+
+    price_line = format_money(price, currency)
+    if previous_price is not None:
+        # «Было» — это цена, которую МЫ называли в прошлый раз, а не вчерашняя:
+        # человек сравнивает с тем, что знает от нас.
+        price_line += f" (было {format_money(previous_price, currency)})"
+    lines += [price_line, "", tail]
+
+    return Message(
+        "\n".join(lines),
+        _keyboard(
+            _row(_web_app_button("Открыть товар", f"/product/{product_id}")),
+            _row(_web_app_button("⭐️ Избранное", "/favorites")),
+        ),
+    )
