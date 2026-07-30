@@ -52,6 +52,39 @@ OUTBOX_BATCH = 20
 _running = True
 
 
+def _schema_ready(state: dict) -> bool:
+    """Готова ли схема БД для фоновых задач.
+
+    Схему создаёт и мигрирует backend на своём старте, а `depends_on` в compose
+    ждёт только ЗАПУСКА контейнера, а не завершения его startup-события. При
+    деплое, добавляющем таблицу, бот успевает сделать первый тик раньше — и
+    получает «relation does not exist».
+
+    Сам по себе этот отказ безобиден (следующий тик через ≤30 с уже проходит),
+    но полноэкранный traceback в логах на каждом деплое учит игнорировать логи
+    бота — а это ровно то, из-за чего потом не замечают настоящую поломку.
+    Поэтому ждём таблицу явно и говорим об этом одной строкой.
+
+    Проверка выполняется, пока не увенчается успехом, после чего больше не
+    повторяется: таблица не исчезает.
+    """
+    if state.get("schema_ready"):
+        return True
+
+    from sqlalchemy import inspect
+
+    from app.db.session import engine
+
+    if inspect(engine).has_table("notifications"):
+        state["schema_ready"] = True
+        return True
+
+    if not state.get("schema_warned"):
+        state["schema_warned"] = True
+        logger.info("схема ещё не создана backend'ом — фоновые задачи ждут")
+    return False
+
+
 def _tick(state: dict) -> None:
     """Фоновая работа между опросами Telegram (патч 1.1).
 
@@ -71,6 +104,8 @@ def _tick(state: dict) -> None:
     now = time.monotonic()
 
     try:
+        if not _schema_ready(state):
+            return
         with SessionLocal() as db:
             # Скан корзин реже, чем опрос: корзина не «протухает» за 30 секунд,
             # а лишние проходы по базе бесполезны.
