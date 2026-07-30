@@ -129,6 +129,37 @@ def test_manager_changes_status_including_new_cart_statuses(ctx):
         assert r.status_code == 200 and r.json()["status"] == status_value
 
 
+def test_status_history_is_recorded_in_the_existing_audit_log(ctx):
+    """Отдельной таблицы под историю нет — используем существующий журнал."""
+    client, db, _user = ctx
+    p = make_product(db)
+    lead = submit_cart(client, db, [(p, 1)])
+
+    assert client.get(f"/api/admin/leads/{lead['id']}").json()["status_history"] == []
+
+    client.patch(f"/api/admin/leads/{lead['id']}", json={"status": "contacted"})
+    client.patch(f"/api/admin/leads/{lead['id']}", json={"status": "confirmed"})
+    # Повтор того же статуса записью не считается: это не изменение.
+    client.patch(f"/api/admin/leads/{lead['id']}", json={"status": "confirmed"})
+
+    history = client.get(f"/api/admin/leads/{lead['id']}").json()["status_history"]
+    assert [(h["from"], h["to"]) for h in history] == [("new", "contacted"), ("contacted", "confirmed")]
+    assert all(h["actor"] == "admin:admin@test.local" for h in history)
+    assert all(h["created_at"] for h in history)
+
+
+def test_status_history_is_per_lead(ctx):
+    """История одной заявки не должна утекать в другую (фильтр по detail)."""
+    client, db, _user = ctx
+    p = make_product(db)
+    first = submit_cart(client, db, [(p, 1)])
+    second = submit_cart(client, db, [(p, 1)])
+
+    client.patch(f"/api/admin/leads/{first['id']}", json={"status": "contacted"})
+    assert len(client.get(f"/api/admin/leads/{first['id']}").json()["status_history"]) == 1
+    assert client.get(f"/api/admin/leads/{second['id']}").json()["status_history"] == []
+
+
 def test_unknown_status_is_rejected(ctx):
     client, db, _user = ctx
     p = make_product(db)

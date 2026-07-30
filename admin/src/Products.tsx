@@ -11,6 +11,8 @@ export type Prod = {
   is_active: boolean; is_hot: boolean; is_available_today: boolean;
   /** Лимитированный: только у таких витрина показывает «Осталось N шт». */
   is_limited?: boolean;
+  /** Режим доступности для корзины. null = выводится из in_stock/is_limited. */
+  availability_mode?: string | null;
   popularity: number; rating: number;
   // Полные поля (to_admin) — используются модалкой редактирования
   description?: string | null; specs?: Record<string, unknown>; tags?: string[];
@@ -406,7 +408,7 @@ function ProductModal({
 
   useEffect(() => {
     if (!product) {
-      setForm({ title: "", sku: "", brand: "", category: "", price: "", old_price: "", stock: "0", image: "", description: "", warranty_months: "12", condition: "new" });
+      setForm({ title: "", sku: "", brand: "", category: "", price: "", old_price: "", stock: "0", image: "", description: "", warranty_months: "12", condition: "new", availability_mode: "" });
       setSpecsText("{}");
       return;
     }
@@ -420,6 +422,7 @@ function ProductModal({
       stock: String(product.stock ?? 0), image: product.image ?? "",
       description: product.description ?? "", warranty_months: String(product.warranty_months ?? 12),
       condition: product.condition ?? "new",
+      availability_mode: product.availability_mode ?? "",
     });
     setImages(product.images ?? []);
     setSpecsText(JSON.stringify(product.specs ?? {}, null, 2));
@@ -524,6 +527,8 @@ function ProductModal({
       stock: Number(form.stock || 0), image: form.image.trim() || null,
       description: form.description.trim() || null, warranty_months: Number(form.warranty_months || 12),
       condition: form.condition || "new",
+      // Пустая строка = «автоматически»: backend превратит её в NULL.
+      availability_mode: form.availability_mode ?? "",
       specs,
     };
     setSaving(true);
@@ -580,6 +585,20 @@ function ProductModal({
               <option value="new">Новый</option>
               <option value="used">Б/у</option>
               <option value="refurbished">Восстановленный</option>
+            </select>
+          </label>
+          {/* Доступность для корзины. Пусто = выводится из «в наличии» и
+              «лимитированный», то есть ровно прежнее поведение. Явное значение
+              нужно там, где флагами не сказать: «нет в наличии» и «предзаказ». */}
+          <label style={{ fontSize: 13, color: C.sub }}>
+            Доступность (корзина)
+            <select style={input} value={form.availability_mode ?? ""} onChange={(e) => set("availability_mode", e.target.value)}>
+              <option value="">Автоматически (из наличия)</option>
+              <option value="in_stock">В наличии</option>
+              <option value="limited">Ограниченная партия</option>
+              <option value="preorder">Предзаказ</option>
+              <option value="on_request">Под заказ</option>
+              <option value="out_of_stock">Нет в наличии (нельзя заказать)</option>
             </select>
           </label>
           <label style={{ fontSize: 13, color: C.sub }}>

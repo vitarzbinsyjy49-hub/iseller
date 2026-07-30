@@ -82,22 +82,66 @@ def lead_detail(lead_id: int, db: Session = Depends(get_db)):
             round(float(product.price) - float(snap), 2)
             if product is not None and snap is not None else None
         )
+    data["status_history"] = _status_history(db, lead_id)
     return data
 
 
+def _status_history(db: Session, lead_id: int) -> list[dict]:
+    """История смен статуса заявки.
+
+    Отдельной таблицы под неё не заводим: в проекте уже есть журнал действий
+    (audit_logs), и вторая параллельная история разошлась бы с ним. Формат
+    detail фиксирован — «lead=<id>;from=<a>;to=<b>».
+    """
+    rows = db.execute(
+        select(AuditLog)
+        .where(AuditLog.action == "lead_status_changed",
+               AuditLog.detail.like(f"lead={lead_id};%"))
+        .order_by(AuditLog.id.asc())
+    ).scalars().all()
+    history: list[dict] = []
+    for row in rows:
+        parts = dict(
+            piece.split("=", 1)
+            for piece in (row.detail or "").split(";") if "=" in piece
+        )
+        history.append({
+            "from": parts.get("from"),
+            "to": parts.get("to"),
+            "actor": row.actor,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        })
+    return history
+
+
 @router.patch("/leads/{lead_id}")
-def update_lead(lead_id: int, body: LeadStatusIn, db: Session = Depends(get_db)):
+def update_lead(
+    lead_id: int,
+    body: LeadStatusIn,
+    db: Session = Depends(get_db),
+    admin: str = Depends(get_current_admin),
+):
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
     if body.status is not None:
         if body.status not in LEAD_STATUSES:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, f"status must be one of {LEAD_STATUSES}")
+        previous = lead.status
         lead.status = body.status
+        if previous != body.status:
+            # Журналируем ДО commit: смена статуса и её запись — одно изменение.
+            db.add(AuditLog(
+                actor=f"admin:{admin}",
+                action="lead_status_changed",
+                detail=f"lead={lead_id};from={previous};to={body.status}",
+            ))
     if body.assigned_to is not None:
         lead.assigned_to = body.assigned_to
     if body.manager_comment is not None:
         lead.manager_comment = body.manager_comment
+    # Состав и цены заявки менеджер не правит: снапшот — то, что отправил
+    # покупатель. Здесь меняются только статус, ответственный и заметка.
     db.commit()
     db.refresh(lead)
     return lead.to_dict()
