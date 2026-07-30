@@ -27,4 +27,10 @@ def public_config():
         "manager_tradein_url": settings.MANAGER_TRADEIN_URL.strip() or retail,
         "telegram_channel_url": settings.TELEGRAM_CHANNEL_URL.strip(),
         "mini_app_url": settings.MINI_APP_URL.strip(),
+        # @username бота без «@». Не секрет: он и так стоит в каждой кнопке
+        # каждого поста канала. Фронту нужен, чтобы «поделиться товаром» слал
+        # deep link t.me/<bot>?start=product_<id>, а не внутренний адрес Mini
+        # App — по внутреннему адресу получатель попадает в веб-версию без
+        # Telegram-авторизации и видит «Не удалось войти».
+        "bot_username": settings.BOT_USERNAME.strip().lstrip("@"),
     }

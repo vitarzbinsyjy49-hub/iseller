@@ -9,7 +9,8 @@ import { formatPrice, discountPct } from "../lib/format";
 import { ProductImage, Badge, FavButton } from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
 import LeadForm from "../components/LeadForm";
-import { haptic, openExternalLink } from "../lib/telegram";
+import { haptic, isInsideTelegram, openExternalLink } from "../lib/telegram";
+import { pickShareTarget } from "../lib/share";
 import { usePublicConfig } from "../lib/appConfig";
 import { toast } from "../lib/toast";
 import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
@@ -68,15 +69,38 @@ export default function ProductDetails() {
     return () => controller.abort();
   }, [p?.id, p?.category]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Поделиться товаром.
+   *
+   *  Раньше отсюда уходил `window.location.href` — внутренний адрес Mini App.
+   *  Получатель открывал его в обычном браузере, где нет Telegram-авторизации,
+   *  и упирался в «Не удалось войти»: ссылка от друга вела в тупик, а выглядело
+   *  это как сломанный магазин. Теперь делимся deep link'ом бота, который
+   *  открывает Telegram и доводит до карточки (см. lib/share.ts).
+   */
   async function share() {
     if (!p) return;
-    const url = window.location.href;
+    const target = pickShareTarget({
+      insideTelegram: isInsideTelegram(),
+      botUsername: config.bot_username,
+      productId: p.id,
+      title: p.title,
+      price: formatPrice(p.price),
+      fallbackUrl: window.location.href,
+      hasNativeShare: typeof navigator !== "undefined" && !!navigator.share,
+    });
+    track("product_shared", { product_id: p.id, target: target.kind });
+    haptic("light");
+
+    if (target.kind === "telegram") {
+      openExternalLink(target.url);
+      return;
+    }
     try {
-      if (navigator.share) {
-        await navigator.share({ title: p.title, url });
+      if (target.kind === "native") {
+        await navigator.share({ title: p.title, text: target.text, url: target.link });
         return;
       }
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(target.link);
       setShared(true);
       setTimeout(() => setShared(false), 1500);
     } catch {

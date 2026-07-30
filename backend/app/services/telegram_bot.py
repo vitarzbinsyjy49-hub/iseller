@@ -150,8 +150,26 @@ def parse_command(text: str | None) -> str | None:
     return name.lower() or None
 
 
+def parse_product_payload(payload: str) -> int | None:
+    """«product_42» -> 42. Всё остальное -> None.
+
+    Строгая проверка на цифры обязательна: payload приходит из ссылки, которую
+    мог собрать кто угодно, а результат подставляется в URL кнопки. `isdigit`
+    здесь мало — он пропускает юникод-цифры вроде «٤٢», поэтому проверяем по
+    ASCII и заодно отсекаем неправдоподобно длинные значения.
+    """
+    prefix = "product_"
+    if not payload.startswith(prefix):
+        return None
+    raw = payload[len(prefix):]
+    if not raw or len(raw) > 12 or not all(c in "0123456789" for c in raw):
+        return None
+    value = int(raw)
+    return value if value > 0 else None
+
+
 def reply_for_payload(payload: str) -> Reply | None:
-    """Ответ на deep link из канала: раздел прайса, каталог или AI-подбор.
+    """Ответ на deep link: раздел прайса, каталог, AI-подбор или товар.
 
     Здесь web_app-кнопки уже законны — это личный чат с ботом, а не канал.
     """
@@ -161,6 +179,29 @@ def reply_for_payload(payload: str) -> Reply | None:
         return build_reply({"message": {"chat": {"type": "private"}, "text": "/catalog"}})
     if payload == "ai":
         return build_reply({"message": {"chat": {"type": "private"}, "text": "/ai"}})
+
+    # Товар, которым поделились. НАЗВАНИЕ ТОВАРА ЗДЕСЬ НЕ ЧИТАЕТСЯ ИЗ БАЗЫ
+    # намеренно: build_reply и reply_for_payload не ходят в БД и не ходят в
+    # сеть, поэтому всё поведение бота проверяется обычными тестами. Название
+    # человек и так видит в сообщении, по которому пришёл; наша задача —
+    # довести его до карточки одним нажатием.
+    product_id = parse_product_payload(payload)
+    if product_id is not None:
+        button = _web_app_button("🛍 Открыть товар", f"/product/{product_id}")
+        if button is None:
+            # Mini App не настроен — кнопки не будет; отправлять сообщение с
+            # обещанием и без кнопки хуже, чем общее меню.
+            return Reply(WELCOME, main_keyboard())
+        return Reply(
+            "Вот товар, которым с вами поделились.",
+            _keyboard(
+                _row(button),
+                _row(
+                    _web_app_button("🛍 Весь каталог", "/catalog"),
+                    _url_button("💬 Менеджер", settings.MANAGER_RETAIL_URL),
+                ),
+            ),
+        )
 
     section = SECTIONS_BY_SLUG.get(payload)
     if section is None:

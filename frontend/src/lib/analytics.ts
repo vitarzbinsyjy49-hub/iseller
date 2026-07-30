@@ -56,7 +56,12 @@ export type AppEvent =
   | "checkout_success"
   | "checkout_error"
   | "buy_now"
-  | "continue_shopping";
+  | "continue_shopping"
+  // Патч 1.1: распространение и возвращаемость. Payload — только product_id и
+  // способ (target/from). Ни ссылки, ни текста сообщения здесь нет: чем именно
+  // человек делится и кому — не наше дело.
+  | "product_shared"
+  | "home_screen_prompted";
 
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();

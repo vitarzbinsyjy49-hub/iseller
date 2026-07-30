@@ -21,6 +21,9 @@ type TelegramWebApp = {
   disableVerticalSwipes?: () => void;
   openTelegramLink?: (url: string) => void;
   openLink?: (url: string) => void;
+  // Bot API 8.0: ярлык Mini App на домашнем экране телефона.
+  addToHomeScreen?: () => void;
+  checkHomeScreenStatus?: (cb: (status: string) => void) => void;
   HapticFeedback?: { impactOccurred: (style: string) => void };
   BackButton?: {
     show?: () => void;
@@ -111,6 +114,66 @@ export function setBackButton(handler: (() => void) | null): () => void {
     try { btn.offClick?.(handler); } catch {}
     try { btn.hide?.(); } catch {}
   };
+}
+
+/* ================= Ярлык на домашнем экране (Bot API 8.0) ================= */
+
+/** Что Telegram знает про ярлык нашего Mini App.
+ *  - `unsupported` — клиент старый или платформа не умеет (desktop, web);
+ *  - `added` — ярлык уже стоит;
+ *  - `missed` — можно предложить добавить;
+ *  - `unknown` — Telegram не берётся ответить. */
+export type HomeScreenStatus = "unsupported" | "added" | "missed" | "unknown";
+
+const HOME_SCREEN_STATUSES: HomeScreenStatus[] = ["unsupported", "added", "missed", "unknown"];
+
+/** Узнать состояние ярлыка.
+ *
+ *  Ответ приходит колбэком, поэтому оборачиваем в Promise. Таймаут обязателен:
+ *  на клиенте, который метод объявил, но колбэк не вызывает, Promise повис бы
+ *  навсегда, а с ним — и состояние кнопки в интерфейсе.
+ *
+ *  Любая неопределённость трактуется как `unsupported`: показать кнопку,
+ *  которая ничего не делает, хуже, чем не показать её вовсе.
+ */
+export function checkHomeScreenStatus(timeoutMs = 1500): Promise<HomeScreenStatus> {
+  const tg = getTelegram();
+  if (!tg?.checkHomeScreenStatus) return Promise.resolve("unsupported");
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (status: HomeScreenStatus) => {
+      if (done) return;
+      done = true;
+      resolve(status);
+    };
+    const timer = window.setTimeout(() => finish("unsupported"), timeoutMs);
+    try {
+      tg.checkHomeScreenStatus!((status) => {
+        window.clearTimeout(timer);
+        finish(
+          HOME_SCREEN_STATUSES.includes(status as HomeScreenStatus)
+            ? (status as HomeScreenStatus)
+            : "unknown",
+        );
+      });
+    } catch {
+      window.clearTimeout(timer);
+      finish("unsupported");
+    }
+  });
+}
+
+/** Предложить добавить ярлык. Диалог показывает сам Telegram — согласие
+ *  пользователя запрашивает он, не мы. Возвращает false, если метода нет. */
+export function addToHomeScreen(): boolean {
+  const tg = getTelegram();
+  if (!tg?.addToHomeScreen) return false;
+  try {
+    tg.addToHomeScreen();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function enterFullscreen(): void {

@@ -330,3 +330,49 @@ def test_unknown_payload_falls_back_to_the_main_menu():
     """Устаревшая ссылка из старого поста не должна упираться в тишину."""
     reply = build_reply(private_message("/start price_deleted_section"))
     assert reply.text.startswith("Добро пожаловать")
+
+
+# ------------------------------------------------- deep link на товар (патч 1.1)
+
+@pytest.mark.parametrize("payload,expected", [
+    ("product_42", 42),
+    ("product_1", 1),
+    ("product_999999", 999999),
+])
+def test_parse_product_payload_accepts_real_ids(payload, expected):
+    assert telegram_bot.parse_product_payload(payload) == expected
+
+
+@pytest.mark.parametrize("payload", [
+    "product_",           # без id
+    "product_abc",        # не число
+    "product_-1",         # отрицательный
+    "product_0",          # нулевой id товара не существует
+    "product_1.5",        # дробный
+    "product_1/../admin", # попытка вылезти из маршрута
+    "product_٤٢",         # арабские цифры: isdigit() их принимает, int() тоже
+    "product_" + "9" * 20,  # неправдоподобно длинный
+    "catalog",
+    "",
+])
+def test_parse_product_payload_rejects_junk(payload):
+    """Payload приходит из ссылки, которую мог собрать кто угодно, а результат
+    подставляется в URL кнопки — поэтому проверка строгая, по ASCII-цифрам."""
+    assert telegram_bot.parse_product_payload(payload) is None
+
+
+def test_shared_product_link_opens_the_card():
+    reply = build_reply(private_message("/start product_42"))
+    urls = [b["web_app"]["url"] for row in reply.keyboard for b in row if "web_app" in b]
+    assert "https://shop.example.com/product/42" in urls
+
+
+def test_shared_product_link_without_mini_app_falls_back_to_menu(monkeypatch):
+    """Без настроенного Mini App кнопки не будет.
+
+    Обещать «вот товар» и не дать кнопку хуже, чем показать обычное меню:
+    человек пришёл по ссылке друга и обязан куда-то попасть.
+    """
+    monkeypatch.setattr(settings, "MINI_APP_URL", "", raising=False)
+    reply = build_reply(private_message("/start product_42"))
+    assert reply.text.startswith("Добро пожаловать")

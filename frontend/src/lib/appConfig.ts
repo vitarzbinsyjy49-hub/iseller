@@ -16,13 +16,15 @@ export type PublicConfig = {
   manager_tradein_url: string;
   telegram_channel_url: string;
   mini_app_url: string;
+  /** @username бота без «@» — нужен для deep link'ов «поделиться товаром». */
+  bot_username: string;
 };
 
 const EMPTY: PublicConfig = {
   app_name: "AI Seller",
   manager_retail_url: "", manager_wholesale_url: "",
   manager_b2b_url: "", manager_tradein_url: "",
-  telegram_channel_url: "", mini_app_url: "",
+  telegram_channel_url: "", mini_app_url: "", bot_username: "",
 };
 
 let cached: PublicConfig | null = null;
