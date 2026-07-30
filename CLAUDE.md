@@ -356,7 +356,7 @@ HTTP-запроса нельзя: Telegram за WARP стоит секунды �
 ## Проверки перед тем, как считать работу сделанной
 
 ```bash
-cd backend && python -m pytest -q          # 665 тестов
+cd backend && python -m pytest -q          # 667 тестов
 cd frontend && npx tsc --noEmit && npx vitest run && npm run build
 cd admin && npx tsc --noEmit && npm run build
 ```

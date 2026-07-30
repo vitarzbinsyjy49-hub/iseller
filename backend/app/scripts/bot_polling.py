@@ -52,21 +52,35 @@ OUTBOX_BATCH = 20
 _running = True
 
 
+#: Что фоновым задачам нужно от схемы: таблица -> обязательные колонки.
+#:
+#: Проверяются именно КОЛОНКИ, а не только наличие таблицы. Новые колонки
+#: приезжают отдельными `ALTER TABLE ... ADD COLUMN` уже после create_all, то
+#: есть ПОЗЖЕ своей таблицы: проверка «таблица существует» пропустила бы
+#: `product_favorites` без `notified_price` и снова дала бы traceback на деплое.
+#: Добавляешь фоновой задаче новое поле — добавь его сюда.
+REQUIRED_SCHEMA: dict[str, tuple[str, ...]] = {
+    "notifications": (),
+    "product_favorites": ("notified_price", "notified_in_stock"),
+    "carts": (),
+}
+
+
 def _schema_ready(state: dict) -> bool:
     """Готова ли схема БД для фоновых задач.
 
     Схему создаёт и мигрирует backend на своём старте, а `depends_on` в compose
     ждёт только ЗАПУСКА контейнера, а не завершения его startup-события. При
-    деплое, добавляющем таблицу, бот успевает сделать первый тик раньше — и
-    получает «relation does not exist».
+    деплое со схемой бот успевает сделать первый тик раньше — и получает
+    «relation/column does not exist».
 
     Сам по себе этот отказ безобиден (следующий тик через ≤30 с уже проходит),
     но полноэкранный traceback в логах на каждом деплое учит игнорировать логи
     бота — а это ровно то, из-за чего потом не замечают настоящую поломку.
-    Поэтому ждём таблицу явно и говорим об этом одной строкой.
+    Поэтому ждём схему явно и говорим об этом одной строкой.
 
     Проверка выполняется, пока не увенчается успехом, после чего больше не
-    повторяется: таблица не исчезает.
+    повторяется: колонки не исчезают.
     """
     if state.get("schema_ready"):
         return True
@@ -75,13 +89,23 @@ def _schema_ready(state: dict) -> bool:
 
     from app.db.session import engine
 
-    if inspect(engine).has_table("notifications"):
+    inspector = inspect(engine)
+    for table, columns in REQUIRED_SCHEMA.items():
+        if not inspector.has_table(table):
+            missing = table
+            break
+        present = {c["name"] for c in inspector.get_columns(table)}
+        absent = [c for c in columns if c not in present]
+        if absent:
+            missing = f"{table}.{absent[0]}"
+            break
+    else:
         state["schema_ready"] = True
         return True
 
     if not state.get("schema_warned"):
         state["schema_warned"] = True
-        logger.info("схема ещё не создана backend'ом — фоновые задачи ждут")
+        logger.info("схема ещё не готова (%s) — фоновые задачи ждут backend", missing)
     return False
 
 
@@ -109,17 +133,22 @@ def _tick(state: dict) -> None:
         with SessionLocal() as db:
             # Сканы реже, чем опрос: ни корзина, ни цена не «протухают» за 30
             # секунд, а лишние проходы по базе бесполезны.
+            # Отметку времени двигаем ПОСЛЕ успешного скана, а не до него.
+            # Наоборот было ошибкой: упавший скан считался выполненным, и повтор
+            # откладывался на целый интервал (час для избранного) вместо
+            # следующего тика. Ровно это и произошло на деплое — скан упал на
+            # ещё не добавленной колонке и «замолчал» на час.
             interval = max(1, settings.CART_REMINDER_SCAN_MINUTES) * 60
             if now - state.get("last_scan", 0.0) >= interval:
-                state["last_scan"] = now
                 stats = cart_reminders.scan(db)
+                state["last_scan"] = now
                 if stats["queued"]:
                     logger.info("скан корзин: %s", stats)
 
             interval = max(1, settings.FAVORITE_WATCH_SCAN_MINUTES) * 60
             if now - state.get("last_favorite_scan", 0.0) >= interval:
-                state["last_favorite_scan"] = now
                 favorite_watch.scan(db)
+                state["last_favorite_scan"] = now
 
             stats = drain(db, limit=OUTBOX_BATCH)
             if stats["sent"] or stats["failed"]:
