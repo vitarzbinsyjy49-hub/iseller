@@ -491,12 +491,21 @@ function EmptyCart() {
   const navigate = useNavigate();
   const [recent, setRecent] = useState<TCard[] | null>(null);
   const [hits, setHits] = useState<TCard[] | null>(null);
+  const [hitsTitle, setHitsTitle] = useState("Хиты продаж");
 
   useEffect(() => {
     api<{ cards?: TCard[] }>("/catalog/recently-viewed?limit=8")
       .then((d) => setRecent(d.cards ?? [])).catch(() => setRecent([]));
+    // Пустая корзина не должна быть тупиком. «Хиты» держатся на флаге is_hot,
+    // и если контент-менеджер его никому не проставил, секции просто не будет —
+    // поэтому падаем на популярное из каталога, а не на пустоту.
     api<{ hot?: TCard[] }>("/catalog/feed")
-      .then((d) => setHits(d.hot ?? [])).catch(() => setHits([]));
+      .then((d) => {
+        if ((d.hot ?? []).length >= 2) { setHits(d.hot ?? []); return; }
+        return api<{ cards?: TCard[] }>("/catalog/list?sort=popularity")
+          .then((l) => { setHitsTitle("Популярное"); setHits(l.cards ?? []); });
+      })
+      .catch(() => setHits([]));
   }, []);
 
   return (
@@ -534,7 +543,7 @@ function EmptyCart() {
       </div>
 
       {recent && recent.length >= 2 && <Suggestions title="Вы недавно смотрели" cards={recent} />}
-      {hits && hits.length >= 2 && <Suggestions title="Хиты продаж" cards={hits} />}
+      {hits && hits.length >= 2 && <Suggestions title={hitsTitle} cards={hits} />}
     </div>
   );
 }
