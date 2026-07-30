@@ -9,11 +9,13 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, ai, auth, catalog, config as config_api, events, favorites, health, home, imports, leads, posts, price_posts, telegram, users
+from app.api import admin, admin_crm, ai, auth, cart, catalog, config as config_api, events, favorites, health, home, imports, leads, posts, price_posts, telegram, users
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import analytics_event as _analytics_event  # noqa: F401
+from app.models import cart as _cart  # noqa: F401
 from app.models import favorite as _favorite  # noqa: F401
+from app.models import lead_item as _lead_item  # noqa: F401
 from app.models import home as _home  # noqa: F401
 from app.models import lead as _lead  # noqa: F401
 from app.models import product as _product  # noqa: F401
@@ -81,6 +83,8 @@ app.include_router(catalog.router, prefix="/api")
 app.include_router(events.router, prefix="/api")
 # Demo MVP: CRM (заявки) + расширенная админка
 app.include_router(leads.router, prefix="/api")
+# Compact Home + Cart: корзина Mini App и общая заявка по ней
+app.include_router(cart.router, prefix="/api")
 app.include_router(admin_crm.router, prefix="/api")
 # v4: управляемая главная + Import Center + публичная конфигурация
 app.include_router(home.router, prefix="/api")
@@ -117,6 +121,24 @@ def _apply_demo_migrations() -> None:
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS metadata JSON DEFAULT '{}'::json",
         "CREATE INDEX IF NOT EXISTS ix_leads_lead_type ON leads (lead_type)",
         "UPDATE leads SET lead_type = 'general' WHERE lead_type IS NULL",
+        # Compact Home + Cart: общая заявка по корзине. Все колонки новые и
+        # необязательные — существующие одиночные заявки остаются как есть
+        # (items_count=0, estimated_total/idempotency_key = NULL), массовой
+        # конвертации нет и быть не должно. Таблицы carts/cart_items/lead_items
+        # создаёт create_all; здесь только доводка leads и products.
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS items_count INTEGER DEFAULT 0",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS estimated_total NUMERIC(12, 2)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS currency VARCHAR(8) DEFAULT 'RUB'",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(64)",
+        "UPDATE leads SET items_count = 0 WHERE items_count IS NULL",
+        # Уникальность ключа идемпотентности — на уровне БД: только она делает
+        # двойной submit безопасным при параллельных запросах. Ключ уникален В
+        # ПРЕДЕЛАХ пользователя, иначе чужой клиент мог бы занять значение.
+        "CREATE INDEX IF NOT EXISTS ix_leads_idempotency_key ON leads (idempotency_key)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_leads_user_idempotency ON leads (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL",
+        # Режим доступности товара. NULL = выводится из in_stock/is_limited,
+        # то есть поведение существующих 217 товаров не меняется ни на шаг.
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS availability_mode VARCHAR(20)",
         # v5.6.0: постоянные прайс-посты канала. Все поля необязательные —
         # существующие новостные посты продолжают работать без изменений.
         "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS slug VARCHAR(64)",

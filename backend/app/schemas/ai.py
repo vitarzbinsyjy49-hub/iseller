@@ -107,6 +107,19 @@ ALLOWED_EVENTS = {
     # v5.5.0: свайп-навигация между страницами. Payload — только маршрут,
     # направление жеста и цель перехода; пользовательских данных нет.
     "page_swiped",
+    # Compact Home + Cart: воронка корзины и checkout. Payload — только
+    # безопасные метаданные (product_id, quantity, items_count, код ошибки).
+    # Телефон, имя и комментарий в аналитику НЕ попадают ни при каких условиях.
+    "cart_add",
+    "cart_remove",
+    "cart_quantity_change",
+    "cart_open",
+    "checkout_start",
+    "checkout_submit",
+    "checkout_success",
+    "checkout_error",
+    "buy_now",
+    "continue_shopping",
 }
 
 

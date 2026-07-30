@@ -6,24 +6,48 @@
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Integer, Numeric, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import JSON, DateTime, Index, Integer, Numeric, String, Text, func, text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
-LEAD_STATUSES = ("new", "in_progress", "reserved", "completed", "cancelled")
-LEAD_SOURCES = ("ai", "product", "catalog", "home", "manager", "other")
-DELIVERY_METHODS = ("pickup", "delivery")
+# Статусы РАСШИРЕНЫ аддитивно (Compact Home + Cart): три новых значения из
+# воронки подтверждения корзины встают рядом со старыми пятью. Заводить второй
+# словарь статусов для того же поля нельзя — админка и витрина читают один
+# список, и расхождение здесь означает заявку с непонятным статусом.
+LEAD_STATUSES = (
+    "new", "contacted", "confirming", "confirmed",
+    "in_progress", "reserved", "completed", "cancelled",
+)
+# telegram_mini_app_cart — источник общей заявки из корзины Mini App.
+LEAD_SOURCES = ("ai", "product", "catalog", "home", "manager", "telegram_mini_app_cart", "other")
+# consult — «уточнить с менеджером»: третий способ получения появился вместе с
+# checkout корзины (раньше выбор был только самовывоз/доставка).
+DELIVERY_METHODS = ("pickup", "delivery", "consult")
 
 # v5.4.0: тип сценарной заявки. Хранится ОТДЕЛЬНО от source (канал происхождения):
 # source остаётся "home"/"product"/"ai"/…, а lead_type задаёт продуктовый сценарий.
 # Обратная совместимость: старый POST без lead_type -> "general" (см. миграцию/схему).
-LEAD_TYPES = ("general", "product", "trade_in", "b2b", "wholesale")
+# cart — общая заявка по корзине: несколько позиций в lead_items.
+LEAD_TYPES = ("general", "product", "trade_in", "b2b", "wholesale", "cart")
 DEFAULT_LEAD_TYPE = "general"
+CART_LEAD_TYPE = "cart"
+CART_LEAD_SOURCE = "telegram_mini_app_cart"
 
 
 class Lead(Base):
     __tablename__ = "leads"
+    __table_args__ = (
+        # Частичный уникальный индекс: пары (пользователь, ключ) уникальны, а
+        # NULL-ключи старых одиночных заявок под ограничение не попадают вовсе.
+        Index(
+            "uq_leads_user_idempotency",
+            "user_id", "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+            sqlite_where=text("idempotency_key IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int | None] = mapped_column(Integer, index=True)
@@ -42,7 +66,19 @@ class Lead(Base):
     # v5.4.0: структурированные ответы сценария. Атрибут `meta`, т.к. `metadata`
     # зарезервировано в declarative Base; DB-колонка и JSON-ключ ответа — "metadata".
     meta: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
-    delivery_method: Mapped[str | None] = mapped_column(String(32))  # pickup | delivery
+    delivery_method: Mapped[str | None] = mapped_column(String(32))  # pickup | delivery | consult
+    # ---- Заявка из корзины (все поля необязательные) ----
+    # Одиночные заявки их не заполняют и продолжают работать без изменений:
+    # items_count=0, estimated_total=NULL, позиций в lead_items нет.
+    items_count: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_total: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str | None] = mapped_column(String(8), default="RUB")
+    # Ключ идемпотентности checkout: повторная отправка той же корзины (двойной
+    # тап, ретрай после таймаута) обязана вернуть ТУ ЖЕ заявку, а не создать
+    # вторую. Уникальность обеспечивает БД, а не проверка «сначала посмотрим»,
+    # и она СОСТАВНАЯ — (user_id, ключ). Глобальный уникальный ключ означал бы,
+    # что чужой клиент может занять значение и сломать checkout другому.
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), index=True)
     status: Mapped[str] = mapped_column(String(32), default="new", index=True)
     assigned_to: Mapped[str | None] = mapped_column(String(200))
     manager_comment: Mapped[str | None] = mapped_column(Text)
@@ -51,9 +87,23 @@ class Lead(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    # Позиции заявки-корзины. lazy="selectin" — один дополнительный запрос на
+    # выборку, а не N+1 на список из сотни заявок в админке.
+    items = relationship(
+        "LeadItem", back_populates="lead", cascade="all, delete-orphan",
+        lazy="selectin", order_by="LeadItem.id",
+    )
+
+    @property
+    def public_number(self) -> str:
+        """Номер заявки для человека. Отдельного счётчика не заводим: id уже
+        уникален и стабилен, а второй номер пришлось бы синхронизировать."""
+        return f"№{self.id}"
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "public_number": self.public_number,
             "user_id": self.user_id,
             "telegram_id": self.telegram_id,
             "name": self.name,
@@ -67,6 +117,10 @@ class Lead(Base):
             "lead_type": self.lead_type or DEFAULT_LEAD_TYPE,
             "metadata": self.meta or {},
             "delivery_method": self.delivery_method,
+            "items_count": self.items_count or 0,
+            "estimated_total": float(self.estimated_total) if self.estimated_total is not None else None,
+            "currency": self.currency or "RUB",
+            "items": [i.to_dict() for i in (self.items or [])],
             "status": self.status,
             "assigned_to": self.assigned_to,
             "manager_comment": self.manager_comment,

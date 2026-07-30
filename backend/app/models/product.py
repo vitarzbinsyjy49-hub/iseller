@@ -68,6 +68,11 @@ class Product(Base):
     # позиций с малым складским остатком, где срочность ложная. Теперь дефицит —
     # осознанное решение контент-менеджера в админке, а не побочный эффект склада.
     is_limited: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Режим доступности для корзины. NULL (по умолчанию) => выводится из
+    # in_stock/is_limited — поведение существующих товаров не меняется. Явное
+    # значение нужно только там, где флагами сказать нечем: «нет в наличии»
+    # (out_of_stock) и «предзаказ» (preorder). См. services/availability.py.
+    availability_mode: Mapped[str | None] = mapped_column(String(20))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)             # вкл/выкл в каталоге (админка)
     warranty_months: Mapped[int] = mapped_column(Integer, default=12)
     condition: Mapped[str] = mapped_column(String(20), default="new")  # new / used / refurbished
@@ -143,6 +148,10 @@ class Product(Base):
 
     def to_card(self) -> dict:
         """Карточка для ленты/AI-ответа/fallback — единый формат для фронтенда."""
+        # Режим доступности считает ОДИН резолвер (services/availability): фронт
+        # не должен второй раз выводить правила из in_stock/is_limited — иначе
+        # кнопка «в корзину» и проверка на checkout разойдутся.
+        from app.services.availability import availability_payload
         return {
             "id": self.id,
             "sku": self.sku,
@@ -167,6 +176,7 @@ class Product(Base):
             "tags": self.tags or [],
             "why": [],
             "buttons": self._buttons(),
+            **availability_payload(self),
         }
 
     def _specifications(self) -> list[dict]:
@@ -241,6 +251,7 @@ class Product(Base):
             "in_stock": self.in_stock, "stock": self.stock, "is_active": self.is_active,
             "is_hot": self.is_hot, "is_available_today": self.is_available_today,
             "is_limited": self.is_limited,
+            "availability_mode": self.availability_mode,  # NULL = «вывести из флагов»
             "popularity": self.popularity, "rating": self.rating,
             # Полные поля для формы редактирования в админке (v2)
             "image": self.image, "images": self.images or [], "description": self.description,
