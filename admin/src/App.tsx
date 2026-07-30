@@ -17,10 +17,41 @@ export default function App() {
 }
 
 // ---------- Login ----------
+/** Локальный ли это запуск. Кнопка тестового входа существует ТОЛЬКО здесь.
+ *
+ *  Две независимые защиты, и ни одна из них не полагается на флаг сборки:
+ *  1) кнопка не рисуется нигде, кроме localhost;
+ *  2) сам маршрут /auth/admin/dev при DEV_MODE=false отдаёт 404 — решение
+ *     принимает сервер, а не клиент.
+ *  Поэтому production-бандл, открытый на боевом домене, этой кнопки не покажет,
+ *  а если бы и показал — она бы не сработала. */
+function isLocalHost(): boolean {
+  const h = window.location.hostname;
+  return h === "localhost" || h === "127.0.0.1" || h === "[::1]";
+}
+
 function Login({ onToken }: { onToken: (t: string) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [devAvailable, setDevAvailable] = useState(false);
+
+  // Спрашиваем сервер, доступен ли тестовый вход. 404 — обычный ответ прода,
+  // поэтому ошибку не показываем: кнопки просто не будет.
+  useEffect(() => {
+    if (!isLocalHost()) return;
+    fetch("/api/config").then(() => setDevAvailable(true)).catch(() => setDevAvailable(false));
+  }, []);
+
+  async function devLogin() {
+    setError("");
+    const res = await fetch("/api/auth/admin/dev", { method: "POST" });
+    if (!res.ok) {
+      setError("Тестовый вход недоступен: сервер запущен не в DEV_MODE");
+      return;
+    }
+    onToken((await res.json()).access_token);
+  }
 
   async function submit() {
     setError("");
@@ -54,6 +85,20 @@ function Login({ onToken }: { onToken: (t: string) => void }) {
         </label>
         {error && <p style={{ color: C.red, fontSize: 13 }}>{error}</p>}
         <button style={{ ...btn, width: "100%", marginTop: 16 }} onClick={submit}>Войти</button>
+        {isLocalHost() && devAvailable && (
+          <>
+            <button
+              style={{ ...btnGhost, width: "100%", marginTop: 8 }}
+              onClick={devLogin}
+              data-testid="dev-admin-login"
+            >
+              Тестовый вход (только локально)
+            </button>
+            <p style={{ color: C.sub, fontSize: 11, marginTop: 6, marginBottom: 0, textAlign: "center" }}>
+              Без пароля. На боевом домене кнопки нет, а маршрут отдаёт 404.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

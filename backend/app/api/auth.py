@@ -64,6 +64,30 @@ def auth_dev(request: Request, db: Session = Depends(get_db)):
     return _token_pair(f"user:{user.id}")
 
 
+@router.post("/admin/dev", response_model=TokenPair)
+def admin_auth_dev(request: Request, db: Session = Depends(get_db)):
+    """Админ-токен для локальной приёмки БЕЗ пароля. Только при DEV_MODE=true.
+
+    Зачем: приёмочные прогоны и скриншоты админки не должны требовать ввода
+    настоящего пароля — ни руками, ни в скрипте. Пароль, попавший в историю
+    команд или в лог CI, перестаёт быть паролем.
+
+    Почему это безопасно:
+    - решение принимает СЕРВЕР, а не флаг сборки: при DEV_MODE=false маршрута
+      не существует (404), сколько бы клиент ни просил;
+    - `settings.ADMIN_PASSWORD` здесь не читается вовсе — сравнивать нечего;
+    - subject отдельный (`admin:dev@local`), поэтому в audit_logs видно, что
+      действие сделано тестовым входом, а не настоящим администратором.
+
+    Симметрично уже существующему `/auth/dev` для покупателя.
+    """
+    if not settings.DEV_MODE:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    subject = "admin:dev@local"
+    audit(db, subject, "admin_login_dev", ip=client_ip(request))
+    return _token_pair(subject)
+
+
 @router.post("/admin/login", response_model=TokenPair)
 def admin_login(body: AdminLoginIn, request: Request, db: Session = Depends(get_db)):
     """Вход администратора.

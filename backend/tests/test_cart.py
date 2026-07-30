@@ -302,6 +302,19 @@ def test_checkout_creates_one_lead_with_all_items(ctx):
     assert db.query(Cart).filter(Cart.status == "converted").count() == 1
 
 
+def test_cart_lead_metadata_has_no_untranslated_keys(ctx):
+    """metadata заявки рисуется в UI как «подпись: значение», и незнакомый ключ
+    выводится сырым. Поэтому в metadata заявки-корзины допустим только origin —
+    он в списке скрытых. Любой новый ключ обязан получить русскую подпись
+    в lib/leads.ts и admin/ui.ts, иначе менеджер увидит «positions: 3»."""
+    client, db, *_ = ctx
+    p = make_product(db)
+    client.post("/api/cart/items", json={"product_id": p.id})
+    lead = client.post("/api/cart/checkout", json=checkout_body()).json()["lead"]
+    assert set(lead["metadata"].keys()) == {"origin"}
+    assert lead["metadata"]["origin"] == "cart"
+
+
 def test_checkout_of_single_item_cart(ctx):
     client, db, *_ = ctx
     p = make_product(db, price=5000)

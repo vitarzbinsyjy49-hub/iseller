@@ -52,8 +52,12 @@ export default function CartBar() {
             <span className="block truncate text-[15px] font-bold leading-5">
               {pluralItems(cart.items_count)} · {formatPrice(cart.estimated_total)}
             </span>
+            {/* Коротко намеренно: в узкой колонке панели длинная фраза
+                обрывалась многоточием на слове «подтв…». Полная формулировка
+                про подтверждение менеджером стоит на экране корзины, где для
+                неё есть место. */}
             <span className="mt-0.5 block truncate text-[11px] leading-4 text-muted">
-              Предварительно — итог подтвердит менеджер
+              Сумма предварительная
             </span>
           </span>
           <span className="tap flex shrink-0 items-center gap-1 rounded-field bg-accent px-4 py-2.5 text-[13px] font-semibold text-white">

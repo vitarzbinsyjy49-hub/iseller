@@ -401,7 +401,11 @@ def checkout(
         message=(comment or "").strip() or None,
         source=CART_LEAD_SOURCE,
         lead_type=CART_LEAD_TYPE,
-        meta={"origin": "cart", "positions": len(lines)},
+        # Только origin (он в скрытых ключах UI). Число позиций сюда класть
+        # нельзя: metadata рисуется как «подпись: значение», незнакомый ключ
+        # выводится КАК ЕСТЬ — и в админке появлялась строка «positions: 3»
+        # сырым английским ключом. Само число и так видно в таблице состава.
+        meta={"origin": "cart"},
         delivery_method=fulfillment,
         items_count=sum(l["quantity"] for l in lines),
         estimated_total=estimated_total,

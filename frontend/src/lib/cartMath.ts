@@ -66,6 +66,46 @@ export function canAddToCart(mode?: AvailabilityMode | null): boolean {
   return !!mode && ORDERABLE.includes(mode);
 }
 
+/** Подпись наличия для карточки товара.
+ *
+ *  Читает РЕЖИМ, а не голый in_stock: у предзаказа in_stock=true, и карточка
+ *  писала «В наличии», пока в корзине тот же товар честно помечался
+ *  предзаказом. Две разные правды об одном товаре на соседних экранах хуже,
+ *  чем одна скучная.
+ *
+ *  Ответ без режима (кэш прошлого визита, фикстура AI) читается как раньше —
+ *  по in_stock: старые данные не должны менять смысл подписи.
+ */
+export function availabilityText(
+  card: { availability_mode?: AvailabilityMode | null; in_stock?: boolean; is_available_today?: boolean },
+): string {
+  const inStockLabel = card.is_available_today ? "В наличии · Сегодня" : "В наличии";
+  switch (card.availability_mode) {
+    case "preorder": return "Предзаказ";
+    case "on_request": return "Под заказ";
+    case "out_of_stock": return "Нет в наличии";
+    case "unavailable": return "Недоступен";
+    case "in_stock":
+    case "limited": return inStockLabel;
+    default: return card.in_stock ? inStockLabel : "Под заказ";
+  }
+}
+
+/** Цвет подписи наличия: зелёный только у реально доступного «сейчас». */
+export function availabilityTone(
+  card: { availability_mode?: AvailabilityMode | null; in_stock?: boolean },
+): "text-green" | "text-muted" {
+  switch (card.availability_mode) {
+    case "in_stock":
+    case "limited": return "text-green";
+    case "preorder":
+    case "on_request":
+    case "out_of_stock":
+    case "unavailable": return "text-muted";
+    default: return card.in_stock ? "text-green" : "text-muted";
+  }
+}
+
 /** Русская плюрализация: «1 товар», «2 товара», «5 товаров». */
 export function pluralItems(n: number): string {
   const abs = Math.abs(n) % 100;

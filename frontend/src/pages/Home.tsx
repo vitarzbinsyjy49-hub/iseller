@@ -247,7 +247,12 @@ export default function Home() {
                 if (e.key === "Enter") goSearch();
                 if (e.key === "Escape") { setSearchOpen(false); e.currentTarget.blur(); }
               }}
-              placeholder={searchMode === "ai" ? "Опишите, что нужно — подберём" : "Найти iPhone, MacBook, AirPods…"}
+              // Подсказка короткая НЕ случайно: рядом стоит тумблер «Каталог /
+              // AI», и на 390px поле остаётся шириной 147px. Прежние «Найти
+              // iPhone, MacBook, AirPods…» (239px) обрывались на середине слова
+              // — обрезанная подсказка хуже короткой. Что продаёт магазин,
+              // говорит ряд категорий строкой ниже.
+              placeholder={searchMode === "ai" ? "Опишите задачу" : "Найти технику"}
               aria-label={searchMode === "ai" ? "AI-подбор" : "Поиск по каталогу"}
               aria-expanded={searchOpen || search.trim().length >= 2}
               className="h-12 min-w-0 flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-muted"

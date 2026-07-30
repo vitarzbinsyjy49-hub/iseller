@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   type CartItemRow,
   EMPTY_CART,
+  availabilityText,
+  availabilityTone,
   canAddToCart,
   clampQuantity,
   newIdempotencyKey,
@@ -53,6 +55,34 @@ describe("canAddToCart", () => {
     expect(canAddToCart("out_of_stock")).toBe(false);
     expect(canAddToCart("unavailable")).toBe(false);
     expect(canAddToCart(undefined)).toBe(false);
+  });
+});
+
+describe("availabilityText", () => {
+  it("предзаказ не выдаёт себя за «В наличии»", () => {
+    // Регрессия: у предзаказа in_stock=true, и карточка писала «В наличии»,
+    // хотя в корзине тот же товар помечался предзаказом.
+    expect(availabilityText({ availability_mode: "preorder", in_stock: true })).toBe("Предзаказ");
+    expect(availabilityTone({ availability_mode: "preorder", in_stock: true })).toBe("text-muted");
+  });
+
+  it("«под заказ», «нет в наличии» и «недоступен» названы своими именами", () => {
+    expect(availabilityText({ availability_mode: "on_request", in_stock: false })).toBe("Под заказ");
+    expect(availabilityText({ availability_mode: "out_of_stock", in_stock: false })).toBe("Нет в наличии");
+    expect(availabilityText({ availability_mode: "unavailable", in_stock: false })).toBe("Недоступен");
+  });
+
+  it("наличие и «сегодня» показываются как раньше", () => {
+    expect(availabilityText({ availability_mode: "in_stock", in_stock: true })).toBe("В наличии");
+    expect(availabilityText({ availability_mode: "limited", in_stock: true, is_available_today: true }))
+      .toBe("В наличии · Сегодня");
+    expect(availabilityTone({ availability_mode: "in_stock" })).toBe("text-green");
+  });
+
+  it("ответ без режима читается по in_stock — старые данные не меняют смысл", () => {
+    expect(availabilityText({ in_stock: true })).toBe("В наличии");
+    expect(availabilityText({ in_stock: false })).toBe("Под заказ");
+    expect(availabilityTone({ in_stock: false })).toBe("text-muted");
   });
 });
 

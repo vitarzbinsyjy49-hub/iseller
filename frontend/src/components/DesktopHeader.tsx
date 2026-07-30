@@ -101,8 +101,14 @@ export default function DesktopHeader() {
         {/* Поиск — живой, с debounce, единственный на desktop. relative — под ним
             компактный popover с историей/сценариями при пустом фокусе; закрытие:
             Escape, клик мимо (blur с contains-проверкой), навигация. */}
+        {/* min-w-[320px] обязателен. С `min-w-0` строка поиска сжималась до
+            88px, и в поле оставалось 56px на текст: подсказка обрывалась на
+            первом слове при любой ширине экрана, потому что контейнер шапки
+            ограничен 1320px, а тумблер «Каталог / AI» внутри строки забирает
+            143px. Минимум держит поле пригодным для ввода, а лишнее ужимается
+            во второстепенных действиях справа. */}
         <div
-          className="relative min-w-0 flex-1"
+          className="relative min-w-[420px] flex-1"
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPanelOpen(false);
           }}
@@ -130,7 +136,7 @@ export default function DesktopHeader() {
                   setPanelOpen(false);
                 }
               }}
-              placeholder={mode === "ai" ? "Опишите, что нужно — подберём" : "Найти iPhone, MacBook, PlayStation…"}
+              placeholder={mode === "ai" ? "Опишите, что нужно" : "Найти iPhone, MacBook…"}
               aria-label={mode === "ai" ? "AI-подбор" : "Поиск по каталогу"}
               aria-expanded={panelOpen && !q.trim()}
               className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-muted"
@@ -188,15 +194,20 @@ export default function DesktopHeader() {
           </button>
           <button
             onClick={() => navigate("/ai")}
-            className="rounded-xl2 bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accentdark"
+            title="AI-подбор"
+            className="whitespace-nowrap rounded-xl2 bg-accent px-3.5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accentdark wide:px-4"
           >
-            ✨ AI-подбор
+            ✨ AI<span className="hidden wide:inline">-подбор</span>
           </button>
+          {/* До 1440px подпись прячется, остаётся иконка: место нужнее строке
+              поиска, а действие вторичное и продублировано на страницах. */}
           <button
             onClick={() => { if (!openExternalLink(config.manager_retail_url)) navigate("/ai"); }}
-            className="rounded-xl2 border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text transition-colors hover:bg-mutedbg"
+            title="Написать менеджеру"
+            aria-label="Написать менеджеру"
+            className="rounded-xl2 border border-border bg-surface px-3 py-2.5 text-sm font-medium text-text transition-colors hover:bg-mutedbg wide:px-4"
           >
-            💬 Менеджер
+            💬<span className="hidden wide:ml-1 wide:inline">Менеджер</span>
           </button>
           <ProfileChip user={user} variant="desktop" />
         </div>

@@ -13,7 +13,7 @@ import { toast } from "../lib/toast";
 import { track } from "../lib/analytics";
 import { indexFromScroll, isSlideMounted, isTapGesture } from "../lib/carousel";
 import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
-import { canAddToCart } from "../lib/cartMath";
+import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMath";
 import { QuantityStepper } from "./QuantityStepper";
 
 const MAX_CARD_IMAGES = 10;
@@ -423,8 +423,12 @@ export default function ProductCard({ card, compact, onOpen }: Props) {
               : card.title}
           </p>
         </button>
-        <p className={`mt-1 text-[11px] font-medium ${card.in_stock ? "text-green" : "text-muted"}`}>
-          {card.in_stock ? (card.is_available_today ? "В наличии · Сегодня" : "В наличии") : "Под заказ"}
+        {/* Подпись наличия читает РЕЖИМ, а не голый in_stock: у предзаказа
+            in_stock=true, и карточка писала «В наличии», хотя в корзине тот же
+            товар честно помечен предзаказом. Две разные правды об одном товаре
+            на соседних экранах — хуже, чем одна скучная. */}
+        <p className={`mt-1 text-[11px] font-medium ${availabilityTone(card)}`}>
+          {availabilityText(card)}
         </p>
         {/* Остаток — только у лимитированных товаров (флаг из админки), а не у
             всего, где склад меньше пяти штук: иначе срочность ложная. */}
