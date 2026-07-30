@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import { api } from "./lib/api";
 import { getTelegram, isInsideTelegram, initTelegramUi } from "./lib/telegram";
 import { hydrateFavorites } from "./lib/favorites";
+import { hydrateCart } from "./lib/cart";
 import { useAuthStore, User } from "./store/auth";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Toaster from "./components/Toaster";
@@ -15,6 +16,7 @@ import Requests from "./pages/Requests";
 import Profile from "./pages/Profile";
 import Favorites from "./pages/Favorites";
 import History from "./pages/History";
+import Cart from "./pages/Cart";
 
 export default function App() {
   const { setTokens, setUser } = useAuthStore();
@@ -40,6 +42,9 @@ export default function App() {
         // Избранное: сливаем локальное (гость/до входа) с серверным и берём
         // серверный список. Не блокируем готовность экрана — фоном.
         void hydrateFavorites();
+        // Корзина: локальный кэш уже отрисован, здесь берём серверное состояние
+        // как истину — цены и наличие могли измениться между визитами.
+        void hydrateCart();
         setStatus("ready");
       } catch (e) {
         setErrorText(e instanceof Error ? e.message : "Неизвестная ошибка");
@@ -68,6 +73,7 @@ export default function App() {
           <Route path="/product/:id" element={<ProductDetails />} />
           <Route path="/ai" element={<AiSearch />} />
           <Route path="/requests" element={<Requests />} />
+          <Route path="/cart" element={<Cart />} />
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/history" element={<History />} />
           <Route path="/profile" element={<Profile />} />

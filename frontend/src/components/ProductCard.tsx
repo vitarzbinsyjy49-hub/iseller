@@ -12,12 +12,14 @@ import { haptic } from "../lib/telegram";
 import { toast } from "../lib/toast";
 import { track } from "../lib/analytics";
 import { indexFromScroll, isSlideMounted, isTapGesture } from "../lib/carousel";
+import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
+import { canAddToCart } from "../lib/cartMath";
+import { QuantityStepper } from "./QuantityStepper";
 
 const MAX_CARD_IMAGES = 10;
 
 type Props = {
   card: TCard;
-  onLead?: (card: TCard) => void;
   compact?: boolean;
   /** Вызывается перед переходом на карточку (напр. лог recommendation_click). */
   onOpen?: (card: TCard) => void;
@@ -286,8 +288,89 @@ export function Badge({ color, children }: { color: "red" | "blue" | "green" | "
   );
 }
 
+/** Кнопка корзины на карточке: «+» до добавления, степпер после.
+ *
+ *  Занимает строку фиксированной высоты, поэтому все карточки в сетке остаются
+ *  одной высоты и ничего не «прыгает» в момент добавления.
+ *
+ *  Товар, который заказать нельзя (нет в наличии, снят с публикации), кнопку не
+ *  получает: показывать «+», который не сработает, — обещание, которого нет.
+ *  Вместо неё — переход на карточку, где живёт «Узнать о поступлении». */
+function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) {
+  const { item, busy } = useCartEntry(card.id);
+  // Режим приходит с backend. Старый ответ без него (кэш/AI-фикстура) —
+  // ориентируемся на in_stock, как делала витрина до корзины.
+  const orderable = card.availability_mode ? canAddToCart(card.availability_mode) : card.in_stock !== false;
+
+  async function add(e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    haptic("light");
+    track("cart_add", { product_id: card.id, source: "card" });
+    try {
+      await addToCart({
+        id: card.id, title: card.title, price: card.price, image: card.image,
+        sku: card.sku, brand: card.brand, category: card.category,
+        max_quantity: card.max_quantity,
+      });
+      toast("Добавлено в корзину");
+    } catch {
+      toast("Не удалось добавить в корзину", "error");
+    }
+  }
+
+  async function change(next: number) {
+    if (!item) return;
+    haptic("light");
+    try {
+      if (next <= 0) await removeCartItem(item.id);
+      else await setItemQuantity(item.id, next);
+    } catch {
+      toast("Не удалось обновить корзину", "error");
+    }
+  }
+
+  if (!orderable) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onOpen(); }}
+        className="tap h-9 w-full rounded-field bg-mutedbg text-[12px] font-semibold text-muted"
+      >
+        Узнать о поступлении
+      </button>
+    );
+  }
+
+  if (item) {
+    return (
+      <QuantityStepper
+        quantity={item.quantity}
+        max={item.max_quantity}
+        busy={busy}
+        size="sm"
+        onChange={change}
+        ariaLabel={`Количество: ${card.title}`}
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={add}
+      aria-label={`Добавить в корзину: ${card.title}`}
+      className="tap flex h-9 w-full items-center justify-center gap-1.5 rounded-field bg-accent text-[13px] font-semibold text-white transition-colors hover:bg-accentdark"
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor"
+        strokeWidth="2.4" strokeLinecap="round">
+        <path d="M12 6v12M6 12h12" />
+      </svg>
+      Добавить
+    </button>
+  );
+}
+
 /** Карточка товара. Цена и наличие — из данных карточки (из БД), не пересчитываются. */
-export default function ProductCard({ card, onLead, compact, onOpen }: Props) {
+export default function ProductCard({ card, compact, onOpen }: Props) {
   const navigate = useNavigate();
   const disc = discountPct(card.price, card.old_price);
   const open = () => { onOpen?.(card); navigate(`/product/${card.id}`); };
@@ -348,14 +431,13 @@ export default function ProductCard({ card, onLead, compact, onOpen }: Props) {
         {card.is_limited && card.in_stock && card.stock != null && card.stock > 0 && (
           <p className="mt-0.5 text-[11px] font-medium text-orange">Осталось {card.stock} шт</p>
         )}
-        {/* Спейсер прижимает кнопку к низу карточки при разной высоте контента */}
+        {/* Спейсер прижимает действие к низу карточки при разной высоте контента */}
         <span aria-hidden className="flex-1" />
-        <button
-          onClick={() => onLead?.(card)}
-          className="tap mt-2.5 w-full rounded-field bg-mutedbg py-2.5 text-[13px] font-semibold text-text transition-colors hover:bg-accent hover:text-white"
-        >
-          Заявка
-        </button>
+        {/* Фиксированная высота строки действия (h-9 внутри) — при добавлении
+            «+» меняется на степпер, и карточка не должна от этого расти. */}
+        <div className="mt-2.5">
+          <CardCartControl card={card} onOpen={open} />
+        </div>
       </div>
     </div>
   );

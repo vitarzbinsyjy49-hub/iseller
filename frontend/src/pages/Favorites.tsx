@@ -1,21 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard, { ProductImage } from "../components/ProductCard";
-import LeadForm from "../components/LeadForm";
 import { ErrorState } from "../components/StateViews";
 import { useFavoriteIds } from "../lib/favorites";
 import { track } from "../lib/analytics";
 
-/** Экран «Избранное»: карточки серверного избранного. Удаление сердечком —
- *  карточка исчезает сразу (фильтр по актуальным id), без перезагрузки. */
+/** Р­РєСЂР°РЅ В«РР·Р±СЂР°РЅРЅРѕРµВ»: РєР°СЂС‚РѕС‡РєРё СЃРµСЂРІРµСЂРЅРѕРіРѕ РёР·Р±СЂР°РЅРЅРѕРіРѕ. РЈРґР°Р»РµРЅРёРµ СЃРµСЂРґРµС‡РєРѕРј вЂ”
+ *  РєР°СЂС‚РѕС‡РєР° РёСЃС‡РµР·Р°РµС‚ СЃСЂР°Р·Сѓ (С„РёР»СЊС‚СЂ РїРѕ Р°РєС‚СѓР°Р»СЊРЅС‹Рј id), Р±РµР· РїРµСЂРµР·Р°РіСЂСѓР·РєРё. */
 export default function Favorites() {
   const navigate = useNavigate();
   const favIds = useFavoriteIds();
   const [cards, setCards] = useState<TCard[] | null>(null);
   const [error, setError] = useState(false);
-  const [lead, setLead] = useState<TCard | null>(null);
 
   const load = useCallback(() => {
     setCards(null);
@@ -26,20 +24,20 @@ export default function Favorites() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  // Показываем только то, что ещё в избранном: снятое сердечком уходит сразу.
+  // РџРѕРєР°Р·С‹РІР°РµРј С‚РѕР»СЊРєРѕ С‚Рѕ, С‡С‚Рѕ РµС‰С‘ РІ РёР·Р±СЂР°РЅРЅРѕРј: СЃРЅСЏС‚РѕРµ СЃРµСЂРґРµС‡РєРѕРј СѓС…РѕРґРёС‚ СЃСЂР°Р·Сѓ.
   const visible = cards?.filter((c) => favIds.includes(c.id)) ?? null;
 
   return (
     <div className="mx-auto max-w-md lg:max-w-none">
       <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">Избранное</h1>
+        <h1 className="text-2xl font-bold">РР·Р±СЂР°РЅРЅРѕРµ</h1>
         {visible && visible.length > 0 && (
           <span className="text-sm text-muted">{visible.length}</span>
         )}
       </div>
 
       {error ? (
-        <div className="mt-6"><ErrorState message="Не удалось загрузить избранное" onRetry={load} /></div>
+        <div className="mt-6"><ErrorState message="РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РёР·Р±СЂР°РЅРЅРѕРµ" onRetry={load} /></div>
       ) : visible === null ? (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton aspect-[3/4] rounded-xl2" />)}
@@ -58,22 +56,15 @@ export default function Favorites() {
         />
       ) : (
         <div className="stagger mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
-          {visible.map((c) => <ProductCard key={c.id} card={c} onLead={setLead} />)}
+          {visible.map((c) => <ProductCard key={c.id} card={c} />)}
         </div>
-      )}
-
-      {lead && (
-        <LeadForm
-          productId={lead.id} productTitle={lead.title} productPrice={lead.price}
-          source="favorites" onClose={() => setLead(null)}
-        />
       )}
     </div>
   );
 }
 
-/** Пустое избранное — не тупик: каталог, AI-подбор и «недавно смотрели»
- *  (существующий endpoint; грузится только когда пустое состояние показано). */
+/** РџСѓСЃС‚РѕРµ РёР·Р±СЂР°РЅРЅРѕРµ вЂ” РЅРµ С‚СѓРїРёРє: РєР°С‚Р°Р»РѕРі, AI-РїРѕРґР±РѕСЂ Рё В«РЅРµРґР°РІРЅРѕ СЃРјРѕС‚СЂРµР»РёВ»
+ *  (СЃСѓС‰РµСЃС‚РІСѓСЋС‰РёР№ endpoint; РіСЂСѓР·РёС‚СЃСЏ С‚РѕР»СЊРєРѕ РєРѕРіРґР° РїСѓСЃС‚РѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ РїРѕРєР°Р·Р°РЅРѕ). */
 function EmptyFavorites({
   onCatalog, onAi, onProduct,
 }: { onCatalog: () => void; onAi: () => void; onProduct: (id: number) => void }) {
@@ -83,7 +74,7 @@ function EmptyFavorites({
     const controller = new AbortController();
     api<{ cards?: TCard[] }>("/catalog/recently-viewed?limit=8", { signal: controller.signal })
       .then((d) => setRecent(Array.isArray(d.cards) ? d.cards : []))
-      .catch(() => { /* блок просто не показывается */ });
+      .catch(() => { /* Р±Р»РѕРє РїСЂРѕСЃС‚Рѕ РЅРµ РїРѕРєР°Р·С‹РІР°РµС‚СЃСЏ */ });
     return () => controller.abort();
   }, []);
 
@@ -95,28 +86,28 @@ function EmptyFavorites({
           <path d="M19 14c1.5-1.5 2.5-3 2.5-5A5.5 5.5 0 0 0 12 5.6 5.5 5.5 0 0 0 2.5 9c0 2 1 3.5 2.5 5l7 7z" />
         </svg>
       </div>
-      <p className="mt-4 text-[17px] font-bold">Пока здесь пусто</p>
+      <p className="mt-4 text-[17px] font-bold">РџРѕРєР° Р·РґРµСЃСЊ РїСѓСЃС‚Рѕ</p>
       <p className="mt-1.5 max-w-xs text-sm text-muted">
-        Добавляйте понравившиеся товары, чтобы быстро вернуться к ним позже.
+        Р”РѕР±Р°РІР»СЏР№С‚Рµ РїРѕРЅСЂР°РІРёРІС€РёРµСЃСЏ С‚РѕРІР°СЂС‹, С‡С‚РѕР±С‹ Р±С‹СЃС‚СЂРѕ РІРµСЂРЅСѓС‚СЊСЃСЏ Рє РЅРёРј РїРѕР·Р¶Рµ.
       </p>
       <div className="mt-5 flex flex-col gap-2 sm:flex-row">
         <button
           onClick={onCatalog}
           className="tap rounded-xl2 bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accentdark"
         >
-          Перейти в каталог
+          РџРµСЂРµР№С‚Рё РІ РєР°С‚Р°Р»РѕРі
         </button>
         <button
           onClick={onAi}
           className="tap rounded-xl2 bg-surface px-5 py-2.5 text-sm font-semibold text-accent shadow-soft"
         >
-          ✨ Подобрать через AI
+          вњЁ РџРѕРґРѕР±СЂР°С‚СЊ С‡РµСЂРµР· AI
         </button>
       </div>
 
       {recent.length >= 2 && (
         <div className="mt-8 w-full max-w-md text-left">
-          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">Вы недавно смотрели</p>
+          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">Р’С‹ РЅРµРґР°РІРЅРѕ СЃРјРѕС‚СЂРµР»Рё</p>
           <div className="no-scrollbar -mx-6 mt-2 flex gap-2 overflow-x-auto px-6">
             {recent.map((c) => (
               <button key={c.id} onClick={() => onProduct(c.id)} className="tap w-24 shrink-0 text-left">

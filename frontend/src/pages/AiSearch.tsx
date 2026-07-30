@@ -371,7 +371,7 @@ export default function AiSearch() {
                   {(item.answer.cards ?? []).slice(0, 6).map((c) => (
                     <ProductCard
                       key={c.id} card={c}
-                      onLead={(card) => { track("ai_product_card_clicked", { product_id: card.id }); setLead({ card, source: "ai" }); }}
+                      onOpen={(card) => track("ai_product_card_clicked", { product_id: card.id })}
                     />
                   ))}
                 </div>

@@ -9,8 +9,12 @@ import { formatPrice, discountPct } from "../lib/format";
 import { ProductImage, Badge, FavButton } from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
 import LeadForm from "../components/LeadForm";
-import { openExternalLink } from "../lib/telegram";
+import { haptic, openExternalLink } from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
+import { toast } from "../lib/toast";
+import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
+import { canAddToCart } from "../lib/cartMath";
+import { QuantityStepper } from "../components/QuantityStepper";
 
 type Tab = "desc" | "specs" | "delivery";
 type LoadState = "loading" | "ready" | "not_found" | "error";
@@ -27,7 +31,6 @@ export default function ProductDetails() {
   // «Похожие варианты» — существующий каталог той же категории (без нового
   // endpoint), текущий товар исключён. Это НЕ персональная подборка.
   const [similar, setSimilar] = useState<TCard[]>([]);
-  const [similarLead, setSimilarLead] = useState<TCard | null>(null);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -273,13 +276,11 @@ export default function ProductDetails() {
       </div>
 
       {/* Desktop CTA — обычный блок в правой колонке (sticky снизу не нужен: колонка компактная) */}
-      <button
-        onClick={() => setLead({ source: "product" })}
-        className="mt-5 hidden w-full rounded-xl2 bg-accent py-3.5 text-white transition-colors hover:bg-accentdark lg:block"
-      >
-        <span className="block text-[15px] font-bold leading-5">Оставить заявку</span>
-        <span className="block text-[11px] font-medium text-white/80">Менеджер свяжется сегодня</span>
-      </button>
+      <div className="mt-5 hidden lg:block">
+        <ProductCta product={p} onNotify={() => setLead({
+          source: "product", preset: `Сообщите, когда появится: ${p.title}`,
+        })} />
+      </div>
 
       </div>{/* /правая колонка */}
       </div>{/* /desktop 2 колонки */}
@@ -367,7 +368,7 @@ export default function ProductDetails() {
           </div>
           <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0 wide:grid-cols-5">
             {similar.map((c) => (
-              <ProductCardView key={c.id} card={c} compact onLead={setSimilarLead} />
+              <ProductCardView key={c.id} card={c} compact />
             ))}
           </div>
         </div>
@@ -380,13 +381,9 @@ export default function ProductDetails() {
           pt-2.5 сверху; нижний паддинг задаёт cta-dock). */}
       <div className="fixed inset-x-0 cta-dock z-30 border-t border-border bg-surface px-4 pt-2.5 lg:hidden">
         <div className="mx-auto max-w-md">
-          <button
-            onClick={() => setLead({ source: "product" })}
-            className="tap w-full rounded-xl2 bg-accent py-3 text-white"
-          >
-            <span className="block text-[15px] font-bold leading-5">Оставить заявку</span>
-            <span className="block text-[11px] font-medium text-white/80">Менеджер свяжется сегодня</span>
-          </button>
+          <ProductCta product={p} onNotify={() => setLead({
+            source: "product", preset: `Сообщите, когда появится: ${p.title}`,
+          })} />
         </div>
       </div>
 
@@ -397,12 +394,130 @@ export default function ProductDetails() {
           onClose={() => setLead(null)}
         />
       )}
-      {similarLead && (
-        <LeadForm
-          productId={similarLead.id} productTitle={similarLead.title} productPrice={similarLead.price}
-          source="product" onClose={() => setSimilarLead(null)}
-        />
-      )}
+    </div>
+  );
+}
+
+/** Основное действие карточки товара.
+ *
+ *  Один компонент на mobile-док и desktop-колонку: две копии этой логики
+ *  разошлись бы в правилах доступности, а именно они решают, можно ли вообще
+ *  оформить товар.
+ *
+ *  - обычный товар: «Добавить в корзину» -> степпер + «Перейти в корзину»;
+ *  - «Купить сейчас» добавляет ТОЛЬКО этот товар и открывает оформление —
+ *    заявку не отправляет: одно случайное нажатие не должно создавать заявку;
+ *  - нет в наличии: добавления нет вовсе, вместо него «Узнать о поступлении»
+ *    (обычная заявка с преднабранным текстом — отдельной подписки на
+ *    поступление в проекте нет, и выдумывать её кнопкой нельзя);
+ *  - предзаказ / под заказ: добавить можно, но подпись честно говорит, что это.
+ */
+function ProductCta({ product, onNotify }: { product: ProductDetail; onNotify: () => void }) {
+  const navigate = useNavigate();
+  const { item, busy } = useCartEntry(product.id);
+  const [pending, setPending] = useState(false);
+  const mode = product.availability_mode;
+  const orderable = mode ? canAddToCart(mode) : product.in_stock !== false;
+  const note = product.availability_note
+    || (mode === "preorder" ? "Предзаказ — сроки подтвердит менеджер" : "");
+
+  async function add(source: "cta" | "buy_now"): Promise<boolean> {
+    setPending(true);
+    haptic("light");
+    track(source === "buy_now" ? "buy_now" : "cart_add", { product_id: product.id, source: "product" });
+    try {
+      await addToCart({
+        id: product.id, title: product.title, price: product.price, image: product.image,
+        sku: product.sku, brand: product.brand, category: product.category,
+        max_quantity: product.max_quantity,
+      });
+      return true;
+    } catch {
+      toast("Не удалось добавить в корзину", "error");
+      return false;
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function change(next: number) {
+    if (!item) return;
+    haptic("light");
+    try {
+      if (next <= 0) await removeCartItem(item.id);
+      else await setItemQuantity(item.id, next);
+    } catch {
+      toast("Не удалось обновить корзину", "error");
+    }
+  }
+
+  async function buyNow() {
+    // Уже в корзине — второй раз не добавляем, просто ведём к оформлению.
+    if (item || await add("buy_now")) navigate("/cart?checkout=1&from=buy_now");
+  }
+
+  if (!orderable) {
+    return (
+      <div>
+        <button
+          onClick={onNotify}
+          className="tap w-full rounded-xl2 bg-accent py-3 text-white transition-colors hover:bg-accentdark"
+        >
+          <span className="block text-[15px] font-bold leading-5">Узнать о поступлении</span>
+          <span className="block text-[11px] font-medium text-white/80">Сообщим, когда появится</span>
+        </button>
+        <p className="mt-1.5 text-center text-[11px] text-muted">
+          {product.availability_label || "Сейчас нет в наличии"}
+        </p>
+      </div>
+    );
+  }
+
+  if (item) {
+    return (
+      <div>
+        <div className="flex items-center gap-2.5">
+          <div className="w-32 shrink-0">
+            <QuantityStepper
+              quantity={item.quantity} max={item.max_quantity} busy={busy}
+              onChange={change} ariaLabel={`Количество: ${product.title}`}
+            />
+          </div>
+          <button
+            onClick={() => navigate("/cart?from=product")}
+            className="tap h-11 flex-1 rounded-xl2 bg-accent text-[15px] font-bold text-white transition-colors hover:bg-accentdark"
+          >
+            Перейти в корзину
+          </button>
+        </div>
+        <p className="mt-1.5 text-center text-[11px] text-muted">
+          {note || "Итоговую стоимость подтвердит менеджер"}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2.5">
+        <button
+          onClick={() => add("cta")}
+          disabled={pending}
+          className="tap h-11 flex-1 rounded-xl2 bg-accent text-[15px] font-bold text-white transition-opacity hover:bg-accentdark disabled:opacity-60"
+        >
+          {pending ? "Добавляем…" : "Добавить в корзину"}
+        </button>
+        <button
+          onClick={buyNow}
+          disabled={pending}
+          className="tap h-11 shrink-0 rounded-xl2 border border-border bg-surface px-4 text-[13px] font-semibold text-text transition-opacity disabled:opacity-60"
+        >
+          Купить сейчас
+        </button>
+      </div>
+      <p className="mt-1.5 text-center text-[11px] text-muted">
+        {note || "Не оплата и не бронь — заявку подтвердит менеджер"}
+      </p>
     </div>
   );
 }

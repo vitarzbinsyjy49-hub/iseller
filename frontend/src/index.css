@@ -211,10 +211,33 @@ body {
 :root {
   --bottom-nav-content: 64px;
   --bottom-nav-height: calc(var(--bottom-nav-content) + max(0.5rem, var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))));
+  /* Высота панели корзины вместе с зазором. Один источник и для позиции самой
+     панели, и для нижнего отступа контента под ней. */
+  --cart-bar-space: 80px;
 }
 @media (max-width: 1023.98px) {
   .cta-dock { bottom: 0; padding-bottom: calc(var(--bottom-nav-height) + 16px); }
   .pb-cta { padding-bottom: calc(var(--bottom-nav-height) + 96px); } /* + высота кнопки (~64px) + воздух */
+}
+
+/* ===== Sticky-панель корзины (Compact Home + Cart) =====
+   Стоит НАД навигацией и использует ту же --bottom-nav-height, что и .cta-dock:
+   safe-area компенсируется ровно один раз, двойного инсета на iPhone нет.
+   Класс .has-cart-bar вешает на <html> Layout, когда панель реально видна, —
+   тогда контент получает дополнительный нижний отступ и последняя карточка
+   ленты остаётся доступной, а не уезжает под панель. На страницах, где панель
+   скрыта (корзина, карточка товара), класса нет и отступ не появляется. */
+@media (max-width: 1023.98px) {
+  .cart-dock { bottom: calc(var(--bottom-nav-height) + 8px); }
+  html.has-cart-bar .pb-nav {
+    padding-bottom: calc(76px + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)) + var(--cart-bar-space));
+  }
+}
+@media (min-width: 1024px) {
+  /* Desktop: панель — плавающая карточка в правом нижнем углу, нижней
+     навигации там нет. Отступ контента задаём тем же классом. */
+  .cart-dock { bottom: 24px; }
+  html.has-cart-bar .pb-nav { padding-bottom: calc(3rem + var(--cart-bar-space)); }
 }
 
 /* Открыта клавиатура (JS вешает .kb-open на <html>): нижняя навигация

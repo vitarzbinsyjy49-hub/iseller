@@ -1,9 +1,12 @@
 import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import BottomNav from "./BottomNav";
+import CartBar from "./CartBar";
 import DesktopHeader from "./DesktopHeader";
 import { usePageSwipe } from "../lib/usePageSwipe";
 import { setBackButton } from "../lib/telegram";
+import { useCart } from "../lib/cart";
+import { shouldShowCartBar } from "../lib/cartMath";
 
 /** ResponsiveShell — каркас приложения.
  *  Mobile (<1024px): как раньше — контент + фиксированная нижняя навигация.
@@ -19,10 +22,20 @@ import { setBackButton } from "../lib/telegram";
 export default function Layout() {
   const location = useLocation();
   const { enterAnimation, isTabRoute, goBack, swipeHandlers } = usePageSwipe();
+  const cart = useCart();
 
   // Нативная кнопка «Назад» Telegram — на вложенных экранах, тем же переходом,
   // что и свайп от края. На корневых вкладках её нет: возвращаться некуда.
   useEffect(() => setBackButton(isTabRoute ? null : goBack), [isTabRoute, location.key]);
+
+  // Класс на <html> — единственный способ сообщить CSS, что снизу появился ещё
+  // один слой: нижний отступ скролл-контейнера должен вырасти ровно тогда, когда
+  // панель видна, иначе последняя карточка ленты уезжает под неё.
+  const cartBarVisible = shouldShowCartBar(location.pathname, cart.items_count);
+  useEffect(() => {
+    document.documentElement.classList.toggle("has-cart-bar", cartBarVisible);
+    return () => document.documentElement.classList.remove("has-cart-bar");
+  }, [cartBarVisible]);
 
   const enterClass =
     enterAnimation === "from-right" ? "page-enter-right"
@@ -46,6 +59,7 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+      <CartBar />
       <BottomNav />
     </div>
   );

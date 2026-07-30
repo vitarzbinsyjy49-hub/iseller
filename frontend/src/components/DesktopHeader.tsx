@@ -6,6 +6,8 @@ import { openExternalLink } from "../lib/telegram";
 import { track } from "../lib/analytics";
 import { pushSearchQuery } from "../lib/searchHistory";
 import { ProfileChip } from "./ProfileChip";
+import { CartGlyph } from "./CartBar";
+import { useCart } from "../lib/cart";
 import SearchPanel from "./SearchPanel";
 import { SegmentedToggle } from "./SegmentedToggle";
 import { searchRoute, type SearchMode } from "../lib/searchMode";
@@ -31,6 +33,7 @@ export default function DesktopHeader() {
   const [params, setParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const config = usePublicConfig();
+  const cart = useCart();
   const onCatalog = pathname.startsWith("/catalog");
   const urlQuery = onCatalog ? (params.get("query") ?? "") : "";
   const [q, setQ] = useState(urlQuery);
@@ -168,6 +171,21 @@ export default function DesktopHeader() {
 
         {/* Действия справа */}
         <div className="flex shrink-0 items-center gap-2">
+          {/* Корзина: постоянный вход. Плавающая панель показывается только с
+              непустой корзиной, поэтому без этой кнопки пустой экран корзины на
+              desktop был бы недостижим. */}
+          <button
+            onClick={() => { track("cart_open", { source: "desktop_header" }); navigate("/cart"); }}
+            aria-label={cart.items_count > 0 ? `Корзина: ${cart.items_count}` : "Корзина"}
+            className="relative flex h-[42px] w-[42px] items-center justify-center rounded-xl2 border border-border bg-surface text-text transition-colors hover:bg-mutedbg"
+          >
+            <CartGlyph className="h-5 w-5" />
+            {cart.items_count > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
+                {cart.items_count}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => navigate("/ai")}
             className="rounded-xl2 bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accentdark"

@@ -19,6 +19,8 @@ import { loadCachedCategories, saveCachedCategories } from "../lib/categoryCache
 import { SegmentedToggle } from "../components/SegmentedToggle";
 import { navTiles, type NavAxis, type NavChip } from "../lib/navTiles";
 import { searchRoute, type SearchMode } from "../lib/searchMode";
+import { CartGlyph } from "../components/CartBar";
+import { useCart } from "../lib/cart";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
@@ -51,6 +53,7 @@ export default function Home() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const config = usePublicConfig();
+  const cart = useCart();
   // v5.4.0: встроенные сценарные заявки (Trade-In/бизнес/опт) и меню MacBook.
   const [scenario, setScenario] = useState<ScenarioKey | null>(null);
   const [macbookOpen, setMacbookOpen] = useState(false);
@@ -91,7 +94,6 @@ export default function Home() {
   const [feedError, setFeedError] = useState(false);
   // Доп. секции desktop-главной (Скидки/Apple/Gaming) — те же API каталога
   const [extra, setExtra] = useState<{ sale: TCard[]; apple: TCard[]; gaming: TCard[] } | null>(null);
-  const [lead, setLead] = useState<TCard | null>(null);
   // Консультационная заявка без товара (fallback, когда ссылка менеджера пуста)
   const [consult, setConsult] = useState(false);
   const [search, setSearch] = useState("");
@@ -183,11 +185,15 @@ export default function Home() {
       {/* ===== Единый верх: системная область Telegram + hero одного цвета. Тёмную
           подложку выреза статус-бара даёт глобальный .hero-top-inset в Layout (на
           всех экранах); здесь только сам hero. ===== */}
-      <header className="app-hero -mx-4 -mt-3 rounded-b-hero px-4 pb-6 pt-4 text-white shadow-float lg:hidden">
+      {/* Верх компактен намеренно: до товарного контента у покупателя раньше
+          было три крупных блока подряд (шапка, сетка сценариев, категории), и
+          первая карточка появлялась ниже сгиба. Теперь между шапкой и товарами —
+          одна строка поиска, одна строка чипов и одна строка сценариев. */}
+      <header className="app-hero -mx-4 -mt-3 rounded-b-hero px-4 pb-5 pt-2.5 text-white shadow-float lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[18px] font-bold leading-6 tracking-tight">AI Seller</p>
-            <p className="mt-0.5 truncate text-[12px] font-medium text-white/70">Техника, которую легко найти</p>
+            <p className="text-[17px] font-bold leading-5 tracking-tight">AI Seller</p>
+            <p className="mt-0.5 truncate text-[11px] font-medium leading-4 text-white/70">Техника, которую легко найти</p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
@@ -199,6 +205,20 @@ export default function Home() {
                 <path d="M12 20.7 4.3 13a4.6 4.6 0 0 1 0-6.5 4.6 4.6 0 0 1 6.5 0l1.2 1.2 1.2-1.2a4.6 4.6 0 0 1 6.5 0 4.6 4.6 0 0 1 0 6.5z" />
               </svg>
             </button>
+            {/* Постоянный вход в корзину: плавающая панель появляется только с
+                товарами, и без этой кнопки пустая корзина была бы недостижима. */}
+            <button
+              onClick={() => { track("cart_open", { source: "home_header" }); navigate("/cart"); }}
+              aria-label={cart.items_count > 0 ? `Корзина: ${cart.items_count}` : "Корзина"}
+              className="tap relative flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.12] backdrop-blur"
+            >
+              <CartGlyph className="h-[18px] w-[18px]" />
+              {cart.items_count > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-accentdark">
+                  {cart.items_count}
+                </span>
+              )}
+            </button>
             <ProfileChip user={user} variant="mobile" />
           </div>
         </div>
@@ -207,7 +227,7 @@ export default function Home() {
             onBlur на обёртке: закрываем панель, только если фокус ушёл наружу
             (кнопки панели держат фокус через preventDefault на mousedown). */}
         <div
-          className="relative mt-4 flex gap-2"
+          className="relative mt-3 flex gap-2"
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSearchOpen(false);
           }}
@@ -285,7 +305,7 @@ export default function Home() {
         {/* Ось навигации: категории или бренды. Тумблера нет, пока бренды не
             пришли — переключатель в пустую вкладку хуже отсутствующего. */}
         {hasBrandAxis && (
-          <div className="mt-4 flex items-center">
+          <div className="mt-3 flex items-center">
             <SegmentedToggle
               value={axis}
               onChange={switchAxis}
@@ -301,7 +321,7 @@ export default function Home() {
 
         {/* Быстрые категории — светлые чипы на тёмном hero (сразу видно глубину
             каталога). Данные: админские плитки → каталог → кэш; максимум 6. */}
-        <div className={`no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 ${hasBrandAxis ? "mt-3" : "mt-4"}`}>
+        <div className={`no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 ${hasBrandAxis ? "mt-2.5" : "mt-3"}`}>
           {heroChips.map((c) => (
             <button
               key={c.key}
@@ -346,12 +366,17 @@ export default function Home() {
 
         <div className="min-w-0">
       {/* ===== Hero-баннеры (управляются из админки): mobile — лента, desktop — сетка 3 ===== */}
+      {/* Две крупные карточки в горизонтальной ленте: на mobile обе помещаются
+          на экран целиком, третья (если админ её завёл) подсказывает прокрутку
+          краем. Раньше карточка была 300px шириной — на 390px экране вторая
+          пряталась почти полностью, и лента читалась как одиночный баннер. */}
       <div className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0">
         {(home ? home.banners : Array.from({ length: 2 }, () => null)).map((b, i) =>
           b ? (
-            <button
+            <HeroBanner
               key={b.id}
-              onClick={() => {
+              banner={b}
+              onOpen={() => {
                 if (b.action_type === "external" && b.action_value) {
                   // только http/https: `javascript:`/`data:` из админки не исполняем
                   const ext = safeExternalUrl(b.action_value);
@@ -360,24 +385,9 @@ export default function Home() {
                 }
                 navigate(safeInternalRoute(actionRoute(b.action_type, b.action_value)));
               }}
-              className="tap lift relative h-[152px] w-[300px] shrink-0 snap-start overflow-hidden rounded-hero p-5 text-left text-white shadow-float transition-shadow lg:h-[176px] lg:w-auto lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.32)]"
-              style={{ background: b.background_gradient || "linear-gradient(135deg,#1a7fd4,#6d5ae0)" }}
-            >
-              {b.image_url && (
-                <img src={b.image_url} alt="" loading="lazy"
-                  className="absolute inset-0 h-full w-full object-cover" />
-              )}
-              <div className="relative z-10 flex h-full flex-col justify-between">
-                <span className="text-3xl drop-shadow">{b.emoji}</span>
-                <div>
-                  <p className="text-[17px] font-bold leading-6 drop-shadow">{b.title}</p>
-                  {b.subtitle && <p className="mt-1 text-[13px] font-medium text-white/85 drop-shadow">{b.subtitle}</p>}
-                </div>
-              </div>
-              {b.image_url && <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />}
-            </button>
+            />
           ) : (
-            <div key={i} className="skeleton h-[152px] w-[300px] shrink-0 rounded-hero lg:h-[176px] lg:w-auto" />
+            <div key={i} className="skeleton h-[150px] w-[calc(50%-6px)] shrink-0 rounded-hero lg:h-[176px] lg:w-auto" />
           ),
         )}
       </div>
@@ -389,14 +399,13 @@ export default function Home() {
 
       {/* v5.2.6: персональные секции — «Недавно смотрели» (если есть история) и «Для вас» */}
       {recentlyViewed && recentlyViewed.length >= 2 && (
-        <Section title="Вы недавно смотрели" cards={recentlyViewed} onLead={setLead}
+        <Section title="Вы недавно смотрели" cards={recentlyViewed}
           onAll={() => navigate("/catalog")} />
       )}
       <Section
         title="Для вас"
         subtitle={recsMode === "cold" ? "Популярное и новое из разных категорий" : "Подобрали по вашим просмотрам"}
         cards={recs === null ? undefined : forYou}
-        onLead={setLead}
         onAll={() => navigate("/catalog")}
         onOpen={(c) => trackProduct("recommendation_click", { product_id: c.id, source: "for_you" })}
         grid
@@ -428,27 +437,27 @@ export default function Home() {
         <div className="mt-6"><ErrorState message="Не удалось загрузить подборки товаров" onRetry={loadFeed} /></div>
       ) : (
         <>
-          <Section title="Хиты продаж" cards={feed?.hot} onLead={setLead}
+          <Section title="Хиты продаж" cards={feed?.hot}
             onAll={() => navigate("/catalog")} />
-          <Section title="Забрать сегодня" cards={feed?.available_today} onLead={setLead}
+          <Section title="Забрать сегодня" cards={feed?.available_today}
             onAll={() => navigate("/catalog?today=1")} />
-          <Section title="Новинки" cards={feed?.new} onLead={setLead}
+          <Section title="Новинки" cards={feed?.new}
             onAll={() => navigate("/catalog")} />
         </>
       )}
 
       {/* Desktop-секции (Скидки/Apple/Gaming) — только lg+, mobile-страницу не удлиняем */}
       <div className="hidden lg:block">
-        <Section title="Скидки" cards={extra?.sale} onLead={setLead}
+        <Section title="Скидки" cards={extra?.sale}
           onAll={() => navigate("/catalog?category=__sale__")} grid />
-        <Section title="Apple" cards={extra?.apple} onLead={setLead}
+        <Section title="Apple" cards={extra?.apple}
           onAll={() => navigate("/catalog")} grid />
-        <Section title="Gaming" cards={extra?.gaming} onLead={setLead}
+        <Section title="Gaming" cards={extra?.gaming}
           onAll={() => navigate(`/catalog?category=${encodeURIComponent("консоли")}`)} grid />
       </div>
 
       {!feedError && alsoLike.length >= 3 && (
-        <Section title="Вам также может понравиться" cards={alsoLike} onLead={setLead}
+        <Section title="Вам также может понравиться" cards={alsoLike}
           onAll={() => navigate("/catalog")} grid />
       )}
 
@@ -483,12 +492,6 @@ export default function Home() {
         </div>{/* /контент */}
       </div>{/* /desktop grid */}
 
-      {lead && (
-        <LeadForm
-          productId={lead.id} productTitle={lead.title} productPrice={lead.price}
-          source="home" onClose={() => setLead(null)}
-        />
-      )}
       {consult && (
         <LeadForm
           productId={null} productTitle={null} productPrice={null}
@@ -519,10 +522,51 @@ export default function Home() {
   );
 }
 
+/** Крупный баннер главной (данные из админки).
+ *
+ *  Два правила, которые легко нарушить обратно:
+ *  - emoji рисуем ТОЛЬКО когда изображения нет. Раньше он лежал поверх фото, и
+ *    над реальным устройством висел мультяшный значок;
+ *  - битая ссылка на изображение не оставляет иконку сломанной картинки: фото
+ *    скрывается, остаётся фирменный градиент и читаемый текст.
+ */
+function HeroBanner({ banner, onOpen }: { banner: HomeBanner; onOpen: () => void }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const hasImage = !!banner.image_url && !imageFailed;
+
+  return (
+    <button
+      onClick={onOpen}
+      className="tap lift relative h-[150px] w-[calc(50%-6px)] shrink-0 snap-start overflow-hidden rounded-hero p-4 text-left text-white shadow-float transition-shadow lg:h-[176px] lg:w-auto lg:p-5 lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.32)]"
+      style={{ background: banner.background_gradient || "linear-gradient(135deg,#1a7fd4,#6d5ae0)" }}
+    >
+      {hasImage && (
+        <img
+          src={banner.image_url!} alt="" loading="lazy" decoding="async"
+          onError={() => setImageFailed(true)}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+      {hasImage && <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />}
+      <div className="relative z-10 flex h-full flex-col justify-end">
+        {!hasImage && banner.emoji && (
+          <span className="mb-auto text-3xl drop-shadow" aria-hidden>{banner.emoji}</span>
+        )}
+        <p className="text-[16px] font-bold leading-5 drop-shadow lg:text-[17px] lg:leading-6">{banner.title}</p>
+        {banner.subtitle && (
+          <p className="mt-1 line-clamp-2 text-[12px] font-medium leading-4 text-white/85 drop-shadow lg:text-[13px]">
+            {banner.subtitle}
+          </p>
+        )}
+      </div>
+    </button>
+  );
+}
+
 function Section({
-  title, subtitle, cards, onLead, onAll, grid, onOpen,
+  title, subtitle, cards, onAll, grid, onOpen,
 }: {
-  title: string; subtitle?: string; cards?: TCard[]; onLead: (c: TCard) => void;
+  title: string; subtitle?: string; cards?: TCard[];
   onAll: () => void; grid?: boolean; onOpen?: (c: TCard) => void;
 }) {
   if (!cards) return <SectionSkeleton title={title} />;
@@ -539,12 +583,12 @@ function Section({
       {grid ? (
         // mobile 2 кол -> tablet 3 -> desktop 4 -> wide 5
         <div className="stagger mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
-          {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} onOpen={onOpen} />)}
+          {cards.map((c) => <ProductCard key={c.id} card={c} onOpen={onOpen} />)}
         </div>
       ) : (
         // mobile — горизонтальная лента, desktop — та же сетка 4/5
         <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0 wide:grid-cols-5">
-          {cards.map((c) => <ProductCard key={c.id} card={c} onLead={onLead} onOpen={onOpen} compact />)}
+          {cards.map((c) => <ProductCard key={c.id} card={c} onOpen={onOpen} compact />)}
         </div>
       )}
     </div>
@@ -650,7 +694,13 @@ function ScenarioIcon({ name }: { name: string }) {
 
 /** Быстрые сценарии на главной (mobile): намерения, а не категории.
  *  Товарные → каталог; «Подобрать MacBook» → AI с prefill (без авто-отправки);
- *  Trade-In/бизнес/опт → профильный менеджер из public config (fallback → AI). */
+ *  Trade-In/бизнес/опт → встроенная сценарная заявка (bottom sheet).
+ *
+ *  ОДНА горизонтальная строка, а не сетка 2×3. Прежний блок занимал три ряда
+ *  крупных карточек с подписями — вместе с категориями и баннерами это
+ *  отодвигало первый товар за пределы экрана. Подписи-пояснения («Все модели»,
+ *  «Партии от 5 шт») ушли: в строке намерений они не читаются, а смысл несёт
+ *  сам ярлык. Сценариев ровно пять — больше в одну строку и не нужно. */
 function QuickScenarios({
   onCatalog, onScenario, onMacbook,
 }: {
@@ -658,33 +708,28 @@ function QuickScenarios({
   onScenario: (k: ScenarioKey) => void;
   onMacbook: () => void;
 }) {
-  // Товарные (iPhone/аксессуары) — прямой каталог; MacBook — меню выбора (AI);
-  // Trade-In/бизнес/опт — встроенная сценарная заявка (bottom sheet), НЕ менеджер.
-  const items: { key: string; label: string; sub: string; onClick: () => void }[] = [
-    { key: "iphone", label: "Купить iPhone", sub: "Все модели", onClick: () => onCatalog("/catalog?query=iPhone", "buy_iphone") },
-    { key: "macbook", label: "Подобрать MacBook", sub: "Поможем выбрать", onClick: onMacbook },
-    { key: "tradein", label: "Trade-In", sub: "Обмен и выкуп", onClick: () => onScenario("trade_in") },
-    { key: "b2b", label: "Для бизнеса", sub: "Поставки юрлицам", onClick: () => onScenario("b2b") },
-    { key: "wholesale", label: "Опт", sub: "Партии от 5 шт", onClick: () => onScenario("wholesale") },
+  const items: { key: string; label: string; onClick: () => void }[] = [
+    { key: "iphone", label: "iPhone", onClick: () => onCatalog("/catalog?query=iPhone", "buy_iphone") },
+    { key: "macbook", label: "MacBook", onClick: onMacbook },
+    { key: "tradein", label: "Trade-In", onClick: () => onScenario("trade_in") },
+    { key: "b2b", label: "Для бизнеса", onClick: () => onScenario("b2b") },
+    { key: "wholesale", label: "Опт", onClick: () => onScenario("wholesale") },
     // Плитки «Аксессуары» здесь больше нет: она вела в категорию «аксессуары»,
     // которой в каталоге не существует (кабелей/чехлов/зарядок нет вовсе).
     // Реальные категории показывает блок категорий — он строится из данных.
   ];
   return (
-    <div className="stagger mt-4 grid grid-cols-2 gap-2 lg:hidden">
+    <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
       {items.map((s) => (
         <button
           key={s.key}
           onClick={s.onClick}
-          className="card-appear tap flex items-center gap-2.5 rounded-xl2 bg-surface px-3 py-2.5 text-left shadow-card"
+          className="card-appear tap flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-field bg-surface pl-2.5 pr-4 text-[13px] font-semibold shadow-card"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-mutedbg text-accent">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center text-accent">
             <ScenarioIcon name={s.key} />
           </span>
-          <span className="min-w-0">
-            <span className="block truncate text-[13px] font-semibold leading-4">{s.label}</span>
-            <span className="mt-0.5 block truncate text-[11px] leading-4 text-muted">{s.sub}</span>
-          </span>
+          {s.label}
         </button>
       ))}
     </div>
