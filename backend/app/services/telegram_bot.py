@@ -17,6 +17,7 @@ callback_query бот не получает и обработчика для н�
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from html import escape
 
 import httpx
 
@@ -208,7 +209,10 @@ def reply_for_payload(payload: str) -> Reply | None:
         return None
     button = _web_app_button(f"🛍 Открыть раздел «{section.title}»", section.route)
     return Reply(
-        f"{section.emoji} <b>{section.title}</b>\n"
+        # escape: текст уходит с parse_mode=HTML, и «&» в названии раздела
+        # заставил бы Telegram отклонить сообщение целиком. Названия сейчас —
+        # константы кода, но это единственное, что их защищает.
+        f"{section.emoji} <b>{escape(section.title)}</b>\n"
         "\nОткройте раздел в каталоге — там актуальные цены, фото и наличие.",
         _keyboard(
             _row(button),
@@ -289,23 +293,38 @@ def build_reply(update: dict) -> Reply | None:
 
 
 def send_reply(chat_id: int | str, reply: Reply) -> None:
-    """Отправить ответ. Ошибки Telegram логируются вызывающим кодом."""
+    """Отправить ответ. Ошибки Telegram логируются вызывающим кодом.
+
+    `parse_mode=HTML` обязателен: тексты ответов содержат разметку (`<b>` в
+    ответе на кнопку раздела из канала). Без него Telegram показывает теги
+    БУКВАЛЬНО — человек, пришедший по кнопке из канала, видел «📱 <b>iPhone</b>»
+    вместе с угловыми скобками. Это был самый заметный путь входа в магазин.
+
+    Раз режим HTML включён, любая подстановка в текст обязана экранироваться
+    (см. `escape` в reply_for_payload): неэкранированный «&» в тексте заставит
+    Telegram отклонить сообщение ЦЕЛИКОМ, и человек не получит ничего.
+    """
     if not settings.TELEGRAM_BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured")
     payload: dict = {
         "chat_id": chat_id,
         "text": reply.text,
+        "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
     markup = reply.markup()
     if markup:
         payload["reply_markup"] = markup
-    response = httpx.post(
-        f"{TELEGRAM_API}/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage",
-        json=payload,
-        timeout=15,
-        **telegram_http_kwargs(),
-    )
-    data = response.json()
-    if not data.get("ok"):
-        raise RuntimeError(f"Telegram rejected sendMessage: {data.get('description')}")
+
+    # Отправляем через общий retry-слой publisher'а (429 + сетевые сбои), а не
+    # одиночным httpx.post. Причина конкретная: исходящие в Telegram идут через
+    # WARP-прокси, и обрыв там — обычное дело, а не исключительная ситуация. При
+    # единственной попытке такой обрыв означал, что человек написал боту и НЕ
+    # ПОЛУЧИЛ НИЧЕГО, причём молча: ретраить некому, входящий апдейт уже
+    # подтверждён сдвинутым offset'ом.
+    #
+    # Импорт локальный: publisher сам импортирует этот модуль (telegram_http_kwargs),
+    # и на уровне модуля вышел бы цикл. Тот же приём, что в reply_for_payload.
+    from app.services.telegram_publisher import call
+
+    call("sendMessage", payload)

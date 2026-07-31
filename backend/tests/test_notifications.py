@@ -16,6 +16,7 @@ from app.models.lead import Lead
 from app.models.notification import MAX_ATTEMPTS, Notification
 from app.models.user import User
 from app.services.notification_templates import (
+    favorite_message,
     Message,
     cart_reminder_message,
     format_money,
@@ -420,3 +421,42 @@ def test_assigned_to_change_alone_does_not_notify(ctx):
 
     client.patch(f"/api/admin/leads/{lead.id}", json={"assigned_to": "Иван"})
     assert pending(db) == []
+
+
+# ------------------------------------------- экранирование (ревизия бота)
+
+def test_product_titles_are_escaped_in_all_templates():
+    """Уведомления уходят с parse_mode=HTML — названия обязаны экранироваться.
+
+    Названия приходят из XLSX-импорта, их содержимое магазин не контролирует.
+    Одно «&» («Dyson Airwrap & аксессуары») заставит Telegram отклонить
+    сообщение ЦЕЛИКОМ: человек не получит ничего, а строка в очереди потратит
+    все попытки на ошибку, которая повтором не лечится.
+    """
+    nasty = "Dyson Airwrap & <Complete>"
+
+    lead = lead_status_message(status="contacted", public_number="№1",
+                               product_title=nasty)
+    cart = cart_reminder_message(items_count=1, estimated_total=1000, titles=[nasty])
+    fav = favorite_message(product_id=1, title=nasty, price=100, previous_price=200)
+
+    for msg in (lead, cart, fav):
+        assert "&amp;" in msg.text
+        assert "&lt;" in msg.text
+        assert nasty not in msg.text, "сырое название просочилось в HTML"
+
+
+def test_broken_markup_is_permanent_not_retried(db):
+    """Сломанная разметка — дефект текста, а не сети.
+
+    Пять повторов дадут пять одинаковых отказов и только задержат очередь.
+    """
+    enqueue(db, chat_id=777, kind="lead_status", message=Message("t"), dedupe_key="k")
+    db.commit()
+
+    def rejected(row):
+        raise TelegramPublishError("Bad Request: can't parse entities: unsupported start tag")
+
+    drain(db, send=rejected)
+    row = pending(db)[0]
+    assert row.status == "failed" and row.attempts == 1

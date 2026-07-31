@@ -138,17 +138,23 @@ def _tick(state: dict) -> None:
             # откладывался на целый интервал (час для избранного) вместо
             # следующего тика. Ровно это и произошло на деплое — скан упал на
             # ещё не добавленной колонке и «замолчал» на час.
+            # Итог скана пишем ВСЕГДА, даже пустой. Раньше строка появлялась
+            # только когда что-то поставлено в очередь, и «скан отработал, дел
+            # нет» было неотличимо от «скан не запускался вовсе» — при разборе
+            # «почему не пришло напоминание» это первый же вопрос, и ответа на
+            # него в логах не было. Два скана в час — не тот объём, ради
+            # которого стоит терять наблюдаемость.
             interval = max(1, settings.CART_REMINDER_SCAN_MINUTES) * 60
             if now - state.get("last_scan", 0.0) >= interval:
                 stats = cart_reminders.scan(db)
                 state["last_scan"] = now
-                if stats["queued"]:
-                    logger.info("скан корзин: %s", stats)
+                logger.info("скан корзин: %s", stats)
 
             interval = max(1, settings.FAVORITE_WATCH_SCAN_MINUTES) * 60
             if now - state.get("last_favorite_scan", 0.0) >= interval:
-                favorite_watch.scan(db)
+                stats = favorite_watch.scan(db)
                 state["last_favorite_scan"] = now
+                logger.info("скан избранного: %s", stats)
 
             stats = drain(db, limit=OUTBOX_BATCH)
             if stats["sent"] or stats["failed"]:

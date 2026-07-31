@@ -8,6 +8,7 @@
 внутренней ошибке. Telegram повторяет доставку, пока не увидит успех, поэтому
 5xx означал бы дубли ответов пользователю, а не «починимся позже».
 """
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -376,3 +377,82 @@ def test_shared_product_link_without_mini_app_falls_back_to_menu(monkeypatch):
     monkeypatch.setattr(settings, "MINI_APP_URL", "", raising=False)
     reply = build_reply(private_message("/start product_42"))
     assert reply.text.startswith("Добро пожаловать")
+
+
+# ------------------------------------------------- разметка ответов (ревизия)
+
+def test_send_reply_uses_html_parse_mode(monkeypatch):
+    """Без parse_mode Telegram показывает теги БУКВАЛЬНО.
+
+    Ответ на кнопку раздела из канала содержит <b>, и пользователь видел
+    «📱 <b>iPhone</b>» вместе с угловыми скобками — на самом заметном пути
+    входа в магазин (канал -> бот -> Mini App).
+    """
+    sent = {}
+    monkeypatch.setattr("app.services.telegram_publisher.call",
+                        lambda method, payload: sent.update(payload) or {"message_id": 1})
+    telegram_bot.send_reply(555, Reply("<b>Привет</b>"))
+    assert sent["parse_mode"] == "HTML"
+    assert sent["chat_id"] == 555
+
+
+def test_send_reply_retries_through_the_publisher(monkeypatch):
+    """Одна попытка = молчание бота при обрыве связи.
+
+    Исходящие идут через WARP-прокси, где обрыв — обычное дело. Апдейт при
+    этом уже подтверждён сдвинутым offset'ом, повторить его некому: человек
+    написал боту и не получил НИЧЕГО. Поэтому отправка идёт через общий
+    retry-слой publisher'а.
+    """
+    from app.services.telegram_publisher import MAX_ATTEMPTS, TelegramPublishError
+
+    monkeypatch.setattr("app.services.telegram_publisher._sleep", lambda s: None)
+
+    calls = []
+
+    def counting_post(*a, **kw):
+        calls.append(1)
+        raise httpx.ConnectError("нет сети")
+
+    monkeypatch.setattr("app.services.telegram_publisher.httpx.post", counting_post)
+    with pytest.raises(TelegramPublishError):
+        telegram_bot.send_reply(555, Reply("привет"))
+    assert len(calls) == MAX_ATTEMPTS, "отправка обязана повторяться, а не сдаваться сразу"
+
+
+def test_section_reply_escapes_the_title(monkeypatch):
+    """Раз режим HTML включён, подстановки обязаны экранироваться.
+
+    Неэкранированный «&» заставляет Telegram отклонить сообщение ЦЕЛИКОМ —
+    человек не получает ничего вместо одного кривого символа.
+    """
+    from app.services import price_posts
+
+    class FakeSection:
+        emoji = "📱"
+        title = "Ноутбуки & моноблоки"
+        route = "/catalog?category=laptops"
+
+    monkeypatch.setitem(price_posts.SECTIONS_BY_SLUG, "price_test", FakeSection())
+    reply = telegram_bot.reply_for_payload("price_test")
+    assert "&amp;" in reply.text
+    assert "Ноутбуки & моноблоки" not in reply.text
+
+
+def test_static_reply_texts_are_html_safe():
+    """Все постоянные тексты бота обязаны переживать parse_mode=HTML.
+
+    Голый «&» в приветствии сломал бы ответ на /start для всех сразу.
+    """
+    import re
+
+    texts = [telegram_bot.WELCOME, telegram_bot.FALLBACK_TEXT]
+    for command in ("/start", "/catalog", "/ai", "/orders", "/manager", "/prices", "привет"):
+        reply = build_reply(private_message(command))
+        texts.append(reply.text)
+
+    for text in texts:
+        # «&», не открывающий HTML-сущность, — ошибка разметки для Telegram.
+        assert not re.search(r"&(?!(amp|lt|gt|quot|#\d+);)", text), text
+        # Незакрытых тегов быть не должно: считаем открывающие и закрывающие.
+        assert text.count("<") == text.count(">"), text

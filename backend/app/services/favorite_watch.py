@@ -184,6 +184,6 @@ def scan(db: Session, *, now: datetime | None = None, limit: int | None = None) 
             fav.notified_price = price
 
     db.commit()
-    if stats["queued"] or stats["initialized"]:
-        logger.info("скан избранного: %s", stats)
+    # Логирует вызывающий код (_tick в bot_polling) — и логирует ВСЕГДА, даже
+    # пустой результат. Второй лог здесь дал бы дубль на каждую находку.
     return stats

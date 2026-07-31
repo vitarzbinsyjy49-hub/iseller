@@ -11,9 +11,18 @@ Bot API — только «данные -> (текст, клавиатура)».
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from html import escape
 
 from app.services.telegram_bot import _row, _url_button, _web_app_button, _keyboard
 from app.core.config import settings
+
+#: Всё, что приходит из каталога (названия товаров), проходит через escape.
+#: Уведомления уходят с parse_mode=HTML, и одно «&» в названии — например
+#: «Dyson Airwrap & аксессуары» — заставит Telegram отклонить сообщение
+#: ЦЕЛИКОМ. Человек не получит ничего, а строка в очереди потратит все попытки
+#: на ошибку, которая повтором не лечится. Названия приходят из XLSX-импорта,
+#: то есть их содержимое магазин не контролирует.
+_esc = escape
 
 
 @dataclass
@@ -112,7 +121,7 @@ def lead_status_message(
             line += f" · {format_money(estimated_total, currency)}"
         lines.append(line)
     elif product_title:
-        lines.append(product_title)
+        lines.append(_esc(product_title))
     lines += ["", explanation]
 
     return Message(
@@ -149,7 +158,7 @@ def cart_reminder_message(
 
     # Первые названия — чтобы человек узнал СВОЮ корзину, а не гадал, о чём речь.
     for title in (titles or [])[:3]:
-        lines.append(f"• {title}")
+        lines.append(f"• {_esc(title)}")
     if titles and len(titles) > 3:
         lines.append(f"…и ещё {plural_items(len(titles) - 3)}")
 
@@ -196,7 +205,7 @@ def favorite_message(
         headline = "Цена снизилась"
         tail = "Товар из вашего избранного."
 
-    lines = [f"<b>{headline}</b>", "", title]
+    lines = [f"<b>{headline}</b>", "", _esc(title)]
 
     price_line = format_money(price, currency)
     if previous_price is not None:

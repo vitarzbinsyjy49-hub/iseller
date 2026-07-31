@@ -141,6 +141,7 @@ def scan(db: Session, *, now: datetime | None = None, limit: int = 100) -> dict:
             stats["queued"] += 1
 
     db.commit()
-    if stats["queued"]:
-        logger.info("напоминания о корзинах: поставлено %s", stats["queued"])
+    # Логирует вызывающий код (_tick в bot_polling), и делает это всегда —
+    # включая пустой результат, иначе «скан отработал, дел нет» неотличимо от
+    # «скан не запускался».
     return stats

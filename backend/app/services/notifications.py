@@ -47,6 +47,11 @@ _PERMANENT_MARKERS = (
     "peer_id_invalid",
     "chat_id is empty",
     "user not found",
+    # Сломанная разметка — дефект текста, а не сети: пять повторов дадут пять
+    # одинаковых отказов. Причина обычно одна — неэкранированное «&» или «<»
+    # в названии товара (см. escape в notification_templates).
+    "can't parse entities",
+    "message text is empty",
 )
 
 
