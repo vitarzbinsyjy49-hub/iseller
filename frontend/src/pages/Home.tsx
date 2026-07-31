@@ -21,6 +21,7 @@ import { navTiles, type NavAxis, type NavChip } from "../lib/navTiles";
 import { searchRoute, type SearchMode } from "../lib/searchMode";
 import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
+import { ClaudeMark } from "../components/ClaudeMark";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
@@ -40,10 +41,44 @@ type HomeData = { banners: HomeBanner[]; categories: HomeCat[]; brands?: HomeCat
 
 /** Запасные промо-блоки, если /api/home недоступен (backend старой версии). */
 const FALLBACK_PROMOS: HomeBanner[] = [
-  { id: -1, emoji: "🔥", title: "Горячие предложения", subtitle: "Лучшие цены этой недели", background_gradient: "linear-gradient(135deg,#f43f5e,#d97706)", action_type: "category", action_value: "__sale__" },
-  { id: -2, emoji: "⚡", title: "Забрать сегодня", subtitle: "В наличии на Горбушке", background_gradient: "linear-gradient(135deg,#0e9f6e,#0694a2)", action_type: "collection", action_value: "today" },
-  { id: -3, emoji: "🤖", title: "Подберём технику", subtitle: "Расскажите AI, что нужно", background_gradient: "linear-gradient(135deg,#1a7fd4,#6d5ae0)", action_type: "ai", action_value: "" },
+  { id: -1, title: "iPhone в наличии", subtitle: "Забирайте сегодня на Горбушке", action_type: "search", action_value: "iphone" },
+  { id: -2, title: "MacBook для работы", subtitle: "Подборка под ваши задачи", action_type: "ai", action_value: "MacBook для работы" },
+  { id: -3, title: "PlayStation сегодня", subtitle: "PS5 и игры в наличии", action_type: "search", action_value: "playstation" },
+  { id: -4, title: "Подберём лучшую цену", subtitle: "Claude сравнит варианты каталога", action_type: "ai", action_value: "" },
+  { id: -5, title: "Техника с гарантией", subtitle: "Проверка и гарантия до 24 месяцев", action_type: "collection", action_value: "hot" },
 ];
+
+type CuratedPromo = {
+  src: string;
+  eyebrow: string;
+  kind: "product" | "claude" | "warranty";
+};
+
+/** Локальная art-direction для пяти штатных промо.
+ *
+ * Тексты, порядок и действия по-прежнему приходят из admin/API. Картинки здесь
+ * служат качественным fallback для уже существующих баннеров без image_url:
+ * администратор в любой момент может переопределить их своей картинкой.
+ */
+function curatedPromo(banner: HomeBanner): CuratedPromo | null {
+  const value = `${banner.title} ${banner.action_value ?? ""}`.toLocaleLowerCase("ru");
+  if (value.includes("iphone")) {
+    return { src: "/assets/promos/iphone-studio.webp", eyebrow: "Забрать сегодня", kind: "product" };
+  }
+  if (value.includes("macbook")) {
+    return { src: "/assets/promos/macbook-studio.webp", eyebrow: "Под ваши задачи", kind: "product" };
+  }
+  if (value.includes("playstation") || value.includes("ps5")) {
+    return { src: "/assets/promos/playstation-studio.webp", eyebrow: "Играть сегодня", kind: "product" };
+  }
+  if (value.includes("гарант")) {
+    return { src: "/assets/promos/warranty-studio.webp", eyebrow: "Проверено", kind: "warranty" };
+  }
+  if (value.includes("лучш") || (banner.action_type === "ai" && !(banner.action_value ?? "").trim())) {
+    return { src: "/assets/promos/claude-price-studio.webp", eyebrow: "AI-подбор", kind: "claude" };
+  }
+  return null;
+}
 
 // Захардкоженного списка категорий здесь больше нет: он разъезжался с базой и
 // показывал плитки, которых в каталоге не существует. Мгновенная отрисовка до
@@ -385,6 +420,7 @@ export default function Home() {
             <HeroBanner
               key={b.id}
               banner={b}
+              claudeEnabled={config.ai_vendor === "claude"}
               onOpen={() => {
                 if (b.action_type === "external" && b.action_value) {
                   // только http/https: `javascript:`/`data:` из админки не исполняем
@@ -396,7 +432,7 @@ export default function Home() {
               }}
             />
           ) : (
-            <div key={i} className="skeleton h-[150px] w-[calc(50%-6px)] shrink-0 rounded-hero lg:h-[176px] lg:w-auto" />
+            <div key={i} className="skeleton h-[176px] w-[78%] shrink-0 rounded-hero lg:h-[184px] lg:w-auto" />
           ),
         )}
       </div>
@@ -539,31 +575,66 @@ export default function Home() {
  *  - битая ссылка на изображение не оставляет иконку сломанной картинки: фото
  *    скрывается, остаётся фирменный градиент и читаемый текст.
  */
-function HeroBanner({ banner, onOpen }: { banner: HomeBanner; onOpen: () => void }) {
+function HeroBanner({
+  banner, onOpen, claudeEnabled,
+}: {
+  banner: HomeBanner;
+  onOpen: () => void;
+  claudeEnabled: boolean;
+}) {
   const [imageFailed, setImageFailed] = useState(false);
-  const hasImage = !!banner.image_url && !imageFailed;
+  const curated = curatedPromo(banner);
+  const imageSrc = banner.image_url || curated?.src;
+  const hasImage = !!imageSrc && !imageFailed;
+  const isCurated = !!curated && !banner.image_url;
 
   return (
     <button
       onClick={onOpen}
-      className="tap lift relative h-[150px] w-[calc(50%-6px)] shrink-0 snap-start overflow-hidden rounded-hero p-4 text-left text-white shadow-float transition-shadow lg:h-[176px] lg:w-auto lg:p-5 lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.32)]"
-      style={{ background: banner.background_gradient || "linear-gradient(135deg,#1a7fd4,#6d5ae0)" }}
+      className={`tap lift relative h-[176px] w-[78%] shrink-0 snap-start overflow-hidden rounded-hero p-4 text-left transition-shadow lg:h-[184px] lg:w-auto lg:p-5 lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.22)] ${
+        isCurated
+          ? "bg-white text-text shadow-card ring-1 ring-inset ring-black/[0.04]"
+          : "text-white shadow-float"
+      }`}
+      style={isCurated ? undefined : {
+        background: banner.background_gradient || "linear-gradient(135deg,#1a7fd4,#6d5ae0)",
+      }}
     >
       {hasImage && (
         <img
-          src={banner.image_url!} alt="" loading="lazy" decoding="async"
+          src={imageSrc!} alt="" loading="lazy" decoding="async"
           onError={() => setImageFailed(true)}
           className="absolute inset-0 h-full w-full object-cover"
+          style={{ objectPosition: isCurated ? "70% center" : "center" }}
         />
       )}
-      {hasImage && <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />}
-      <div className="relative z-10 flex h-full flex-col justify-end">
+      {hasImage && !isCurated && (
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
+      )}
+      <div className="relative z-10 flex h-full max-w-[66%] flex-col justify-end">
         {!hasImage && banner.emoji && (
           <span className="mb-auto text-3xl drop-shadow" aria-hidden>{banner.emoji}</span>
         )}
-        <p className="text-[16px] font-bold leading-5 drop-shadow lg:text-[17px] lg:leading-6">{banner.title}</p>
+        {isCurated && curated && (
+          <span className="mb-auto inline-flex w-fit items-center gap-1 rounded-full bg-white/80 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-text/65 shadow-sm backdrop-blur-sm">
+            {curated.kind === "claude" && claudeEnabled && <ClaudeMark className="h-3.5 w-3.5" />}
+            {curated.kind === "warranty" && (
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-emerald-600" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 3 5 6v5c0 4.7 2.8 8.1 7 10 4.2-1.9 7-5.3 7-10V6z" />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
+            )}
+            {curated.kind === "claude" && claudeEnabled ? "Claude" : curated.eyebrow}
+          </span>
+        )}
+        <p className={`text-[16px] font-extrabold leading-5 lg:text-[18px] lg:leading-6 ${
+          isCurated ? "tracking-[-0.02em] text-text" : "drop-shadow"
+        }`}>{banner.title}</p>
         {banner.subtitle && (
-          <p className="mt-1 line-clamp-2 text-[12px] font-medium leading-4 text-white/85 drop-shadow lg:text-[13px]">
+          <p className={`mt-1 line-clamp-2 text-[12px] font-medium leading-4 lg:text-[13px] ${
+            isCurated ? "text-text/60" : "text-white/85 drop-shadow"
+          }`}>
             {banner.subtitle}
           </p>
         )}
@@ -705,11 +776,9 @@ function ScenarioIcon({ name }: { name: string }) {
  *  Товарные → каталог; «Подобрать MacBook» → AI с prefill (без авто-отправки);
  *  Trade-In/бизнес/опт → встроенная сценарная заявка (bottom sheet).
  *
- *  ОДНА горизонтальная строка, а не сетка 2×3. Прежний блок занимал три ряда
- *  крупных карточек с подписями — вместе с категориями и баннерами это
- *  отодвигало первый товар за пределы экрана. Подписи-пояснения («Все модели»,
- *  «Партии от 5 шт») ушли: в строке намерений они не читаются, а смысл несёт
- *  сам ярлык. Сценариев ровно пять — больше в одну строку и не нужно. */
+ *  ОДНА горизонтальная строка, а не сетка 2×3. Короткая вторая строка объясняет
+ *  результат нажатия — это превью действия, а не загадочная иконка. Высота всё
+ *  ещё достаточно мала, чтобы товарные секции оставались близко к первому экрану. */
 function QuickScenarios({
   onCatalog, onScenario, onMacbook,
 }: {
@@ -717,28 +786,31 @@ function QuickScenarios({
   onScenario: (k: ScenarioKey) => void;
   onMacbook: () => void;
 }) {
-  const items: { key: string; label: string; onClick: () => void }[] = [
-    { key: "iphone", label: "iPhone", onClick: () => onCatalog("/catalog?query=iPhone", "buy_iphone") },
-    { key: "macbook", label: "MacBook", onClick: onMacbook },
-    { key: "tradein", label: "Trade-In", onClick: () => onScenario("trade_in") },
-    { key: "b2b", label: "Для бизнеса", onClick: () => onScenario("b2b") },
-    { key: "wholesale", label: "Опт", onClick: () => onScenario("wholesale") },
+  const items: { key: string; label: string; detail: string; onClick: () => void }[] = [
+    { key: "iphone", label: "iPhone", detail: "Все модели", onClick: () => onCatalog("/catalog?query=iPhone", "buy_iphone") },
+    { key: "macbook", label: "MacBook", detail: "Под ваши задачи", onClick: onMacbook },
+    { key: "tradein", label: "Trade-In", detail: "Оценим технику", onClick: () => onScenario("trade_in") },
+    { key: "b2b", label: "Для бизнеса", detail: "С НДС и документами", onClick: () => onScenario("b2b") },
+    { key: "wholesale", label: "Опт", detail: "Цена на партию", onClick: () => onScenario("wholesale") },
     // Плитки «Аксессуары» здесь больше нет: она вела в категорию «аксессуары»,
     // которой в каталоге не существует (кабелей/чехлов/зарядок нет вовсе).
     // Реальные категории показывает блок категорий — он строится из данных.
   ];
   return (
-    <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
+    <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-2.5 overflow-x-auto px-4 pb-1 lg:hidden">
       {items.map((s) => (
         <button
           key={s.key}
           onClick={s.onClick}
-          className="card-appear tap flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-field bg-surface pl-2.5 pr-4 text-[13px] font-semibold shadow-card"
+          className="card-appear tap flex h-[62px] w-[154px] shrink-0 items-center gap-2.5 rounded-xl2 bg-surface px-3 text-left shadow-card ring-1 ring-inset ring-black/[0.035]"
         >
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center text-accent">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-accent">
             <ScenarioIcon name={s.key} />
           </span>
-          {s.label}
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] font-bold leading-4 text-text">{s.label}</span>
+            <span className="mt-0.5 block truncate text-[11px] font-medium leading-4 text-muted">{s.detail}</span>
+          </span>
         </button>
       ))}
     </div>
