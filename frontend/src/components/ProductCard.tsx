@@ -435,6 +435,12 @@ export default function ProductCard({ card, compact, onOpen }: Props) {
         {card.is_limited && card.in_stock && card.stock != null && card.stock > 0 && (
           <p className="mt-0.5 text-[11px] font-medium text-orange">Осталось {card.stock} шт</p>
         )}
+        {/* Социальное доказательство: строка приходит с backend посчитанной.
+            В плитке она обрезается одной строкой — карточки в сетке обязаны
+            остаться одной высоты, иначе ряд «поедет». */}
+        {card.social_proof && (
+          <p className="mt-0.5 truncate text-[11px] text-muted">{card.social_proof}</p>
+        )}
         {/* Спейсер прижимает действие к низу карточки при разной высоте контента */}
         <span aria-hidden className="flex-1" />
         {/* Фиксированная высота строки действия (h-9 внутри) — при добавлении

@@ -81,6 +81,15 @@ class Settings(BaseSettings):
     FAVORITE_WATCH_LIMIT: int = 500
     FAVORITE_WATCH_SCAN_MINUTES: int = 60
 
+    # ==== Социальное доказательство на карточке (патч 1.1, фича #6) ====
+    SOCIAL_PROOF_ENABLED: bool = True
+    # Пороги. Ниже них бейджа нет вовсе: «заказывали 1 раз» — антиреклама, а на
+    # числах вроде единицы это ещё и указание на конкретного человека.
+    SOCIAL_PROOF_MIN_ORDERS: int = 3
+    SOCIAL_PROOF_MIN_FAVORITES: int = 5
+    # Окно для заказов. Год назад продавалось хорошо — не аргумент сегодня.
+    SOCIAL_PROOF_ORDER_WINDOW_DAYS: int = 30
+
     # ==== CORS (production guard, v2) ====
     # Явный список разрешённых origin через запятую, например:
     # ALLOWED_ORIGINS=https://example.com,https://t.me

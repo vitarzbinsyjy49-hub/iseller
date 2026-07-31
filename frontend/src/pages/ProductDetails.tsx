@@ -263,6 +263,23 @@ export default function ProductDetails() {
         <p className="mt-1.5 text-[13px] font-medium text-orange">Осталось {p.stock} шт — успейте забрать</p>
       )}
 
+      {/* Социальное доказательство. Текст приходит с backend уже готовым и
+          посчитанным по заявкам/избранному — здесь его только показывают.
+          Спокойный, не «горящий» стиль намеренно: это факт о товаре, а не
+          призыв торопиться, и рядом с оранжевым «Осталось N шт» он не должен
+          выглядеть вторым таймером. */}
+      {p.social_proof && (
+        <p className="mt-1.5 flex items-center gap-1.5 text-[13px] font-medium text-muted">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor"
+            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20" />
+            <circle cx="10" cy="8" r="3.2" />
+            <path d="M19 20v-1.5a3.5 3.5 0 0 0-2.6-3.4M15.5 5.2a3.2 3.2 0 0 1 0 5.6" />
+          </svg>
+          {p.social_proof}
+        </p>
+      )}
+
       {/* Быстрые действия — в потоке контента, ниже цены (не в fixed-зоне) */}
       <div className="mt-3 flex gap-2">
         <button

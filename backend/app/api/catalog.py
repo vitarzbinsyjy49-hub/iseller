@@ -26,6 +26,7 @@ from app.services.image_groups import (
 )
 from app.services.catalog_nav import list_categories
 from app.services.recommendations import recently_viewed, recommend
+from app.services.social_proof import apply_social_proof
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -200,6 +201,7 @@ def list_catalog(
     products = _photo_last(db, products)[:limit]
     cards = [p.to_card() for p in products]
     apply_group_images(db, products, cards)
+    apply_social_proof(db, products, cards)
     return {"cards": cards}
 
 
@@ -316,4 +318,5 @@ def product_details(product_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
     detail = product.to_detail()
     apply_group_images(db, [product], [detail])
+    apply_social_proof(db, [product], [detail])
     return detail

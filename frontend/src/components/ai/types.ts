@@ -41,6 +41,11 @@ export type ProductCard = {
   availability_note?: string;
   orderable?: boolean;
   max_quantity?: number;
+  /** Одна честная строка вроде «Заказывали 5 раз за месяц». Считает backend по
+   *  реальным заявкам и избранному (services/social_proof.py); ниже порога —
+   *  null, и тогда не показываем НИЧЕГО. Придумывать замену на фронте нельзя:
+   *  весь смысл в том, что это посчитано, а не написано. */
+  social_proof?: string | null;
   tags?: string[];
   why: string[];
   buttons: CardButton[];
