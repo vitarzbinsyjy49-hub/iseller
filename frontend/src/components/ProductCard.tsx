@@ -1,5 +1,5 @@
 import {
-  useEffect, useRef, useState,
+  memo, useCallback, useEffect, useMemo, useRef, useState,
   type PointerEvent as ReactPointerEvent, type UIEvent as ReactUIEvent,
   type MouseEvent, type ReactNode,
 } from "react";
@@ -15,6 +15,7 @@ import { indexFromScroll, isSlideMounted, isTapGesture } from "../lib/carousel";
 import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
 import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMath";
 import { QuantityStepper } from "./QuantityStepper";
+import { preloadRoute } from "../lib/routePreload";
 
 const MAX_CARD_IMAGES = 10;
 
@@ -66,9 +67,10 @@ function CategorySilhouette({ category }: { category?: string | null }) {
 export function ProductImage({
   src, title, category, className = "", compact = false,
 }: { src?: string; title: string; category?: string | null; className?: string; compact?: boolean }) {
-  const [failed, setFailed] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const [pad, setPad] = useState<"p-2" | "p-1">("p-2");
-  const showImg = src && !failed;
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const showImg = src && failedSrc !== src;
   return (
     <div
       className={`relative overflow-hidden ${className}`}
@@ -84,11 +86,14 @@ export function ProductImage({
           alt={title}
           loading="lazy"
           decoding="async"
-          className={`h-full w-full object-contain object-center ${pad}`}
-          onError={() => setFailed(true)}
+          className={`product-image h-full w-full object-contain object-center ${pad} ${
+            loadedSrc === src ? "product-image-loaded" : ""
+          }`}
+          onError={() => setFailedSrc(src ?? null)}
           onLoad={(e) => {
             const img = e.currentTarget;
             setPad(imagePaddingClass(img.naturalWidth, img.naturalHeight));
+            setLoadedSrc(src ?? null);
           }}
         />
       ) : (
@@ -146,7 +151,10 @@ function CardCarousel({
     track("product_gallery_dot_clicked",
       { product_id: id, from_index: index, to_index: to, image_count: n });
     programmaticRef.current = to;
-    el.scrollTo({ left: to * el.clientWidth, behavior: "smooth" });
+    el.scrollTo({
+      left: to * el.clientWidth,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
     setIndex(to);
   }
 
@@ -163,6 +171,7 @@ function CardCarousel({
   }
 
   function onPointerDown(e: ReactPointerEvent) {
+    preloadRoute("/product");
     gestureRef.current = { x: e.clientX, y: e.clientY, scroll: scrollRef.current?.scrollLeft ?? 0 };
     tapRef.current = false;
   }
@@ -226,7 +235,7 @@ function CardCarousel({
               aria-label={`Показать фото ${i + 1}`}
               aria-current={i === index}
               onClick={(e) => { e.stopPropagation(); goToDot(i); }}
-              className={`pointer-events-auto h-1.5 rounded-full shadow-soft transition-all ${
+              className={`pointer-events-auto h-1.5 rounded-full shadow-soft transition-[width,background-color] duration-150 ${
                 i === index ? "w-4 bg-white" : "w-1.5 bg-white/60"
               }`}
             />
@@ -265,9 +274,9 @@ export function FavButton({ id, className = "" }: { id: number; className?: stri
       onClick={onClick}
       aria-pressed={fav}
       aria-label={fav ? "Убрать из избранного" : "В избранное"}
-      className={`tap flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-card transition-transform duration-200 ${pop ? "scale-125" : ""} ${className}`}
+      className={`tap flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-card ${className}`}
     >
-      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-colors"
+      <svg viewBox="0 0 24 24" className={`h-[18px] w-[18px] transition-colors ${pop ? "favorite-pop" : ""}`}
         fill={fav ? "#ff3b30" : "none"} stroke={fav ? "#ff3b30" : "#9aa1ab"}
         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M19 14c1.5-1.5 2.5-3 2.5-5A5.5 5.5 0 0 0 12 5.6 5.5 5.5 0 0 0 2.5 9c0 2 1 3.5 2.5 5l7 7z" />
@@ -370,22 +379,28 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
 }
 
 /** Карточка товара. Цена и наличие — из данных карточки (из БД), не пересчитываются. */
-export default function ProductCard({ card, compact, onOpen }: Props) {
+function ProductCard({ card, compact, onOpen }: Props) {
   const navigate = useNavigate();
   const disc = discountPct(card.price, card.old_price);
-  const open = () => { onOpen?.(card); navigate(`/product/${card.id}`); };
+  const open = useCallback(() => {
+    onOpen?.(card);
+    navigate(`/product/${card.id}`);
+  }, [card, navigate, onOpen]);
 
   // Эффективная галерея карточки: images (из resolver групп), иначе одиночное
   // image, иначе пусто. Лимит 10 (backend уже режет; здесь — защита).
-  const gallery = (card.images && card.images.length ? card.images : card.image ? [card.image] : [])
-    .filter(Boolean)
-    .slice(0, MAX_CARD_IMAGES);
+  const gallery = useMemo(
+    () => (card.images && card.images.length ? card.images : card.image ? [card.image] : [])
+      .filter(Boolean)
+      .slice(0, MAX_CARD_IMAGES),
+    [card.image, card.images],
+  );
 
   return (
     // h-full + flex-col: в сетке все карточки одной высоты, кнопка прижата вниз.
     // lg:hover — desktop-состояние; tap scale остаётся на mobile.
     <div
-      className={`card-appear lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface shadow-card lg:hover:shadow-float ${
+      className={`product-card-viewport card-appear lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface shadow-card lg:hover:shadow-float ${
         compact ? "w-40 shrink-0 lg:w-auto" : ""
       }`}
     >
@@ -416,7 +431,7 @@ export default function ProductCard({ card, compact, onOpen }: Props) {
             <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price!)}</span>
           )}
         </div>
-        <button onClick={open} className="block w-full text-left">
+        <button onClick={open} onPointerDown={() => preloadRoute("/product")} className="block w-full text-left">
           <p className="mt-1 line-clamp-2 min-h-[2.35rem] text-[13px] font-medium leading-[1.35]">
             {card.brand && !card.title.toLowerCase().includes(card.brand.toLowerCase())
               ? `${card.brand} ${card.title}`
@@ -452,3 +467,5 @@ export default function ProductCard({ card, compact, onOpen }: Props) {
     </div>
   );
 }
+
+export default memo(ProductCard);

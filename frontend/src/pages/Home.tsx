@@ -234,7 +234,7 @@ export default function Home() {
             <button
               onClick={() => navigate("/favorites")}
               aria-label="Избранное"
-              className="tap flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.12] backdrop-blur"
+              className="tap flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.12]"
             >
               <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 20.7 4.3 13a4.6 4.6 0 0 1 0-6.5 4.6 4.6 0 0 1 6.5 0l1.2 1.2 1.2-1.2a4.6 4.6 0 0 1 6.5 0 4.6 4.6 0 0 1 0 6.5z" />
@@ -245,7 +245,7 @@ export default function Home() {
             <button
               onClick={() => { track("cart_open", { source: "home_header" }); navigate("/cart"); }}
               aria-label={cart.items_count > 0 ? `Корзина: ${cart.items_count}` : "Корзина"}
-              className="tap relative flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.12] backdrop-blur"
+              className="tap relative flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.12]"
             >
               <CartGlyph className="h-[18px] w-[18px]" />
               {cart.items_count > 0 && (
@@ -414,7 +414,7 @@ export default function Home() {
           по границе ПАДДИНГ-БОКСА контейнера, а не по контентной. Без scroll-padding
           браузер сам доводил ленту до snap-позиции ещё на первой отрисовке и съедал
           левые 16px — первый баннер вставал вплотную к краю экрана. */}
-      <div className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:scroll-px-0 lg:px-0 lg:pb-0">
+      <div className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:scroll-px-0 lg:px-0 lg:pb-0">
         {(home ? home.banners : Array.from({ length: 2 }, () => null)).map((b, i) =>
           b ? (
             <HeroBanner
@@ -591,7 +591,7 @@ function HeroBanner({
   return (
     <button
       onClick={onOpen}
-      className={`tap lift relative h-[176px] w-[78%] shrink-0 snap-start overflow-hidden rounded-hero p-4 text-left transition-shadow lg:h-[184px] lg:w-auto lg:p-5 lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.22)] ${
+      className={`press-surface lift relative aspect-[3/2] h-auto w-[min(82vw,320px)] shrink-0 snap-start overflow-hidden rounded-hero p-4 text-left lg:aspect-auto lg:h-[184px] lg:w-auto lg:p-5 lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.22)] ${
         isCurated
           ? "bg-white text-text shadow-card ring-1 ring-inset ring-black/[0.04]"
           : "text-white shadow-float"
@@ -605,18 +605,18 @@ function HeroBanner({
           src={imageSrc!} alt="" loading="lazy" decoding="async"
           onError={() => setImageFailed(true)}
           className="absolute inset-0 h-full w-full object-cover"
-          style={{ objectPosition: isCurated ? "70% center" : "center" }}
+          style={{ objectPosition: isCurated ? "72% center" : "center" }}
         />
       )}
       {hasImage && !isCurated && (
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
       )}
-      <div className="relative z-10 flex h-full max-w-[66%] flex-col justify-end">
+      <div className="relative z-10 flex h-full max-w-[62%] flex-col justify-end lg:max-w-[66%]">
         {!hasImage && banner.emoji && (
           <span className="mb-auto text-3xl drop-shadow" aria-hidden>{banner.emoji}</span>
         )}
         {isCurated && curated && (
-          <span className="mb-auto inline-flex w-fit items-center gap-1 rounded-full bg-white/80 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-text/65 shadow-sm backdrop-blur-sm">
+          <span className="mb-auto inline-flex w-fit items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-text/65 shadow-sm">
             {curated.kind === "claude" && claudeEnabled && <ClaudeMark className="h-3.5 w-3.5" />}
             {curated.kind === "warranty" && (
               <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-emerald-600" fill="none"
@@ -797,12 +797,12 @@ function QuickScenarios({
     // Реальные категории показывает блок категорий — он строится из данных.
   ];
   return (
-    <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-2.5 overflow-x-auto px-4 pb-1 lg:hidden">
+    <div className="no-scrollbar stagger -mx-4 mt-3 flex snap-x snap-proximity scroll-px-4 gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1 lg:hidden">
       {items.map((s) => (
         <button
           key={s.key}
           onClick={s.onClick}
-          className="card-appear tap flex h-[62px] w-[154px] shrink-0 items-center gap-2.5 rounded-xl2 bg-surface px-3 text-left shadow-card ring-1 ring-inset ring-black/[0.035]"
+          className="card-appear tap flex h-16 w-[clamp(148px,42vw,164px)] shrink-0 snap-start items-center gap-2.5 rounded-xl2 bg-surface px-3 text-left shadow-card ring-1 ring-inset ring-black/[0.035]"
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-accent">
             <ScenarioIcon name={s.key} />

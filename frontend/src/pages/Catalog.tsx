@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
@@ -39,6 +39,8 @@ export default function Catalog() {
   const [params, setParams] = useSearchParams();
   const [cards, setCards] = useState<TCard[] | null>(null);
   const [cardsError, setCardsError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const catalogRequest = useRef<AbortController | null>(null);
   const [category, setCategory] = useState(params.get("category") ?? "");
   // Единое состояние поиска — URL-параметр `query` (тот же, что использует
   // шапка на desktop и живые подсказки на главной). Локальный `q` нужен только
@@ -93,8 +95,11 @@ export default function Catalog() {
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = useCallback(() => {
-    setCards(null);
+    catalogRequest.current?.abort();
+    const controller = new AbortController();
+    catalogRequest.current = controller;
     setCardsError(false);
+    setRefreshing(true);
     const qs = new URLSearchParams();
     if (category) qs.set("category", category);
     if (urlQuery) qs.set("query", urlQuery);
@@ -105,12 +110,24 @@ export default function Catalog() {
     if (condition) qs.set("condition", condition);
     if (collection) qs.set("collection", collection);
     qs.set("sort", sort);
-    api<{ cards?: TCard[] }>(`/catalog/list?${qs.toString()}`)
-      .then((d) => setCards(Array.isArray(d.cards) ? d.cards : []))
-      .catch(() => { setCards([]); setCardsError(true); });
+    api<{ cards?: TCard[] }>(`/catalog/list?${qs.toString()}`, { signal: controller.signal })
+      .then((d) => {
+        if (controller.signal.aborted) return;
+        startTransition(() => setCards(Array.isArray(d.cards) ? d.cards : []));
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setCardsError(true);
+      })
+      .finally(() => {
+        if (catalogRequest.current === controller) setRefreshing(false);
+      });
   }, [category, sort, priceMax, urlQuery, brand, onlyStock, onlyToday, condition, collection]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => () => {
+    catalogRequest.current?.abort();
+    catalogRequest.current = null;
+  }, []);
 
   function pickCategory(key: string) {
     setCategory(key);
@@ -279,8 +296,18 @@ export default function Catalog() {
         </div>
       </div>
 
+      {refreshing && cards !== null && (
+        <div className="loading-bar mt-3 h-0.5 rounded-full" role="progressbar" aria-label="Обновляем товары" />
+      )}
+      {cardsError && cards !== null && (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-field bg-[#fff3f2] px-3 py-2 text-xs text-[#b42318]" role="alert">
+          <span>Не удалось обновить выдачу — показаны предыдущие товары.</span>
+          <button onClick={load} className="tap shrink-0 font-semibold">Повторить</button>
+        </div>
+      )}
+
       {/* Сетка товаров: 2 / 3 (tablet) / 4 (desktop) / 5 (wide) */}
-      {cardsError ? (
+      {cardsError && cards === null ? (
         <div className="mt-6"><ErrorState message="Не удалось загрузить товары" onRetry={load} /></div>
       ) : !cards ? (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:mt-5 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
@@ -301,7 +328,10 @@ export default function Catalog() {
           }}
         />
       ) : (
-        <div className="stagger mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:mt-5 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
+        <div
+          className="stagger mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:mt-5 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5"
+          aria-busy={refreshing}
+        >
           {cards.map((c) => <ProductCard key={c.id} card={c} />)}
         </div>
       )}

@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TOAST_EVENT, type ToastKind } from "../lib/toast";
 
-type Item = { id: number; message: string; kind: ToastKind };
+type Item = { id: number; message: string; kind: ToastKind; closing?: boolean };
 
 /** Стек toast'ов над нижней навигацией и панелью корзины (учёт safe-area).
  *  Автоскрытие 2.2с. Позиционирование — класс .toast-dock в index.css. */
 export default function Toaster() {
   const [items, setItems] = useState<Item[]>([]);
+  const timers = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     let seq = 0;
@@ -15,10 +16,23 @@ export default function Toaster() {
       if (!detail?.message) return;
       const id = ++seq;
       setItems((cur) => [...cur.slice(-2), { id, message: detail.message!, kind: detail.kind ?? "success" }]);
-      window.setTimeout(() => setItems((cur) => cur.filter((x) => x.id !== id)), 2200);
+      const exitTimer = window.setTimeout(() => {
+        setItems((cur) => cur.map((x) => x.id === id ? { ...x, closing: true } : x));
+      }, 2000);
+      const removeTimer = window.setTimeout(() => {
+        setItems((cur) => cur.filter((x) => x.id !== id));
+        timers.current.delete(exitTimer);
+        timers.current.delete(removeTimer);
+      }, 2200);
+      timers.current.add(exitTimer);
+      timers.current.add(removeTimer);
     };
     window.addEventListener(TOAST_EVENT, onToast);
-    return () => window.removeEventListener(TOAST_EVENT, onToast);
+    return () => {
+      window.removeEventListener(TOAST_EVENT, onToast);
+      timers.current.forEach((timer) => window.clearTimeout(timer));
+      timers.current.clear();
+    };
   }, []);
 
   if (!items.length) return null;
@@ -31,7 +45,7 @@ export default function Toaster() {
       {items.map((t) => (
         <div
           key={t.id}
-          className={`pop-in pointer-events-auto max-w-xs rounded-full px-4 py-2 text-center text-[13px] font-medium text-white shadow-sheet ${
+          className={`${t.closing ? "toast-out" : "toast-in"} pointer-events-auto max-w-xs rounded-full px-4 py-2 text-center text-[13px] font-medium text-white shadow-sheet ${
             t.kind === "error" ? "bg-[#d92c3c]/95" : "bg-text/95"
           }`}
         >

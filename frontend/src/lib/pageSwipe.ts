@@ -71,8 +71,8 @@ export function classifyPageSwipe(
   return dx < 0 ? "left" : "right";
 }
 
-/** Направление въезда новой страницы для CSS-анимации.
- *  Палец влево = следующая страница приходит справа. */
-export function enterAnimationFor(dir: SwipeDirection): "from-right" | "from-left" {
-  return dir === "left" ? "from-right" : "from-left";
-}
+// enterAnimationFor удалена: направленной анимации въезда больше нет. <main>
+// не пересоздаётся между маршрутами, а сдвиг потребовал бы transform на нём —
+// он ломает position: fixed у потомков (.cta-dock карточки товара, строка ввода
+// AI), и на время перехода эти панели отвязались бы от экрана. Подробности —
+// в docstring Layout.tsx.

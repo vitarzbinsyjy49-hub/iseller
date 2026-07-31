@@ -5,9 +5,13 @@
  *
  *  Сознательно НЕ тянем страницу за пальцем: живое перетаскивание требует
  *  держать в DOM обе страницы разом (со всеми их запросами и скролл-позициями),
- *  а сейчас на экране всегда ровно один <Outlet />. Вместо этого жест
- *  распознаётся на отпускании, а направленность возвращает анимация въезда —
- *  ощущение направления сохраняется, устройство карты роутов не меняется.
+ *  а сейчас на экране всегда ровно один <Outlet />. Жест распознаётся на
+ *  отпускании и просто выполняет переход.
+ *
+ *  Направленной анимации въезда здесь больше нет: <main> не пересоздаётся между
+ *  маршрутами, а сдвиг потребовал бы transform на нём — он ломает
+ *  position: fixed у потомков (см. Layout.tsx). Хук направление жеста наружу не
+ *  отдаёт, и хранить его между переходами незачем.
  *
  *  Мышь игнорируем: на desktop горизонтальное перетаскивание — это выделение
  *  текста, и там навигация и так есть в шапке.
@@ -20,7 +24,6 @@ import {
   EDGE_ZONE,
   SWIPE_TABS,
   classifyPageSwipe,
-  enterAnimationFor,
   resolveSwipeNav,
   tabIndexOf,
 } from "./pageSwipe";
@@ -49,8 +52,6 @@ function startedInsideHorizontalScroller(target: Element | null, root: Element):
   return false;
 }
 
-export type EnterAnimation = "from-left" | "from-right" | null;
-
 /** Есть ли куда возвращаться внутри приложения. react-router держит порядковый
  *  номер записи в history.state.idx; 0 означает, что мы вошли сразу на этот
  *  экран (диплинк из чата) — уходить «назад» из мини-аппа нельзя, поэтому
@@ -63,26 +64,9 @@ function hasAppHistory(): boolean {
 export function usePageSwipe() {
   const navigate = useNavigate();
   const location = useLocation();
-  // Направление жеста копится до перехода и забирается первым же рендером новой
-  // страницы. Именно рендером, а не эффектом: <main> монтируется заново вместе
-  // с маршрутом, CSS-анимация стартует сразу при монтировании, и класс, который
-  // приехал бы позже (из эффекта), перезапустил бы уже проигрывающуюся
-  // анимацию — переход дёргался бы дважды.
-  const pendingAnimation = useRef<EnterAnimation>(null);
-  const shownAnimation = useRef<{ key: string; animation: EnterAnimation }>({
-    key: "", animation: null,
-  });
   const gesture = useRef<
     { x: number; y: number; startedAt: number; fromEdge: boolean; width: number } | null
   >(null);
-
-  if (shownAnimation.current.key !== location.key) {
-    // Идемпотентно для одного и того же location.key, поэтому безопасно и при
-    // повторном рендере (StrictMode).
-    shownAnimation.current = { key: location.key, animation: pendingAnimation.current };
-    pendingAnimation.current = null;
-  }
-  const enterAnimation = shownAnimation.current.animation;
 
   function onPointerDown(e: ReactPointerEvent<HTMLElement>) {
     gesture.current = null;
@@ -116,7 +100,6 @@ export function usePageSwipe() {
       direction: dir,
       target: target.kind === "tab" ? target.to : "back",
     });
-    pendingAnimation.current = enterAnimationFor(dir);
     haptic("light");
     if (target.kind === "tab") navigate(target.to);
     else if (hasAppHistory()) navigate(-1);
@@ -128,12 +111,10 @@ export function usePageSwipe() {
   }
 
   return {
-    enterAnimation,
     /** true, если текущий путь — корневая вкладка (нет экрана «выше»). */
     isTabRoute: tabIndexOf(location.pathname) >= 0,
     /** Уйти на экран выше тем же путём, что и свайп «назад». */
     goBack: () => {
-      pendingAnimation.current = enterAnimationFor("right");
       if (hasAppHistory()) navigate(-1);
       else navigate(SWIPE_TABS[0]);
     },

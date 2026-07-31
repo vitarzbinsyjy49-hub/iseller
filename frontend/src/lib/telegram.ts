@@ -139,6 +139,17 @@ const HOME_SCREEN_STATUSES: HomeScreenStatus[] = ["unsupported", "added", "misse
 export function checkHomeScreenStatus(timeoutMs = 1500): Promise<HomeScreenStatus> {
   const tg = getTelegram();
   if (!tg?.checkHomeScreenStatus) return Promise.resolve("unsupported");
+  // Версию проверяем ДО вызова, хотя try/catch ниже и так его переживёт: SDK
+  // на старом клиенте печатает в консоль собственную ошибку «Method ... is not
+  // supported in version 6.0» ещё до того, как бросить исключение. Перехватить
+  // её нельзя, а профиль открывают часто — консоль забивалась бы шумом, в
+  // котором потом не видно настоящих ошибок. Ярлык на домашний экран появился
+  // в Bot API 8.0, спрашивать раньше не о чем.
+  try {
+    if (tg.isVersionAtLeast && !tg.isVersionAtLeast("8.0")) return Promise.resolve("unsupported");
+  } catch {
+    return Promise.resolve("unsupported");
+  }
   return new Promise((resolve) => {
     let done = false;
     const finish = (status: HomeScreenStatus) => {

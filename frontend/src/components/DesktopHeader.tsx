@@ -11,6 +11,7 @@ import { useCart } from "../lib/cart";
 import SearchPanel from "./SearchPanel";
 import { SegmentedToggle } from "./SegmentedToggle";
 import { searchRoute, type SearchMode } from "../lib/searchMode";
+import { preloadRoute } from "../lib/routePreload";
 
 /** Desktop-шапка (>=1024px): логотип, навигация, поиск, действия.
  *  Видна только на lg+ — mobile UX (BottomNav + градиентный header) не трогаем.
@@ -69,13 +70,10 @@ export default function DesktopHeader() {
   }, [q, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    // relative z-50 обязателен: backdrop-blur создаёт на шапке собственный
-    // контекст наложения, поэтому z-40 у выпадающей панели поиска действует
-    // только ВНУТРИ шапки. Без z-index сама шапка (не позиционированная)
-    // рисуется раньше контента <main>, и панель уходила под hero-баннеры.
+    // relative z-50 держит выпадающую панель поиска выше содержимого <main>.
     // 50 — ниже модалок (ScenarioSheet/LeadForm тоже z-50, но они в DOM позже
     // и потому остаются сверху) и ниже toast'ов (z-60).
-    <header className="relative z-50 hidden border-b border-border bg-surface/95 backdrop-blur-lg lg:block">
+    <header className="relative z-50 hidden border-b border-border bg-surface/97 lg:block">
       <div className="mx-auto flex h-16 w-full max-w-[1320px] items-center gap-6 px-8">
         {/* Логотип */}
         <Link to="/" className="flex shrink-0 items-center gap-2.5">
@@ -93,6 +91,8 @@ export default function DesktopHeader() {
               <Link
                 key={item.to}
                 to={item.to}
+                onPointerDown={() => preloadRoute(item.to)}
+                onPointerEnter={() => preloadRoute(item.to)}
                 aria-current={active ? "page" : undefined}
                 className={`rounded-xl px-3.5 py-2 text-sm font-medium transition-colors ${
                   active ? "bg-accent/10 text-accent" : "text-muted hover:bg-mutedbg hover:text-text"

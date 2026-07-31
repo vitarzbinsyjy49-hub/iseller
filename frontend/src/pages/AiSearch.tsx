@@ -442,7 +442,7 @@ export default function AiSearch() {
 
       {/* Строка ввода: mobile — фиксирована над нижней навигацией; desktop — sticky
           снизу внутри чат-pane (main — скролл-контейнер, sticky bottom работает). */}
-      <div className="fixed inset-x-0 cta-dock z-30 border-t border-border bg-bg px-4 pt-2.5 backdrop-blur-lg lg:sticky lg:inset-x-auto lg:bottom-0 lg:mt-4 lg:rounded-xl2 lg:border lg:border-border lg:bg-surface/95 lg:px-3 lg:py-3">
+      <div className="fixed inset-x-0 cta-dock z-30 border-t border-border bg-bg px-4 pt-2.5 lg:sticky lg:inset-x-auto lg:bottom-0 lg:mt-4 lg:rounded-xl2 lg:border lg:border-border lg:bg-surface lg:px-3 lg:py-3">
         <div className="mx-auto flex max-w-md gap-2 lg:max-w-none">
           <input
             ref={inputRef} value={value} maxLength={1000}

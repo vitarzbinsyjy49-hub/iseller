@@ -109,6 +109,16 @@ def _schema_ready(state: dict) -> bool:
     return False
 
 
+def _due(last: float | None, now: float, interval: float) -> bool:
+    """Пора ли выполнять периодическую задачу.
+
+    `last is None` = не выполняли ни разу с запуска процесса => пора. Отдельный
+    сентинел нужен именно потому, что ноль в шкале time.monotonic() — это не
+    «давно», а момент загрузки системы.
+    """
+    return last is None or now - last >= interval
+
+
 def _tick(state: dict) -> None:
     """Фоновая работа между опросами Telegram (патч 1.1).
 
@@ -144,14 +154,19 @@ def _tick(state: dict) -> None:
             # «почему не пришло напоминание» это первый же вопрос, и ответа на
             # него в логах не было. Два скана в час — не тот объём, ради
             # которого стоит терять наблюдаемость.
+            # «Ещё не сканировали» — это None, а не ноль. Ноль означал бы момент
+            # времени, а time.monotonic() отсчитывается от старта СИСТЕМЫ: на
+            # свежезагруженном хосте разница «сейчас минус ноль» меньше
+            # интервала, и первый скан молча откладывался на 30-60 минут после
+            # запуска. На проде с аптаймом в недели это не проявлялось.
             interval = max(1, settings.CART_REMINDER_SCAN_MINUTES) * 60
-            if now - state.get("last_scan", 0.0) >= interval:
+            if _due(state.get("last_scan"), now, interval):
                 stats = cart_reminders.scan(db)
                 state["last_scan"] = now
                 logger.info("скан корзин: %s", stats)
 
             interval = max(1, settings.FAVORITE_WATCH_SCAN_MINUTES) * 60
-            if now - state.get("last_favorite_scan", 0.0) >= interval:
+            if _due(state.get("last_favorite_scan"), now, interval):
                 stats = favorite_watch.scan(db)
                 state["last_favorite_scan"] = now
                 logger.info("скан избранного: %s", stats)
@@ -204,7 +219,7 @@ def run() -> int:
         # Состояние фоновых задач живёт в локальной переменной, а не в модуле:
         # так его видно из сигнатуры и его нельзя случайно разделить между
         # двумя run() в тестах.
-        tick_state: dict = {"last_scan": 0.0}
+        tick_state: dict = {}
 
         while _running:
             _tick(tick_state)

@@ -33,6 +33,14 @@
   --app-hero-bg: linear-gradient(163deg, #14304d 0%, #1b4870 58%, #205488 100%);
   --app-hero-chip: rgba(255, 255, 255, 0.13);
   --app-hero-chip-ink: #e9f1fb;
+  /* Motion v2: короткие продуктовые переходы, единая кривая и только свойства,
+     которые композитор умеет анимировать без layout/repaint. */
+  --motion-instant: 90ms;
+  --motion-fast: 150ms;
+  --motion-standard: 190ms;
+  --motion-sheet: 260ms;
+  --ease-standard: cubic-bezier(.2, .8, .25, 1);
+  --ease-emphasized: cubic-bezier(.22, 1, .36, 1);
 }
 
 /* ============================================================
@@ -92,28 +100,57 @@ body {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* ================= Motion system =================
-   Быстрые (180–280ms), лёгкие, без лагов. Только CSS —
-   нулевые зависимости, нативная производительность. */
+/* ================= Motion system v2 =================
+   Никаких transition-all и анимированных теней/blur: состояние видно сразу,
+   а transform/opacity остаются на compositor thread. */
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes fadeIn {
-  from { opacity: 0; }
+  from { opacity: .72; }
   to   { opacity: 1; }
 }
 @keyframes slideUp {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
+  from { opacity: .86; transform: translate3d(0, 32px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes slideDown {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to   { opacity: 0; transform: translate3d(0, 20px, 0); }
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translate3d(0, 8px, 0) scale(.98); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes toastOut {
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to   { opacity: 0; transform: translate3d(0, -4px, 0) scale(.98); }
+}
+@keyframes favoritePop {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.18); }
+  to   { transform: scale(1); }
 }
 @keyframes popIn {
-  from { opacity: 0; transform: scale(0.96); }
+  from { opacity: 0; transform: scale(0.98); }
   to   { opacity: 1; transform: scale(1); }
 }
-@keyframes shimmer {
-  from { background-position: -400px 0; }
-  to   { background-position: 400px 0; }
+@keyframes skeletonPulse {
+  0%, 100% { opacity: .68; }
+  50%      { opacity: 1; }
+}
+@keyframes loadingBar {
+  from { transform: translate3d(-100%, 0, 0); }
+  to   { transform: translate3d(260%, 0, 0); }
 }
 /* Только положение, без яркости. Раньше здесь была ещё и opacity .4 -> 1: при
    сдвигах фаз всего в 14% и 28% цикла все три точки светлели почти
@@ -124,58 +161,91 @@ body {
   30%           { transform: translateY(-3.5px); }
 }
 
-@keyframes pageFromRight {
-  from { opacity: .55; transform: translate3d(7%, 0, 0); }
-  to   { opacity: 1;   transform: translate3d(0, 0, 0); }
-}
-@keyframes pageFromLeft {
-  from { opacity: .55; transform: translate3d(-7%, 0, 0); }
-  to   { opacity: 1;   transform: translate3d(0, 0, 0); }
-}
+.card-appear { animation: fadeUp var(--motion-standard) var(--ease-standard) both; }
+.fade-in     { animation: fadeIn var(--motion-fast) ease-out both; }
+.pop-in      { animation: popIn var(--motion-standard) var(--ease-emphasized) both; }
+.sheet-in    { animation: slideUp var(--motion-sheet) var(--ease-standard) both; }
+.sheet-out   { animation: slideDown var(--motion-standard) ease-in both; pointer-events: none; }
+.backdrop-in { animation: backdropIn var(--motion-fast) ease-out both; }
+.backdrop-out { animation: fadeOut var(--motion-standard) ease-in both; pointer-events: none; }
+.toast-in    { animation: toastIn var(--motion-standard) var(--ease-emphasized) both; }
+.toast-out   { animation: toastOut var(--motion-fast) ease-in both; pointer-events: none; }
+.favorite-pop { animation: favoritePop var(--motion-standard) var(--ease-emphasized); }
 
-/* page-enter — только opacity, БЕЗ transform: fill-mode both оставляет
-   transform на <main> навсегда, а transform-предок становится containing block
-   для position:fixed — фиксированные CTA "прилипают" к контенту вместо viewport. */
-.page-enter   { animation: fadeIn 220ms ease-out both; }
-
-/* Направленный въезд страницы после свайпа (v5.5.0): страница приезжает с той
-   стороны, откуда её тянул палец. Здесь transform нужен, поэтому fill-mode НЕ
-   ставим — по той же причине, что описана выше: анимация доигрывает до
-   transform:none, и после неё на <main> не остаётся ни одного transform, так
-   что фиксированные CTA снова считаются от viewport. */
-.page-enter-right { animation: pageFromRight 240ms cubic-bezier(.2, .8, .25, 1); }
-.page-enter-left  { animation: pageFromLeft  240ms cubic-bezier(.2, .8, .25, 1); }
-.card-appear  { animation: fadeUp 240ms cubic-bezier(.2,.8,.3,1) both; }
-.fade-in      { animation: fadeIn 200ms ease-out both; }
-.pop-in       { animation: popIn 200ms cubic-bezier(.2,.8,.3,1) both; }
-.sheet-in     { animation: slideUp 260ms cubic-bezier(.2,.8,.25,1) both; }
-.backdrop-in  { animation: fadeIn 200ms ease-out both; }
-
-/* Каскад карточек: задержки по nth-child (не перегружаем — максимум 8) */
+/* Каскад только первого визуального ряда: длинная лента больше не ждёт 450ms. */
 .stagger > *:nth-child(1) { animation-delay: 0ms; }
-.stagger > *:nth-child(2) { animation-delay: 30ms; }
-.stagger > *:nth-child(3) { animation-delay: 60ms; }
-.stagger > *:nth-child(4) { animation-delay: 90ms; }
-.stagger > *:nth-child(5) { animation-delay: 120ms; }
-.stagger > *:nth-child(6) { animation-delay: 150ms; }
-.stagger > *:nth-child(7) { animation-delay: 180ms; }
-.stagger > *:nth-child(8) { animation-delay: 210ms; }
+.stagger > *:nth-child(2) { animation-delay: 24ms; }
+.stagger > *:nth-child(3) { animation-delay: 48ms; }
+.stagger > *:nth-child(4) { animation-delay: 72ms; }
+.stagger > .card-appear:nth-child(n+5) { animation: none; }
 
-/* Tap/press: мягкое сжатие с премиальным замедлением (v5.2.8) */
-.tap { transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1); }
-.tap:active { transform: scale(0.97); }
+/* Микроотклик появляется быстрее 100ms; крупные поверхности почти не меняют размер. */
+.tap {
+  touch-action: manipulation;
+  transition: transform var(--motion-instant) ease-out;
+}
+.tap:active { transform: scale(0.975); }
+.press-surface {
+  touch-action: manipulation;
+  transition: transform var(--motion-fast) var(--ease-emphasized);
+}
+.press-surface:active { transform: scale(.995); }
 
 /* Подъём карточки на hover (только desktop; на тач-устройствах ничего) */
 @media (hover: hover) and (pointer: fine) {
-  .lift { transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .lift { transition: transform var(--motion-standard) var(--ease-emphasized); }
   .lift:hover { transform: translateY(-2px); }
 }
 
-/* Скелетоны с мягким шиммером */
+/* Opacity-pulse не перекрашивает градиент на каждом кадре, в отличие от shimmer. */
 .skeleton {
-  background: linear-gradient(90deg, #eef0f3 25%, #f6f7f9 50%, #eef0f3 75%);
-  background-size: 800px 100%;
-  animation: shimmer 1.4s linear infinite;
+  background: #e9edf1;
+  animation: skeletonPulse 1.7s ease-in-out infinite;
+}
+
+.loading-bar {
+  overflow: hidden;
+  background: rgb(var(--app-accent) / .14);
+}
+.loading-bar::after {
+  content: "";
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: inherit;
+  background: rgb(var(--app-accent));
+  animation: loadingBar .9s var(--ease-standard) infinite;
+}
+
+.product-image {
+  opacity: 0;
+  transition: opacity var(--motion-fast) ease-out;
+}
+.product-image-loaded { opacity: 1; }
+
+/* Нижняя панель остаётся читаемой без дорогого blur в Telegram WebView. */
+.nav-surface {
+  background: rgb(var(--app-surface) / .97);
+  box-shadow: 0 -8px 24px rgba(17, 24, 39, .035);
+}
+.nav-icon {
+  transition:
+    color var(--motion-fast) ease-out,
+    background-color var(--motion-fast) ease-out,
+    transform var(--motion-fast) var(--ease-emphasized);
+}
+.nav-icon-active {
+  background: rgb(var(--app-accent) / .11);
+  transform: translateY(-1px);
+}
+
+/* Длинный каталог не тратит layout/paint на карточки далеко за viewport.
+   auto запоминает реальную высоту после первого показа и минимизирует сдвиги. */
+@supports (content-visibility: auto) {
+  .product-card-viewport {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 340px;
+  }
 }
 
 /* AI typing indicator. Сдвиги — 1/6 и 1/3 цикла: при активном окне 0-60% пики
@@ -301,5 +371,6 @@ html.kb-open .js-bottom-nav { display: none; }
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

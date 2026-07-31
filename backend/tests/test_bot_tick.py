@@ -199,3 +199,16 @@ def test_failed_scan_retries_on_the_next_tick(monkeypatch):
 
     assert len(attempts) == 3, "скан должен повторяться, а не молчать до конца интервала"
     assert "last_favorite_scan" not in state
+
+
+def test_first_scan_runs_regardless_of_system_uptime(monkeypatch):
+    """Первый скан после запуска не должен зависеть от аптайма машины.
+
+    time.monotonic() отсчитывается от старта СИСТЕМЫ, поэтому «сейчас минус
+    ноль» на свежезагруженном хосте меньше интервала — и сканы молча ждали бы
+    30-60 минут. На проде с аптаймом в недели это не проявлялось, а на только
+    что перезагруженной машине ломалось (и роняло эти тесты).
+    """
+    assert bp._due(None, 10.0, 1800) is True      # ни разу не сканировали
+    assert bp._due(0.0, 10.0, 1800) is False      # сканировали в момент 0 — рано
+    assert bp._due(5.0, 1805.0, 1800) is True     # интервал прошёл

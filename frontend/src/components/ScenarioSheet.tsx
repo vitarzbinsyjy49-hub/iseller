@@ -10,7 +10,7 @@
  *  от viewport и не зависит от transform/overflow родителей. Управление фокусом,
  *  блокировка фонового скролла, Escape, safe-area, haptic, защита от двойной отправки.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
@@ -33,10 +33,35 @@ export type { ScenarioKey, ChoiceItem } from "../lib/scenario";
    означал бы вторую реализацию ловушки фокуса и блокировки скролла —
    расходятся они молча и обнаруживаются только с клавиатуры.
    ============================================================ */
-export function SheetShell({ onClose, labelledBy, children }: {
-  onClose: () => void; labelledBy: string; children: ReactNode;
+export type SheetClose = (afterClose?: () => void) => void;
+
+export function SheetShell({ onClose, labelledBy, panelClassName = "", children }: {
+  onClose: () => void;
+  labelledBy: string;
+  panelClassName?: string;
+  children: ReactNode | ((close: SheetClose) => ReactNode);
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const closeTimer = useRef<number | null>(null);
+  const closingRef = useRef(false);
+  const [closing, setClosing] = useState(false);
+  onCloseRef.current = onClose;
+
+  const requestClose = useCallback<SheetClose>((afterClose) => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosing(true);
+    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 190;
+    closeTimer.current = window.setTimeout(() => {
+      onCloseRef.current();
+      afterClose?.();
+    }, delay);
+  }, []);
+
+  useEffect(() => () => {
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+  }, []);
 
   // Блокировка фонового скролла без прыжка страницы (компенсируем ширину
   // скроллбара на desktop; на mobile она ~0). Восстанавливаем при закрытии.
@@ -62,7 +87,7 @@ export function SheetShell({ onClose, labelledBy, children }: {
     // не открывалась мгновенно и не перекрывала контент/CTA)
     panel?.focus();
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+      if (e.key === "Escape") { e.preventDefault(); requestClose(); return; }
       if (e.key !== "Tab") return;
       const els = focusables();
       if (els.length === 0) return;
@@ -73,12 +98,12 @@ export function SheetShell({ onClose, labelledBy, children }: {
     }
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("keydown", onKey); prevActive?.focus?.(); };
-  }, [onClose]);
+  }, [requestClose]);
 
   return createPortal(
     <div
-      className="backdrop-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center"
-      onClick={onClose}
+      className={`${closing ? "backdrop-out" : "backdrop-in"} fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center`}
+      onClick={() => requestClose()}
     >
       <div
         ref={panelRef}
@@ -87,9 +112,9 @@ export function SheetShell({ onClose, labelledBy, children }: {
         aria-labelledby={labelledBy}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="sheet-in flex max-h-[88vh] w-full max-w-md flex-col rounded-t-3xl bg-surface shadow-sheet outline-none safe-bottom sm:max-h-[90vh] sm:rounded-3xl"
+        className={`${closing ? "sheet-out" : "sheet-in"} flex max-h-[88vh] w-full max-w-md flex-col rounded-t-3xl bg-surface shadow-sheet outline-none safe-bottom sm:max-h-[90vh] sm:rounded-3xl ${panelClassName}`}
       >
-        {children}
+        {typeof children === "function" ? children(requestClose) : children}
       </div>
     </div>,
     document.body,
@@ -172,28 +197,32 @@ export function ScenarioRequestSheet({
   if (state === "done") {
     return (
       <SheetShell onClose={onClose} labelledBy="scenario-done-title">
-        <DragHandle />
-        <div className="pop-in px-5 pb-5 pt-2 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green/15 text-3xl">✅</div>
-          <p id="scenario-done-title" className="mt-4 text-lg font-bold">Заявка отправлена</p>
-          <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
-            Менеджер изучит информацию и свяжется с вами в Telegram. Статус можно посмотреть в разделе «Заявки».
-          </p>
-          <button
-            onClick={() => { onClose(); navigate("/requests"); }}
-            className="tap mt-5 w-full rounded-xl2 bg-accent py-3.5 font-semibold text-white"
-          >
-            Посмотреть заявку
-          </button>
-          {managerUrl && managerUrl.trim() && (
-            <button
-              onClick={() => openExternalLink(managerUrl)}
-              className="tap mt-2 w-full rounded-xl2 bg-mutedbg py-3 text-sm font-semibold text-text"
-            >
-              Написать менеджеру сейчас
-            </button>
-          )}
-        </div>
+        {(close) => (
+          <>
+            <DragHandle />
+            <div className="pop-in px-5 pb-5 pt-2 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green/15 text-3xl">✅</div>
+              <p id="scenario-done-title" className="mt-4 text-lg font-bold">Заявка отправлена</p>
+              <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
+                Менеджер изучит информацию и свяжется с вами в Telegram. Статус можно посмотреть в разделе «Заявки».
+              </p>
+              <button
+                onClick={() => close(() => navigate("/requests"))}
+                className="tap mt-5 w-full rounded-xl2 bg-accent py-3.5 font-semibold text-white"
+              >
+                Посмотреть заявку
+              </button>
+              {managerUrl && managerUrl.trim() && (
+                <button
+                  onClick={() => openExternalLink(managerUrl)}
+                  className="tap mt-2 w-full rounded-xl2 bg-mutedbg py-3 text-sm font-semibold text-text"
+                >
+                  Написать менеджеру сейчас
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </SheetShell>
     );
   }
@@ -201,21 +230,23 @@ export function ScenarioRequestSheet({
   // ---- форма ----
   return (
     <SheetShell onClose={onClose} labelledBy="scenario-form-title">
-      <DragHandle />
-      <div className="flex items-start justify-between gap-3 px-5 pt-2">
-        <div className="min-w-0">
-          <h3 id="scenario-form-title" className="text-lg font-bold leading-6">{cfg.title}</h3>
-          <p className="mt-0.5 text-[13px] text-muted">{cfg.subtitle}</p>
-        </div>
-        <CloseButton onClose={onClose} />
-      </div>
+      {(close) => (
+        <>
+          <DragHandle />
+          <div className="flex items-start justify-between gap-3 px-5 pt-2">
+            <div className="min-w-0">
+              <h3 id="scenario-form-title" className="text-lg font-bold leading-6">{cfg.title}</h3>
+              <p className="mt-0.5 text-[13px] text-muted">{cfg.subtitle}</p>
+            </div>
+            <CloseButton onClose={() => close()} />
+          </div>
 
-      {/* Прокручиваемое тело: длинная форма скроллится, CTA закреплена снизу и
-          не перекрывается клавиатурой iOS. */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 pt-4">
-        <div className="space-y-4">
-          {cfg.fields.map((f) => (
-            <div key={f.key}>
+          {/* Прокручиваемое тело: длинная форма скроллится, CTA закреплена снизу и
+              не перекрывается клавиатурой iOS. */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 pt-4">
+            <div className="space-y-4">
+              {cfg.fields.map((f) => (
+                <div key={f.key}>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">
                 {f.label}{"required" in f && f.required && <span className="text-[#ff3b30]"> *</span>}
               </label>
@@ -248,8 +279,8 @@ export function ScenarioRequestSheet({
                   placeholder={f.placeholder} maxLength={200} className={inputCls}
                 />
               )}
-            </div>
-          ))}
+                </div>
+              ))}
 
           {/* Контакт: телефон необязателен, если менеджер может ответить в Telegram
               (есть @username); иначе обязателен. */}
@@ -266,22 +297,24 @@ export function ScenarioRequestSheet({
             )}
           </div>
 
-          {error && <p className="text-sm text-[#ff3b30]">{error}</p>}
-        </div>
-      </div>
+              {error && <p className="text-sm text-[#ff3b30]">{error}</p>}
+            </div>
+          </div>
 
-      {/* CTA закреплена снизу шторки (не уезжает за клавиатуру) */}
-      <div className="shrink-0 border-t border-border px-5 pb-1 pt-3">
-        <button
-          onClick={submit} disabled={state === "sending"}
-          className="tap w-full rounded-xl2 bg-accent py-3.5 font-semibold text-white transition-opacity disabled:opacity-50"
-        >
-          {state === "sending" ? "Отправляем…" : cfg.cta}
-        </button>
-        <p className="mt-2 text-center text-[11px] text-muted">
-          Нажимая кнопку, вы соглашаетесь с обработкой персональных данных
-        </p>
-      </div>
+          {/* CTA закреплена снизу шторки (не уезжает за клавиатуру) */}
+          <div className="shrink-0 border-t border-border px-5 pb-1 pt-3">
+            <button
+              onClick={submit} disabled={state === "sending"}
+              className="tap w-full rounded-xl2 bg-accent py-3.5 font-semibold text-white transition-opacity disabled:opacity-50"
+            >
+              {state === "sending" ? "Отправляем…" : cfg.cta}
+            </button>
+            <p className="mt-2 text-center text-[11px] text-muted">
+              Нажимая кнопку, вы соглашаетесь с обработкой персональных данных
+            </p>
+          </div>
+        </>
+      )}
     </SheetShell>
   );
 }
@@ -301,27 +334,31 @@ export function ScenarioChoiceSheet({
 }) {
   return (
     <SheetShell onClose={onClose} labelledBy="choice-title">
-      <DragHandle />
-      <div className="flex items-start justify-between gap-3 px-5 pt-2">
-        <h3 id="choice-title" className="text-lg font-bold leading-6">{title}</h3>
-        <CloseButton onClose={onClose} />
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-4">
-        <div className="space-y-2">
-          {items.map((it) => (
-            <button
-              key={it.key}
-              onClick={() => { haptic("light"); onPick(it); }}
-              className="tap flex w-full items-center justify-between gap-3 rounded-xl2 border border-border bg-surface px-4 py-3.5 text-left"
-            >
-              <span className="text-[15px] font-semibold">{it.label}</span>
-              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </button>
-          ))}
-        </div>
-      </div>
+      {(close) => (
+        <>
+          <DragHandle />
+          <div className="flex items-start justify-between gap-3 px-5 pt-2">
+            <h3 id="choice-title" className="text-lg font-bold leading-6">{title}</h3>
+            <CloseButton onClose={() => close()} />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-4">
+            <div className="space-y-2">
+              {items.map((it) => (
+                <button
+                  key={it.key}
+                  onClick={() => { haptic("light"); close(() => onPick(it)); }}
+                  className="tap flex w-full items-center justify-between gap-3 rounded-xl2 border border-border bg-surface px-4 py-3.5 text-left"
+                >
+                  <span className="text-[15px] font-semibold">{it.label}</span>
+                  <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </SheetShell>
   );
 }

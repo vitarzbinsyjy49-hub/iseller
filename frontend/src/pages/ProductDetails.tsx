@@ -579,7 +579,10 @@ function Gallery({
   function goTo(i: number) {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+    el.scrollTo({
+      left: i * el.clientWidth,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
     setIdx(i);
   }
 
@@ -612,7 +615,7 @@ function Gallery({
               aria-label={`Показать фото ${i + 1} из ${slides.length}`}
               aria-current={i === idx}
               onClick={() => goTo(i)}
-              className={`h-1.5 rounded-full shadow-soft transition-all ${
+              className={`h-1.5 rounded-full shadow-soft transition-[width,background-color] duration-150 ${
                 i === idx ? "w-4 bg-white" : "w-1.5 bg-white/60"
               }`}
             />

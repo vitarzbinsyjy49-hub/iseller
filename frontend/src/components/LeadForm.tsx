@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import { formatPrice } from "../lib/format";
+import { SheetShell } from "./ScenarioSheet";
 
 type Props = {
   productId?: number | null;
@@ -17,7 +17,7 @@ type Props = {
 type Delivery = "pickup" | "delivery";
 
 /** Bottom sheet «Оставить заявку»: имя, телефон, комментарий, способ получения.
- *  Выезжает снизу (260ms), backdrop с blur. Создаёт Lead в CRM.
+ *  Выезжает снизу (260ms), backdrop меняет только opacity. Создаёт Lead в CRM.
  *  Рендерится через createPortal в document.body: fixed-оверлей позиционируется
  *  строго от viewport и не зависит от transform/overflow родителей
  *  (иначе на прокрученной странице шторка могла оказаться вне экрана). */
@@ -61,31 +61,30 @@ export default function LeadForm({
   const inputCls =
     "w-full rounded-xl2 border border-border bg-mutedbg px-4 py-3 text-sm outline-none transition-colors focus:border-accent focus:bg-surface";
 
-  return createPortal(
-    <div
-      className="backdrop-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center"
-      onClick={onClose}
-    >
-      <div
-        className="sheet-in w-full max-w-md rounded-t-3xl bg-surface p-5 shadow-sheet safe-bottom sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+  return (
+    <SheetShell onClose={onClose} labelledBy="lead-form-title" panelClassName="p-5">
+      {(close) => (
+        <>
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
 
         {state === "done" ? (
           <div className="pop-in py-6 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green/15 text-3xl">✅</div>
-            <p className="mt-4 text-lg font-bold">Заявка отправлена</p>
+            <p id="lead-form-title" className="mt-4 text-lg font-bold">Заявка отправлена</p>
             <p className="mt-1 text-sm text-muted">Менеджер скоро свяжется с вами. Статус — в разделе «Заявки».</p>
-            <button onClick={onClose} className="tap mt-5 w-full rounded-xl2 bg-accent py-3.5 font-semibold text-white">
+            <button onClick={() => close()} className="tap mt-5 w-full rounded-xl2 bg-accent py-3.5 font-semibold text-white">
               Готово
             </button>
           </div>
         ) : (
           <>
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold">Оставить заявку</h3>
-              <button onClick={onClose} className="tap flex h-8 w-8 items-center justify-center rounded-full bg-mutedbg text-muted">✕</button>
+              <h3 id="lead-form-title" className="text-lg font-bold">Оставить заявку</h3>
+              <button
+                onClick={() => close()}
+                aria-label="Закрыть"
+                className="tap flex h-8 w-8 items-center justify-center rounded-full bg-mutedbg text-muted"
+              >✕</button>
             </div>
 
             {productTitle && (
@@ -133,9 +132,9 @@ export default function LeadForm({
             </p>
           </>
         )}
-      </div>
-    </div>,
-    document.body,
+        </>
+      )}
+    </SheetShell>
   );
 }
 

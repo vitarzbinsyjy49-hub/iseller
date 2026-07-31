@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { preloadRoute } from "../lib/routePreload";
 
 /** Нижняя навигация: 5 вкладок, SVG-иконки, активная — Telegram blue.
  *  Сознательно НЕ используем NavLink: обычный Link + useLocation дают тот же
@@ -68,7 +69,7 @@ export default function BottomNav() {
   return (
     // lg:hidden — на desktop навигация в DesktopHeader, мобильный bottom nav скрыт
     // js-bottom-nav: при открытой клавиатуре скрывается через html.kb-open (index.css)
-    <nav className="js-bottom-nav safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/90 backdrop-blur-lg lg:hidden">
+    <nav className="js-bottom-nav nav-surface safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border lg:hidden">
       <div className="mx-auto flex max-w-md justify-around py-1.5">
         {items.map((item) => {
           const isActive = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
@@ -76,12 +77,18 @@ export default function BottomNav() {
             <Link
               key={item.to}
               to={item.to}
+              onPointerDown={() => preloadRoute(item.to)}
+              onPointerEnter={() => preloadRoute(item.to)}
               aria-current={isActive ? "page" : undefined}
               className={`tap flex w-16 flex-col items-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-medium transition-colors ${
                 isActive ? "text-accent" : "text-muted"
               }`}
             >
-              {item.icon(isActive)}
+              <span className={`nav-icon flex h-7 min-w-10 items-center justify-center rounded-full ${
+                isActive ? "nav-icon-active" : ""
+              }`}>
+                {item.icon(isActive)}
+              </span>
               {item.label}
             </Link>
           );
