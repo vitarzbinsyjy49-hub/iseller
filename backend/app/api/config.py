@@ -12,6 +12,23 @@ from app.core.config import settings
 
 router = APIRouter(prefix="/config", tags=["config"])
 
+#: Какие значения AI_PROVIDER означают, что отвечает именно Claude.
+#: `ollama_remote` — это Ollama на Mac mini, `fallback`/`mock` — ответ по
+#: каталогу вообще без модели. Ни то, ни другое Claude не является.
+_CLAUDE_PROVIDERS = frozenset({"anthropic"})
+
+
+def ai_vendor() -> str:
+    """Кто на самом деле отвечает в AI-подборе прямо сейчас.
+
+    Витрина показывает «Powered by Claude» ТОЛЬКО по этому полю, а не по
+    константе во фронте. Иначе на локальном стенде с `AI_PROVIDER=fallback`
+    магазин утверждал бы, что за подбор отвечает Claude, хотя ответ собран из
+    каталога без единого обращения к модели. Утверждение о том, чем работает
+    магазин, обязано быть проверяемым — как и всё остальное на витрине.
+    """
+    return "claude" if (settings.AI_PROVIDER or "").strip().lower() in _CLAUDE_PROVIDERS else ""
+
 
 @router.get("/public")
 def public_config():
@@ -33,4 +50,7 @@ def public_config():
         # App — по внутреннему адресу получатель попадает в веб-версию без
         # Telegram-авторизации и видит «Не удалось войти».
         "bot_username": settings.BOT_USERNAME.strip().lstrip("@"),
+        # Пусто => движок не Claude, и бейджа на витрине не будет.
+        "ai_vendor": ai_vendor(),
+        "ai_model": settings.AI_ANTHROPIC_MODEL.strip() if ai_vendor() else "",
     }

@@ -29,8 +29,11 @@ export type { ScenarioKey, ChoiceItem } from "../lib/scenario";
 
 /* ============================================================
    Общая оболочка: portal, backdrop, Escape, scroll-lock, focus trap.
+   Экспортируется для переиспользования (роудмап AI): второй такой шелл
+   означал бы вторую реализацию ловушки фокуса и блокировки скролла —
+   расходятся они молча и обнаруживаются только с клавиатуры.
    ============================================================ */
-function SheetShell({ onClose, labelledBy, children }: {
+export function SheetShell({ onClose, labelledBy, children }: {
   onClose: () => void; labelledBy: string; children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);

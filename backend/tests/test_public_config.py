@@ -56,3 +56,27 @@ def test_manager_fallbacks_do_not_require_configuration(client, monkeypatch):
     monkeypatch.setattr(settings, "MANAGER_B2B_URL", "", raising=False)
     data = client.get("/api/config/public").json()
     assert data["manager_b2b_url"] == "https://t.me/manager"
+
+
+# ------------------------------------ движок AI (бейдж «Powered by Claude»)
+
+def test_claude_badge_only_when_claude_actually_answers(client, monkeypatch):
+    """Витрина утверждает «Powered by Claude» только если это правда.
+
+    На локальном стенде AI_PROVIDER=fallback: ответ собирается из каталога без
+    единого обращения к модели. Показать там бейдж значило бы соврать про то,
+    чем работает магазин.
+    """
+    monkeypatch.setattr(settings, "AI_PROVIDER", "anthropic", raising=False)
+    data = client.get("/api/config/public").json()
+    assert data["ai_vendor"] == "claude"
+    assert data["ai_model"]
+
+
+@pytest.mark.parametrize("provider", ["fallback", "mock", "ollama_remote", "ai", ""])
+def test_no_claude_badge_for_other_engines(client, monkeypatch, provider):
+    """ollama_remote — это Ollama на Mac mini, fallback — вообще без модели."""
+    monkeypatch.setattr(settings, "AI_PROVIDER", provider, raising=False)
+    data = client.get("/api/config/public").json()
+    assert data["ai_vendor"] == ""
+    assert data["ai_model"] == ""

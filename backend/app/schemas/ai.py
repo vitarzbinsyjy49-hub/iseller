@@ -120,6 +120,16 @@ ALLOWED_EVENTS = {
     "checkout_error",
     "buy_now",
     "continue_shopping",
+    # v5.9: тумблеры навигации (ось категорий/брендов, режим строки поиска).
+    # Payload — только выбранное положение и место переключения.
+    "home_axis_switched",
+    "search_mode_switched",
+    # Патч 1.1: распространение и возвращаемость. Payload — product_id и способ
+    # (target/from). Ни ссылки, ни текста сообщения, ни адресата.
+    "product_shared",
+    "home_screen_prompted",
+    # Патч 1.2: интерес к устройству и планам AI-подбора.
+    "ai_roadmap_opened",
 }
 
 

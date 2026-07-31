@@ -410,6 +410,36 @@ Telegram-авторизации, и видел «Не удалось войти�
 frontend`. Симптом: локально `text-muted` рисуется чёрным (старый конфиг с
 `var(--app-sub)` вместо `rgb(var(--app-sub) / <alpha-value>)`), в проде — серым.
 
+## Powered by Claude и роудмап AI (патч 1.2)
+
+Бейдж на экране `/ai` со знаком Claude; по нажатию — шит с роудмапом из семи
+шагов (`components/AiRoadmapSheet.tsx`).
+
+**Бейдж показывается только когда движок РЕАЛЬНО Claude.** `GET
+/api/config/public` отдаёт `ai_vendor` (`"claude"` при `AI_PROVIDER=anthropic`,
+иначе пусто) и `ai_model`. Фронт не имеет права утверждать это от себя:
+`ollama_remote` — это Ollama на Mac mini, `fallback` — ответ из каталога вообще
+без модели, и бейдж там был бы враньём про собственный магазин. Недоступный
+конфиг = пустой vendor = молчание, а не утверждение по умолчанию.
+
+Знак Claude — `components/ClaudeMark.tsx`, одиннадцать лучей по кругу,
+`CLAUDE_ORANGE = #D97757` одной константой на знак и акценты шита. Формулировки
+намеренно означают атрибуцию, а не партнёрство: в шите прямо сказано, что
+роудмап — планы магазина, а не Anthropic. Сроков в роудмапе нет: дата — это
+обещание, а обеспечить его некому.
+
+`SheetShell` из `ScenarioSheet.tsx` теперь экспортируется — второй шелл означал
+бы вторую ловушку фокуса и блокировку скролла, которые расходятся молча.
+
+**Списки событий аналитики фронта и бэкенда обязаны совпадать.** Они уже
+расходились дважды: фронт объявлял событие в `AppEvent`, backend не находил его
+в `ALLOWED_EVENTS` и отвечал 400, а `track()` — fire-and-forget с проглоченной
+ошибкой. Итог: события молча не доходили, и в отчёте «кнопкой не пользуются»
+вместо «кнопку не посчитали». Так терялись пять событий (`home_axis_switched`,
+`search_mode_switched`, `product_shared`, `home_screen_prompted`,
+`ai_roadmap_opened`). Расхождение теперь ловит `test_event_allowlist_sync.py` —
+он читает union `AppEvent` прямо из `analytics.ts`.
+
 ## Админка
 
 `https://admin.158.255.1.248.sslip.io`, разделы: Товары, Заявки, **Прайс канала**
@@ -421,7 +451,7 @@ frontend`. Симптом: локально `text-muted` рисуется чёр
 ## Проверки перед тем, как считать работу сделанной
 
 ```bash
-cd backend && python -m pytest -q          # 716 тестов
+cd backend && python -m pytest -q          # 730 тестов
 cd frontend && npx tsc --noEmit && npx vitest run && npm run build
 cd admin && npx tsc --noEmit && npm run build
 ```

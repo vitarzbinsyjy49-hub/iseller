@@ -61,7 +61,9 @@ export type AppEvent =
   // способ (target/from). Ни ссылки, ни текста сообщения здесь нет: чем именно
   // человек делится и кому — не наше дело.
   | "product_shared"
-  | "home_screen_prompted";
+  | "home_screen_prompted"
+  // Патч 1.2: интерес к тому, как устроен и куда движется AI-подбор.
+  | "ai_roadmap_opened";
 
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();
