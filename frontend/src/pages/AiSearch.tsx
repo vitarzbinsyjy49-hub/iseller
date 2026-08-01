@@ -6,6 +6,8 @@ import { AiAction, AiAnswer, ProductCard as TCard } from "../components/ai/types
 import ProductCard from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
 import { usePublicConfig } from "../lib/appConfig";
+import { PoweredByClaude } from "../components/ClaudeMark";
+import AiRoadmapSheet from "../components/AiRoadmapSheet";
 import { openExternalLink } from "../lib/telegram";
 import { aiEntryAction, clearAiHistory, loadAiHistory, pushAiQuery } from "../lib/searchHistory";
 import { prefersReducedMotion, revealDurationMs, revealedChars } from "../lib/answerReveal";
@@ -45,6 +47,7 @@ export default function AiSearch() {
   const [chat, setChat] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [lead, setLead] = useState<{ card?: TCard; source: string } | null>(null);
+  const [roadmap, setRoadmap] = useState(false);
   // Локальная история запросов к AI (localStorage, между сессиями)
   const [aiHistory, setAiHistory] = useState<string[]>(() => loadAiHistory());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -284,6 +287,25 @@ export default function AiSearch() {
       <h1 className="text-2xl font-bold">AI-подбор техники</h1>
       <p className="mt-1 text-sm text-muted">Опишите, что вам нужно — подберём варианты из наличия</p>
 
+      {/* Бейдж движка. Показывается ТОЛЬКО когда backend подтвердил, что
+          отвечает действительно Claude (config.ai_vendor): на стенде с
+          AI_PROVIDER=fallback ответ собирается из каталога без модели, и
+          утверждать обратное значило бы соврать про собственный магазин.
+          По нажатию — роудмап: чем помощник станет дальше. */}
+      {config.ai_vendor === "claude" && (
+        <button
+          onClick={() => { track("ai_roadmap_opened", { source: "ai_header" }); setRoadmap(true); }}
+          aria-haspopup="dialog"
+          className="tap mt-2.5 inline-flex items-center gap-1.5 self-start rounded-full border border-border bg-surface py-1.5 pl-2.5 pr-2 transition-colors hover:bg-mutedbg"
+        >
+          <PoweredByClaude model={config.ai_model} />
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-muted" fill="none"
+            stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </button>
+      )}
+
       {/* Сценарные карточки (mobile/tablet; на desktop — в sidebar) */}
       {chat.length === 0 && (
         <div className="stagger mt-4 grid grid-cols-2 gap-2 lg:hidden">
@@ -371,7 +393,7 @@ export default function AiSearch() {
                   {(item.answer.cards ?? []).slice(0, 6).map((c) => (
                     <ProductCard
                       key={c.id} card={c}
-                      onLead={(card) => { track("ai_product_card_clicked", { product_id: card.id }); setLead({ card, source: "ai" }); }}
+                      onOpen={(card) => track("ai_product_card_clicked", { product_id: card.id })}
                     />
                   ))}
                 </div>
@@ -420,7 +442,7 @@ export default function AiSearch() {
 
       {/* Строка ввода: mobile — фиксирована над нижней навигацией; desktop — sticky
           снизу внутри чат-pane (main — скролл-контейнер, sticky bottom работает). */}
-      <div className="fixed inset-x-0 cta-dock z-30 border-t border-border bg-bg px-4 pt-2.5 backdrop-blur-lg lg:sticky lg:inset-x-auto lg:bottom-0 lg:mt-4 lg:rounded-xl2 lg:border lg:border-border lg:bg-surface/95 lg:px-3 lg:py-3">
+      <div className="fixed inset-x-0 cta-dock z-30 border-t border-border bg-bg px-4 pt-2.5 lg:sticky lg:inset-x-auto lg:bottom-0 lg:mt-4 lg:rounded-xl2 lg:border lg:border-border lg:bg-surface lg:px-3 lg:py-3">
         <div className="mx-auto flex max-w-md gap-2 lg:max-w-none">
           <input
             ref={inputRef} value={value} maxLength={1000}
@@ -450,6 +472,10 @@ export default function AiSearch() {
           productPrice={lead.card?.price ?? null} source={lead.source}
           onClose={() => setLead(null)}
         />
+      )}
+
+      {roadmap && (
+        <AiRoadmapSheet model={config.ai_model} onClose={() => setRoadmap(false)} />
       )}
     </div>
   );

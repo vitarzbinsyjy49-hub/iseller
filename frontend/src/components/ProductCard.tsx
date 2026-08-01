@@ -1,5 +1,5 @@
 import {
-  useEffect, useRef, useState,
+  memo, useCallback, useEffect, useMemo, useRef, useState,
   type PointerEvent as ReactPointerEvent, type UIEvent as ReactUIEvent,
   type MouseEvent, type ReactNode,
 } from "react";
@@ -12,12 +12,15 @@ import { haptic } from "../lib/telegram";
 import { toast } from "../lib/toast";
 import { track } from "../lib/analytics";
 import { indexFromScroll, isSlideMounted, isTapGesture } from "../lib/carousel";
+import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
+import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMath";
+import { QuantityStepper } from "./QuantityStepper";
+import { preloadRoute } from "../lib/routePreload";
 
 const MAX_CARD_IMAGES = 10;
 
 type Props = {
   card: TCard;
-  onLead?: (card: TCard) => void;
   compact?: boolean;
   /** Вызывается перед переходом на карточку (напр. лог recommendation_click). */
   onOpen?: (card: TCard) => void;
@@ -64,9 +67,10 @@ function CategorySilhouette({ category }: { category?: string | null }) {
 export function ProductImage({
   src, title, category, className = "", compact = false,
 }: { src?: string; title: string; category?: string | null; className?: string; compact?: boolean }) {
-  const [failed, setFailed] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const [pad, setPad] = useState<"p-2" | "p-1">("p-2");
-  const showImg = src && !failed;
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const showImg = src && failedSrc !== src;
   return (
     <div
       className={`relative overflow-hidden ${className}`}
@@ -82,11 +86,14 @@ export function ProductImage({
           alt={title}
           loading="lazy"
           decoding="async"
-          className={`h-full w-full object-contain object-center ${pad}`}
-          onError={() => setFailed(true)}
+          className={`product-image h-full w-full object-contain object-center ${pad} ${
+            loadedSrc === src ? "product-image-loaded" : ""
+          }`}
+          onError={() => setFailedSrc(src ?? null)}
           onLoad={(e) => {
             const img = e.currentTarget;
             setPad(imagePaddingClass(img.naturalWidth, img.naturalHeight));
+            setLoadedSrc(src ?? null);
           }}
         />
       ) : (
@@ -144,7 +151,10 @@ function CardCarousel({
     track("product_gallery_dot_clicked",
       { product_id: id, from_index: index, to_index: to, image_count: n });
     programmaticRef.current = to;
-    el.scrollTo({ left: to * el.clientWidth, behavior: "smooth" });
+    el.scrollTo({
+      left: to * el.clientWidth,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
     setIndex(to);
   }
 
@@ -161,6 +171,7 @@ function CardCarousel({
   }
 
   function onPointerDown(e: ReactPointerEvent) {
+    preloadRoute("/product");
     gestureRef.current = { x: e.clientX, y: e.clientY, scroll: scrollRef.current?.scrollLeft ?? 0 };
     tapRef.current = false;
   }
@@ -224,7 +235,7 @@ function CardCarousel({
               aria-label={`Показать фото ${i + 1}`}
               aria-current={i === index}
               onClick={(e) => { e.stopPropagation(); goToDot(i); }}
-              className={`pointer-events-auto h-1.5 rounded-full shadow-soft transition-all ${
+              className={`pointer-events-auto h-1.5 rounded-full shadow-soft transition-[width,background-color] duration-150 ${
                 i === index ? "w-4 bg-white" : "w-1.5 bg-white/60"
               }`}
             />
@@ -263,9 +274,9 @@ export function FavButton({ id, className = "" }: { id: number; className?: stri
       onClick={onClick}
       aria-pressed={fav}
       aria-label={fav ? "Убрать из избранного" : "В избранное"}
-      className={`tap flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-card transition-transform duration-200 ${pop ? "scale-125" : ""} ${className}`}
+      className={`tap flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-card ${className}`}
     >
-      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-colors"
+      <svg viewBox="0 0 24 24" className={`h-[18px] w-[18px] transition-colors ${pop ? "favorite-pop" : ""}`}
         fill={fav ? "#ff3b30" : "none"} stroke={fav ? "#ff3b30" : "#9aa1ab"}
         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M19 14c1.5-1.5 2.5-3 2.5-5A5.5 5.5 0 0 0 12 5.6 5.5 5.5 0 0 0 2.5 9c0 2 1 3.5 2.5 5l7 7z" />
@@ -286,23 +297,110 @@ export function Badge({ color, children }: { color: "red" | "blue" | "green" | "
   );
 }
 
+/** Кнопка корзины на карточке: «+» до добавления, степпер после.
+ *
+ *  Занимает строку фиксированной высоты, поэтому все карточки в сетке остаются
+ *  одной высоты и ничего не «прыгает» в момент добавления.
+ *
+ *  Товар, который заказать нельзя (нет в наличии, снят с публикации), кнопку не
+ *  получает: показывать «+», который не сработает, — обещание, которого нет.
+ *  Вместо неё — переход на карточку, где живёт «Узнать о поступлении». */
+function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) {
+  const { item, busy } = useCartEntry(card.id);
+  // Режим приходит с backend. Старый ответ без него (кэш/AI-фикстура) —
+  // ориентируемся на in_stock, как делала витрина до корзины.
+  const orderable = card.availability_mode ? canAddToCart(card.availability_mode) : card.in_stock !== false;
+
+  async function add(e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    haptic("light");
+    track("cart_add", { product_id: card.id, source: "card" });
+    try {
+      await addToCart({
+        id: card.id, title: card.title, price: card.price, image: card.image,
+        sku: card.sku, brand: card.brand, category: card.category,
+        max_quantity: card.max_quantity,
+      });
+      toast("Добавлено в корзину");
+    } catch {
+      toast("Не удалось добавить в корзину", "error");
+    }
+  }
+
+  async function change(next: number) {
+    if (!item) return;
+    haptic("light");
+    try {
+      if (next <= 0) await removeCartItem(item.id);
+      else await setItemQuantity(item.id, next);
+    } catch {
+      toast("Не удалось обновить корзину", "error");
+    }
+  }
+
+  if (!orderable) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onOpen(); }}
+        className="tap h-9 w-full rounded-field bg-mutedbg text-[12px] font-semibold text-muted"
+      >
+        Узнать о поступлении
+      </button>
+    );
+  }
+
+  if (item) {
+    return (
+      <QuantityStepper
+        quantity={item.quantity}
+        max={item.max_quantity}
+        busy={busy}
+        size="sm"
+        onChange={change}
+        ariaLabel={`Количество: ${card.title}`}
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={add}
+      aria-label={`Добавить в корзину: ${card.title}`}
+      className="tap flex h-9 w-full items-center justify-center gap-1.5 rounded-field bg-accent text-[13px] font-semibold text-white transition-colors hover:bg-accentdark"
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor"
+        strokeWidth="2.4" strokeLinecap="round">
+        <path d="M12 6v12M6 12h12" />
+      </svg>
+      Добавить
+    </button>
+  );
+}
+
 /** Карточка товара. Цена и наличие — из данных карточки (из БД), не пересчитываются. */
-export default function ProductCard({ card, onLead, compact, onOpen }: Props) {
+function ProductCard({ card, compact, onOpen }: Props) {
   const navigate = useNavigate();
   const disc = discountPct(card.price, card.old_price);
-  const open = () => { onOpen?.(card); navigate(`/product/${card.id}`); };
+  const open = useCallback(() => {
+    onOpen?.(card);
+    navigate(`/product/${card.id}`);
+  }, [card, navigate, onOpen]);
 
   // Эффективная галерея карточки: images (из resolver групп), иначе одиночное
   // image, иначе пусто. Лимит 10 (backend уже режет; здесь — защита).
-  const gallery = (card.images && card.images.length ? card.images : card.image ? [card.image] : [])
-    .filter(Boolean)
-    .slice(0, MAX_CARD_IMAGES);
+  const gallery = useMemo(
+    () => (card.images && card.images.length ? card.images : card.image ? [card.image] : [])
+      .filter(Boolean)
+      .slice(0, MAX_CARD_IMAGES),
+    [card.image, card.images],
+  );
 
   return (
     // h-full + flex-col: в сетке все карточки одной высоты, кнопка прижата вниз.
     // lg:hover — desktop-состояние; tap scale остаётся на mobile.
     <div
-      className={`card-appear lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface shadow-card lg:hover:shadow-float ${
+      className={`product-card-viewport card-appear lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface shadow-card lg:hover:shadow-float ${
         compact ? "w-40 shrink-0 lg:w-auto" : ""
       }`}
     >
@@ -333,30 +431,41 @@ export default function ProductCard({ card, onLead, compact, onOpen }: Props) {
             <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price!)}</span>
           )}
         </div>
-        <button onClick={open} className="block w-full text-left">
+        <button onClick={open} onPointerDown={() => preloadRoute("/product")} className="block w-full text-left">
           <p className="mt-1 line-clamp-2 min-h-[2.35rem] text-[13px] font-medium leading-[1.35]">
             {card.brand && !card.title.toLowerCase().includes(card.brand.toLowerCase())
               ? `${card.brand} ${card.title}`
               : card.title}
           </p>
         </button>
-        <p className={`mt-1 text-[11px] font-medium ${card.in_stock ? "text-green" : "text-muted"}`}>
-          {card.in_stock ? (card.is_available_today ? "В наличии · Сегодня" : "В наличии") : "Под заказ"}
+        {/* Подпись наличия читает РЕЖИМ, а не голый in_stock: у предзаказа
+            in_stock=true, и карточка писала «В наличии», хотя в корзине тот же
+            товар честно помечен предзаказом. Две разные правды об одном товаре
+            на соседних экранах — хуже, чем одна скучная. */}
+        <p className={`mt-1 text-[11px] font-medium ${availabilityTone(card)}`}>
+          {availabilityText(card)}
         </p>
         {/* Остаток — только у лимитированных товаров (флаг из админки), а не у
             всего, где склад меньше пяти штук: иначе срочность ложная. */}
         {card.is_limited && card.in_stock && card.stock != null && card.stock > 0 && (
           <p className="mt-0.5 text-[11px] font-medium text-orange">Осталось {card.stock} шт</p>
         )}
-        {/* Спейсер прижимает кнопку к низу карточки при разной высоте контента */}
+        {/* Социальное доказательство: строка приходит с backend посчитанной.
+            В плитке она обрезается одной строкой — карточки в сетке обязаны
+            остаться одной высоты, иначе ряд «поедет». */}
+        {card.social_proof && (
+          <p className="mt-0.5 truncate text-[11px] text-muted">{card.social_proof}</p>
+        )}
+        {/* Спейсер прижимает действие к низу карточки при разной высоте контента */}
         <span aria-hidden className="flex-1" />
-        <button
-          onClick={() => onLead?.(card)}
-          className="tap mt-2.5 w-full rounded-field bg-mutedbg py-2.5 text-[13px] font-semibold text-text transition-colors hover:bg-accent hover:text-white"
-        >
-          Заявка
-        </button>
+        {/* Фиксированная высота строки действия (h-9 внутри) — при добавлении
+            «+» меняется на степпер, и карточка не должна от этого расти. */}
+        <div className="mt-2.5">
+          <CardCartControl card={card} onOpen={open} />
+        </div>
       </div>
     </div>
   );
 }
+
+export default memo(ProductCard);

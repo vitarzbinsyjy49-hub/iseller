@@ -43,7 +43,27 @@ export type AppEvent =
   // v5.9: тумблеры навигации. Payload — только выбранное положение (axis, mode)
   // и место переключения (source); текста запроса здесь нет и быть не должно.
   | "home_axis_switched"
-  | "search_mode_switched";
+  | "search_mode_switched"
+  // Compact Home + Cart: воронка корзины. Payload — только безопасные
+  // метаданные (product_id, quantity, items_count, source, код ошибки).
+  // Телефон, имя и комментарий сюда не попадают ни при каких условиях.
+  | "cart_add"
+  | "cart_remove"
+  | "cart_quantity_change"
+  | "cart_open"
+  | "checkout_start"
+  | "checkout_submit"
+  | "checkout_success"
+  | "checkout_error"
+  | "buy_now"
+  | "continue_shopping"
+  // Патч 1.1: распространение и возвращаемость. Payload — только product_id и
+  // способ (target/from). Ни ссылки, ни текста сообщения здесь нет: чем именно
+  // человек делится и кому — не наше дело.
+  | "product_shared"
+  | "home_screen_prompted"
+  // Патч 1.2: интерес к тому, как устроен и куда движется AI-подбор.
+  | "ai_roadmap_opened";
 
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();

@@ -1,0 +1,1268 @@
+{
+  "started_at": "2026-07-30T04:00:47.289Z",
+  "steps": [
+    {
+      "name": "Авторизация тестового пользователя (/auth/dev — тот же путь, что у Telegram-входа)",
+      "data": null,
+      "at": "2026-07-30T04:00:47.576Z"
+    },
+    {
+      "name": "Пустая корзина",
+      "data": null,
+      "at": "2026-07-30T04:00:47.695Z"
+    },
+    {
+      "name": "Главная — три разрешения",
+      "data": null,
+      "at": "2026-07-30T04:00:52.149Z"
+    },
+    {
+      "name": "Товар №1 — добавление с Главной",
+      "data": null,
+      "at": "2026-07-30T04:00:57.807Z"
+    },
+    {
+      "name": "Товар №2 — добавление из Каталога (+ карточка до/после)",
+      "data": null,
+      "at": "2026-07-30T04:01:00.665Z"
+    },
+    {
+      "name": "Sticky cart bar",
+      "data": null,
+      "at": "2026-07-30T04:01:04.064Z"
+    },
+    {
+      "name": "Товар №3 — добавление из карточки товара",
+      "data": null,
+      "at": "2026-07-30T04:01:05.507Z"
+    },
+    {
+      "name": "Удаление позиции и повторное добавление",
+      "data": null,
+      "at": "2026-07-30T04:01:08.560Z"
+    },
+    {
+      "name": "Корзина: три товара, затем изменение количества",
+      "data": null,
+      "at": "2026-07-30T04:01:08.600Z"
+    },
+    {
+      "name": "Оформление заявки",
+      "data": null,
+      "at": "2026-07-30T04:01:11.749Z"
+    },
+    {
+      "name": "Проверка через API (данные, которые видит менеджер)",
+      "data": null,
+      "at": "2026-07-30T04:01:15.312Z"
+    },
+    {
+      "name": "Повторная отправка с тем же ключом идемпотентности",
+      "data": null,
+      "at": "2026-07-30T04:01:15.347Z"
+    },
+    {
+      "name": "Старые одиночные заявки",
+      "data": null,
+      "at": "2026-07-30T04:01:15.422Z"
+    },
+    {
+      "name": "Дашборд и фильтры",
+      "data": null,
+      "at": "2026-07-30T04:01:15.431Z"
+    },
+    {
+      "name": "Админка: список заявок и открытая заявка корзины",
+      "data": null,
+      "at": "2026-07-30T04:01:15.460Z"
+    },
+    {
+      "name": "Проверка UI на пяти разрешениях",
+      "data": null,
+      "at": "2026-07-30T04:01:22.230Z"
+    },
+    {
+      "name": "Клавиатура на экране оформления",
+      "data": null,
+      "at": "2026-07-30T04:01:46.286Z"
+    },
+    {
+      "name": "Длинные названия товаров",
+      "data": null,
+      "at": "2026-07-30T04:01:48.223Z"
+    }
+  ],
+  "assertions": [
+    {
+      "name": "Тестовый пользователь авторизован",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "Пустая корзина показывает подсказку, а не пустой экран",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "Товар добавлен с Главной",
+      "ok": true,
+      "detail": {
+        "title": "Apple AirPods Max 2024 Midnight"
+      }
+    },
+    {
+      "name": "Найдена карточка без товара в корзине",
+      "ok": true,
+      "detail": {
+        "index": 1
+      }
+    },
+    {
+      "name": "Товар добавлен из Каталога",
+      "ok": true,
+      "detail": {
+        "title": "Apple AirPods Max 2024 Orange"
+      }
+    },
+    {
+      "name": "После добавления карточка показывает степпер",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "Панель корзины отрисована",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "Подписи в панели корзины не обрезаны",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "Открыта карточка третьего товара",
+      "ok": true,
+      "detail": {
+        "hint": "Apple AirPods 4 (2024) с шумуоподавлением"
+      }
+    },
+    {
+      "name": "Товар добавлен из карточки товара",
+      "ok": true,
+      "detail": {
+        "title": "Apple AirPods 4 (2024) с шумуоподавлением"
+      }
+    },
+    {
+      "name": "В корзине три разных товара",
+      "ok": true,
+      "detail": {
+        "positions": 3,
+        "titles": [
+          "Apple AirPods Max 2024 Midnight",
+          "Apple AirPods Max 2024 Orange",
+          "Apple AirPods 4 (2024) с шумуоподавлением"
+        ]
+      }
+    },
+    {
+      "name": "Позиция удалена",
+      "ok": true,
+      "detail": {
+        "positions": 2
+      }
+    },
+    {
+      "name": "Позиция добавлена снова",
+      "ok": true,
+      "detail": {
+        "positions": 3
+      }
+    },
+    {
+      "name": "Количество изменено на сервере",
+      "ok": true,
+      "detail": {
+        "items_count": 4,
+        "quantities": [
+          2,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "name": "Сумма корзины совпадает с суммой позиций",
+      "ok": true,
+      "detail": {
+        "estimated_total": 128700,
+        "computed": 128700
+      }
+    },
+    {
+      "name": "Показан success с номером заявки",
+      "ok": true,
+      "detail": {
+        "text": "✅ Заявка №6 отправлена Менеджер подтвердит наличие, комплектацию и итоговую стоимость. 4 товара · предварительно 128 700"
+      }
+    },
+    {
+      "name": "Тестовый админ-вход выдал токен",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "lead_type = cart",
+      "ok": true,
+      "detail": {
+        "lead_type": "cart"
+      }
+    },
+    {
+      "name": "source = telegram_mini_app_cart",
+      "ok": true,
+      "detail": {
+        "source": "telegram_mini_app_cart"
+      }
+    },
+    {
+      "name": "В заявке три позиции",
+      "ok": true,
+      "detail": {
+        "items": 3
+      }
+    },
+    {
+      "name": "Снапшоты количеств совпадают с корзиной",
+      "ok": true,
+      "detail": {
+        "lead": [
+          2,
+          1,
+          1
+        ],
+        "cart": [
+          2,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "name": "Снапшоты цен совпадают с корзиной",
+      "ok": true,
+      "detail": {
+        "lead": [
+          38100,
+          13900,
+          38600
+        ],
+        "cart": [
+          38100,
+          13900,
+          38600
+        ]
+      }
+    },
+    {
+      "name": "estimated_total = сумма line_total",
+      "ok": true,
+      "detail": {
+        "estimated_total": 128700,
+        "sum": 128700
+      }
+    },
+    {
+      "name": "estimated_total совпадает с суммой корзины до отправки",
+      "ok": true,
+      "detail": {
+        "lead": 128700,
+        "cart": 128700
+      }
+    },
+    {
+      "name": "Персональные данные не попали в аналитику (проверка ниже по БД)",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "Корзина после отправки пуста",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "Первый запрос создал заявку",
+      "ok": true,
+      "detail": {
+        "id": 7
+      }
+    },
+    {
+      "name": "Повтор с тем же ключом НЕ создал дубль",
+      "ok": true,
+      "detail": {
+        "id": 7
+      }
+    },
+    {
+      "name": "Оба ответа указывают на одну заявку",
+      "ok": true,
+      "detail": {
+        "first": 7,
+        "second": 7
+      }
+    },
+    {
+      "name": "Число заявок выросло ровно на одну",
+      "ok": true,
+      "detail": {
+        "before": 6,
+        "after": 7
+      }
+    },
+    {
+      "name": "Одиночная заявка по-прежнему в списке",
+      "ok": true,
+      "detail": {
+        "id": 5,
+        "lead_type": "general"
+      }
+    },
+    {
+      "name": "Деталка одиночной заявки открывается и не содержит позиций",
+      "ok": true,
+      "detail": {
+        "id": 5,
+        "items": 0
+      }
+    },
+    {
+      "name": "Дашборд считает заявки корзины",
+      "ok": true,
+      "detail": {
+        "cart_leads_total": 2
+      }
+    },
+    {
+      "name": "Заявка корзины попадает в фильтр «Новые»",
+      "ok": true,
+      "detail": {
+        "new_count": 3
+      }
+    },
+    {
+      "name": "В списке админки видна заявка типа «Корзина»",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "Заявка корзины открывается в UI админки",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "В модалке видны все три позиции и состав заявки",
+      "ok": true,
+      "detail": {
+        "has": true
+      }
+    },
+    {
+      "name": "Статус изменён через UI админки",
+      "ok": true,
+      "detail": {
+        "status": "confirmed"
+      }
+    },
+    {
+      "name": "История статусов записана",
+      "ok": true,
+      "detail": {
+        "history": [
+          "new->confirmed",
+          "new->confirmed"
+        ]
+      }
+    },
+    {
+      "name": "Состав заявки не изменился после смены статуса",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "overflow-X = 0 · Android 360x800 /",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": 9,
+        "barVisible": true,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 4,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · Android 360x800 /",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · Android 360x800 /",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "панель корзины выше навигации · Android 360x800 /",
+      "ok": true,
+      "detail": {
+        "gap": 9
+      }
+    },
+    {
+      "name": "низ контента достижим · Android 360x800 /",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · Android 360x800 /catalog",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": 9,
+        "barVisible": true,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 2,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · Android 360x800 /catalog",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · Android 360x800 /catalog",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "панель корзины выше навигации · Android 360x800 /catalog",
+      "ok": true,
+      "detail": {
+        "gap": 9
+      }
+    },
+    {
+      "name": "низ контента достижим · Android 360x800 /catalog",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · Android 360x800 /cart",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": null,
+        "barVisible": false,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 2,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · Android 360x800 /cart",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · Android 360x800 /cart",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "низ контента достижим · Android 360x800 /cart",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · iPhone 390x844 /",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": 9,
+        "barVisible": true,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 4,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · iPhone 390x844 /",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · iPhone 390x844 /",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "панель корзины выше навигации · iPhone 390x844 /",
+      "ok": true,
+      "detail": {
+        "gap": 9
+      }
+    },
+    {
+      "name": "низ контента достижим · iPhone 390x844 /",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · iPhone 390x844 /catalog",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": 9,
+        "barVisible": true,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 2,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · iPhone 390x844 /catalog",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · iPhone 390x844 /catalog",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "панель корзины выше навигации · iPhone 390x844 /catalog",
+      "ok": true,
+      "detail": {
+        "gap": 9
+      }
+    },
+    {
+      "name": "низ контента достижим · iPhone 390x844 /catalog",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · iPhone 390x844 /cart",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": null,
+        "barVisible": false,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 2,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · iPhone 390x844 /cart",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · iPhone 390x844 /cart",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "низ контента достижим · iPhone 390x844 /cart",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · iPhone Pro Max 430x932 /",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": 9,
+        "barVisible": true,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 4,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · iPhone Pro Max 430x932 /",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · iPhone Pro Max 430x932 /",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "панель корзины выше навигации · iPhone Pro Max 430x932 /",
+      "ok": true,
+      "detail": {
+        "gap": 9
+      }
+    },
+    {
+      "name": "низ контента достижим · iPhone Pro Max 430x932 /",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · iPhone Pro Max 430x932 /catalog",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": 9,
+        "barVisible": true,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 2,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · iPhone Pro Max 430x932 /catalog",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · iPhone Pro Max 430x932 /catalog",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "панель корзины выше навигации · iPhone Pro Max 430x932 /catalog",
+      "ok": true,
+      "detail": {
+        "gap": 9
+      }
+    },
+    {
+      "name": "низ контента достижим · iPhone Pro Max 430x932 /catalog",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · iPhone Pro Max 430x932 /cart",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": null,
+        "barVisible": false,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 2,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · iPhone Pro Max 430x932 /cart",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · iPhone Pro Max 430x932 /cart",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "низ контента достижим · iPhone Pro Max 430x932 /cart",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · Планшет/окно 900x700 /",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": 9,
+        "barVisible": true,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 4,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · Планшет/окно 900x700 /",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · Планшет/окно 900x700 /",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "панель корзины выше навигации · Планшет/окно 900x700 /",
+      "ok": true,
+      "detail": {
+        "gap": 9
+      }
+    },
+    {
+      "name": "низ контента достижим · Планшет/окно 900x700 /",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · Планшет/окно 900x700 /catalog",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": 9,
+        "barVisible": true,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 2,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · Планшет/окно 900x700 /catalog",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · Планшет/окно 900x700 /catalog",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "панель корзины выше навигации · Планшет/окно 900x700 /catalog",
+      "ok": true,
+      "detail": {
+        "gap": 9
+      }
+    },
+    {
+      "name": "низ контента достижим · Планшет/окно 900x700 /catalog",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · Планшет/окно 900x700 /cart",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": null,
+        "barVisible": false,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 2,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · Планшет/окно 900x700 /cart",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · Планшет/окно 900x700 /cart",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "низ контента достижим · Планшет/окно 900x700 /cart",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · Chrome desktop 1366x768 /",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": -744,
+        "barVisible": true,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 4,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · Chrome desktop 1366x768 /",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · Chrome desktop 1366x768 /",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "низ контента достижим · Chrome desktop 1366x768 /",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · Chrome desktop 1366x768 /catalog",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": -744,
+        "barVisible": true,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 2,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · Chrome desktop 1366x768 /catalog",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · Chrome desktop 1366x768 /catalog",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "низ контента достижим · Chrome desktop 1366x768 /catalog",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "overflow-X = 0 · Chrome desktop 1366x768 /cart",
+      "ok": true,
+      "detail": {
+        "overflowX": 0,
+        "gapBarNav": null,
+        "barVisible": false,
+        "scrollGap": 0,
+        "clippedPrices": 0,
+        "steppers": 2,
+        "clippedPlaceholders": []
+      }
+    },
+    {
+      "name": "цены не обрезаются · Chrome desktop 1366x768 /cart",
+      "ok": true,
+      "detail": {
+        "clipped": 0
+      }
+    },
+    {
+      "name": "подсказки полей не обрезаются · Chrome desktop 1366x768 /cart",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "низ контента достижим · Chrome desktop 1366x768 /cart",
+      "ok": true,
+      "detail": {
+        "gap": 0
+      }
+    },
+    {
+      "name": "При открытой клавиатуре нижняя навигация скрыта",
+      "ok": true,
+      "detail": {
+        "navHidden": true,
+        "barHidden": true,
+        "submitVisible": true,
+        "submitBottom": 1102,
+        "focused": true
+      }
+    },
+    {
+      "name": "При открытой клавиатуре панель корзины скрыта",
+      "ok": true,
+      "detail": {
+        "navHidden": true,
+        "barHidden": true,
+        "submitVisible": true,
+        "submitBottom": 1102,
+        "focused": true
+      }
+    },
+    {
+      "name": "Кнопка отправки остаётся в потоке страницы (не за фиксированной панелью)",
+      "ok": true,
+      "detail": {
+        "navHidden": true,
+        "barHidden": true,
+        "submitVisible": true,
+        "submitBottom": 1102,
+        "focused": true
+      }
+    },
+    {
+      "name": "Длинные названия не выходят за карточку",
+      "ok": true,
+      "detail": {
+        "longestTitleChars": 62,
+        "overflowingTitles": 0,
+        "cardHeights": [
+          329
+        ],
+        "cardCount": 50
+      }
+    },
+    {
+      "name": "Карточки в сетке одной высоты",
+      "ok": true,
+      "detail": {
+        "longestTitleChars": 62,
+        "overflowingTitles": 0,
+        "cardHeights": [
+          329
+        ],
+        "cardCount": 50
+      }
+    }
+  ],
+  "screenshots": [
+    "10-cart-empty-390x844.png",
+    "01-home-390x844.png",
+    "02-home-430x932.png",
+    "03-home-1366x768.png",
+    "04-product-card-before-add.png",
+    "05-product-card-after-add.png",
+    "07-sticky-cart-bar.png",
+    "06-product-details-add-to-cart.png",
+    "08-cart-three-items.png",
+    "09-cart-after-quantity-change.png",
+    "11-checkout.png",
+    "12-checkout-success.png",
+    "13-admin-leads-list.png",
+    "14-admin-cart-lead-detail.png"
+  ],
+  "ui_matrix": [
+    {
+      "viewport": "360x800",
+      "label": "Android",
+      "route": "/",
+      "overflowX": 0,
+      "gapBarNav": 9,
+      "barVisible": true,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 4,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "360x800",
+      "label": "Android",
+      "route": "/catalog",
+      "overflowX": 0,
+      "gapBarNav": 9,
+      "barVisible": true,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 2,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "360x800",
+      "label": "Android",
+      "route": "/cart",
+      "overflowX": 0,
+      "gapBarNav": null,
+      "barVisible": false,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 2,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "390x844",
+      "label": "iPhone",
+      "route": "/",
+      "overflowX": 0,
+      "gapBarNav": 9,
+      "barVisible": true,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 4,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "390x844",
+      "label": "iPhone",
+      "route": "/catalog",
+      "overflowX": 0,
+      "gapBarNav": 9,
+      "barVisible": true,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 2,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "390x844",
+      "label": "iPhone",
+      "route": "/cart",
+      "overflowX": 0,
+      "gapBarNav": null,
+      "barVisible": false,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 2,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "430x932",
+      "label": "iPhone Pro Max",
+      "route": "/",
+      "overflowX": 0,
+      "gapBarNav": 9,
+      "barVisible": true,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 4,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "430x932",
+      "label": "iPhone Pro Max",
+      "route": "/catalog",
+      "overflowX": 0,
+      "gapBarNav": 9,
+      "barVisible": true,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 2,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "430x932",
+      "label": "iPhone Pro Max",
+      "route": "/cart",
+      "overflowX": 0,
+      "gapBarNav": null,
+      "barVisible": false,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 2,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "900x700",
+      "label": "Планшет/окно",
+      "route": "/",
+      "overflowX": 0,
+      "gapBarNav": 9,
+      "barVisible": true,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 4,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "900x700",
+      "label": "Планшет/окно",
+      "route": "/catalog",
+      "overflowX": 0,
+      "gapBarNav": 9,
+      "barVisible": true,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 2,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "900x700",
+      "label": "Планшет/окно",
+      "route": "/cart",
+      "overflowX": 0,
+      "gapBarNav": null,
+      "barVisible": false,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 2,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "1366x768",
+      "label": "Chrome desktop",
+      "route": "/",
+      "overflowX": 0,
+      "gapBarNav": -744,
+      "barVisible": true,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 4,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "1366x768",
+      "label": "Chrome desktop",
+      "route": "/catalog",
+      "overflowX": 0,
+      "gapBarNav": -744,
+      "barVisible": true,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 2,
+      "clippedPlaceholders": []
+    },
+    {
+      "viewport": "1366x768",
+      "label": "Chrome desktop",
+      "route": "/cart",
+      "overflowX": 0,
+      "gapBarNav": null,
+      "barVisible": false,
+      "scrollGap": 0,
+      "clippedPrices": 0,
+      "steppers": 2,
+      "clippedPlaceholders": []
+    }
+  ],
+  "test_entities": {
+    "user_id": 1,
+    "telegram_id": 1,
+    "username": "dev_user"
+  },
+  "cart_before_checkout": {
+    "positions": 3,
+    "items_count": 4,
+    "estimated_total": 128700,
+    "items": [
+      {
+        "product_id": 37,
+        "sku": "APL-APD-MAX-2024-MID",
+        "price": 38100,
+        "quantity": 2
+      },
+      {
+        "product_id": 35,
+        "sku": "APL-APD-4-2024-2",
+        "price": 13900,
+        "quantity": 1
+      },
+      {
+        "product_id": 38,
+        "sku": "APL-APD-MAX-2024-ORG",
+        "price": 38600,
+        "quantity": 1
+      }
+    ]
+  },
+  "lead_id": 6,
+  "lead_snapshot": {
+    "id": 6,
+    "public_number": "№6",
+    "lead_type": "cart",
+    "source": "telegram_mini_app_cart",
+    "status": "new",
+    "items_count": 4,
+    "estimated_total": 128700,
+    "delivery_method": "pickup",
+    "items": [
+      {
+        "product_id": 37,
+        "sku": "APL-APD-MAX-2024-MID",
+        "price": 38100,
+        "quantity": 2,
+        "line_total": 76200
+      },
+      {
+        "product_id": 35,
+        "sku": "APL-APD-4-2024-2",
+        "price": 13900,
+        "quantity": 1,
+        "line_total": 13900
+      },
+      {
+        "product_id": 38,
+        "sku": "APL-APD-MAX-2024-ORG",
+        "price": 38600,
+        "quantity": 1,
+        "line_total": 38600
+      }
+    ]
+  },
+  "idempotency_lead_id": 7,
+  "legacy_lead_id": 5,
+  "keyboard": {
+    "navHidden": true,
+    "barHidden": true,
+    "submitVisible": true,
+    "submitBottom": 1102,
+    "focused": true
+  },
+  "long_titles": {
+    "longestTitleChars": 62,
+    "overflowingTitles": 0,
+    "cardHeights": [
+      329
+    ],
+    "cardCount": 50
+  },
+  "finished_at": "2026-07-30T04:01:50.063Z",
+  "failures": 0,
+  "passed": true
+}

@@ -30,6 +30,19 @@ router = APIRouter(prefix="/favorites", tags=["favorites"])
 MAX_MERGE_IDS = 500
 
 
+def _baseline(product: Product) -> dict:
+    """Отметки «что человек уже видел» на момент добавления в избранное.
+
+    Ставятся СРАЗУ, а не первым сканом: иначе товар, добавленный между сканами,
+    попадёт в скан как новая строка и получит статус «первое знакомство» — то
+    есть отметку с ценой на момент СКАНА. Снижение, случившееся в этом
+    промежутке, было бы потеряно молча.
+    """
+    from app.services.favorite_watch import in_stock_now
+
+    return {"notified_price": float(product.price), "notified_in_stock": in_stock_now(product)}
+
+
 def _favorite_ids(db: Session, user_id: int) -> list[int]:
     return list(
         db.execute(
@@ -73,7 +86,7 @@ def add_favorite(
         )
     ).scalar_one_or_none()
     if exists is None:
-        db.add(ProductFavorite(user_id=user.id, product_id=product_id))
+        db.add(ProductFavorite(user_id=user.id, product_id=product_id, **_baseline(product)))
         try:
             db.commit()
         except IntegrityError:
@@ -118,13 +131,16 @@ def merge_favorites(
                 continue
     if ids:
         existing = set(_favorite_ids(db, user.id))
+        # Товары целиком, а не только id: слитой строке нужна та же отметка
+        # состояния, что и добавленной вручную (см. _baseline).
         valid = db.execute(
-            select(Product.id).where(Product.id.in_(set(ids)))
+            select(Product).where(Product.id.in_(set(ids)))
         ).scalars().all()
         added = False
-        for pid in valid:
-            if pid not in existing:
-                db.add(ProductFavorite(user_id=user.id, product_id=pid))
+        for product in valid:
+            if product.id not in existing:
+                db.add(ProductFavorite(user_id=user.id, product_id=product.id,
+                                       **_baseline(product)))
                 added = True
         if added:
             try:

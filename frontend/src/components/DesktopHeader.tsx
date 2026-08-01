@@ -6,9 +6,12 @@ import { openExternalLink } from "../lib/telegram";
 import { track } from "../lib/analytics";
 import { pushSearchQuery } from "../lib/searchHistory";
 import { ProfileChip } from "./ProfileChip";
+import { CartGlyph } from "./CartBar";
+import { useCart } from "../lib/cart";
 import SearchPanel from "./SearchPanel";
 import { SegmentedToggle } from "./SegmentedToggle";
 import { searchRoute, type SearchMode } from "../lib/searchMode";
+import { preloadRoute } from "../lib/routePreload";
 
 /** Desktop-шапка (>=1024px): логотип, навигация, поиск, действия.
  *  Видна только на lg+ — mobile UX (BottomNav + градиентный header) не трогаем.
@@ -31,6 +34,7 @@ export default function DesktopHeader() {
   const [params, setParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const config = usePublicConfig();
+  const cart = useCart();
   const onCatalog = pathname.startsWith("/catalog");
   const urlQuery = onCatalog ? (params.get("query") ?? "") : "";
   const [q, setQ] = useState(urlQuery);
@@ -66,7 +70,10 @@ export default function DesktopHeader() {
   }, [q, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <header className="hidden border-b border-border bg-surface/95 backdrop-blur-lg lg:block">
+    // relative z-50 держит выпадающую панель поиска выше содержимого <main>.
+    // 50 — ниже модалок (ScenarioSheet/LeadForm тоже z-50, но они в DOM позже
+    // и потому остаются сверху) и ниже toast'ов (z-60).
+    <header className="relative z-50 hidden border-b border-border bg-surface/97 lg:block">
       <div className="mx-auto flex h-16 w-full max-w-[1320px] items-center gap-6 px-8">
         {/* Логотип */}
         <Link to="/" className="flex shrink-0 items-center gap-2.5">
@@ -84,6 +91,8 @@ export default function DesktopHeader() {
               <Link
                 key={item.to}
                 to={item.to}
+                onPointerDown={() => preloadRoute(item.to)}
+                onPointerEnter={() => preloadRoute(item.to)}
                 aria-current={active ? "page" : undefined}
                 className={`rounded-xl px-3.5 py-2 text-sm font-medium transition-colors ${
                   active ? "bg-accent/10 text-accent" : "text-muted hover:bg-mutedbg hover:text-text"
@@ -98,8 +107,14 @@ export default function DesktopHeader() {
         {/* Поиск — живой, с debounce, единственный на desktop. relative — под ним
             компактный popover с историей/сценариями при пустом фокусе; закрытие:
             Escape, клик мимо (blur с contains-проверкой), навигация. */}
+        {/* min-w-[320px] обязателен. С `min-w-0` строка поиска сжималась до
+            88px, и в поле оставалось 56px на текст: подсказка обрывалась на
+            первом слове при любой ширине экрана, потому что контейнер шапки
+            ограничен 1320px, а тумблер «Каталог / AI» внутри строки забирает
+            143px. Минимум держит поле пригодным для ввода, а лишнее ужимается
+            во второстепенных действиях справа. */}
         <div
-          className="relative min-w-0 flex-1"
+          className="relative min-w-[420px] flex-1"
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPanelOpen(false);
           }}
@@ -127,7 +142,7 @@ export default function DesktopHeader() {
                   setPanelOpen(false);
                 }
               }}
-              placeholder={mode === "ai" ? "Опишите, что нужно — подберём" : "Найти iPhone, MacBook, PlayStation…"}
+              placeholder={mode === "ai" ? "Опишите, что нужно" : "Найти iPhone, MacBook…"}
               aria-label={mode === "ai" ? "AI-подбор" : "Поиск по каталогу"}
               aria-expanded={panelOpen && !q.trim()}
               className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-muted"
@@ -168,17 +183,37 @@ export default function DesktopHeader() {
 
         {/* Действия справа */}
         <div className="flex shrink-0 items-center gap-2">
+          {/* Корзина: постоянный вход. Плавающая панель показывается только с
+              непустой корзиной, поэтому без этой кнопки пустой экран корзины на
+              desktop был бы недостижим. */}
           <button
-            onClick={() => navigate("/ai")}
-            className="rounded-xl2 bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accentdark"
+            onClick={() => { track("cart_open", { source: "desktop_header" }); navigate("/cart"); }}
+            aria-label={cart.items_count > 0 ? `Корзина: ${cart.items_count}` : "Корзина"}
+            className="relative flex h-[42px] w-[42px] items-center justify-center rounded-xl2 border border-border bg-surface text-text transition-colors hover:bg-mutedbg"
           >
-            ✨ AI-подбор
+            <CartGlyph className="h-5 w-5" />
+            {cart.items_count > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
+                {cart.items_count}
+              </span>
+            )}
           </button>
           <button
-            onClick={() => { if (!openExternalLink(config.manager_retail_url)) navigate("/ai"); }}
-            className="rounded-xl2 border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text transition-colors hover:bg-mutedbg"
+            onClick={() => navigate("/ai")}
+            title="AI-подбор"
+            className="whitespace-nowrap rounded-xl2 bg-accent px-3.5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accentdark wide:px-4"
           >
-            💬 Менеджер
+            ✨ AI<span className="hidden wide:inline">-подбор</span>
+          </button>
+          {/* До 1440px подпись прячется, остаётся иконка: место нужнее строке
+              поиска, а действие вторичное и продублировано на страницах. */}
+          <button
+            onClick={() => { if (!openExternalLink(config.manager_retail_url)) navigate("/ai"); }}
+            title="Написать менеджеру"
+            aria-label="Написать менеджеру"
+            className="rounded-xl2 border border-border bg-surface px-3 py-2.5 text-sm font-medium text-text transition-colors hover:bg-mutedbg wide:px-4"
+          >
+            💬<span className="hidden wide:ml-1 wide:inline">Менеджер</span>
           </button>
           <ProfileChip user={user} variant="desktop" />
         </div>

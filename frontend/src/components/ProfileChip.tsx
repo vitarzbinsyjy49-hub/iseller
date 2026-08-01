@@ -30,7 +30,7 @@ export function ProfileChip({ user, variant }: { user: User | null; variant: "mo
       onClick={() => navigate("/profile")}
       aria-label={`Профиль: ${name}`}
       title={name}
-      className="tap flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white backdrop-blur"
+      className="tap flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white"
     >
       {init}
     </button>

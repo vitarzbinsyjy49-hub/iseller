@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuthStore } from "../store/auth";
-import { isInsideTelegram, openExternalLink } from "../lib/telegram";
+import {
+  addToHomeScreen,
+  checkHomeScreenStatus,
+  isInsideTelegram,
+  openExternalLink,
+  type HomeScreenStatus,
+} from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
 import { useFavoriteIds } from "../lib/favorites";
 import { ScenarioRequestSheet } from "../components/ScenarioSheet";
@@ -41,6 +47,20 @@ export default function Profile() {
     api<{ leads: unknown[] }>("/leads/my").then((d) => setLeadCount(d.leads.length)).catch(() => setLeadCount(0));
   }, []);
 
+  // Ярлык на домашнем экране (Bot API 8.0). Спрашиваем Telegram, а не гадаем:
+  // на desktop и старых клиентах метода нет, и кнопка, которая ничего не
+  // делает, — худший вид интерфейса. Показываем ТОЛЬКО при «missed».
+  const [homeScreen, setHomeScreen] = useState<HomeScreenStatus>("unsupported");
+  useEffect(() => { checkHomeScreenStatus().then(setHomeScreen); }, []);
+
+  function addShortcut() {
+    track("home_screen_prompted", { from: "profile" });
+    if (!addToHomeScreen()) return;
+    // Telegram не сообщает результат синхронно: диалог показывает он сам.
+    // Перепроверяем состояние — если ярлык встал, предложение исчезнет.
+    setTimeout(() => { checkHomeScreenStatus().then(setHomeScreen); }, 3000);
+  }
+
   const name = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || "Гость";
   const source = isInsideTelegram() ? "Telegram Mini App" : "Веб (dev-режим)";
 
@@ -71,6 +91,29 @@ export default function Profile() {
         </div>
         <span className="rounded-full bg-surface px-3 py-1.5 text-sm font-bold shadow-soft">0 ✨</span>
       </div>
+
+      {/* Ярлык на домашний экран. Появляется только когда Telegram подтвердил,
+          что ярлыка нет и добавить его можно — иначе блока нет вовсе, а не
+          «есть, но неактивен»: неработающая кнопка обесценивает соседние. */}
+      {homeScreen === "missed" && (
+        <div className="pop-in mt-3 flex items-center gap-3 rounded-xl2 bg-surface p-4 shadow-soft">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-xl">
+            📲
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold">Магазин на домашний экран</p>
+            <p className="mt-0.5 text-xs leading-4 text-muted">
+              Открывайте каталог в одно касание, как обычное приложение
+            </p>
+          </div>
+          <button
+            onClick={addShortcut}
+            className="tap shrink-0 rounded-field bg-accent px-3.5 py-2 text-[13px] font-semibold text-white"
+          >
+            Добавить
+          </button>
+        </div>
+      )}
 
       {/* Меню */}
       <div className="mt-3 overflow-hidden rounded-xl2 bg-surface shadow-soft">

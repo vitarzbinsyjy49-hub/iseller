@@ -1,4 +1,7 @@
 /** Типы ответа AI-моста и карточек товаров (Demo MVP). */
+import type { AvailabilityMode } from "../../lib/cartMath";
+
+export type { AvailabilityMode };
 
 export type CardButtonType =
   | "open_product" | "reserve" | "lead" | "manager" | "notify_stock" | "add_to_cart";
@@ -30,6 +33,19 @@ export type ProductCard = {
    *  показывает «Осталось N шт». У обычных позиций малый складской остаток —
    *  не повод изображать дефицит. */
   is_limited?: boolean;
+  /** Режим доступности считает backend (services/availability.py) — фронт его
+   *  только показывает. Второй раз выводить правила из in_stock/is_limited
+   *  нельзя: кнопка «в корзину» и проверка на checkout обязаны совпадать. */
+  availability_mode?: AvailabilityMode;
+  availability_label?: string;
+  availability_note?: string;
+  orderable?: boolean;
+  max_quantity?: number;
+  /** Одна честная строка вроде «Заказывали 5 раз за месяц». Считает backend по
+   *  реальным заявкам и избранному (services/social_proof.py); ниже порога —
+   *  null, и тогда не показываем НИЧЕГО. Придумывать замену на фронте нельзя:
+   *  весь смысл в том, что это посчитано, а не написано. */
+  social_proof?: string | null;
   tags?: string[];
   why: string[];
   buttons: CardButton[];

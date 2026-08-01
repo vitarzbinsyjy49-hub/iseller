@@ -22,10 +22,13 @@ from app.core.uploads import (
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
 from app.models.audit import AuditLog
-from app.models.lead import LEAD_STATUSES, Lead
+from app.models.lead import CART_LEAD_TYPE, LEAD_STATUSES, Lead
 from app.models.product import Product
 from app.models.user import User
 from app.schemas.ai import LeadStatusIn
+from app.services.availability import EXPLICIT_MODES
+from app.services.notification_templates import lead_status_message
+from app.services.notifications import enqueue, notifications_enabled
 
 router = APIRouter(prefix="/admin", tags=["admin-crm"], dependencies=[Depends(get_current_admin)])
 
@@ -51,19 +54,129 @@ def list_leads(
     return {"leads": [l.to_dict() for l in rows]}
 
 
+@router.get("/leads/{lead_id}")
+def lead_detail(lead_id: int, db: Session = Depends(get_db)):
+    """Детали заявки: снапшот позиций + АКТУАЛЬНОЕ состояние тех же товаров.
+
+    Снапшот неизменен — это то, что отправил покупатель. Рядом показываем, что
+    с товаром сейчас (цена выросла, товар скрыли), чтобы менеджер видел разницу
+    и не звонил с устаревшей цифрой. Правки снапшота здесь нет и быть не должно.
+    """
+    lead = db.get(Lead, lead_id)
+    if lead is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
+
+    data = lead.to_dict()
+    ids = [i.product_id for i in (lead.items or []) if i.product_id]
+    # Один запрос на все товары заявки, не по товару на позицию.
+    current = {
+        p.id: p
+        for p in (db.execute(select(Product).where(Product.id.in_(ids))).scalars().all() if ids else [])
+    }
+    for row in data["items"]:
+        product = current.get(row["product_id"])
+        row["current_price"] = float(product.price) if product else None
+        row["current_title"] = product.title if product else None
+        row["product_exists"] = product is not None
+        row["product_active"] = bool(product.is_active) if product else False
+        snap = row.get("price")
+        row["price_diff"] = (
+            round(float(product.price) - float(snap), 2)
+            if product is not None and snap is not None else None
+        )
+    data["status_history"] = _status_history(db, lead_id)
+    return data
+
+
+def _status_history(db: Session, lead_id: int) -> list[dict]:
+    """История смен статуса заявки.
+
+    Отдельной таблицы под неё не заводим: в проекте уже есть журнал действий
+    (audit_logs), и вторая параллельная история разошлась бы с ним. Формат
+    detail фиксирован — «lead=<id>;from=<a>;to=<b>».
+    """
+    rows = db.execute(
+        select(AuditLog)
+        .where(AuditLog.action == "lead_status_changed",
+               AuditLog.detail.like(f"lead={lead_id};%"))
+        .order_by(AuditLog.id.asc())
+    ).scalars().all()
+    history: list[dict] = []
+    for row in rows:
+        parts = dict(
+            piece.split("=", 1)
+            for piece in (row.detail or "").split(";") if "=" in piece
+        )
+        history.append({
+            "from": parts.get("from"),
+            "to": parts.get("to"),
+            "actor": row.actor,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        })
+    return history
+
+
+def _notify_status_change(db: Session, lead: Lead, new_status: str) -> None:
+    """Поставить уведомление автору заявки в очередь (патч 1.1).
+
+    Сети здесь нет и быть не должно: менеджер меняет статус в админке, и этот
+    запрос не имеет права ждать Telegram — тем более падать вместе с ним. Строка
+    уходит в outbox ТОЙ ЖЕ транзакцией, что и сам статус с записью в журнал:
+    статус сменился => уведомление гарантированно поставлено, и наоборот.
+
+    Отправкой займётся сервис `bot` (services/notifications.drain).
+    """
+    if not notifications_enabled():
+        return
+    message = lead_status_message(
+        status=new_status,
+        public_number=lead.public_number,
+        items_count=lead.items_count or 0,
+        estimated_total=float(lead.estimated_total) if lead.estimated_total is not None else None,
+        currency=lead.currency or "RUB",
+        product_title=lead.product_title,
+    )
+    enqueue(
+        db,
+        chat_id=lead.telegram_id,
+        kind="lead_status",
+        message=message,
+        # «Об этом статусе этой заявки мы уже писали». Возврат назад и повторный
+        # перевод в тот же статус второго сообщения не породит — для покупателя
+        # это выглядело бы как сбой, а не как забота.
+        dedupe_key=f"lead:{lead.id}:status:{new_status}",
+    )
+
+
 @router.patch("/leads/{lead_id}")
-def update_lead(lead_id: int, body: LeadStatusIn, db: Session = Depends(get_db)):
+def update_lead(
+    lead_id: int,
+    body: LeadStatusIn,
+    db: Session = Depends(get_db),
+    admin: str = Depends(get_current_admin),
+):
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
     if body.status is not None:
         if body.status not in LEAD_STATUSES:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, f"status must be one of {LEAD_STATUSES}")
+        previous = lead.status
         lead.status = body.status
+        if previous != body.status:
+            # Журналируем ДО commit: смена статуса и её запись — одно изменение.
+            db.add(AuditLog(
+                actor=f"admin:{admin}",
+                action="lead_status_changed",
+                detail=f"lead={lead_id};from={previous};to={body.status}",
+            ))
+            _notify_status_change(db, lead, body.status)
     if body.assigned_to is not None:
         lead.assigned_to = body.assigned_to
     if body.manager_comment is not None:
         lead.manager_comment = body.manager_comment
+    # Состав и цены заявки менеджер не правит: снапшот — то, что отправил
+    # покупатель. Здесь меняются только статус, ответственный и заметка.
     db.commit()
     db.refresh(lead)
     return lead.to_dict()
@@ -79,6 +192,11 @@ def dashboard(db: Session = Depends(get_db)):
     leads_total = db.execute(select(func.count()).select_from(Lead)).scalar_one()
     leads_today = db.execute(
         select(func.count()).select_from(Lead).where(Lead.created_at >= day_start)
+    ).scalar_one()
+    # Заявки корзины живут в той же таблице, поэтому в общий счётчик они попали
+    # сами. Отдельная метрика — чтобы менеджер видел, сколько из них многотоварных.
+    cart_leads_total = db.execute(
+        select(func.count()).select_from(Lead).where(Lead.lead_type == CART_LEAD_TYPE)
     ).scalar_one()
     ai_queries = db.execute(
         select(func.count()).select_from(AnalyticsEvent).where(AnalyticsEvent.event == "ai_query_submitted")
@@ -118,6 +236,7 @@ def dashboard(db: Session = Depends(get_db)):
         "users_total": users_total,
         "leads_total": leads_total,
         "leads_today": leads_today,
+        "cart_leads_total": cart_leads_total,
         "ai_queries": ai_queries,
         "app_opens": app_opens,
         "conversion_pct": conversion,
@@ -235,6 +354,7 @@ _PRODUCT_EDITABLE = (
     "sku", "title", "brand", "category", "subcategory", "price", "old_price", "stock", "in_stock",
     "is_active", "is_hot", "is_available_today", "is_new", "on_sale",
     "is_limited",   # v5.5.0: показывать «Осталось N шт» на витрине
+    "availability_mode",  # Cart: пусто = вывести из in_stock/is_limited
     "warranty_months", "condition", "color", "memory", "storage", "screen_size", "cpu", "ram",
     "description", "specs", "tags", "image", "images", "url",
     "rating", "popularity", "margin_pct",
@@ -259,6 +379,12 @@ def _apply_product_fields(product: Product, body: dict) -> None:
     # in_stock авто-согласуем со stock, если пришёл только stock
     if "stock" in body and "in_stock" not in body:
         product.in_stock = int(body["stock"] or 0) > 0
+    # Режим доступности: пустая строка из формы = «выводить из флагов» (NULL),
+    # неизвестное значение не сохраняем — иначе товар получил бы режим, которого
+    # резолвер не знает, и молча вёл бы себя как «под заказ».
+    if "availability_mode" in body:
+        raw = (body.get("availability_mode") or "").strip().lower()
+        product.availability_mode = raw if raw in EXPLICIT_MODES else None
 
 
 @router.post("/products", status_code=status.HTTP_201_CREATED)

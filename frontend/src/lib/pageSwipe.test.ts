@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   SWIPE_TABS,
   classifyPageSwipe,
-  enterAnimationFor,
   resolveSwipeNav,
   tabIndexOf,
 } from "./pageSwipe";
@@ -75,9 +74,8 @@ describe("classifyPageSwipe", () => {
   });
 });
 
-describe("enterAnimationFor", () => {
-  it("следующая страница въезжает с той стороны, откуда её «тянут»", () => {
-    expect(enterAnimationFor("left")).toBe("from-right");
-    expect(enterAnimationFor("right")).toBe("from-left");
-  });
-});
+// Тест enterAnimationFor удалён вместе с самой функцией: направленная анимация
+// въезда ушла, когда <main> перестал пересоздаваться между маршрутами (сдвиг
+// потребовал бы transform, ломающий position: fixed внутри страниц — см.
+// Layout.tsx). Зелёный тест на функцию, которую никто не вызывает, охраняет
+// не поведение, а собственное существование.

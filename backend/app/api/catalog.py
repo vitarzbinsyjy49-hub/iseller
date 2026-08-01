@@ -25,7 +25,9 @@ from app.services.image_groups import (
     resolve_product_images,
 )
 from app.services.catalog_nav import list_categories
+from app.services.ranking import default_order
 from app.services.recommendations import recently_viewed, recommend
+from app.services.social_proof import apply_social_proof
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -102,7 +104,7 @@ def search_products(db: Session, query: str, price_max: float | None = None, lim
         ))
     if price_max:
         stmt = stmt.where(Product.price <= price_max)
-    stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc())
+    stmt = stmt.order_by(*default_order(db))
     products = list(db.execute(stmt).scalars().all())
     return _photo_last(db, products)[:limit]
 
@@ -183,16 +185,20 @@ def list_catalog(
                 func.cast(Product.tags, Text).ilike(like),
             ))
 
+    # Порядок по умолчанию — см. services/ranking: спрос, потом приор из плиток.
+    # Явные сортировки тоже дополняем им, иначе внутри равных значений (а цена и
+    # рейтинг совпадают у десятков вариантов одной модели) порядок произволен.
+    fallback = default_order(db)
     if sort == "price_asc":
-        stmt = stmt.order_by(Product.price.asc())
+        stmt = stmt.order_by(Product.price.asc(), *fallback)
     elif sort == "price_desc":
-        stmt = stmt.order_by(Product.price.desc())
+        stmt = stmt.order_by(Product.price.desc(), *fallback)
     elif sort == "rating":
-        stmt = stmt.order_by(Product.rating.desc())
+        stmt = stmt.order_by(Product.rating.desc(), *fallback)
     elif sort == "hot":
-        stmt = stmt.order_by(Product.is_hot.desc(), Product.popularity.desc())
+        stmt = stmt.order_by(Product.is_hot.desc(), *fallback)
     else:
-        stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc())
+        stmt = stmt.order_by(*fallback)
 
     products = list(db.execute(stmt).scalars().all())
     # Товары без реального фото — в конец выдачи (не пропадают из каталога),
@@ -200,6 +206,7 @@ def list_catalog(
     products = _photo_last(db, products)[:limit]
     cards = [p.to_card() for p in products]
     apply_group_images(db, products, cards)
+    apply_social_proof(db, products, cards)
     return {"cards": cards}
 
 
@@ -228,12 +235,13 @@ def feed(db: Session = Depends(get_db)):
         return db.execute(stmt.limit(n)).scalars().all()
 
     base = select(Product).where(Product.is_active.is_(True))
-    hot_raw = rows(base.where(Product.is_hot.is_(True)).order_by(Product.popularity.desc()))
+    order = default_order(db)          # см. services/ranking
+    hot_raw = rows(base.where(Product.is_hot.is_(True)).order_by(*order))
     today_raw = rows(base.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
-                     .order_by(Product.popularity.desc()))
+                     .order_by(*order))
     new_raw = rows(base.where(Product.is_new.is_(True)).order_by(Product.id.desc()))
     recent_raw = rows(base.order_by(Product.id.desc()), n=64)
-    pool_raw = rows(base.order_by(Product.in_stock.desc(), Product.popularity.desc()), n=96)
+    pool_raw = rows(base.order_by(*order), n=96)
 
     all_candidates = list({p.id: p for p in (*hot_raw, *today_raw, *new_raw, *recent_raw, *pool_raw)}.values())
     resolved = resolve_product_images(db, all_candidates)
@@ -316,4 +324,5 @@ def product_details(product_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
     detail = product.to_detail()
     apply_group_images(db, [product], [detail])
+    apply_social_proof(db, [product], [detail])
     return detail

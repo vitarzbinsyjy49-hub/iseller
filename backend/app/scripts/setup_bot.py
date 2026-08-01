@@ -4,10 +4,17 @@
 
     docker compose -f docker-compose.prod.yml exec -T backend python -m app.scripts.setup_bot
 
-Делает три вещи, все идемпотентные — повторный запуск безопасен:
+Делает две вещи, обе идемпотентные — повторный запуск безопасен:
   1. setMyCommands       — меню команд в клиенте Telegram;
-  2. setChatMenuButton   — кнопка «Открыть магазин» рядом с полем ввода;
-  3. setWebhook          — куда Telegram шлёт апдейты, вместе с secret_token.
+  2. setChatMenuButton   — кнопка «Открыть магазин» рядом с полем ввода.
+
+Вебхук ставится ТОЛЬКО по явному флагу `--webhook`, и это не педантизм.
+Транспорт бота на проде — long polling (сеть хостинга режет входящие от
+Telegram, см. bot_polling.py). Вебхук и getUpdates взаимоисключающи: как только
+вебхук установлен, polling начинает получать 409 Conflict и бот замолкает —
+до перезапуска контейнера, который снимает вебхук на старте. То есть невинная
+на вид «донастройка команд» глушила бота, и связь между причиной и следствием
+не видна ни в одном сообщении об ошибке.
 
 `--dry-run` печатает, что будет отправлено, и ничего не меняет.
 
@@ -66,15 +73,20 @@ def webhook_url() -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Настроить Telegram-бота")
     parser.add_argument("--dry-run", action="store_true", help="только показать, ничего не менять")
+    parser.add_argument(
+        "--webhook", action="store_true",
+        help="ТАКЖЕ поставить вебхук. ВНИМАНИЕ: заглушает long polling (409 Conflict) "
+             "до перезапуска сервиса bot. Нужен, только если переходите на вебхук.",
+    )
     args = parser.parse_args()
 
-    missing = [
-        name for name, value in (
-            ("TELEGRAM_BOT_TOKEN", settings.TELEGRAM_BOT_TOKEN),
-            ("TELEGRAM_WEBHOOK_SECRET", settings.TELEGRAM_WEBHOOK_SECRET),
-            ("MINI_APP_URL", settings.MINI_APP_URL),
-        ) if not (value or "").strip()
+    required = [
+        ("TELEGRAM_BOT_TOKEN", settings.TELEGRAM_BOT_TOKEN),
+        ("MINI_APP_URL", settings.MINI_APP_URL),
     ]
+    if args.webhook:
+        required.append(("TELEGRAM_WEBHOOK_SECRET", settings.TELEGRAM_WEBHOOK_SECRET))
+    missing = [name for name, value in required if not (value or "").strip()]
     if missing:
         print("Не заданы обязательные переменные: " + ", ".join(missing), file=sys.stderr)
         return 1
@@ -104,6 +116,11 @@ def main() -> int:
     }, dry_run=args.dry_run)
     print(f"✓ setChatMenuButton: «{MENU_BUTTON_TEXT}» -> {settings.MINI_APP_URL}")
 
+    if not args.webhook:
+        print("• setWebhook пропущен: транспорт бота — long polling. "
+              "Нужен вебхук — запустите с --webhook и перезапустите сервис bot.")
+        return 0
+
     _call("setWebhook", {
         "url": webhook_url(),
         "secret_token": settings.TELEGRAM_WEBHOOK_SECRET,
@@ -113,6 +130,8 @@ def main() -> int:
         "max_connections": 40,
     }, dry_run=args.dry_run)
     print(f"✓ setWebhook: {webhook_url()}")
+    print("! long polling теперь получает 409 Conflict. Либо остановите сервис bot, "
+          "либо снимите вебхук (перезапуск bot делает это автоматически).")
 
     if not args.dry_run:
         info = httpx.get(

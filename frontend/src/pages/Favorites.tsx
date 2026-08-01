@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard, { ProductImage } from "../components/ProductCard";
-import LeadForm from "../components/LeadForm";
 import { ErrorState } from "../components/StateViews";
 import { useFavoriteIds } from "../lib/favorites";
 import { track } from "../lib/analytics";
@@ -15,7 +14,6 @@ export default function Favorites() {
   const favIds = useFavoriteIds();
   const [cards, setCards] = useState<TCard[] | null>(null);
   const [error, setError] = useState(false);
-  const [lead, setLead] = useState<TCard | null>(null);
 
   const load = useCallback(() => {
     setCards(null);
@@ -58,15 +56,8 @@ export default function Favorites() {
         />
       ) : (
         <div className="stagger mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
-          {visible.map((c) => <ProductCard key={c.id} card={c} onLead={setLead} />)}
+          {visible.map((c) => <ProductCard key={c.id} card={c} />)}
         </div>
-      )}
-
-      {lead && (
-        <LeadForm
-          productId={lead.id} productTitle={lead.title} productPrice={lead.price}
-          source="favorites" onClose={() => setLead(null)}
-        />
       )}
     </div>
   );

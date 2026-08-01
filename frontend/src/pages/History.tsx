@@ -4,7 +4,6 @@ import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
-import LeadForm from "../components/LeadForm";
 import { ErrorState } from "../components/StateViews";
 
 /** История просмотров (/history): существующий /catalog/recently-viewed,
@@ -14,7 +13,6 @@ export default function History() {
   const navigate = useNavigate();
   const [cards, setCards] = useState<TCard[] | null>(null);
   const [error, setError] = useState(false);
-  const [lead, setLead] = useState<TCard | null>(null);
 
   const load = useCallback(() => {
     setCards(null);
@@ -73,15 +71,8 @@ export default function History() {
         </div>
       ) : (
         <div className="stagger mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 wide:grid-cols-5">
-          {cards.map((c) => <ProductCard key={c.id} card={c} onLead={setLead} />)}
+          {cards.map((c) => <ProductCard key={c.id} card={c} />)}
         </div>
-      )}
-
-      {lead && (
-        <LeadForm
-          productId={lead.id} productTitle={lead.title} productPrice={lead.price}
-          source="catalog" onClose={() => setLead(null)}
-        />
       )}
     </div>
   );

@@ -1,20 +1,26 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { lazy, Suspense, type ReactNode, useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import { api } from "./lib/api";
 import { getTelegram, isInsideTelegram, initTelegramUi } from "./lib/telegram";
 import { hydrateFavorites } from "./lib/favorites";
+import { hydrateCart } from "./lib/cart";
 import { useAuthStore, User } from "./store/auth";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Toaster from "./components/Toaster";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
-import Catalog from "./pages/Catalog";
-import ProductDetails from "./pages/ProductDetails";
-import AiSearch from "./pages/AiSearch";
-import Requests from "./pages/Requests";
-import Profile from "./pages/Profile";
-import Favorites from "./pages/Favorites";
-import History from "./pages/History";
+import { routeLoaders } from "./lib/routePreload";
+
+// Главная остаётся в стартовом chunk: это первый экран почти каждого запуска.
+// Остальные страницы загружаются по намерению пользователя/при навигации.
+const Catalog = lazy(routeLoaders.catalog);
+const ProductDetails = lazy(routeLoaders.product);
+const AiSearch = lazy(routeLoaders.ai);
+const Requests = lazy(routeLoaders.requests);
+const Profile = lazy(routeLoaders.profile);
+const Favorites = lazy(routeLoaders.favorites);
+const History = lazy(routeLoaders.history);
+const Cart = lazy(routeLoaders.cart);
 
 export default function App() {
   const { setTokens, setUser } = useAuthStore();
@@ -40,6 +46,9 @@ export default function App() {
         // Избранное: сливаем локальное (гость/до входа) с серверным и берём
         // серверный список. Не блокируем готовность экрана — фоном.
         void hydrateFavorites();
+        // Корзина: локальный кэш уже отрисован, здесь берём серверное состояние
+        // как истину — цены и наличие могли измениться между визитами.
+        void hydrateCart();
         setStatus("ready");
       } catch (e) {
         setErrorText(e instanceof Error ? e.message : "Неизвестная ошибка");
@@ -64,18 +73,39 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
-          <Route path="/catalog" element={<Catalog />} />
-          <Route path="/product/:id" element={<ProductDetails />} />
-          <Route path="/ai" element={<AiSearch />} />
-          <Route path="/requests" element={<Requests />} />
-          <Route path="/favorites" element={<Favorites />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/catalog" element={<DeferredPage><Catalog /></DeferredPage>} />
+          <Route path="/product/:id" element={<DeferredPage><ProductDetails /></DeferredPage>} />
+          <Route path="/ai" element={<DeferredPage><AiSearch /></DeferredPage>} />
+          <Route path="/requests" element={<DeferredPage><Requests /></DeferredPage>} />
+          <Route path="/cart" element={<DeferredPage><Cart /></DeferredPage>} />
+          <Route path="/favorites" element={<DeferredPage><Favorites /></DeferredPage>} />
+          <Route path="/history" element={<DeferredPage><History /></DeferredPage>} />
+          <Route path="/profile" element={<DeferredPage><Profile /></DeferredPage>} />
           <Route path="*" element={<Home />} />
         </Route>
       </Routes>
       <Toaster />
     </ErrorBoundary>
+  );
+}
+
+function DeferredPage({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      {children}
+    </Suspense>
+  );
+}
+
+/** Стабильная геометрия вместо полноэкранного спиннера: навигация остаётся на месте. */
+function RouteFallback() {
+  return (
+    <div className="fade-in mx-auto max-w-md lg:max-w-none" aria-label="Загрузка страницы" aria-busy="true">
+      <div className="skeleton h-7 w-36 rounded-lg" />
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-64 rounded-xl2" />)}
+      </div>
+    </div>
   );
 }
 
