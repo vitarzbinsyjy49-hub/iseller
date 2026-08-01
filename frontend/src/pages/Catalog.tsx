@@ -59,7 +59,12 @@ export default function Catalog() {
   const [brand, setBrand] = useState(params.get("brand") ?? "");
   const [brands, setBrands] = useState<string[]>([]);
   // Категории — из каталога, с мгновенным стартом из кэша прошлого ответа.
-  const [cats, setCats] = useState<NavCategory[]>(() => loadCachedCategories());
+  // Кэш ГЛОБАЛЬНЫЙ, поэтому при входе с брендом им пользоваться нельзя: иначе
+  // на витрине Dyson на мгновение появился бы ряд всего магазина со
+  // «смартфонами» — ровно то, что мы убираем.
+  const [cats, setCats] = useState<NavCategory[]>(
+    () => (params.get("brand") ? [] : loadCachedCategories()),
+  );
   const tabs = [ALL_TAB, ...cats.map((c) => ({ key: c.key, label: c.label }))];
   const [onlyStock, setOnlyStock] = useState(params.get("in_stock") === "1");
   const [onlyToday, setOnlyToday] = useState(params.get("today") === "1");
@@ -74,10 +79,22 @@ export default function Catalog() {
   useEffect(() => { track("catalog_opened", { category }); }, []);
   useEffect(() => {
     api<{ brands: string[] }>("/catalog/brands").then((d) => setBrands(d.brands)).catch(() => {});
-    api<{ categories: NavCategory[] }>("/catalog/categories")
-      .then((d) => { setCats(sanitizeCategories(d.categories)); saveCachedCategories(d.categories); })
-      .catch(() => {});
   }, []);
+
+  // Ряд категорий описывает то, что человек сейчас смотрит: с выбранным брендом
+  // это категории ВНУТРИ бренда. Раньше ряд был глобальным, и тап по
+  // «смартфонам» на витрине Dyson давал brand=Dyson&category=смартфоны — пустой
+  // экран в один тап. В кэш кладём только глобальный ответ: брендовый там
+  // означал бы, что следующий вход в каталог начнётся с чужого набора.
+  useEffect(() => {
+    const qs = brand ? `?brand=${encodeURIComponent(brand)}` : "";
+    api<{ categories: NavCategory[] }>(`/catalog/categories${qs}`)
+      .then((d) => {
+        setCats(sanitizeCategories(d.categories));
+        if (!brand) saveCachedCategories(d.categories);
+      })
+      .catch(() => {});
+  }, [brand]);
 
   // Подхватить внешнее изменение URL (переход из шапки/баннера/подсказки на главной).
   useEffect(() => { setQ(urlQuery); }, [urlQuery]);
@@ -136,6 +153,28 @@ export default function Catalog() {
     setParams(next);
   }
 
+  /** Выбрать или снять бренд.
+   *
+   *  Бренд живёт в URL, а не только в стейте: витрина бренда — это адрес,
+   *  которым делятся и на который ведут плитки главной.
+   *
+   *  Смена бренда СБРАСЫВАЕТ категорию: у другого бренда другой ассортимент, и
+   *  «красота» от Dyson у Apple не существует — сохранённая категория дала бы
+   *  пустой экран. Снятие бренда категорию оставляет: это расширение выборки,
+   *  и раздел, в котором человек стоит, существует и без бренда.
+   */
+  function pickBrand(value: string) {
+    setBrand(value);
+    const next = new URLSearchParams(params);
+    if (value) {
+      next.set("brand", value);
+      if (value !== brand) { next.delete("category"); setCategory(""); }
+    } else {
+      next.delete("brand");
+    }
+    setParams(next);
+  }
+
   // Рамка есть у обоих состояний (у активного — в цвет фона), поэтому высота
   // одинаковая. На mobile рамка неактивного прозрачна — вид не меняется.
   const chip = (active: boolean) =>
@@ -144,7 +183,12 @@ export default function Catalog() {
     }`;
 
   // Заголовок раздела и счётчик — из фактического ответа API, без хардкода.
-  const sectionTitle = category ? tabs.find((c) => c.key === category)?.label ?? "Каталог" : "Каталог";
+  // Заголовок называет то, что человек видит. С брендом это витрина бренда
+  // («Dyson», «Dyson · Красота»), иначе — раздел каталога.
+  const categoryLabel = category ? tabs.find((c) => c.key === category)?.label : undefined;
+  const sectionTitle = brand
+    ? [brand, categoryLabel].filter(Boolean).join(" · ")
+    : categoryLabel ?? "Каталог";
   const total = cards?.length ?? null;
   const countLabel =
     total === null
@@ -156,7 +200,7 @@ export default function Catalog() {
       {/* Mobile: прежний заголовок над фильтрами. На desktop заголовок раздела
           живёт в колонке контента (см. title row ниже) — так он выровнен с
           toolbar и сеткой, а не растянут поверх всей ширины включая sidebar. */}
-      <h1 className="text-2xl font-bold lg:hidden">Каталог</h1>
+      <h1 className="text-2xl font-bold lg:hidden">{sectionTitle}</h1>
 
       {/* Desktop: сетка [sidebar фильтров | контент]; sidebar сворачивается.
           lg:mt-0 — отступ от шапки задаёт padding-top у <main> (lg:pt-6 = 24px),
@@ -165,7 +209,7 @@ export default function Catalog() {
         {sidebarOpen && (
           <FilterSidebar
             category={category} onCategory={pickCategory} tabs={tabs}
-            brands={brands} brand={brand} onBrand={setBrand}
+            brands={brands} brand={brand} onBrand={pickBrand}
             priceMax={priceMax} onPriceMax={setPriceMax}
             onlyStock={onlyStock} onOnlyStock={setOnlyStock}
             onlyToday={onlyToday} onOnlyToday={setOnlyToday}
@@ -265,7 +309,24 @@ export default function Catalog() {
           </div>
         )}
 
-        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
+        {/* Чип бренда стоит ПЕРЕД рядом категорий и снимается одним тапом.
+            Без него сужение выдачи выглядит как поломка каталога: товаров мало,
+            причина не названа, выхода не видно. Ряд справа — категории этого же
+            бренда, поэтому пустых пересечений в один тап больше нет. */}
+        <div className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
+          {brand && (
+            <button
+              onClick={() => pickBrand("")}
+              aria-label={`Показать весь каталог, убрать бренд ${brand}`}
+              className="tap flex shrink-0 items-center gap-1.5 rounded-full border border-accent bg-accent px-3.5 py-2 text-xs font-semibold text-white"
+            >
+              {brand}
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor"
+                strokeWidth="2.6" strokeLinecap="round" aria-hidden>
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+          )}
           {tabs.map((c) => (
             <button key={c.key} onClick={() => pickCategory(c.key)} className={chip(category === c.key)}>
               {c.label}
@@ -282,7 +343,7 @@ export default function Catalog() {
           <button onClick={() => setOnlyStock(!onlyStock)} className={chip(onlyStock)}>В наличии</button>
           <button onClick={() => setOnlyToday(!onlyToday)} className={chip(onlyToday)}>Забрать сегодня</button>
           <select
-            value={brand} onChange={(e) => setBrand(e.target.value)}
+            value={brand} onChange={(e) => pickBrand(e.target.value)}
             className="tap shrink-0 appearance-none rounded-full bg-surface px-3.5 py-2 text-xs font-medium shadow-soft outline-none"
           >
             <option value="">Бренд</option>

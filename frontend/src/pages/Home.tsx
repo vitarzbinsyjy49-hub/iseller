@@ -18,7 +18,7 @@ import { actionRoute, safeExternalUrl, safeInternalRoute } from "../lib/route";
 import { loadCachedCategories, saveCachedCategories } from "../lib/categoryCache";
 import { SegmentedToggle } from "../components/SegmentedToggle";
 import { navTiles, type NavAxis, type NavChip } from "../lib/navTiles";
-import { searchRoute, type SearchMode } from "../lib/searchMode";
+import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
 import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
@@ -136,9 +136,6 @@ export default function Home() {
   // при вводе (live-результаты). Содержимое — SearchPanel; debounce и отмена
   // запросов (AbortController) — в lib/liveSearch.
   const [searchOpen, setSearchOpen] = useState(false);
-  // Режим строки поиска. Между визитами не сохраняется: по умолчанию всегда
-  // каталог, AI — осознанное переключение.
-  const [searchMode, setSearchMode] = useState<SearchMode>("catalog");
   // v5.2.6: персональные секции («Для вас», «Недавно смотрели»)
   const [recs, setRecs] = useState<TCard[] | null>(null);
   const [recsMode, setRecsMode] = useState<string>("cold");
@@ -178,11 +175,21 @@ export default function Home() {
     const q = search.trim();
     if (q) {
       pushSearchQuery(q);
-      track("search_query_submitted", {
-        query_length: q.length, source: "home_enter", mode: searchMode,
-      });
+      track("search_query_submitted", { query_length: q.length, source: "home_enter" });
     }
-    navigate(searchRoute(searchMode, search));
+    navigate(catalogSearchRoute(search));
+  }
+
+  /** Кнопка AI в строке поиска: сразу открывает экран, забирая набранный текст.
+   *
+   *  Именно ОТКРЫВАЕТ, а не переключает режим. Прежний тумблер только менял
+   *  состояние строки, и человек, нажавший «AI», не получал ничего до Enter —
+   *  выглядело это как неработающая кнопка. */
+  function goAi() {
+    const q = search.trim();
+    if (q) pushSearchQuery(q);
+    track("search_ai_escalated", { query_length: q.length, source: "home_button" });
+    navigate(aiSearchRoute(search));
   }
 
   /** Навигация из поисковой панели: сохранить осмысленный запрос в историю и уйти. */
@@ -267,7 +274,10 @@ export default function Home() {
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSearchOpen(false);
           }}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-card bg-white px-4 text-text shadow-[0_4px_14px_-6px_rgba(9,23,41,0.28)]">
+          {/* Одно поле во всю ширину, кнопка AI — внутри у правого края и
+              заметно меньше поля. Раньше рядом стоял тумблер «Каталог / AI»:
+              он отъедал ширину у подсказки и, главное, ничего не открывал. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-card bg-white py-1.5 pl-4 pr-1.5 text-text shadow-[0_4px_14px_-6px_rgba(9,23,41,0.28)]">
             <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
             </svg>
@@ -287,10 +297,10 @@ export default function Home() {
               // iPhone, MacBook, AirPods…» (239px) обрывались на середине слова
               // — обрезанная подсказка хуже короткой. Что продаёт магазин,
               // говорит ряд категорий строкой ниже.
-              placeholder={searchMode === "ai" ? "Опишите задачу" : "Найти технику"}
-              aria-label={searchMode === "ai" ? "AI-подбор" : "Поиск по каталогу"}
+              placeholder="Найти технику"
+              aria-label="Поиск по каталогу"
               aria-expanded={searchOpen || search.trim().length >= 2}
-              className="h-12 min-w-0 flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-muted"
+              className="h-9 min-w-0 flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-muted"
             />
             {/* Кнопка очистки — только когда есть текст. Иконка сканера убрана до
                 реализации сценария «наведи камеру → AI определил модель». */}
@@ -305,23 +315,19 @@ export default function Home() {
                 </svg>
               </button>
             )}
+            {/* Вход в AI. Кнопка внутри поля и меньше него: она подчинена
+                строке, а не спорит с ней за место. Знака Claude здесь нет
+                намеренно — движок бывает и не Claude, а бейдж об этом
+                утверждает; он живёт на самом экране AI, где сверен с ai_vendor. */}
+            <button
+              onClick={goAi}
+              aria-label={search.trim() ? `Спросить AI: ${search.trim()}` : "Открыть AI-подбор"}
+              className="tap flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 text-[13px] font-semibold text-white"
+            >
+              <span aria-hidden>✨</span>
+              ИИ
+            </button>
           </div>
-          {/* Тумблер режима вместо прежней кнопки «✨ AI»: та уводила в чат
-              без запроса, тумблер делает то же самое и вдобавок переносит уже
-              введённый текст — держать оба смысла нет. */}
-          <SegmentedToggle
-            value={searchMode}
-            onChange={(next) => {
-              setSearchMode(next);
-              track("search_mode_switched", { mode: next, source: "home" });
-            }}
-            options={[
-              { value: "catalog", label: "Каталог" },
-              { value: "ai", label: "✨ AI" },
-            ] as const}
-            ariaLabel="Режим поиска"
-            variant="on-dark"
-          />
 
           {/* Умная поисковая панель: по фокусу — история/чипы/недавние/AI,
               при вводе — live-результаты (debounce + AbortController внутри).

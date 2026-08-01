@@ -61,15 +61,28 @@ def category_icon(raw: str) -> str:
     return CATEGORY_ICONS.get((raw or "").strip().lower(), FALLBACK_ICON)
 
 
-def category_counts(db: Session) -> dict[str, int]:
+def category_counts(db: Session, brand: str | None = None) -> dict[str, int]:
     """{категория: сколько активных товаров}. Пустые категории не возвращаются —
-    их не существует по определению (счётчик берётся из самих товаров)."""
-    rows = db.execute(
+    их не существует по определению (счётчик берётся из самих товаров).
+
+    ``brand`` сужает разрез до одного бренда: у Dyson это «красота» и «бытовая
+    техника», и «смартфонов» в таком ответе нет вовсе. Это не косметика —
+    каталог, открытый по бренду, показывал ГЛОБАЛЬНЫЙ ряд категорий, и тап по
+    «смартфонам» давал brand=Dyson&category=смартфоны, то есть пустой экран.
+    Пересечение, которого не существует, не должно быть достижимо в один тап.
+    """
+    stmt = (
         select(Product.category, func.count())
         .where(Product.is_active.is_(True),
                Product.category.is_not(None), Product.category != "")
         .group_by(Product.category)
-    ).all()
+    )
+    if brand:
+        # Точное равенство — тот же способ сравнения, что у фильтра `?brand=`
+        # в /catalog/list. Сравнивай мы иначе (например, без регистра), ряд
+        # категорий показывал бы не то, что потом вернёт сам каталог.
+        stmt = stmt.where(Product.brand == brand)
+    rows = db.execute(stmt).all()
     return {c: n for c, n in rows if n}
 
 
@@ -85,25 +98,34 @@ def brand_counts(db: Session) -> dict[str, int]:
     return {b: n for b, n in rows if n}
 
 
-def sale_count(db: Session) -> int:
-    return db.execute(
+def sale_count(db: Session, brand: str | None = None) -> int:
+    stmt = (
         select(func.count()).select_from(Product)
         .where(Product.is_active.is_(True), Product.on_sale.is_(True))
-    ).scalar_one()
+    )
+    if brand:
+        stmt = stmt.where(Product.brand == brand)
+    return db.execute(stmt).scalar_one()
 
 
-def list_categories(db: Session) -> list[dict]:
+def list_categories(db: Session, brand: str | None = None) -> list[dict]:
     """Категории для навигации: только непустые, крупные первыми.
 
     Порядок детерминированный (количество убыв., затем имя) — иначе плитки
     прыгали бы между запросами при равных счётчиках.
+
+    С ``brand`` это категории ВНУТРИ бренда. Счётчики тоже брендовые: «красота
+    32» рядом с брендом обязана означать 32 товара этого бренда, иначе цифра
+    противоречит списку, который откроется по тапу. Незнакомый бренд даёт
+    пустой список — это честный ответ «такого бренда у нас нет», а не повод
+    показать весь магазин.
     """
-    counts = category_counts(db)
+    counts = category_counts(db, brand=brand)
     out = [
         {"key": key, "label": category_label(key), "icon": category_icon(key), "count": n}
         for key, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
     ]
-    sale = sale_count(db)
+    sale = sale_count(db, brand=brand)
     if sale:
         out.append({"key": SALE_KEY, "label": SALE_LABEL, "icon": SALE_ICON, "count": sale})
     return out

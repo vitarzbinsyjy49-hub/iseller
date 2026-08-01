@@ -9,8 +9,7 @@ import { ProfileChip } from "./ProfileChip";
 import { CartGlyph } from "./CartBar";
 import { useCart } from "../lib/cart";
 import SearchPanel from "./SearchPanel";
-import { SegmentedToggle } from "./SegmentedToggle";
-import { searchRoute, type SearchMode } from "../lib/searchMode";
+import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
 import { preloadRoute } from "../lib/routePreload";
 
 /** Desktop-шапка (>=1024px): логотип, навигация, поиск, действия.
@@ -41,8 +40,6 @@ export default function DesktopHeader() {
   // Компактный popover при фокусе с пустым запросом: история + быстрые сценарии
   // + «Спросить AI». Live-результаты на desktop рисует сам каталог (как раньше).
   const [panelOpen, setPanelOpen] = useState(false);
-  // Режим строки поиска: каталог или AI-подбор. Не сохраняется между визитами.
-  const [mode, setMode] = useState<SearchMode>("catalog");
 
   // Подхватить внешний query (переход на каталог с другим query) или сброс
   // при уходе со страницы каталога — шапка не должна хранить «чужой» текст.
@@ -50,11 +47,11 @@ export default function DesktopHeader() {
 
   // Live-поиск с debounce 250ms — единственная точка входа в поиск на desktop.
   //
-  // В режиме AI живой поиск выключен: он свойство каталожного режима. Иначе
-  // набранный запрос уезжал бы в /catalog через 250мс после ввода — раньше,
-  // чем пользователь нажмёт Enter, и до AI-подбора было бы не добраться.
+  // Раньше здесь стояла проверка режима: в режиме AI живой поиск отключался,
+  // иначе запрос уезжал в /catalog раньше, чем человек нажмёт Enter. Режима
+  // больше нет — строка всегда каталожная, а в AI ведёт отдельная кнопка,
+  // которая навигирует сама и ждать debounce не обязана.
   useEffect(() => {
-    if (mode === "ai") return;
     const t = setTimeout(() => {
       const trimmed = q.trim();
       if (onCatalog) {
@@ -67,7 +64,7 @@ export default function DesktopHeader() {
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [q, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     // relative z-50 держит выпадающую панель поиска выше содержимого <main>.
@@ -135,15 +132,15 @@ export default function DesktopHeader() {
                   if (trimmed.length >= 2) {
                     pushSearchQuery(trimmed);
                     track("search_query_submitted", {
-                      query_length: trimmed.length, source: "desktop_enter", mode,
+                      query_length: trimmed.length, source: "desktop_enter",
                     });
-                    navigate(searchRoute(mode, trimmed));
+                    navigate(catalogSearchRoute(trimmed));
                   }
                   setPanelOpen(false);
                 }
               }}
-              placeholder={mode === "ai" ? "Опишите, что нужно" : "Найти iPhone, MacBook…"}
-              aria-label={mode === "ai" ? "AI-подбор" : "Поиск по каталогу"}
+              placeholder="Найти iPhone, MacBook…"
+              aria-label="Поиск по каталогу"
               aria-expanded={panelOpen && !q.trim()}
               className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-muted"
             />
@@ -152,18 +149,23 @@ export default function DesktopHeader() {
                 ✕
               </button>
             )}
-            <SegmentedToggle
-              value={mode}
-              onChange={(next) => {
-                setMode(next);
-                track("search_mode_switched", { mode: next, source: "desktop_header" });
+            {/* Та же кнопка, что на главной, и с тем же поведением: одинаковые
+                на вид контролы обязаны делать одинаковое. */}
+            <button
+              onClick={() => {
+                const trimmed = q.trim();
+                if (trimmed) pushSearchQuery(trimmed);
+                track("search_ai_escalated", {
+                  query_length: trimmed.length, source: "desktop_header",
+                });
+                navigate(aiSearchRoute(trimmed));
               }}
-              options={[
-                { value: "catalog", label: "Каталог" },
-                { value: "ai", label: "✨ AI" },
-              ] as const}
-              ariaLabel="Режим поиска"
-            />
+              aria-label={q.trim() ? `Спросить AI: ${q.trim()}` : "Открыть AI-подбор"}
+              className="tap my-1.5 flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3 text-[13px] font-semibold text-white"
+            >
+              <span aria-hidden>✨</span>
+              ИИ
+            </button>
           </div>
 
           {panelOpen && !q.trim() && (

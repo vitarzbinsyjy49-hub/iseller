@@ -125,13 +125,20 @@ def catalog_search(
 # ==================== Демо: витрина каталога ====================
 
 @router.get("/categories", dependencies=[Depends(get_current_user)])
-def categories(db: Session = Depends(get_db)):
+def categories(
+    brand: str | None = Query(default=None, max_length=100),
+    db: Session = Depends(get_db),
+):
     """Категории для навигации — из самих товаров, а не из списка в коде.
 
     Пустых категорий здесь не бывает: раньше список был захардкожен, и плитки
     «Dyson»/«Аксессуары» вели в пустой каталог, потому что таких категорий в БД
-    нет. Новая категория (импорт, правка в админке) появляется сама."""
-    return {"categories": list_categories(db)}
+    нет. Новая категория (импорт, правка в админке) появляется сама.
+
+    `?brand=` сужает ответ до категорий этого бренда — им пользуется каталог,
+    открытый по плитке бренда. Без сужения ряд предлагал бы разделы, которых у
+    бренда нет, и тап уводил бы в заведомо пустую выдачу."""
+    return {"categories": list_categories(db, brand=brand)}
 
 
 @router.get("/list", dependencies=[Depends(get_current_user)])

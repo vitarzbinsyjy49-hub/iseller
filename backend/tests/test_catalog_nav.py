@@ -132,6 +132,59 @@ def test_sale_appears_with_discounts(db):
     assert next(c for c in cats if c["key"] == SALE_KEY)["count"] == 1
 
 
+# ---------- категории ВНУТРИ бренда ----------
+# Ряд категорий в каталоге, открытом по бренду, обязан описывать сам бренд.
+# Глобальный ряд предлагал «смартфоны» на витрине Dyson, и тап давал
+# brand=Dyson&category=смартфоны — пустой экран в один тап.
+
+def _dyson_catalog(db):
+    make_product(db, title="Dyson Airwrap", brand="Dyson", category="красота")
+    make_product(db, title="Dyson Supersonic", brand="Dyson", category="красота")
+    make_product(db, title="Dyson V15", brand="Dyson", category="бытовая техника")
+    make_product(db, title="iPhone 16", brand="Apple", category="смартфоны")
+
+
+def test_brand_categories_exclude_what_brand_does_not_have(db):
+    _dyson_catalog(db)
+    keys = _keys(list_categories(db, brand="Dyson"))
+    assert "смартфоны" not in keys
+    assert set(keys) == {"красота", "бытовая техника"}
+
+
+def test_brand_category_counts_are_brand_scoped(db):
+    """Цифра рядом с категорией обязана совпасть с тем, что откроется по тапу."""
+    _dyson_catalog(db)
+    cats = list_categories(db, brand="Dyson")
+    assert next(c for c in cats if c["key"] == "красота")["count"] == 2
+    # без бренда та же категория считается по всему каталогу
+    assert next(c for c in list_categories(db) if c["key"] == "красота")["count"] == 2
+
+
+def test_unknown_brand_gets_empty_list_not_whole_shop(db):
+    _dyson_catalog(db)
+    assert list_categories(db, brand="Xiaomi") == []
+
+
+def test_brand_scoped_sale_chip(db):
+    """«Скидки» внутри бренда — только скидки этого бренда."""
+    make_product(db, title="Dyson V15", brand="Dyson", category="бытовая техника", on_sale=True)
+    make_product(db, title="iPhone 16", brand="Apple", category="смартфоны", on_sale=True)
+    assert SALE_KEY in _keys(list_categories(db, brand="Dyson"))
+    assert next(
+        c for c in list_categories(db, brand="Dyson") if c["key"] == SALE_KEY
+    )["count"] == 1
+    make_product(db, title="Dyson Pure", brand="Dyson", category="бытовая техника", on_sale=False)
+    assert SALE_KEY not in _keys(list_categories(db, brand="Nothing"))
+
+
+def test_categories_endpoint_accepts_brand(client, db):
+    _dyson_catalog(db)
+    keys = _keys(client.get("/api/catalog/categories?brand=Dyson").json()["categories"])
+    assert "смартфоны" not in keys
+    # без параметра ответ прежний — глобальный
+    assert "смартфоны" in _keys(client.get("/api/catalog/categories").json()["categories"])
+
+
 # ---------- бренды: та же ось навигации, тот же источник правды ----------
 
 def test_empty_catalog_has_no_brands(db):
