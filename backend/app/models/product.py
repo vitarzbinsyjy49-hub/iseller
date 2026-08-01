@@ -39,7 +39,9 @@ def _spec_value_to_str(v) -> str | None:
     if isinstance(v, (list, tuple)):
         parts = [p for p in (_spec_value_to_str(x) for x in v) if p]
         return ", ".join(parts) if parts else None
-    s = str(v).strip()
+    # Пробелы схлопываем: в прайсе встречается «2  ТБ», и в характеристиках
+    # это читается как опечатка магазина, а не как особенность выгрузки.
+    s = " ".join(str(v).split())
     return s or None
 
 
@@ -207,12 +209,30 @@ class Product(Base):
                 lab = str(k).strip()
                 add(lab[:1].upper() + lab[1:] if lab else lab, v)
 
+        # «Память» (memory) и «Накопитель» (storage) — про одно и то же, когда
+        # значения совпадают. Колонка memory заведена «как в прайсе»: у телефона
+        # это встроенная память, у ноутбука выгрузка кладёт туда же размер SSD.
+        # На проде так у ВСЕХ товаров, где оба поля заполнены, и человек видел
+        # одно число дважды под разными подписями. Оставляем «Накопитель» —
+        # подпись однозначная, а ОЗУ живёт в отдельном поле ram.
+        #
+        # Сравниваем ЗНАЧЕНИЯ, а не факт «оба поля есть»: если импорт когда-нибудь
+        # положит в memory что-то своё, обе строки обязаны остаться — прятать
+        # реальное различие хуже, чем показать две строки.
+        storage_str = _spec_value_to_str(self.storage)
+        memory_str = _spec_value_to_str(self.memory)
+        memory_is_duplicate = bool(
+            storage_str and memory_str and storage_str.casefold() == memory_str.casefold()
+        )
+
         for field, label in _STRUCTURED_SPEC_LABELS:
             value = getattr(self, field, None)
             if field == "condition":
                 if not value or value == "new":
                     continue  # «Новый» по умолчанию — не засоряем список
                 value = _CONDITION_RU.get(value, value)
+            if field == "memory" and memory_is_duplicate:
+                continue
             add(label, value)
 
         if self.warranty_months:

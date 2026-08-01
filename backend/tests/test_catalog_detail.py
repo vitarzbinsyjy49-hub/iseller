@@ -53,6 +53,52 @@ def test_specifications_merges_specs_and_columns(db):
     assert len(labels) == len({l.lower() for l in labels})
 
 
+def test_memory_duplicating_storage_is_shown_once(db):
+    """«Память» и «Накопитель» с одним значением — одна строка, а не две.
+
+    На проде так у ВСЕХ 115 товаров, где эти поля заполнены: колонка memory
+    заведена «как в прайсе» и повторяет storage. Человек видел одно и то же
+    число дважды под разными подписями и не понимал разницы — её и нет.
+    """
+    p = make_product(db, memory="512 ГБ", storage="512 ГБ", ram="16 ГБ", specs={})
+    values = {s["label"]: s["value"] for s in p.to_detail()["specifications"]}
+
+    assert values["Накопитель"] == "512 ГБ"
+    assert "Память" not in values          # дубль убран
+    assert values["Оперативная память"] == "16 ГБ"   # ОЗУ — другое поле, остаётся
+
+
+def test_memory_kept_when_it_differs_from_storage(db):
+    """Дедуп по ЗНАЧЕНИЮ, а не по факту «есть оба поля».
+
+    Если завтра импорт положит в memory что-то своё, обе строки обязаны
+    остаться: скрывать реальное различие хуже, чем показать две строки.
+    """
+    p = make_product(db, memory="8 ГБ", storage="256 ГБ", specs={})
+    values = {s["label"]: s["value"] for s in p.to_detail()["specifications"]}
+
+    assert values["Память"] == "8 ГБ"
+    assert values["Накопитель"] == "256 ГБ"
+
+
+def test_memory_shown_when_storage_empty(db):
+    """Пустой storage не должен прятать единственное, что есть у товара."""
+    p = make_product(db, memory="256 ГБ", storage=None, specs={})
+    values = {s["label"]: s["value"] for s in p.to_detail()["specifications"]}
+
+    assert values["Память"] == "256 ГБ"
+
+
+def test_double_spaces_in_values_are_collapsed(db):
+    """В прайсе встречается «2  ТБ» с двойным пробелом — в характеристиках
+    это читается как опечатка магазина."""
+    p = make_product(db, storage="2  ТБ", memory="2  ТБ", specs={})
+    values = {s["label"]: s["value"] for s in p.to_detail()["specifications"]}
+
+    assert values["Накопитель"] == "2 ТБ"
+    assert "Память" not in values  # схлопнутые пробелы не мешают увидеть дубль
+
+
 def test_specifications_condition_new_hidden(db):
     p = make_product(db, condition="new", specs={})
     labels = [s["label"] for s in p.to_detail()["specifications"]]

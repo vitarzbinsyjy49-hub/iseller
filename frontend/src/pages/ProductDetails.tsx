@@ -16,6 +16,7 @@ import { toast } from "../lib/toast";
 import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
 import { canAddToCart } from "../lib/cartMath";
 import { QuantityStepper } from "../components/QuantityStepper";
+import { specChips } from "../lib/specChips";
 
 type Tab = "desc" | "specs" | "delivery";
 type LoadState = "loading" | "ready" | "not_found" | "error";
@@ -240,8 +241,10 @@ export default function ProductDetails() {
           {p.condition === "refurbished" && (
             <span className="rounded-full bg-[#e0f4f3] px-2 py-0.5 text-[11px] font-semibold text-[#0f766e]">Восстановленный</span>
           )}
-          {[p.color, p.memory, p.storage].filter(Boolean).map((v) => (
-            <span key={v as string} className="rounded-full bg-mutedbg px-2 py-0.5 text-[11px] font-medium text-muted">{v}</span>
+          {/* Дедуп по значению: в прайсе memory и storage почти всегда одно и
+              то же («512 ГБ»), и без него здесь висели два одинаковых чипа. */}
+          {specChips([p.color, p.memory, p.storage]).map((v) => (
+            <span key={v} className="rounded-full bg-mutedbg px-2 py-0.5 text-[11px] font-medium text-muted">{v}</span>
           ))}
         </div>
       )}
