@@ -12,6 +12,7 @@ export const routeLoaders = {
   favorites: () => import("../pages/Favorites"),
   history: () => import("../pages/History"),
   profile: () => import("../pages/Profile"),
+  loyalty: () => import("../pages/Loyalty"),
 };
 
 const started = new Set<keyof typeof routeLoaders>();
@@ -25,6 +26,7 @@ function routeKey(pathname: string): keyof typeof routeLoaders | null {
   if (pathname.startsWith("/favorites")) return "favorites";
   if (pathname.startsWith("/history")) return "history";
   if (pathname.startsWith("/profile")) return "profile";
+  if (pathname.startsWith("/loyalty")) return "loyalty";
   return null;
 }
 

@@ -21,6 +21,7 @@ const Profile = lazy(routeLoaders.profile);
 const Favorites = lazy(routeLoaders.favorites);
 const History = lazy(routeLoaders.history);
 const Cart = lazy(routeLoaders.cart);
+const Loyalty = lazy(routeLoaders.loyalty);
 
 export default function App() {
   const { setTokens, setUser } = useAuthStore();
@@ -81,6 +82,7 @@ export default function App() {
           <Route path="/favorites" element={<DeferredPage><Favorites /></DeferredPage>} />
           <Route path="/history" element={<DeferredPage><History /></DeferredPage>} />
           <Route path="/profile" element={<DeferredPage><Profile /></DeferredPage>} />
+          <Route path="/loyalty" element={<DeferredPage><Loyalty /></DeferredPage>} />
           <Route path="*" element={<Home />} />
         </Route>
       </Routes>

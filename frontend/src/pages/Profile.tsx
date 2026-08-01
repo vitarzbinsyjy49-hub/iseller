@@ -14,6 +14,7 @@ import { useFavoriteIds } from "../lib/favorites";
 import { ScenarioRequestSheet } from "../components/ScenarioSheet";
 import type { ScenarioKey } from "../lib/scenario";
 import { track } from "../lib/analytics";
+import { fetchLoyalty, formatRate, type LoyaltyAccount } from "../lib/loyalty";
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user);
@@ -46,6 +47,11 @@ export default function Profile() {
   useEffect(() => {
     api<{ leads: unknown[] }>("/leads/my").then((d) => setLeadCount(d.leads.length)).catch(() => setLeadCount(0));
   }, []);
+
+  // Счёт лояльности. Сбой запроса оставляет блок в нейтральном виде — карточка
+  // с ошибкой в профиле пугает сильнее, чем отсутствие цифры.
+  const [loyalty, setLoyalty] = useState<LoyaltyAccount | null>(null);
+  useEffect(() => { fetchLoyalty().then(setLoyalty).catch(() => setLoyalty(null)); }, []);
 
   // Ярлык на домашнем экране (Bot API 8.0). Спрашиваем Telegram, а не гадаем:
   // на desktop и старых клиентах метода нет, и кнопка, которая ничего не
@@ -83,14 +89,27 @@ export default function Profile() {
       {/* Desktop: 2 колонки — [аккаунт/заявки | контакты/опт/B2B/Trade-In] */}
       <div className="lg:mt-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6">
       <div>
-      {/* Бонусы — заглушка */}
-      <div className="mt-3 flex items-center justify-between rounded-xl2 bg-gradient-to-r from-[#e3f2fd] to-[#e8eaf6] p-4 lg:mt-0">
-        <div>
-          <p className="text-sm font-bold">Бонусы</p>
-          <p className="mt-0.5 text-xs text-muted">Скоро: копите баллы за покупки</p>
+      {/* Баллы. Пока счёт не загрузился, показываем уровень и ставку как
+          «—»: подставить нули значило бы сообщить человеку, что у него ничего
+          нет, хотя мы этого ещё не знаем. */}
+      <button
+        onClick={() => navigate("/loyalty")}
+        className="tap mt-3 flex w-full items-center justify-between gap-3 rounded-xl2 bg-gradient-to-r from-[#e3f2fd] to-[#e8eaf6] p-4 text-left lg:mt-0"
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-bold">Баллы</p>
+          <p className="mt-0.5 text-xs text-muted">
+            {loyalty
+              ? `${loyalty.level.title} · кэшбек ${formatRate(loyalty.level.rate_bps)}${
+                  loyalty.next_level ? ` · до «${loyalty.next_level.title}» ${Math.round(loyalty.to_next).toLocaleString("ru-RU")} ₽` : ""
+                }`
+              : "Копите кэшбек с покупок"}
+          </p>
         </div>
-        <span className="rounded-full bg-surface px-3 py-1.5 text-sm font-bold shadow-soft">0 ✨</span>
-      </div>
+        <span className="shrink-0 rounded-full bg-surface px-3 py-1.5 text-sm font-bold shadow-soft">
+          {loyalty ? loyalty.balance.toLocaleString("ru-RU") : "—"} ✨
+        </span>
+      </button>
 
       {/* Ярлык на домашний экран. Появляется только когда Telegram подтвердил,
           что ярлыка нет и добавить его можно — иначе блока нет вовсе, а не

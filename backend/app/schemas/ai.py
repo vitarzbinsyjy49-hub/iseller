@@ -130,6 +130,9 @@ ALLOWED_EVENTS = {
     "home_screen_prompted",
     # Патч 1.2: интерес к устройству и планам AI-подбора.
     "ai_roadmap_opened",
+    # v5.8.0: лояльность — открытие экрана баллов и роудмапа программы.
+    "loyalty_opened",
+    "loyalty_roadmap_opened",
 }
 
 

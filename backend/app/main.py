@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, ai, auth, cart, catalog, config as config_api, events, favorites, health, home, imports, leads, posts, price_posts, telegram, users
+from app.api import admin, admin_crm, admin_users, ai, auth, cart, catalog, config as config_api, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, telegram, users
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import analytics_event as _analytics_event  # noqa: F401
@@ -18,6 +18,7 @@ from app.models import favorite as _favorite  # noqa: F401
 from app.models import lead_item as _lead_item  # noqa: F401
 from app.models import home as _home  # noqa: F401
 from app.models import lead as _lead  # noqa: F401
+from app.models import loyalty as _loyalty  # noqa: F401
 from app.models import notification as _notification  # noqa: F401
 from app.models import product as _product  # noqa: F401
 from app.models import product_image_group as _product_image_group  # noqa: F401
@@ -87,6 +88,9 @@ app.include_router(leads.router, prefix="/api")
 # Compact Home + Cart: корзина Mini App и общая заявка по ней
 app.include_router(cart.router, prefix="/api")
 app.include_router(admin_crm.router, prefix="/api")
+# v5.8.0: лояльность — счёт покупателя и раздел «Клиенты» в админке
+app.include_router(loyalty.router, prefix="/api")
+app.include_router(admin_users.router, prefix="/api")
 # v4: управляемая главная + Import Center + публичная конфигурация
 app.include_router(home.router, prefix="/api")
 app.include_router(home.admin_router, prefix="/api")

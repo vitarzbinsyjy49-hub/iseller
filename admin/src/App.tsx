@@ -10,6 +10,7 @@ import { ImportCenter, HomeContent, MediaTab } from "./HomeAdmin";
 import { Posts } from "./Posts";
 import { PricePosts } from "./PricePosts";
 import { ChannelPosts } from "./ChannelPosts";
+import { Customers } from "./Customers";
 
 export default function App() {
   const [token, setToken] = useState<string | null>(null);
@@ -105,10 +106,11 @@ function Login({ onToken }: { onToken: (t: string) => void }) {
 }
 
 // ---------- Shell with tabs ----------
-type Tab = "dashboard" | "leads" | "products" | "posts" | "price" | "channel" | "import" | "home" | "media" | "analytics" | "ai";
+type Tab = "dashboard" | "leads" | "customers" | "products" | "posts" | "price" | "channel" | "import" | "home" | "media" | "analytics" | "ai";
 const TABS: { key: Tab; label: string }[] = [
   { key: "dashboard", label: "Дашборд" },
   { key: "leads", label: "Заявки" },
+  { key: "customers", label: "Клиенты" },
   { key: "products", label: "Товары" },
   { key: "posts", label: "Посты" },
   { key: "price", label: "Прайс канала" },
@@ -152,6 +154,7 @@ function Shell({ token, onLogout }: { token: string; onLogout: () => void }) {
       <main style={{ padding: 24, maxWidth: 1150, margin: "0 auto" }}>
         {tab === "dashboard" && <Dashboard token={token} />}
         {tab === "leads" && <Leads token={token} />}
+        {tab === "customers" && <Customers token={token} />}
         {tab === "products" && <Products token={token} />}
         {tab === "posts" && <Posts token={token} />}
         {tab === "price" && <PricePosts token={token} />}
