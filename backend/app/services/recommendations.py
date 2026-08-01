@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.product import Product
 from app.models.user_product_event import EVENT_TYPES, UserProductEvent
 from app.services.image_groups import dedupe_by_group, has_real_photo, resolve_product_images
+from app.services.ranking import category_priority, product_sort_key
 
 # Веса сигналов (прозрачные, объяснимые). Заявка/избранное — сильные, просмотр —
 # слабый, повторный просмотр накапливается суммой. Снятие из избранного — лёгкий
@@ -237,16 +238,18 @@ def recommend(db: Session, user_id: int, limit: int = 12) -> tuple[list[Product]
     resolved = resolve_product_images(db, candidates)
     candidates = [p for p in candidates if has_real_photo(resolved.get(p.id))]
 
+    # Приор из плиток главной — тот же, что у каталога (см. services/ranking).
+    # Без него холодный старт сортировался по (in_stock, popularity, is_new, id),
+    # а при нулевой популярности и is_new у всех это давало порядок по id.
+    prio = category_priority(db)
     if aff.is_empty:
         mode = "cold"
-        ranked = sorted(candidates, key=lambda p: (0 if p.in_stock else 1, -(p.popularity or 0),
-                                                   0 if p.is_new else 1, p.id))
+        ranked = sorted(candidates, key=lambda p: product_sort_key(p, prio))
         default_reason = "popular"
     else:
         has_intent = any(e.event_type in ("favorite_add", "lead_created") for e in events)
         mode = "intent" if has_intent else "views"
-        ranked = sorted(candidates, key=lambda p: (-_score(p, aff), 0 if p.in_stock else 1,
-                                                   -(p.popularity or 0), p.id))
+        ranked = sorted(candidates, key=lambda p: (-_score(p, aff), *product_sort_key(p, prio)))
         default_reason = "based_on_views"
         # не рекомендуем только что просмотренные (пусть «Для вас» показывает новое)
         ranked = [p for p in ranked if p.id not in aff.recent_ids]
