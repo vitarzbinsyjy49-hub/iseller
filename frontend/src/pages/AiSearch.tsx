@@ -496,7 +496,10 @@ export default function AiSearch() {
         {/* Typing indicator: пузырь растёт по контенту, а не фиксированной
             ширины — подпись ожидания (см. waitLabel выше) не должна обрезаться. */}
         {loading && (
-          <div className="fade-in flex flex-col items-start gap-1.5 rounded-2xl rounded-bl-md bg-surface px-4 py-3.5 shadow-soft">
+          // w-fit обязателен. Контейнер чата — блочный, поэтому пузырь без него
+          // растягивался во всю ширину экрана: три точки посреди пустой панели
+          // читались как сломанная заглушка, а не как «собеседник печатает».
+          <div className="fade-in flex w-fit max-w-[92%] flex-col items-start gap-1.5 rounded-2xl rounded-bl-md bg-surface px-4 py-3.5 shadow-soft">
             <div className="flex items-center gap-1.5">
               <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
               <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
