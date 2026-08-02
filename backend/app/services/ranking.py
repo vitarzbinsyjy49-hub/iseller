@@ -14,6 +14,9 @@
 
 Ключ сортировки, от главного к второстепенному:
 
+0. `is_legendary` — закреплённые позиции. Стоят выше ВСЕГО, включая наличие:
+   легендарный товар снимают с витрины через `is_active`, а не роняя его вниз
+   молча. Работает, пока таких позиций единицы;
 1. `in_stock` — то, что нельзя купить, вниз;
 2. `popularity` — реальный спрос, если он есть. Ноль у всех => шаг не работает,
    и решение переходит дальше;
@@ -54,6 +57,7 @@ def product_sort_key(product: Product, priority: dict[str, int]) -> tuple:
     except (TypeError, ValueError):
         price = 0.0
     return (
+        0 if product.is_legendary else 1,
         0 if product.in_stock else 1,
         -float(product.popularity or 0),
         priority.get(product.category, NO_TILE_RANK),
@@ -69,6 +73,7 @@ def order_by_clauses(priority: dict[str, int]):
     else:
         rank = case((Product.id.is_(None), NO_TILE_RANK), else_=NO_TILE_RANK)
     return [
+        Product.is_legendary.desc(),
         Product.in_stock.desc(),
         Product.popularity.desc(),
         rank.asc(),

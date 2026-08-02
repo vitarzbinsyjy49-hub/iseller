@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  AUTOPLAY_RESUME_MS,
+  autoplayReady,
   indexFromScroll,
   isSlideMounted,
   isTapGesture,
+  nextSlideIndex,
 } from "./carousel";
 
 describe("isSlideMounted", () => {
@@ -38,5 +41,38 @@ describe("indexFromScroll", () => {
     expect(indexFromScroll(310, 300, 5)).toBe(1);
     expect(indexFromScroll(9999, 300, 5)).toBe(4);
     expect(indexFromScroll(100, 0, 5)).toBe(0);
+  });
+});
+
+describe("nextSlideIndex", () => {
+  it("идёт вперёд по одному", () => {
+    expect(nextSlideIndex(0, 5)).toBe(1);
+    expect(nextSlideIndex(3, 5)).toBe(4);
+  });
+  it("с последнего возвращается на первый — лента бесконечная", () => {
+    expect(nextSlideIndex(4, 5)).toBe(0);
+  });
+  it("один слайд или пустая лента — двигаться некуда", () => {
+    expect(nextSlideIndex(0, 1)).toBe(0);
+    expect(nextSlideIndex(0, 0)).toBe(0);
+  });
+});
+
+describe("autoplayReady", () => {
+  const t = 100_000;
+  it("листает, когда никто не трогал ленту", () => {
+    expect(autoplayReady({ now: t, lastInteractionAt: 0, visible: true, scrollable: true })).toBe(true);
+  });
+  it("молчит сразу после жеста и оживает по истечении паузы", () => {
+    expect(autoplayReady({ now: t, lastInteractionAt: t - 1_000, visible: true, scrollable: true })).toBe(false);
+    expect(autoplayReady({
+      now: t, lastInteractionAt: t - AUTOPLAY_RESUME_MS - 1, visible: true, scrollable: true,
+    })).toBe(true);
+  });
+  it("вкладка скрыта — не листаем: иначе на возврате лента прыгает", () => {
+    expect(autoplayReady({ now: t, lastInteractionAt: 0, visible: false, scrollable: true })).toBe(false);
+  });
+  it("лента не скроллится (desktop-сетка, один баннер) — автоплей выключен", () => {
+    expect(autoplayReady({ now: t, lastInteractionAt: 0, visible: true, scrollable: false })).toBe(false);
   });
 });

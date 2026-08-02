@@ -354,6 +354,7 @@ _PRODUCT_EDITABLE = (
     "sku", "title", "brand", "category", "subcategory", "price", "old_price", "stock", "in_stock",
     "is_active", "is_hot", "is_available_today", "is_new", "on_sale",
     "is_limited",   # v5.5.0: показывать «Осталось N шт» на витрине
+    "is_legendary",  # v5.8: закрепить наверху выдачи и пометить золотом
     "availability_mode",  # Cart: пусто = вывести из in_stock/is_limited
     "warranty_months", "condition", "color", "memory", "storage", "screen_size", "cpu", "ram",
     "description", "specs", "tags", "image", "images", "url",

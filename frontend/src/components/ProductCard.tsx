@@ -285,12 +285,17 @@ export function FavButton({ id, className = "" }: { id: number; className?: stri
   );
 }
 
-export function Badge({ color, children }: { color: "red" | "blue" | "green" | "orange"; children: ReactNode }) {
+export function Badge({ color, children }: {
+  color: "red" | "blue" | "green" | "orange" | "gold"; children: ReactNode;
+}) {
   const map = {
     red: "bg-[#ff3b30] text-white",
     blue: "bg-accent text-white",
     green: "bg-green text-white",
     orange: "bg-orange text-white",
+    // Золото читается только на тёмном: жёлтый текст на жёлтом фоне не набирает
+    // контраст. Отсюда тёмно-коричневая подложка, а не золотая заливка.
+    gold: "bg-[#2b1c00] text-[#ffce6a]",
   };
   return (
     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4 ${map[color]}`}>{children}</span>
@@ -400,8 +405,15 @@ function ProductCard({ card, compact, onOpen }: Props) {
     // h-full + flex-col: в сетке все карточки одной высоты, кнопка прижата вниз.
     // lg:hover — desktop-состояние; tap scale остаётся на mobile.
     <div
-      className={`product-card-viewport card-appear lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface shadow-card lg:hover:shadow-float ${
+      className={`product-card-viewport card-appear lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface lg:hover:shadow-float ${
         compact ? "w-40 shrink-0 lg:w-auto" : ""
+      } ${
+        // Легендарный товар: золотая рамка вместо обычной тени карточки.
+        // Подложку под фотографию НЕ красим — она подкрашивает белый фон
+        // вырезанных снимков, и на светлых товарах это читается как грязь.
+        card.is_legendary
+          ? "shadow-[0_0_0_1.5px_#c8921f,0_6px_18px_-8px_rgba(122,82,0,0.38)]"
+          : "shadow-card"
       }`}
     >
       {/* Карусель + бейджи + избранное — соседи в relative-контейнере (валидный DOM,
@@ -412,6 +424,9 @@ function ProductCard({ card, compact, onOpen }: Props) {
           compact={compact} onOpen={open}
         />
         <div className="pointer-events-none absolute left-2 top-2 z-10 flex flex-col items-start gap-1">
+          {/* «Хит» на легендарном товаре гасит backend (to_card): правило одно
+              на все места, где рисуется карточка, а не продублировано в вёрстке. */}
+          {card.is_legendary && <Badge color="gold">Легендарный</Badge>}
           {card.is_hot && <Badge color="orange">🔥 Хит</Badge>}
           {disc && <Badge color="red">−{disc}%</Badge>}
         </div>

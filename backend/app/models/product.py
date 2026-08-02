@@ -70,6 +70,12 @@ class Product(Base):
     # позиций с малым складским остатком, где срочность ложная. Теперь дефицит —
     # осознанное решение контент-менеджера в админке, а не побочный эффект склада.
     is_limited: Mapped[bool] = mapped_column(Boolean, default=False)
+    # «Легендарный» — редкая позиция, ради которой человек и приходит: комплект,
+    # эксклюзив, предзаказ. От is_hot отличается тем, что НЕ соревнуется за место
+    # в выдаче: товар закреплён наверху (см. services/ranking) и получает золотое
+    # оформление карточки. Держать таких позиций много нельзя — закрепление
+    # работает, пока их единицы.
+    is_legendary: Mapped[bool] = mapped_column(Boolean, default=False)
     # Режим доступности для корзины. NULL (по умолчанию) => выводится из
     # in_stock/is_limited — поведение существующих товаров не меняется. Явное
     # значение нужно только там, где флагами сказать нечем: «нет в наличии»
@@ -171,7 +177,12 @@ class Product(Base):
             # apply_group_images заполнит её эффективной групповой галереей (≤10).
             "images": self._card_gallery(),
             "url": self.url or "",
-            "is_hot": self.is_hot,
+            # Два «важных» шильдика на одной карточке спорят между собой, а
+            # оранжевый «Хит» рядом с золотой рамкой ещё и мутит её. Легендарный
+            # старше — гасим «Хит» здесь, а не в вёрстке, чтобы правило было
+            # одно на все места, где рисуется карточка.
+            "is_hot": self.is_hot and not self.is_legendary,
+            "is_legendary": self.is_legendary,
             "is_available_today": self.is_available_today,
             # Витрина показывает остаток только при is_limited (см. поле модели).
             "is_limited": self.is_limited,
@@ -270,7 +281,7 @@ class Product(Base):
             "discount_percent": self.discount_percent,
             "in_stock": self.in_stock, "stock": self.stock, "is_active": self.is_active,
             "is_hot": self.is_hot, "is_available_today": self.is_available_today,
-            "is_limited": self.is_limited,
+            "is_limited": self.is_limited, "is_legendary": self.is_legendary,
             "availability_mode": self.availability_mode,  # NULL = «вывести из флагов»
             "popularity": self.popularity, "rating": self.rating,
             # Полные поля для формы редактирования в админке (v2)

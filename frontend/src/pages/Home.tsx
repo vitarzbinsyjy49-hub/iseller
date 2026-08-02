@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { track, trackProduct } from "../lib/analytics";
@@ -22,6 +22,7 @@ import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
 import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
+import { autoplayReady, nextSlideIndex } from "../lib/carousel";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
@@ -84,6 +85,69 @@ function curatedPromo(banner: HomeBanner): CuratedPromo | null {
 // показывал плитки, которых в каталоге не существует. Мгновенная отрисовка до
 // ответа /api идёт из кэша последнего реального ответа (см. lib/categoryCache).
 
+/** Медленная автопрокрутка ленты баннеров.
+ *
+ *  Лента — нативный scroll-snap, поэтому «пролистнуть» = доскроллить до
+ *  offsetLeft следующего ребёнка. Позицию НЕ считаем по ширине слайда: ширина
+ *  задана как min(82vw, 320px) плюс gap, и любое расхождение накапливалось бы с
+ *  каждым шагом.
+ *
+ *  При «уменьшить движение» лента продолжает меняться, но прыжком: настройка
+ *  убирает движение, а не жизнь интерфейса — та же линия, что в index.css.
+ */
+function useBannerAutoplay(count: number, intervalMs = 6_000) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const lastInteractionAt = useRef(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || count <= 1) return;
+
+    const touched = () => { lastInteractionAt.current = Date.now(); };
+    // pointerdown ловит палец и мышь, wheel — трекпад: любой из них означает,
+    // что лентой сейчас управляет человек.
+    el.addEventListener("pointerdown", touched, { passive: true });
+    el.addEventListener("wheel", touched, { passive: true });
+    el.addEventListener("touchstart", touched, { passive: true });
+
+    const timer = window.setInterval(() => {
+      const strip = ref.current;
+      if (!strip) return;
+      const scrollable = strip.scrollWidth - strip.clientWidth > 4;   // desktop-сетка не скроллится
+      if (!autoplayReady({
+        now: Date.now(),
+        lastInteractionAt: lastInteractionAt.current,
+        visible: document.visibilityState === "visible",
+        scrollable,
+      })) return;
+
+      const slides = Array.from(strip.children) as HTMLElement[];
+      if (slides.length <= 1) return;
+      // Текущий слайд — ближайший к левому краю видимой области.
+      const current = slides.reduce(
+        (best, node, i) =>
+          Math.abs(node.offsetLeft - strip.scrollLeft) <
+          Math.abs(slides[best].offsetLeft - strip.scrollLeft) ? i : best,
+        0,
+      );
+      const target = slides[nextSlideIndex(current, slides.length)];
+      strip.scrollTo({
+        left: target.offsetLeft - strip.offsetLeft,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+    }, intervalMs);
+
+    return () => {
+      window.clearInterval(timer);
+      el.removeEventListener("pointerdown", touched);
+      el.removeEventListener("wheel", touched);
+      el.removeEventListener("touchstart", touched);
+    };
+  }, [count, intervalMs]);
+
+  return ref;
+}
+
 export default function Home() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
@@ -118,6 +182,7 @@ export default function Home() {
   // без сдвига вёрстки и без выдуманных категорий.
   const [categories, setCategories] = useState<Category[]>(() => loadCachedCategories());
   const [home, setHome] = useState<HomeData | null>(null);
+  const bannerStrip = useBannerAutoplay(home?.banners.length ?? 0);
   // Ось навигации общая для hero-чипов и desktop-сайдбара: если развести их по
   // разным состояниям, hero покажет бренды, а сайдбар рядом — категории.
   // Между визитами не сохраняется намеренно: по умолчанию всегда «Категории».
@@ -420,7 +485,10 @@ export default function Home() {
           по границе ПАДДИНГ-БОКСА контейнера, а не по контентной. Без scroll-padding
           браузер сам доводил ленту до snap-позиции ещё на первой отрисовке и съедал
           левые 16px — первый баннер вставал вплотную к краю экрана. */}
-      <div className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:scroll-px-0 lg:px-0 lg:pb-0">
+      <div
+        ref={bannerStrip}
+        className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:scroll-px-0 lg:px-0 lg:pb-0"
+      >
         {(home ? home.banners : Array.from({ length: 2 }, () => null)).map((b, i) =>
           b ? (
             <HeroBanner
@@ -593,6 +661,11 @@ function HeroBanner({
   const imageSrc = banner.image_url || curated?.src;
   const hasImage = !!imageSrc && !imageFailed;
   const isCurated = !!curated && !banner.image_url;
+  // Готовая афиша: макет уже содержит и заголовок, и цену. Накладывать поверх
+  // ещё и наши подписи — значит спорить с картинкой, поэтому текст и затемнение
+  // не рисуем вовсе, баннер работает как одна большая кнопка. Признак —
+  // пустой subtitle у баннера с картинкой: заголовок остаётся для screen reader.
+  const artworkOnly = hasImage && !isCurated && !banner.subtitle;
 
   return (
     <button
@@ -608,15 +681,21 @@ function HeroBanner({
     >
       {hasImage && (
         <img
-          src={imageSrc!} alt="" loading="lazy" decoding="async"
+          src={imageSrc!}
+          // У афиши весь смысл в самой картинке — её и озвучиваем незрячим,
+          // раз подписи поверх нет. У остальных баннеров текст рядом, картинка
+          // декоративна и в озвучке только мешала бы.
+          alt={artworkOnly ? banner.title : ""}
+          loading="lazy" decoding="async"
           onError={() => setImageFailed(true)}
           className="absolute inset-0 h-full w-full object-cover"
           style={{ objectPosition: isCurated ? "72% center" : "center" }}
         />
       )}
-      {hasImage && !isCurated && (
+      {hasImage && !isCurated && !artworkOnly && (
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
       )}
+      {artworkOnly ? null : (
       <div className="relative z-10 flex h-full max-w-[62%] flex-col justify-end lg:max-w-[66%]">
         {!hasImage && banner.emoji && (
           <span className="mb-auto text-3xl drop-shadow" aria-hidden>{banner.emoji}</span>
@@ -645,6 +724,7 @@ function HeroBanner({
           </p>
         )}
       </div>
+      )}
     </button>
   );
 }

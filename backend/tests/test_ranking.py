@@ -85,7 +85,9 @@ def test_category_without_tile_goes_last_but_stays_visible(db):
         make_product(db, title="iPhone", category="смартфоны", popularity=0, price=100000),
     ]
     assert _titles_in_order(db, items) == ["iPhone", "Dyson"]
-    assert product_sort_key(items[0], category_priority(db))[2] == NO_TILE_RANK
+    # Ранг категории — в ключе сортировки; ищем его по значению, а не по номеру
+    # позиции: над ним уже появился закреплённый флаг, и номер ещё будет ехать.
+    assert NO_TILE_RANK in product_sort_key(items[0], category_priority(db))
 
 
 def test_in_stock_still_wins_over_everything(db):

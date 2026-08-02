@@ -37,3 +37,39 @@ export function indexFromScroll(scrollLeft: number, slideWidth: number, count: n
   if (slideWidth <= 0) return 0;
   return Math.max(0, Math.min(count - 1, Math.round(scrollLeft / slideWidth)));
 }
+
+// ===== Автопрокрутка ленты баннеров на главной =====
+
+/** Пауза после жеста пользователя, прежде чем лента снова поедет сама. */
+export const AUTOPLAY_RESUME_MS = 9_000;
+
+/** Шаг автопрокрутки: следующий слайд, с последнего — на первый. */
+export function nextSlideIndex(current: number, count: number): number {
+  if (count <= 1) return 0;
+  return (current + 1) % count;
+}
+
+/** Можно ли сейчас пролистнуть ленту самим.
+ *
+ *  Четыре причины НЕ листать, и каждая из них — про уважение к пользователю:
+ *  - он только что сам листал: перехватывать управление сразу после жеста
+ *    противно, поэтому ждём `AUTOPLAY_RESUME_MS`;
+ *  - вкладка/приложение скрыты: иначе накопится десяток тиков и на возврате
+ *    лента прыгнет через все баннеры разом;
+ *  - листать нечего: на desktop это сетка, а не лента, и при одном баннере
+ *    прокрутка бессмысленна.
+ *
+ *  Здесь намеренно НЕТ проверки prefers-reduced-motion: эта настройка убирает
+ *  движение, а не жизнь интерфейса (см. блок reduce в index.css). При ней лента
+ *  всё так же меняет баннер, просто мгновенно, без пролёта содержимого мимо глаз
+ *  — за это отвечает вызывающий код, выбирая behavior скролла.
+ */
+export function autoplayReady(state: {
+  now: number;
+  lastInteractionAt: number;
+  visible: boolean;
+  scrollable: boolean;
+}): boolean {
+  if (!state.visible || !state.scrollable) return false;
+  return state.now - state.lastInteractionAt >= AUTOPLAY_RESUME_MS;
+}
