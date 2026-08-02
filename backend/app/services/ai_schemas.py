@@ -89,14 +89,20 @@ class AiStructuredAnswer(BaseModel):
     def _clean_quick_replies(cls, v):
         """Короткие, непустые, без дублей, не больше четырёх.
 
-        Длинные варианты не помещаются в чип и превращают ряд кнопок в стену
-        текста, поэтому режем по длине, а не переносим."""
+        Слишком длинный вариант ОТБРАСЫВАЕТСЯ ЦЕЛИКОМ, а не режется по символам.
+        Раньше здесь стоял срез `[:QUICK_REPLY_MAX_LEN]`, и чип обрывался на
+        полуслове: «512 ГБ для надёжности и запа». Быстрый ответ — это реплика,
+        которую покупатель отправляет от своего имени; обрезанная фраза меняет
+        сказанное и выглядит поломкой. Лучше показать три варианта из четырёх,
+        чем четвёртый огрызком."""
         if not isinstance(v, list):
             return []
         out: list[str] = []
         seen: set[str] = set()
         for item in v:
-            text = " ".join(str(item or "").split())[:QUICK_REPLY_MAX_LEN].strip()
+            text = " ".join(str(item or "").split()).strip()
+            if len(text) > QUICK_REPLY_MAX_LEN:
+                continue
             key = text.lower()
             if text and key not in seen:
                 seen.add(key)

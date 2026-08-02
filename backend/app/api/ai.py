@@ -76,7 +76,7 @@ async def chat(
         from app.services.ai_orchestrator import answer_via_local_ai
         try:
             history = [h.model_dump() for h in body.history]
-            answer = await answer_via_local_ai(db, message, history)
+            answer = await answer_via_local_ai(db, message, history, product_id=body.product_id)
         except Exception:
             logger.exception("Local AI failed and fallback is disabled")
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,

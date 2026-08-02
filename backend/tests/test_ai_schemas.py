@@ -74,10 +74,21 @@ def test_quick_replies_limited():
     assert len(got) == QUICK_REPLY_LIMIT
 
 
-def test_quick_replies_truncated_not_wrapped():
-    """Длинный вариант режется: в чип он всё равно не влезет."""
-    got = _answer(quick_replies=["о" * 200]).quick_replies
-    assert len(got[0]) == QUICK_REPLY_MAX_LEN
+def test_quick_replies_too_long_are_dropped_whole():
+    """Длинный вариант выбрасывается ЦЕЛИКОМ, а не режется по символам.
+
+    Раньше он обрезался до QUICK_REPLY_MAX_LEN и обрывался на полуслове
+    («512 ГБ для надёжности и запа»). Быстрый ответ уходит в чат от имени
+    покупателя, поэтому огрызок — это фраза, которую он не выбирал; лучше
+    показать оставшиеся варианты, чем один испорченный.
+    """
+    long_one = "о" * (QUICK_REPLY_MAX_LEN + 1)
+    assert _answer(quick_replies=[long_one]).quick_replies == []
+    # Короткие соседи при этом остаются на месте.
+    assert _answer(quick_replies=["Да", long_one, "Нет"]).quick_replies == ["Да", "Нет"]
+    # Ровно по границе — ещё годится.
+    edge = "о" * QUICK_REPLY_MAX_LEN
+    assert _answer(quick_replies=[edge]).quick_replies == [edge]
 
 
 def test_quick_replies_drop_empty_and_duplicates():

@@ -3,7 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import { AiAction, AiAnswer, ProductCard as TCard } from "../components/ai/types";
-import ProductCard from "../components/ProductCard";
+import ProductCard, { ProductImage } from "../components/ProductCard";
+import { formatPrice } from "../lib/format";
 import LeadForm from "../components/LeadForm";
 import { usePublicConfig } from "../lib/appConfig";
 import { PoweredByClaude } from "../components/ClaudeMark";
@@ -11,6 +12,18 @@ import AiRoadmapSheet from "../components/AiRoadmapSheet";
 import { openExternalLink } from "../lib/telegram";
 import { aiEntryAction, clearAiHistory, loadAiHistory, pushAiQuery } from "../lib/searchHistory";
 import { prefersReducedMotion, revealDurationMs, revealedChars } from "../lib/answerReveal";
+import AnswerBody from "../components/AnswerBody";
+import { parseAnswer, plainText } from "../lib/answerFormat";
+
+/** Намерения для товара, с карточки которого пришли. Формулировки короткие и
+ *  от лица покупателя — они уходят в чат как его реплика. Товар в тексте не
+ *  называем: backend знает его по id, а длинное название в пузыре мешало бы
+ *  читать сам вопрос. */
+const PRODUCT_INTENTS = [
+  "Сравни с альтернативами",
+  "Кому подойдёт",
+  "Что есть дешевле",
+] as const;
 
 /** Сценарные быстрые действия: понятная подпись + что произойдёт.
  *  mode: submit — отправить готовый запрос; prefill — подставить шаблон в
@@ -83,6 +96,23 @@ export default function AiSearch() {
   }
 
   useEffect(() => { track("ai_chat_opened"); }, []);
+
+  // /ai?product=<id> — пришли с карточки товара. Товар подтягиваем из каталога
+  // и показываем плашкой: человек должен видеть, о чём именно пойдёт разговор,
+  // а не гадать, понял ли его AI. Сбой загрузки просто оставляет обычный чат —
+  // это хуже, но не сломано.
+  const [focus, setFocus] = useState<TCard | null>(null);
+  useEffect(() => {
+    const raw = params.get("product");
+    const id = raw && /^\d+$/.test(raw) ? Number(raw) : null;
+    if (!id) return;
+    track("ai_product_context_opened", { product_id: id });
+    api<TCard>(`/catalog/product/${id}`)
+      .then((card) => setFocus(card))
+      .catch(() => setFocus(null));
+    setParams(new URLSearchParams(), { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // /ai?q=<text> — безопасный prefill: текст подставляется в строку, отправляет
   // его САМ пользователь. Исключение — явный переход по кнопке «Спросить AI»
   // (auto=1): тогда одна контролируемая отправка (guard от StrictMode/remount).
@@ -155,7 +185,9 @@ export default function AiSearch() {
    *  в скрытой панели браузера кадры не шли, и набор висел неоконченным. */
   function startReveal(text: string) {
     finishReveal();
-    const length = text.length;
+    // Считаем по тексту БЕЗ разметки: символы `**` и `- ` на экран не попадают,
+    // и если мерить по сырому ответу, набор «залипал» бы на невидимом.
+    const length = plainText(parseAnswer(text)).length;
     // Пустой текст и reduced-motion: показываем сразу, без промежуточных кадров.
     if (!length || prefersReducedMotion()) return;
     const startedAt = performance.now();
@@ -239,7 +271,9 @@ export default function AiSearch() {
     try {
       const raw = await api<Partial<AiAnswer>>("/ai/chat", {
         method: "POST",
-        body: JSON.stringify({ message: query, history }),
+        // product_id держится всю беседу, а не только на первый вопрос:
+        // «а что дешевле?» следующей репликой всё ещё про этот товар.
+        body: JSON.stringify({ message: query, history, product_id: focus?.id ?? null }),
         signal: controller.signal,
       });
       const data = normalizeAnswer(raw);
@@ -306,8 +340,48 @@ export default function AiSearch() {
         </button>
       )}
 
+      {/* Контекст товара: пришли с карточки. Показываем, о ЧЁМ будет разговор,
+          и предлагаем намерение в один тап — вместо километрового запроса,
+          который раньше подставлялся в поле и никем не читался.
+          Плашка держится всю беседу: по ней видно, что AI помнит товар. */}
+      {focus && (
+        <div className="fade-in mt-4 flex items-center gap-3 rounded-xl2 bg-surface p-3 shadow-soft">
+          <ProductImage src={focus.image} title={focus.title} category={focus.category}
+            className="h-14 w-14 shrink-0 rounded-field" compact />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Вы смотрите</p>
+            <p className="line-clamp-2 text-[13px] font-semibold leading-4">{focus.title}</p>
+            <p className="mt-0.5 text-[13px] font-bold">{formatPrice(focus.price)}</p>
+          </div>
+          <button
+            onClick={() => setFocus(null)}
+            aria-label="Спрашивать не про этот товар"
+            className="tap -mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center self-start rounded-full text-muted hover:bg-mutedbg"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor"
+              strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+      )}
+      {focus && chat.length === 0 && (
+        <div className="stagger mt-2 flex flex-wrap gap-2">
+          {PRODUCT_INTENTS.map((intent) => (
+            <button
+              key={intent}
+              onClick={() => submit(intent)}
+              disabled={loading}
+              className="card-appear tap rounded-full border border-accent bg-transparent px-3.5 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent hover:text-white disabled:opacity-50"
+            >
+              {intent}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Сценарные карточки (mobile/tablet; на desktop — в sidebar) */}
-      {chat.length === 0 && (
+      {!focus && chat.length === 0 && (
         <div className="stagger mt-4 grid grid-cols-2 gap-2 lg:hidden">
           {QUICK_ACTIONS.map((qa) => (
             <button
@@ -373,18 +447,13 @@ export default function AiSearch() {
           // показаны целиком, иначе прокрутка назад запускала бы анимацию заново.
           const isRevealing = revealChars !== null && i === chat.length - 1;
           const fullText = item.answer.text ?? "";
-          const shownText = isRevealing ? fullText.slice(0, revealChars ?? 0) : fullText;
-          const restText = isRevealing ? fullText.slice(revealChars ?? 0) : "";
           return (
             <div key={i} className="card-appear">
               {/* max-w текста ответа на desktop ~760px — не растягиваем на всю ширину */}
-              <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-sm leading-relaxed shadow-soft lg:max-w-[760px]">
-                {shownText}
-                {/* Ненабранный хвост остаётся в разметке прозрачным: он держит
-                    финальный размер пузыря. Без него текст перевёрстывался на
-                    каждом кадре, пузырь рос скачками, а карточки под ним
-                    дёргались. Скринридеру при этом сразу доступен весь ответ. */}
-                {restText && <span className="opacity-0">{restText}</span>}
+              <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-sm shadow-soft lg:max-w-[760px]">
+                {/* Абзацы, списки и выделения; ненабранный хвост держит размер
+                    пузыря — см. комментарий в AnswerBody. */}
+                <AnswerBody text={fullText} revealChars={isRevealing ? revealChars : null} />
               </div>
               {/* Карточки и кнопки прикладываются ПОСЛЕ набора текста: сначала
                   читаешь ответ, потом появляются варианты. */}

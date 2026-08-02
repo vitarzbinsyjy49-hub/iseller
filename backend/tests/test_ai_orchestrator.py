@@ -233,6 +233,121 @@ def test_quick_replies_become_actions(db, monkeypatch):
     assert chips == ["Скорость сушки", "Бережность к волосам"]
 
 
+# ---------- контекст товара: пришли с карточки ----------
+
+def test_focused_product_is_always_a_candidate(db, monkeypatch):
+    """Товар, с карточки которого пришли, ОБЯЗАН быть среди кандидатов.
+
+    Иначе повторяется случай с прода: человек стоит на карточке iPhone, жмёт
+    «Спросить AI», а тот отвечает «такого в каталоге нет» — про товар, который
+    прямо перед ним и в наличии. Здесь это невозможно по построению: id
+    известен, товар кладётся в кандидаты первым, а не ищется заново по тексту.
+    """
+    focus = make_product(db, title="Apple iPhone 17 Pro Max 256 ГБ Orange",
+                         brand="Apple", category="смартфоны", price=104000, popularity=0)
+    # Шум, который раньше вытеснял нужную модель.
+    for i in range(40):
+        make_product(db, title=f"Apple AirPods Max Orange #{i}", brand="Apple",
+                     category="наушники", popularity=90)
+
+    seen: dict = {}
+
+    async def _capture(**kwargs):
+        seen.update(kwargs)
+        return {"content": '{"answer":"Смотрю варианты.","recommended_product_ids":[]}',
+                "model": "test", "total_ms": 1}
+
+    monkeypatch.setattr(orch, "call_gateway", _capture)
+    run(orch.answer_via_local_ai(db, "Сравни с альтернативами", [], product_id=focus.id))
+
+    ids = [c["id"] for c in seen["candidates"]]
+    assert focus.id in ids, f"товар с карточки потерян: {ids}"
+    assert ids[0] == focus.id, "и он должен идти первым — вопрос именно о нём"
+    # Модель обязана ЗНАТЬ, что человек смотрит этот товар.
+    assert "iPhone 17 Pro Max" in seen["context"]
+
+
+def test_alternatives_come_from_the_product_not_from_the_words(db, monkeypatch):
+    """«Сравни с альтернативами» — три слова, искать по ним нечего.
+
+    Раньше кандидатами становились самые популярные товары бренда, и модель
+    честно отвечала: «других смартфонов нет, остальное — наушники Apple».
+    Альтернативы обязаны выводиться из САМОГО товара: та же категория,
+    соседние объёмы и цвета, а не из слов вопроса.
+    """
+    focus = make_product(db, title="Apple iPhone 17 Pro Max 256 ГБ Orange", brand="Apple",
+                         category="смартфоны", price=104000, popularity=0)
+    sibling_a = make_product(db, title="Apple iPhone 17 Pro Max 512 ГБ Orange", brand="Apple",
+                             category="смартфоны", price=120000, popularity=0)
+    sibling_b = make_product(db, title="Apple iPhone 17 Pro 256 ГБ Blue", brand="Apple",
+                             category="смартфоны", price=95000, popularity=0)
+    for i in range(30):
+        make_product(db, title=f"Apple AirPods Max #{i}", brand="Apple",
+                     category="наушники", price=60000, popularity=99)
+
+    seen: dict = {}
+
+    async def _capture(**kwargs):
+        seen.update(kwargs)
+        return {"content": '{"answer":"Сравниваю."}', "model": "test", "total_ms": 1}
+
+    monkeypatch.setattr(orch, "call_gateway", _capture)
+    run(orch.answer_via_local_ai(db, "Сравни с альтернативами", [], product_id=focus.id))
+
+    ids = [c["id"] for c in seen["candidates"]]
+    assert ids[0] == focus.id
+    assert sibling_a.id in ids and sibling_b.id in ids, (
+        f"соседние смартфоны обязаны быть в кандидатах, пришли: {ids}"
+    )
+
+
+def test_focus_on_hidden_product_does_not_crash(db, monkeypatch):
+    """Снятый с витрины товар не закрепляем: ссылка могла устареть."""
+    hidden = make_product(db, title="Снят с продажи", is_active=False)
+    monkeypatch.setattr(orch, "call_gateway", _gw_response({"answer": "Ок."}))
+    ans = run(orch.answer_via_local_ai(db, "что скажешь", [], product_id=hidden.id))
+    assert ans["text"]
+
+
+def test_focus_skips_browse_shortcut(db, monkeypatch):
+    """Короткое «Сравни с альтернативами» не должно уйти в ответ из каталога.
+
+    Быстрый путь для просмотра каталога (2-3 слова) экономит запрос к модели,
+    но здесь у вопроса есть конкретный товар и намерение — сравнение без модели
+    не сделать."""
+    focus = make_product(db, title="Apple iPhone 17 Pro", brand="Apple", category="смартфоны")
+    called = {"n": 0}
+
+    async def _gw(**kwargs):
+        called["n"] += 1
+        return {"content": '{"answer":"Сравниваю."}', "model": "test", "total_ms": 1}
+
+    monkeypatch.setattr(orch, "call_gateway", _gw)
+    run(orch.answer_via_local_ai(db, "Сравни с альтернативами", [], product_id=focus.id))
+    assert called["n"] == 1, "модель должна быть вызвана, а не пропущена"
+
+
+def test_long_quick_reply_is_dropped_not_cut_mid_word(db, monkeypatch):
+    """Обрезанный по символам чип обрывался на полуслове и менял сказанное.
+
+    Быстрый ответ уходит в чат ОТ ИМЕНИ покупателя, поэтому «512 ГБ для
+    надёжности и запа» — это фраза, которую он не выбирал. Длинный вариант
+    выбрасываем целиком, короткие рядом остаются.
+    """
+    long_one = "512 ГБ для надёжности и запаса на несколько лет вперёд, с фото и видео"
+    assert len(long_one) > 40
+    monkeypatch.setattr(orch, "call_gateway", _gw_response({
+        "answer": "Уточню объём.",
+        "follow_up_question": "Сколько памяти нужно?",
+        "quick_replies": ["256 ГБ хватит", long_one, "Максимум памяти"],
+    }))
+    ans = run(orch.answer_via_local_ai(db, "какой объём взять", []))
+    chips = [a["label"] for a in ans["actions"] if a["type"] == "quick_reply"]
+
+    assert chips == ["256 ГБ хватит", "Максимум памяти"]
+    assert all(not c.endswith("запа") for c in chips)
+
+
 def test_no_quick_replies_no_empty_buttons(db, monkeypatch):
     """Нет уточняющего вопроса — нет и чипов: пустых кнопок не рисуем."""
     monkeypatch.setattr(orch, "call_gateway", _gw_response({"answer": "Готово.", "quick_replies": []}))

@@ -10,7 +10,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from sqlalchemy import or_, select
+from sqlalchemy import case, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.catalog import _alias, search_products  # переиспользуем алиасы live-поиска
@@ -211,10 +211,96 @@ def _score(p: Product, f: ExtractedFilters, tokens: list[str]) -> float:
     return score
 
 
+# Сколько токенов запроса участвует в OR-поиске и какой пул он отдаёт на
+# ранжирование. Пул щедрый: решает _score в Python, SQL лишь не даёт нужной
+# модели выпасть до ранжирования.
+_TOKEN_POOL_TOKENS = 8
+_TOKEN_POOL_SIZE = 60
+
+
+def _token_pool(db: Session, tokens: list[str], budget_max: float | None) -> list[Product]:
+    """Товары, у которых совпал ХОТЯ БЫ ОДИН значимый токен запроса.
+
+    Ветка нужна потому, что две прежние промахиваются на обычном вопросе вокруг
+    названия модели — «Сравни <модель> с альтернативами»:
+
+    - текстовый поиск требует совпадения ВСЕХ первых пяти слов и ломается о
+      глагол «Сравни», которого нет ни в одном названии;
+    - структурная выборка при известном бренде режет пул по популярности, и у
+      бренда с сотней позиций нужная модель до Python-ранжирования не доходит.
+
+    Итог на проде: на вопрос про iPhone 17 Pro Max приходили наушники AirPods
+    Max (совпали «Apple», «Max», «Orange»), а сам телефон не попадал в
+    кандидаты — и модель честно отвечала «такого в каталоге нет».
+
+    Порядок пула — по ЧИСЛУ совпавших токенов, а не по популярности: обрезать
+    список по популярности значит снова потерять точную модель, ради которой
+    ветка и заведена.
+    """
+    words = [t for t in tokens if len(t) >= 3 or t.isdigit()][:_TOKEN_POOL_TOKENS]
+    if not words:
+        return []
+
+    matches = [Product.title.ilike(f"%{w}%") for w in words]
+    matches += [Product.sku.ilike(f"%{w}%") for w in words]
+    hits = sum(
+        (case((Product.title.ilike(f"%{w}%"), 1), else_=0) for w in words),
+        case((Product.sku.ilike(f"%{words[0]}%"), 2), else_=0),  # артикул весомее
+    )
+
+    stmt = select(Product).where(Product.is_active.is_(True), or_(*matches))
+    if budget_max:
+        stmt = stmt.where(Product.price <= budget_max)
+    stmt = stmt.order_by(
+        hits.desc(), Product.in_stock.desc(), Product.popularity.desc(), Product.id
+    ).limit(_TOKEN_POOL_SIZE)
+    return list(db.execute(stmt).scalars().all())
+
+
+def alternatives_for(db: Session, product: Product, limit: int = 8) -> list[Product]:
+    """Чем можно заменить ЭТОТ товар — выводится из него самого, не из слов.
+
+    Нужно потому, что осмысленный вопрос бывает бессодержательным для поиска:
+    «Сравни с альтернативами» — три слова, ни модели, ни категории. Раньше в
+    кандидаты попадали просто самые популярные товары бренда, и на вопрос про
+    iPhone модель отвечала «других смартфонов нет, остальное — наушники Apple».
+
+    Порядок: сначала то же семейство моделей, потом тот же бренд, затем просто
+    категория; внутри — по близости цены. Человек, смотрящий на телефон за
+    104 000, сравнивает его с телефонами рядом по цене, а не с самым дешёвым в
+    категории и не с самым популярным в магазине.
+    """
+    if not product.category:
+        return []
+
+    # 0 — «свой», 1 — «чужой»; сортировка по возрастанию ставит своих первыми.
+    same_family = (
+        case((Product.model_family == product.model_family, 0), else_=1)
+        if product.model_family else literal(1)
+    )
+    same_brand = case((Product.brand == product.brand, 0), else_=1) if product.brand else literal(1)
+    price_gap = func.abs(Product.price - product.price)
+
+    stmt = (
+        select(Product)
+        .where(
+            Product.is_active.is_(True),
+            Product.id != product.id,
+            Product.category == product.category,
+        )
+        .order_by(same_family, same_brand, Product.in_stock.desc(), price_gap, Product.id)
+        .limit(limit)
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
 def retrieve_candidates(db: Session, message: str, f: ExtractedFilters, limit: int = 12) -> list[Product]:
     """Жёсткие фильтры в SQL -> объединение с текстовым поиском -> мягкий ranking."""
-    # 1) текстовый поиск по словам запроса (та же логика, что live-поиск)
+    tokens = _query_tokens(message)
+    # 1) текстовый поиск по словам запроса (та же логика, что live-поиск) плюс
+    #    пул по отдельным токенам — он ловит модель, когда AND-поиск промахнулся.
     by_words = search_products(db, message, f.budget_max, limit=limit * 2)
+    by_tokens = _token_pool(db, tokens, f.budget_max)
 
     # 2) структурный запрос по извлечённым фильтрам
     stmt = select(Product).where(Product.is_active.is_(True))
@@ -253,7 +339,7 @@ def retrieve_candidates(db: Session, message: str, f: ExtractedFilters, limit: i
     excluded_low = {b.lower() for b in f.excluded_brands}
     seen: set[int] = set()
     merged: list[Product] = []
-    for p in [*by_words, *structural]:
+    for p in [*by_words, *by_tokens, *structural]:
         if p.id in seen:
             continue
         if excluded_low and (p.brand or "").lower() in excluded_low:
@@ -261,7 +347,6 @@ def retrieve_candidates(db: Session, message: str, f: ExtractedFilters, limit: i
         seen.add(p.id)
         merged.append(p)
 
-    tokens = _query_tokens(message)
     merged.sort(key=lambda p: _score(p, f, tokens), reverse=True)
     return merged[:limit]
 

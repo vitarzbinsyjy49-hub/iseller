@@ -66,6 +66,43 @@ def test_exact_model_beats_popularity(db):
     assert other.id in {p.id for p in got}
 
 
+def test_model_survives_question_words_around_it(db):
+    """Вопрос вокруг названия модели не имеет права её потерять.
+
+    Реальный случай с прода: кнопка «Спросить AI» с карточки отправляла
+    «Сравни Apple iPhone 17 Pro Max 256 ГБ Orange (...) с подходящими
+    альтернативами и объясни, кому он подойдёт». Текстовая ветка требовала
+    совпадения ВСЕХ первых пяти слов, включая «Сравни», — не совпало ничего;
+    структурная взяла первые товары Apple по популярности. Итог: на вопрос про
+    iPhone приходили наушники AirPods Max, а сам телефон не попадал даже в
+    топ-12 кандидатов, и модель честно отвечала «нет в каталоге».
+    """
+    target = make_product(
+        db, title="Apple iPhone 17 Pro Max 256 ГБ Orange (HK-KR, SIM+eSIM)",
+        brand="Apple", category="смартфоны", price=104000, popularity=0,
+        storage="256 ГБ", color="Orange",
+    )
+    # Шумные соседи того же бренда со словами «Max» и «Orange» в названии и
+    # высокой популярностью — именно они раньше вытесняли телефон.
+    #
+    # Их СПЕЦИАЛЬНО больше, чем структурный пул (limit * 3): именно так выглядит
+    # реальный каталог, где у Apple больше сотни позиций. С десятком товаров
+    # баг не воспроизводится — пул вмещает всё, и тест зеленеет впустую.
+    for i in range(40):
+        make_product(db, title=f"Apple AirPods Max 2024 Orange #{i}", brand="Apple",
+                     category="наушники", price=60000, popularity=50, color="Orange")
+
+    message = ("Сравни Apple iPhone 17 Pro Max 256 ГБ Orange (HK-KR, SIM+eSIM) "
+               "с подходящими альтернативами и объясни, кому он подойдёт")
+    cands = retrieve_candidates(db, message, extract_filters(message), limit=8)
+
+    assert target.id in [p.id for p in cands], (
+        "товар из вопроса обязан быть среди кандидатов: "
+        f"пришли {[p.title[:40] for p in cands]}"
+    )
+    assert cands[0].id == target.id, "и он же должен возглавлять выдачу"
+
+
 def test_ram_value_normalized_for_editing(db):
     """32 ГБ RAM для монтажа должны обгонять 8 ГБ при прочих равных."""
     small = make_product(db, title="Ноутбук A 14", category="ноутбуки", price=120000, ram="8 ГБ", cpu="M3")

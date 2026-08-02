@@ -135,6 +135,8 @@ ALLOWED_EVENTS = {
     # v5.8.0: лояльность — открытие экрана баллов и роудмапа программы.
     "loyalty_opened",
     "loyalty_roadmap_opened",
+    # Переход в AI с карточки товара (контекст товара в чате).
+    "ai_product_context_opened",
 }
 
 
@@ -148,6 +150,11 @@ class AiChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_LEN)
     # История диалога от фронтенда (v5): максимум 10 последних сообщений.
     history: list[AiHistoryItem] = Field(default_factory=list, max_length=10)
+    # Товар, с карточки которого пришёл вопрос. Не «подсказка» модели, а факт,
+    # который мы знаем точно: backend сам достанет товар из БД по этому id и
+    # закрепит его первым кандидатом. Чужой или снятый id безопасен — он просто
+    # не закрепится, поиск отработает как обычно.
+    product_id: int | None = Field(default=None, ge=1)
 
 
 class EventIn(BaseModel):

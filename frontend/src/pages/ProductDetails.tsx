@@ -287,10 +287,13 @@ export default function ProductDetails() {
       <div className="mt-3 flex gap-2">
         <button
           onClick={() => {
-            // Prefill без авто-отправки: пользователь видит текст и жмёт сам.
-            // Цену в prompt не вставляем — факты AI получает через backend.
-            // ai_prefill_opened трекает сам AiSearch при потреблении ?q=.
-            navigate(`/ai?q=${encodeURIComponent(`Сравни ${p.title} с подходящими альтернативами и объясни, кому он подойдёт`)}`);
+            // Передаём ID товара, а не его название текстом. Прежний вариант
+            // склеивал километровый запрос («Сравни Apple iPhone 17 Pro Max
+            // 256 ГБ Orange (HK-KR, SIM+eSIM) с подходящими…»), и backend
+            // заново искал товар по этим словам — промахивался и отвечал
+            // «такого в каталоге нет» про открытую карточку. По id промахнуться
+            // нельзя. Намерение человек выбирает на экране AI.
+            navigate(`/ai?product=${p.id}`);
           }}
           className="tap flex-1 rounded-xl2 border border-border bg-surface py-2.5 text-xs font-medium text-muted"
         >

@@ -69,7 +69,9 @@ export type AppEvent =
   | "ai_roadmap_opened"
   // v5.8.0: лояльность. Payload пустой — сам факт интереса к программе.
   | "loyalty_opened"
-  | "loyalty_roadmap_opened";
+  | "loyalty_roadmap_opened"
+  // Переход в AI с карточки товара. Payload — только product_id.
+  | "ai_product_context_opened";
 
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();

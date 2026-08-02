@@ -31,6 +31,7 @@ Telegram Mini App магазин техники (Apple, Dyson, PlayStation) + б
 | Категории, бренды, плитки главной, пустой каталог | `services/catalog_nav.py` | ниже, раздел Навигация |
 | Порядок товаров, «не то в Популярном» | `services/ranking.py` | ниже, раздел Порядок |
 | AI-подбор, провайдеры, промпт, гейтвей Anthropic | `services/ai_*.py` | `docs/context/ai.md` |
+| Вопрос к AI с карточки товара, формат ответа в чате | `ai_orchestrator.py`, `lib/answerFormat.ts` | `docs/context/ai.md` |
 | Корзина, checkout, заявки, баллы и уровни | `services/cart.py`, `loyalty.py` | `docs/context/cart-and-loyalty.md` |
 | Уведомления в Telegram, напоминания, избранное | `services/notifications.py` | `docs/context/notifications.md` |
 | Поделиться, ярлык на экран, бейджи спроса, события аналитики | `lib/share.ts`, `social_proof.py` | `docs/context/sharing-and-social-proof.md` |
