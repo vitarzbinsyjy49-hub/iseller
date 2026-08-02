@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import { AiAction, AiAnswer, ProductCard as TCard } from "../components/ai/types";
 import ProductCard, { ProductImage } from "../components/ProductCard";
+import { CartGlyph } from "../components/CartBar";
+import { useCart } from "../lib/cart";
 import { formatPrice } from "../lib/format";
 import LeadForm from "../components/LeadForm";
 import { usePublicConfig } from "../lib/appConfig";
@@ -61,6 +63,9 @@ export default function AiSearch() {
   const [loading, setLoading] = useState(false);
   const [lead, setLead] = useState<{ card?: TCard; source: string } | null>(null);
   const [roadmap, setRoadmap] = useState(false);
+  const navigate = useNavigate();
+  // Счётчик корзины: панель корзины на этом экране скрыта, вход живёт в шапке.
+  const cart = useCart();
   // Локальная история запросов к AI (localStorage, между сессиями)
   const [aiHistory, setAiHistory] = useState<string[]>(() => loadAiHistory());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -321,7 +326,25 @@ export default function AiSearch() {
       />
 
       <div className="flex min-w-0 flex-col lg:mx-auto lg:w-full lg:max-w-[860px]">
-      <h1 className="text-2xl font-bold">AI-подбор техники</h1>
+      {/* Заголовок и вход в корзину в одной строке. Кнопка нужна именно здесь:
+          плавающая панель корзины на этом экране скрыта (она перекрывала строку
+          ввода), и без неё корзина стала бы недостижима с экрана AI — а человек
+          приходит сюда как раз выбирать, что в неё положить. */}
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-2xl font-bold">AI-подбор техники</h1>
+        {cart.items_count > 0 && (
+          <button
+            onClick={() => { track("cart_open", { source: "ai_header" }); navigate("/cart"); }}
+            aria-label={`Корзина: ${cart.items_count}`}
+            className="tap relative mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface shadow-soft lg:hidden"
+          >
+            <CartGlyph className="h-[18px] w-[18px]" />
+            <span className="absolute -right-0.5 -top-0.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
+              {cart.items_count}
+            </span>
+          </button>
+        )}
+      </div>
       <p className="mt-1 text-sm text-muted">Опишите, что вам нужно — подберём варианты из наличия</p>
 
       {/* Бейдж движка. Показывается ТОЛЬКО когда backend подтвердил, что

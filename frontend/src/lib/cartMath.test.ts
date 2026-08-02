@@ -178,6 +178,14 @@ describe("shouldShowCartBar", () => {
   it("на карточке товара панель встала бы поверх её собственной CTA", () => {
     expect(shouldShowCartBar("/product/42", 3)).toBe(false);
   });
+
+  it("на экране AI панель перекрывала бы строку ввода", () => {
+    // Та же причина, что у карточки товара: внизу уже стоит своя фиксированная
+    // панель — поле ввода вопроса. Две всплывающие панели встают друг на друга,
+    // и написать AI становится невозможно, пока в корзине что-то лежит.
+    expect(shouldShowCartBar("/ai", 3)).toBe(false);
+    expect(shouldShowCartBar("/ai?q=iphone", 3)).toBe(false);
+  });
 });
 
 describe("validateCheckout", () => {
