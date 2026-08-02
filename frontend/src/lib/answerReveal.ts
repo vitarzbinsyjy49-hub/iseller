@@ -32,25 +32,37 @@ export const REVEAL_MAX_MS = 2800;
 /** Ориентир для средней длины ответа (~250-600 символов). */
 export const REVEAL_MS_PER_CHAR = 9;
 
+/** Потолок набора, когда система просит меньше движения.
+ *
+ *  Именно потолок, а не отключение. Текст при наборе никуда не движется — он
+ *  проявляется, и укачать этим нельзя; ровно по этой границе проведено
+ *  требование WCAG. Раньше набор здесь выключался целиком, и в Telegram на
+ *  телефоне с включённой настройкой ответ возникал стеной — человек жаловался
+ *  не на «слишком много анимации», а на её отсутствие. Но и растягивать
+ *  незачем: просьбу пользователя сокращаем, а не игнорируем. */
+export const REVEAL_REDUCED_MAX_MS = 1000;
+
 /** Сколько всего длится набор текста такой длины. */
-export function revealDurationMs(length: number): number {
+export function revealDurationMs(length: number, reduced = false): number {
   if (length <= 0) return 0;
-  return Math.min(REVEAL_MAX_MS, Math.max(REVEAL_MIN_MS, length * REVEAL_MS_PER_CHAR));
+  const ceiling = reduced ? REVEAL_REDUCED_MAX_MS : REVEAL_MAX_MS;
+  return Math.min(ceiling, Math.max(REVEAL_MIN_MS, length * REVEAL_MS_PER_CHAR));
 }
 
 /** Сколько символов показано к моменту elapsedMs. Линейно: набор текста должен
  *  идти ровно, ускорение к концу читается как рывок. */
-export function revealedChars(length: number, elapsedMs: number): number {
+export function revealedChars(length: number, elapsedMs: number, reduced = false): number {
   if (length <= 0) return 0;
   if (elapsedMs <= 0) return 0;
-  const total = revealDurationMs(length);
+  const total = revealDurationMs(length, reduced);
   if (elapsedMs >= total) return length;
   return Math.round((elapsedMs / total) * length);
 }
 
-/** Пользователь просил не анимировать — показываем ответ целиком сразу.
- *  Не в общем CSS-блоке `prefers-reduced-motion`, потому что здесь дело не в
- *  длительности анимации: посимвольный показ нужно не ускорить, а выключить. */
+/** Система просит меньше движения. Набор от этого не выключается — только
+ *  укорачивается (см. REVEAL_REDUCED_MAX_MS). Движение убирает CSS-блок
+ *  `prefers-reduced-motion`: там гасятся смещения и масштаб, а проявление
+ *  остаётся. */
 export function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;

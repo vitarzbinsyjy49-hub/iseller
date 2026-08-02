@@ -188,15 +188,18 @@ export default function AiSearch() {
     // Считаем по тексту БЕЗ разметки: символы `**` и `- ` на экран не попадают,
     // и если мерить по сырому ответу, набор «залипал» бы на невидимом.
     const length = plainText(parseAnswer(text)).length;
-    // Пустой текст и reduced-motion: показываем сразу, без промежуточных кадров.
-    if (!length || prefersReducedMotion()) return;
+    // Пустой текст показываем сразу. При «уменьшить движение» набор НЕ
+    // выключается — он короче: текст не движется, а проявляется, и без него
+    // ответ возникал стеной (жалоба с телефона в Telegram).
+    if (!length) return;
+    const reduced = prefersReducedMotion();
     const startedAt = performance.now();
-    const total = revealDurationMs(length);
+    const total = revealDurationMs(length, reduced);
     setRevealChars(0);
     const step = () => {
       const elapsed = performance.now() - startedAt;
       if (elapsed >= total) { finishReveal(); return; }
-      setRevealChars(revealedChars(length, elapsed));
+      setRevealChars(revealedChars(length, elapsed, reduced));
       revealRaf.current = requestAnimationFrame(step);
     };
     revealRaf.current = requestAnimationFrame(step);

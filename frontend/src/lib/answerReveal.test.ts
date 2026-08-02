@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { REVEAL_MAX_MS, REVEAL_MIN_MS, revealDurationMs, revealedChars } from "./answerReveal";
+import {
+  REVEAL_MAX_MS, REVEAL_MIN_MS, REVEAL_REDUCED_MAX_MS, revealDurationMs, revealedChars,
+} from "./answerReveal";
 
 describe("revealDurationMs", () => {
   it("пустой текст не набирается вовсе", () => {
@@ -33,6 +35,17 @@ describe("revealDurationMs", () => {
     // иначе ответ на 900 символов заставлял бы ждать секунды на пустом месте.
     expect(revealDurationMs(600)).toBe(REVEAL_MAX_MS);
     expect(revealDurationMs(2000)).toBe(REVEAL_MAX_MS);
+  });
+
+  it("при «уменьшить движение» набор короче, но НЕ выключается", () => {
+    // Раньше он выключался целиком, и в Telegram на телефоне с этой настройкой
+    // ответ возникал стеной. Текст при наборе не движется — он проявляется.
+    const reduced = revealDurationMs(600, true);
+    expect(reduced).toBe(REVEAL_REDUCED_MAX_MS);
+    expect(reduced).toBeGreaterThan(0);
+    expect(reduced).toBeLessThan(revealDurationMs(600));
+    // Короткий ответ и здесь не мигает: пол общий.
+    expect(revealDurationMs(10, true)).toBe(REVEAL_MIN_MS);
   });
 
   it("набор заметен глазом, а не мелькает", () => {
