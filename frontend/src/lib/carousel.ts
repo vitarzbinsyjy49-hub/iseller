@@ -76,3 +76,24 @@ export function autoplayReady(state: {
 // Каким переходом менять баннер, решает lib/motion (transitionStyle) — там же,
 // где это решают все остальные анимации проекта. Здесь этого правила нет
 // намеренно: пока оно жило по месту, каждая новая фича решала заново.
+
+/** Куда прокрутить ленту, чтобы слайд встал ровно в свою точку привязки.
+ *
+ *  Вычитать `scrollPaddingLeft` обязательно. У ленты задан `scroll-px-4`, то
+ *  есть отступ прокрутки 16px, и точка привязки сдвинута на него: слайд
+ *  выравнивается не по краю ленты, а по краю её «окна привязки». Без вычитания
+ *  анимация приезжала на 16 пикселей дальше, а при возврате защёлкивания
+ *  браузер утягивал ленту назад — глазом это читалось как «проехал и вернулся».
+ *
+ *  Зажим по краям нужен для крайних слайдов: у последнего расчётная позиция
+ *  выходит за предел прокрутки, и без зажима получался бы тот же откат.
+ */
+export function snapTargetLeft(geometry: {
+  slideOffsetLeft: number;
+  stripOffsetLeft: number;
+  scrollPaddingLeft: number;
+  maxScrollLeft: number;
+}): number {
+  const raw = geometry.slideOffsetLeft - geometry.stripOffsetLeft - geometry.scrollPaddingLeft;
+  return Math.max(0, Math.min(raw, Math.max(0, geometry.maxScrollLeft)));
+}

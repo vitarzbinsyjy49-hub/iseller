@@ -6,6 +6,7 @@ import {
   isSlideMounted,
   isTapGesture,
   nextSlideIndex,
+  snapTargetLeft,
 } from "./carousel";
 
 describe("isSlideMounted", () => {
@@ -74,6 +75,36 @@ describe("autoplayReady", () => {
   });
   it("лента не скроллится (desktop-сетка, один баннер) — автоплей выключен", () => {
     expect(autoplayReady({ now: t, lastInteractionAt: 0, visible: true, scrollable: false })).toBe(false);
+  });
+});
+
+describe("snapTargetLeft", () => {
+  // Числа взяты с живой страницы: у ленты padding и scroll-padding по 16px,
+  // второй баннер лежит на 336, браузер защёлкивает его на 320.
+  const strip = { stripOffsetLeft: 0, scrollPaddingLeft: 16, maxScrollLeft: 1562 };
+
+  it("целится в точку привязки, а не на отступ прокрутки дальше", () => {
+    expect(snapTargetLeft({ ...strip, slideOffsetLeft: 336 })).toBe(320);
+  });
+
+  it("первый слайд — самое начало ленты", () => {
+    expect(snapTargetLeft({ ...strip, slideOffsetLeft: 16 })).toBe(0);
+  });
+
+  it("до начала не уезжает", () => {
+    expect(snapTargetLeft({ ...strip, slideOffsetLeft: 0 })).toBe(0);
+  });
+
+  it("последний слайд зажат пределом прокрутки: иначе тот же откат назад", () => {
+    expect(snapTargetLeft({ ...strip, slideOffsetLeft: 9999 })).toBe(1562);
+  });
+
+  it("ленты короче экрана прокручивать некуда", () => {
+    expect(snapTargetLeft({ ...strip, slideOffsetLeft: 336, maxScrollLeft: 0 })).toBe(0);
+  });
+
+  it("без отступа прокрутки позиция слайда и есть цель", () => {
+    expect(snapTargetLeft({ ...strip, slideOffsetLeft: 320, scrollPaddingLeft: 0 })).toBe(320);
   });
 });
 

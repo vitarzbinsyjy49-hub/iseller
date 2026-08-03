@@ -23,7 +23,7 @@ import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
 import { BrandLockup } from "../components/BrandMark";
-import { autoplayReady, nextSlideIndex } from "../lib/carousel";
+import { autoplayReady, nextSlideIndex, snapTargetLeft } from "../lib/carousel";
 import { animateScrollTo } from "../lib/motion";
 
 type Category = { key: string; label: string; icon: string; count: number };
@@ -139,15 +139,23 @@ function useBannerAutoplay(count: number, intervalMs = 6_000) {
 
       const slides = Array.from(strip.children) as HTMLElement[];
       if (slides.length <= 1) return;
-      // Текущий слайд — ближайший к левому краю видимой области.
+
+      // Геометрия одна и для «где мы сейчас», и для «куда едем»: считать эти
+      // две вещи по-разному значит однажды поехать не туда, откуда считали.
+      const geometry = {
+        stripOffsetLeft: strip.offsetLeft,
+        scrollPaddingLeft: parseFloat(getComputedStyle(strip).scrollPaddingLeft) || 0,
+        maxScrollLeft: strip.scrollWidth - strip.clientWidth,
+      };
+      const stopAt = (node: HTMLElement) => snapTargetLeft({ ...geometry, slideOffsetLeft: node.offsetLeft });
+
+      // Текущий слайд — тот, чья точка остановки ближе всего к текущей позиции.
       const current = slides.reduce(
         (best, node, i) =>
-          Math.abs(node.offsetLeft - strip.scrollLeft) <
-          Math.abs(slides[best].offsetLeft - strip.scrollLeft) ? i : best,
+          Math.abs(stopAt(node) - strip.scrollLeft) < Math.abs(stopAt(slides[best]) - strip.scrollLeft) ? i : best,
         0,
       );
-      const target = slides[nextSlideIndex(current, slides.length)];
-      const left = target.offsetLeft - strip.offsetLeft;
+      const left = stopAt(slides[nextSlideIndex(current, slides.length)]);
 
       // Лента ВСЕГДА едет, даже при системном «уменьшить движение». Это
       // осознанное решение владельца магазина, а не недосмотр: то же самое
