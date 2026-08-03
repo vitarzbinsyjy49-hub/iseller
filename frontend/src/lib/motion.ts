@@ -129,13 +129,8 @@ export function animateOpacity(el: HTMLElement, from: number, to: number, durati
  *
  *  Возвращает функцию отмены — её обязан вызвать тот, кто владеет элементом.
  */
-export function animateScrollTo(el: HTMLElement, left: number, durationMs: number): () => void {
-  const from = el.scrollLeft;
-  if (durationMs <= 0 || Math.abs(left - from) < 1) {
-    el.scrollLeft = left;
-    return () => {};
-  }
-
+/** Прокрутка своими кадрами. Внутренняя: снаружи вызывают animateScrollTo. */
+function animateScrollOurselves(el: HTMLElement, from: number, left: number, durationMs: number): () => void {
   // Снимаем защёлкивание на время анимации и возвращаем в конце.
   //
   // Без этого анимации просто нет: у ленты `scroll-snap-type: x mandatory`, и
@@ -147,10 +142,57 @@ export function animateScrollTo(el: HTMLElement, left: number, durationMs: numbe
   el.style.scrollSnapType = "none";
   const restoreSnap = () => { el.style.scrollSnapType = snapBefore; };
 
-  const cancel = animateValue(
-    from, left, durationMs,
-    (v) => { el.scrollLeft = v; },
-    restoreSnap,
-  );
+  const cancel = animateValue(from, left, durationMs, (v) => { el.scrollLeft = v; }, restoreSnap);
   return () => { cancel(); restoreSnap(); };
+}
+
+/** Сколько ждём, прежде чем решить, что браузер плавность проигнорировал.
+ *  Два-три кадра: за это время настоящая анимация успевает сдвинуться. */
+const SMOOTH_PROBE_MS = 50;
+
+/** Плавно прокрутить ленту к позиции.
+ *
+ *  Сначала просим браузер (`behavior: 'smooth'`), и это не лень: браузерную
+ *  прокрутку рисует композитор — та же дорожка, по которой лента едет под
+ *  пальцем, с тем же качеством и без нагрузки на основной поток. Своими
+ *  кадрами так гладко не получится, они считаются в JS.
+ *
+ *  Но композитор берёт эту работу не всегда: при системном «уменьшить
+ *  движение» браузер выполняет плавную прокрутку мгновенно, и в части WebView
+ *  она игнорируется молча. Поэтому через пару кадров проверяем, тронулась ли
+ *  лента, и если нет — дорисовываем сами. Проверка безопасна: если браузер
+ *  проигнорировал плавность, позиция ещё равна исходной, и подхват не даёт
+ *  скачка.
+ *
+ *  Возвращает функцию отмены — её обязан вызвать тот, кто владеет элементом.
+ */
+export function animateScrollTo(el: HTMLElement, left: number, durationMs: number): () => void {
+  const from = el.scrollLeft;
+  if (durationMs <= 0 || Math.abs(left - from) < 1) {
+    el.scrollLeft = left;
+    return () => {};
+  }
+
+  // Решаем ДО обращения к браузеру, а не по факту. Проверить постфактум
+  // нельзя: при «уменьшить движение» браузер выполняет плавную прокрутку
+  // мгновенно, и для любой пробы это неотличимо от «уже доехали» — позиция
+  // равна целевой в обоих случаях. Замер это и показал: проба видела прыжок на
+  // 320 пикселей и делала вывод, что анимация идёт.
+  if (typeof el.scrollTo !== "function" || prefersReducedMotion()) {
+    return animateScrollOurselves(el, from, left, durationMs);
+  }
+
+  let cancelSelf = () => {};
+  el.scrollTo({ left, behavior: "smooth" });
+
+  // Подстраховка для окружений, которые игнорируют плавность молча и БЕЗ
+  // всякой настройки: если через пару кадров лента не сдвинулась ни на пиксель,
+  // дорисовываем сами. Скачка тут быть не может — позиция ещё исходная.
+  const probe = window.setTimeout(() => {
+    if (Math.abs(el.scrollLeft - from) < 1) {
+      cancelSelf = animateScrollOurselves(el, el.scrollLeft, left, durationMs);
+    }
+  }, SMOOTH_PROBE_MS);
+
+  return () => { window.clearTimeout(probe); cancelSelf(); };
 }
