@@ -56,7 +56,11 @@ export default function Layout() {
     if (previousPathname.current === location.pathname) return;
     previousPathname.current = location.pathname;
     const main = mainRef.current;
-    if (!main || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!main) return;
+    // Проверки на «уменьшить движение» здесь нет намеренно: этот переход и так
+    // всего лишь проявление, без единого пикселя движения — то самое, чем
+    // движение положено заменять. Раньше он при этой настройке отключался
+    // целиком, и смена страницы происходила вообще без обратной связи.
     const animation = main.animate(
       [{ opacity: 0.72 }, { opacity: 1 }],
       { duration: 180, easing: "cubic-bezier(.2,.8,.25,1)" },

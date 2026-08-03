@@ -12,6 +12,7 @@ import { haptic } from "../lib/telegram";
 import { toast } from "../lib/toast";
 import { track } from "../lib/analytics";
 import { indexFromScroll, isSlideMounted, isTapGesture } from "../lib/carousel";
+import { animateScrollTo, transitionDuration } from "../lib/motion";
 import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
 import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMath";
 import { QuantityStepper } from "./QuantityStepper";
@@ -151,10 +152,11 @@ function CardCarousel({
     track("product_gallery_dot_clicked",
       { product_id: id, from_index: index, to_index: to, image_count: n });
     programmaticRef.current = to;
-    el.scrollTo({
-      left: to * el.clientWidth,
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-    });
+    // Своя анимация вместо browser smooth: он рисуется композитором и в части
+    // WebView молча не срабатывает — фото менялось рывком там, где мы обещали
+    // проезд. При «уменьшить движение» transitionDuration отдаёт короткое
+    // время, и переход остаётся заметным, но без пролёта. См. lib/motion.
+    animateScrollTo(el, to * el.clientWidth, transitionDuration(320));
     setIndex(to);
   }
 

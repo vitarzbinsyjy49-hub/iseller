@@ -62,8 +62,8 @@ export function revealedChars(length: number, elapsedMs: number, reduced = false
 /** Система просит меньше движения. Набор от этого не выключается — только
  *  укорачивается (см. REVEAL_REDUCED_MAX_MS). Движение убирает CSS-блок
  *  `prefers-reduced-motion`: там гасятся смещения и масштаб, а проявление
- *  остаётся. */
-export function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
+ *  остаётся.
+ *
+ *  Сама настройка читается в lib/motion — одним местом на весь проект. Здесь
+ *  только реэкспорт, чтобы не плодить второй источник правды. */
+export { prefersReducedMotion } from "./motion";

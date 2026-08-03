@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import { haptic, openExternalLink } from "../lib/telegram";
+import { transitionDuration } from "../lib/motion";
 import {
   SCENARIOS,
   buildScenarioLead,
@@ -52,7 +53,10 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
     if (closingRef.current) return;
     closingRef.current = true;
     setClosing(true);
-    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 190;
+    // Ноля здесь быть не может: при «уменьшить движение» шит всё равно гаснет
+    // (index.css переопределяет slideDown в чистую прозрачность), и нулевая
+    // задержка снимала его с экрана ДО того, как затухание успевало проиграть.
+    const delay = transitionDuration(190);
     closeTimer.current = window.setTimeout(() => {
       onCloseRef.current();
       afterClose?.();

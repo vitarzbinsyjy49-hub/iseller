@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { indexFromScroll } from "../lib/carousel";
+import { animateScrollTo, transitionDuration } from "../lib/motion";
 import { track, trackProduct } from "../lib/analytics";
 import { ProductCard as TCard, ProductDetail } from "../components/ai/types";
 import ProductCardView from "../components/ProductCard";
@@ -632,10 +633,9 @@ function Gallery({
   function goTo(i: number) {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTo({
-      left: i * el.clientWidth,
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-    });
+    // Своя анимация, а не browser smooth: см. lib/motion — композиторный
+    // плавный скролл в части WebView молча не срабатывает.
+    animateScrollTo(el, i * el.clientWidth, transitionDuration(320));
     setIdx(i);
   }
 

@@ -51,6 +51,9 @@ services:
     volumes:
       - ./frontend/src:/code/src
       - ./frontend/index.html:/code/index.html
+      # public тоже монтируем: без него любая правка картинки/шрифта требовала
+      # полной пересборки контейнера, хотя Vite отдаёт эти файлы как есть.
+      - ./frontend/public:/code/public
 
   admin:
     build: ./admin

@@ -23,7 +23,8 @@ import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
 import { BrandLockup } from "../components/BrandMark";
-import { SLIDE_FADE_MS, autoplayReady, nextSlideIndex, slideTransition } from "../lib/carousel";
+import { autoplayReady, nextSlideIndex } from "../lib/carousel";
+import { FADE_MS, animateScrollTo, transitionStyle } from "../lib/motion";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
@@ -99,16 +100,24 @@ function curatedPromo(banner: HomeBanner): CuratedPromo | null {
  *  одном режиме: подменённый между морганиями баннер выглядит сбоем, и человек
  *  не понимает, что лента листается сама.
  */
+/** Сколько едет лента к следующему баннеру. Заметно медленнее продуктовых
+ *  переходов (--motion-standard, 190мс): здесь движение не отвечает на действие
+ *  человека, а само привлекает внимание, и резкий рывок читался бы как сбой. */
+const BANNER_SLIDE_MS = 620;
+
 function useBannerAutoplay(count: number, intervalMs = 6_000) {
   const ref = useRef<HTMLDivElement | null>(null);
   const lastInteractionAt = useRef(0);
   const fadeTimer = useRef(0);
+  const cancelScroll = useRef<() => void>(() => {});
 
   useEffect(() => {
     const el = ref.current;
     if (!el || count <= 1) return;
 
-    const touched = () => { lastInteractionAt.current = Date.now(); };
+    // Жест человека обрывает нашу анимацию: доводить ленту до «своего» баннера
+    // под пальцем — это отнимать управление посреди движения.
+    const touched = () => { lastInteractionAt.current = Date.now(); cancelScroll.current(); };
     // pointerdown ловит палец и мышь, wheel — трекпад: любой из них означает,
     // что лентой сейчас управляет человек.
     el.addEventListener("pointerdown", touched, { passive: true });
@@ -138,26 +147,32 @@ function useBannerAutoplay(count: number, intervalMs = 6_000) {
       const target = slides[nextSlideIndex(current, slides.length)];
       const left = target.offsetLeft - strip.offsetLeft;
 
-      if (slideTransition(window.matchMedia("(prefers-reduced-motion: reduce)").matches) === "slide") {
-        strip.scrollTo({ left, behavior: "smooth" });
+      if (transitionStyle() === "move") {
+        // Прокрутка своя, а не браузерная: `behavior: smooth` рисует
+        // композитор, и в части окружений (WebView, свёрнутое окно) он молча
+        // не срабатывает — лента переставляется мгновенно, и выглядит это как
+        // «анимация не работает». См. lib/motion.
+        cancelScroll.current();
+        cancelScroll.current = animateScrollTo(strip, left, BANNER_SLIDE_MS);
         return;
       }
 
       // Затухание: гасим ленту, переставляем её уже невидимой и проявляем.
       // Скролл здесь строго мгновенный — сдвиг под затуханием и был бы тем
       // самым движением, которого просит не делать настройка.
-      strip.style.transition = `opacity ${SLIDE_FADE_MS}ms ease`;
+      strip.style.transition = `opacity ${FADE_MS}ms ease`;
       strip.style.opacity = "0";
       window.clearTimeout(fadeTimer.current);
       fadeTimer.current = window.setTimeout(() => {
-        strip.scrollTo({ left, behavior: "auto" });
+        strip.scrollLeft = left;
         strip.style.opacity = "1";
-      }, SLIDE_FADE_MS);
+      }, FADE_MS);
     }, intervalMs);
 
     return () => {
       window.clearInterval(timer);
       window.clearTimeout(fadeTimer.current);
+      cancelScroll.current();
       // Лента могла остаться погашенной, если размонтировали посреди перехода.
       el.style.opacity = "1";
       el.removeEventListener("pointerdown", touched);
