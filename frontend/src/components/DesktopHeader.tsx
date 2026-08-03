@@ -11,6 +11,7 @@ import { useCart } from "../lib/cart";
 import SearchPanel from "./SearchPanel";
 import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
 import { preloadRoute } from "../lib/routePreload";
+import { BrandLockup } from "./BrandMark";
 
 /** Desktop-шапка (>=1024px): логотип, навигация, поиск, действия.
  *  Видна только на lg+ — mobile UX (BottomNav + градиентный header) не трогаем.
@@ -73,11 +74,8 @@ export default function DesktopHeader() {
     <header className="relative z-50 hidden border-b border-border bg-surface/97 lg:block">
       <div className="mx-auto flex h-16 w-full max-w-[1320px] items-center gap-6 px-8">
         {/* Логотип */}
-        <Link to="/" className="flex shrink-0 items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#1a7fd4] to-[#6d5ae0] text-[13px] font-extrabold tracking-tight text-white">
-            AI
-          </span>
-          <span className="text-[17px] font-bold tracking-tight">AI Seller</span>
+        <Link to="/" className="flex shrink-0 items-center">
+          <BrandLockup height={26} />
         </Link>
 
         {/* Навигация */}

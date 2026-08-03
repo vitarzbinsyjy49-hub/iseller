@@ -22,6 +22,7 @@ import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
 import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
+import { BrandLockup } from "../components/BrandMark";
 import { autoplayReady, nextSlideIndex } from "../lib/carousel";
 
 type Category = { key: string; label: string; icon: string; count: number };
@@ -299,8 +300,8 @@ export default function Home() {
       <header className="app-hero -mx-4 -mt-3 rounded-b-hero px-4 pb-5 pt-2.5 text-white shadow-float lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[17px] font-bold leading-5 tracking-tight">AI Seller</p>
-            <p className="mt-0.5 truncate text-[11px] font-medium leading-4 text-white/70">Техника, которую легко найти</p>
+            <BrandLockup height={22} chip />
+            <p className="mt-1.5 truncate text-[11px] font-medium leading-4 text-white/70">Техника, которую легко найти</p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
