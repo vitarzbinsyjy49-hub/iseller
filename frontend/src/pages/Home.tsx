@@ -23,7 +23,7 @@ import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
 import { BrandLockup } from "../components/BrandMark";
-import { autoplayReady, nextSlideIndex } from "../lib/carousel";
+import { SLIDE_FADE_MS, autoplayReady, nextSlideIndex, slideTransition } from "../lib/carousel";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
@@ -93,12 +93,16 @@ function curatedPromo(banner: HomeBanner): CuratedPromo | null {
  *  задана как min(82vw, 320px) плюс gap, и любое расхождение накапливалось бы с
  *  каждым шагом.
  *
- *  При «уменьшить движение» лента продолжает меняться, но прыжком: настройка
- *  убирает движение, а не жизнь интерфейса — та же линия, что в index.css.
+ *  При «уменьшить движение» лента продолжает меняться, но затуханием вместо
+ *  движения (slideTransition): настройка убирает движение, а не жизнь
+ *  интерфейса — та же линия, что в index.css. Прыжка без перехода нет ни в
+ *  одном режиме: подменённый между морганиями баннер выглядит сбоем, и человек
+ *  не понимает, что лента листается сама.
  */
 function useBannerAutoplay(count: number, intervalMs = 6_000) {
   const ref = useRef<HTMLDivElement | null>(null);
   const lastInteractionAt = useRef(0);
+  const fadeTimer = useRef(0);
 
   useEffect(() => {
     const el = ref.current;
@@ -132,14 +136,30 @@ function useBannerAutoplay(count: number, intervalMs = 6_000) {
         0,
       );
       const target = slides[nextSlideIndex(current, slides.length)];
-      strip.scrollTo({
-        left: target.offsetLeft - strip.offsetLeft,
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-      });
+      const left = target.offsetLeft - strip.offsetLeft;
+
+      if (slideTransition(window.matchMedia("(prefers-reduced-motion: reduce)").matches) === "slide") {
+        strip.scrollTo({ left, behavior: "smooth" });
+        return;
+      }
+
+      // Затухание: гасим ленту, переставляем её уже невидимой и проявляем.
+      // Скролл здесь строго мгновенный — сдвиг под затуханием и был бы тем
+      // самым движением, которого просит не делать настройка.
+      strip.style.transition = `opacity ${SLIDE_FADE_MS}ms ease`;
+      strip.style.opacity = "0";
+      window.clearTimeout(fadeTimer.current);
+      fadeTimer.current = window.setTimeout(() => {
+        strip.scrollTo({ left, behavior: "auto" });
+        strip.style.opacity = "1";
+      }, SLIDE_FADE_MS);
     }, intervalMs);
 
     return () => {
       window.clearInterval(timer);
+      window.clearTimeout(fadeTimer.current);
+      // Лента могла остаться погашенной, если размонтировали посреди перехода.
+      el.style.opacity = "1";
       el.removeEventListener("pointerdown", touched);
       el.removeEventListener("wheel", touched);
       el.removeEventListener("touchstart", touched);
@@ -297,11 +317,14 @@ export default function Home() {
           было три крупных блока подряд (шапка, сетка сценариев, категории), и
           первая карточка появлялась ниже сгиба. Теперь между шапкой и товарами —
           одна строка поиска, одна строка чипов и одна строка сценариев. */}
-      <header className="app-hero -mx-4 -mt-3 rounded-b-hero px-4 pb-5 pt-2.5 text-white shadow-float lg:hidden">
+      <header className="app-hero -mx-4 -mt-3 rounded-b-hero px-4 pb-5 pt-2 text-white shadow-float lg:hidden">
         <div className="flex items-center justify-between gap-3">
+          {/* Логотип крупнее кнопок справа намеренно: это единственная точка
+              бренда на экране. Прибавку в росте гасим более тесной плашкой и
+              подписью, поэтому строка поиска ниже остаётся на прежнем месте. */}
           <div className="min-w-0">
-            <BrandLockup height={22} chip />
-            <p className="mt-1.5 truncate text-[11px] font-medium leading-4 text-white/70">Техника, которую легко найти</p>
+            <BrandLockup height={32} chip />
+            <p className="mt-1 truncate text-[11px] font-medium leading-4 text-white/70">Техника, которую легко найти</p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <button

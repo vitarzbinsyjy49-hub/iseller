@@ -61,8 +61,7 @@ export function nextSlideIndex(current: number, count: number): number {
  *
  *  Здесь намеренно НЕТ проверки prefers-reduced-motion: эта настройка убирает
  *  движение, а не жизнь интерфейса (см. блок reduce в index.css). При ней лента
- *  всё так же меняет баннер, просто мгновенно, без пролёта содержимого мимо глаз
- *  — за это отвечает вызывающий код, выбирая behavior скролла.
+ *  всё так же меняет баннер, просто другим переходом — см. slideTransition.
  */
 export function autoplayReady(state: {
   now: number;
@@ -72,4 +71,23 @@ export function autoplayReady(state: {
 }): boolean {
   if (!state.visible || !state.scrollable) return false;
   return state.now - state.lastInteractionAt >= AUTOPLAY_RESUME_MS;
+}
+
+/** Длительность затухания при смене баннера в режиме «уменьшить движение». */
+export const SLIDE_FADE_MS = 160;
+
+/** Каким переходом менять баннер.
+ *
+ *  `slide` — лента доезжает до следующего баннера, содержимое движется.
+ *  `fade` — баннер гаснет, лента переставляется мгновенно, баннер проявляется.
+ *
+ *  Смена БЕЗ перехода вообще (жёсткий прыжок) не предлагается ни в одном
+ *  режиме: подменённая между морганиями картинка читается как сбой, а не как
+ *  переход, и человек не понимает, что лента вообще листается. При «уменьшить
+ *  движение» вместо движения даём затухание — это и есть штатная замена
+ *  анимации для этой настройки: меняется только прозрачность, ничего не едет
+ *  мимо глаз.
+ */
+export function slideTransition(reducedMotion: boolean): "slide" | "fade" {
+  return reducedMotion ? "fade" : "slide";
 }

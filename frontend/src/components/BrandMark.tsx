@@ -38,7 +38,7 @@ export function BrandLockup({
   );
   if (!chip) return <span className={className}>{img}</span>;
   return (
-    <span className={`inline-flex shrink-0 items-center rounded-xl bg-white px-2.5 py-1.5 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.35)] ${className}`}>
+    <span className={`inline-flex shrink-0 items-center rounded-xl bg-white px-2 py-1 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.35)] ${className}`}>
       {img}
     </span>
   );

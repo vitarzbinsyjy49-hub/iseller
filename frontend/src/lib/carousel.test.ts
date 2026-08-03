@@ -6,6 +6,7 @@ import {
   isSlideMounted,
   isTapGesture,
   nextSlideIndex,
+  slideTransition,
 } from "./carousel";
 
 describe("isSlideMounted", () => {
@@ -74,5 +75,19 @@ describe("autoplayReady", () => {
   });
   it("лента не скроллится (desktop-сетка, один баннер) — автоплей выключен", () => {
     expect(autoplayReady({ now: t, lastInteractionAt: 0, visible: true, scrollable: false })).toBe(false);
+  });
+});
+
+describe("slideTransition", () => {
+  it("обычный режим — лента едет", () => {
+    expect(slideTransition(false)).toBe("slide");
+  });
+  it("«уменьшить движение» — затухание вместо движения", () => {
+    expect(slideTransition(true)).toBe("fade");
+  });
+  it("перехода нет только у самого перехода: варианта «мгновенно» не бывает", () => {
+    // Подмена баннера без всякого перехода читалась как сбой отрисовки:
+    // человек не понимал, что лента листается сама.
+    expect([slideTransition(true), slideTransition(false)]).not.toContain("none");
   });
 });
