@@ -6,6 +6,7 @@ import DesktopHeader from "./DesktopHeader";
 import { usePageSwipe } from "../lib/usePageSwipe";
 import { setBackButton } from "../lib/telegram";
 import { useCart } from "../lib/cart";
+import { animateOpacity } from "../lib/motion";
 import { shouldShowCartBar } from "../lib/cartMath";
 
 /** Позиции корневого scroll-контейнера живут вне route-компонентов: возврат из
@@ -61,11 +62,12 @@ export default function Layout() {
     // всего лишь проявление, без единого пикселя движения — то самое, чем
     // движение положено заменять. Раньше он при этой настройке отключался
     // целиком, и смена страницы происходила вообще без обратной связи.
-    const animation = main.animate(
-      [{ opacity: 0.72 }, { opacity: 1 }],
-      { duration: 180, easing: "cubic-bezier(.2,.8,.25,1)" },
-    );
-    return () => animation.cancel();
+    //
+    // Считаем кадры сами, а не через main.animate: Web Animations API — такая
+    // же декларативная анимация, как CSS-переход, и на устройствах с
+    // выключенной системной анимацией она не проигрывается (см. lib/motion).
+    const cancel = animateOpacity(main, 0.72, 1, 180, () => { main.style.opacity = ""; });
+    return () => { cancel(); main.style.opacity = ""; };
   }, [location.pathname]);
 
   // Восстановление делаем до кадра. Если данные страницы ещё грузятся, несколько

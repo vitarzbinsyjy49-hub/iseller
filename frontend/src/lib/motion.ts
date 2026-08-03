@@ -46,7 +46,19 @@ export function transitionDuration(moveMs: number, reducedMotion = prefersReduce
   return reducedMotion ? FADE_MS : moveMs;
 }
 
-// ===== Собственная анимация горизонтальной прокрутки =====
+// ===== Собственные анимации =====
+//
+// Всё, что здесь есть, рисуется из JS через requestAnimationFrame, и это не
+// вкусовщина. На части устройств система гасит ВСЮ декларативную анимацию
+// разом: CSS-переходы, CSS-анимации, Web Animations API и браузерный плавный
+// скролл (на Android это «Убрать анимации» / нулевой animator duration scale).
+// Свойство при этом применяется мгновенно — ошибки нет, события есть, отличить
+// «не анимировалось» от «анимировалось быстро» со стороны кода нечем. Проверено
+// на живом телефоне: набор текста в AI (он на JS) шёл плавно, а затухание
+// баннера на CSS-переходе выглядело щелчком.
+//
+// Поэтому правило: если анимацию должен увидеть пользователь — она считается
+// здесь, а не отдаётся браузеру.
 
 /** Кривая движения: быстрый старт, мягкое торможение (ease-out-quint).
  *  Та же линия, что у --ease-standard в index.css. */
@@ -55,10 +67,55 @@ export function easeOutQuint(t: number): number {
   return 1 - Math.pow(1 - clamped, 5);
 }
 
-/** Позиция прокрутки на момент времени: чистая функция, тестируется без DOM. */
+/** Значение на момент времени: чистая функция, тестируется без DOM. Годится и
+ *  для позиции прокрутки, и для прозрачности — кривая одна. */
 export function scrollPositionAt(from: number, to: number, elapsedMs: number, durationMs: number): number {
   if (durationMs <= 0) return to;
   return from + (to - from) * easeOutQuint(elapsedMs / durationMs);
+}
+
+/** Прогнать значение от `from` к `to` за `durationMs`, отдавая каждый кадр в
+ *  `apply`. Общий мотор для прокрутки и прозрачности. Возвращает отмену. */
+function animateValue(
+  from: number, to: number, durationMs: number,
+  apply: (value: number) => void,
+  done?: () => void,
+): () => void {
+  if (durationMs <= 0) {
+    apply(to);
+    done?.();
+    return () => {};
+  }
+
+  const start = performance.now();
+  let frame = 0;
+
+  const step = (now: number) => {
+    const elapsed = now - start;
+    if (elapsed >= durationMs) {
+      apply(to);
+      done?.();
+      return;
+    }
+    apply(scrollPositionAt(from, to, elapsed, durationMs));
+    frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+
+  return () => cancelAnimationFrame(frame);
+}
+
+/** Плавно изменить прозрачность элемента — своими руками, без CSS-перехода.
+ *
+ *  CSS-переход здесь не годится: на устройствах с выключенной системной
+ *  анимацией он применяется мгновенно, и затухание выглядит щелчком. Именно так
+ *  и выглядела смена баннера на проде.
+ */
+export function animateOpacity(el: HTMLElement, from: number, to: number, durationMs: number, done?: () => void): () => void {
+  // Инлайновый transition убираем: если он остался от прежнего кода, браузер
+  // попытается доводить значение сам поверх наших кадров.
+  el.style.transition = "";
+  return animateValue(from, to, durationMs, (v) => { el.style.opacity = String(v); }, done);
 }
 
 /** Плавно прокрутить ленту к позиции СВОЕЙ анимацией, а не браузерной.
@@ -90,20 +147,10 @@ export function animateScrollTo(el: HTMLElement, left: number, durationMs: numbe
   el.style.scrollSnapType = "none";
   const restoreSnap = () => { el.style.scrollSnapType = snapBefore; };
 
-  const start = performance.now();
-  let frame = 0;
-
-  const step = (now: number) => {
-    const elapsed = now - start;
-    if (elapsed >= durationMs) {
-      el.scrollLeft = left;
-      restoreSnap();
-      return;
-    }
-    el.scrollLeft = scrollPositionAt(from, left, elapsed, durationMs);
-    frame = requestAnimationFrame(step);
-  };
-  frame = requestAnimationFrame(step);
-
-  return () => { cancelAnimationFrame(frame); restoreSnap(); };
+  const cancel = animateValue(
+    from, left, durationMs,
+    (v) => { el.scrollLeft = v; },
+    restoreSnap,
+  );
+  return () => { cancel(); restoreSnap(); };
 }

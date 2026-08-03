@@ -24,7 +24,7 @@ import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
 import { BrandLockup } from "../components/BrandMark";
 import { autoplayReady, nextSlideIndex } from "../lib/carousel";
-import { FADE_MS, animateScrollTo, transitionStyle } from "../lib/motion";
+import { FADE_MS, animateOpacity, animateScrollTo, transitionStyle } from "../lib/motion";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
@@ -108,8 +108,8 @@ const BANNER_SLIDE_MS = 620;
 function useBannerAutoplay(count: number, intervalMs = 6_000) {
   const ref = useRef<HTMLDivElement | null>(null);
   const lastInteractionAt = useRef(0);
-  const fadeTimer = useRef(0);
   const cancelScroll = useRef<() => void>(() => {});
+  const cancelFade = useRef<() => void>(() => {});
 
   useEffect(() => {
     const el = ref.current;
@@ -117,7 +117,14 @@ function useBannerAutoplay(count: number, intervalMs = 6_000) {
 
     // Жест человека обрывает нашу анимацию: доводить ленту до «своего» баннера
     // под пальцем — это отнимать управление посреди движения.
-    const touched = () => { lastInteractionAt.current = Date.now(); cancelScroll.current(); };
+    const touched = () => {
+      lastInteractionAt.current = Date.now();
+      cancelScroll.current();
+      // Затухание обрываем вместе с движением, но ленту обязательно возвращаем
+      // видимой: иначе жест посреди перехода оставил бы её погашенной.
+      cancelFade.current();
+      el.style.opacity = "1";
+    };
     // pointerdown ловит палец и мышь, wheel — трекпад: любой из них означает,
     // что лентой сейчас управляет человек.
     el.addEventListener("pointerdown", touched, { passive: true });
@@ -158,21 +165,23 @@ function useBannerAutoplay(count: number, intervalMs = 6_000) {
       }
 
       // Затухание: гасим ленту, переставляем её уже невидимой и проявляем.
-      // Скролл здесь строго мгновенный — сдвиг под затуханием и был бы тем
-      // самым движением, которого просит не делать настройка.
-      strip.style.transition = `opacity ${FADE_MS}ms ease`;
-      strip.style.opacity = "0";
-      window.clearTimeout(fadeTimer.current);
-      fadeTimer.current = window.setTimeout(() => {
+      // Скролл между фазами строго мгновенный — сдвиг под затуханием и был бы
+      // тем самым движением, которого просит не делать настройка.
+      //
+      // Обе фазы считаются из JS: на CSS-переходе устройства с выключенной
+      // системной анимацией применяли прозрачность мгновенно, и смена баннера
+      // выглядела щелчком (ровно то, что было видно на проде).
+      cancelFade.current();
+      cancelFade.current = animateOpacity(strip, 1, 0, FADE_MS, () => {
         strip.scrollLeft = left;
-        strip.style.opacity = "1";
-      }, FADE_MS);
+        cancelFade.current = animateOpacity(strip, 0, 1, FADE_MS);
+      });
     }, intervalMs);
 
     return () => {
       window.clearInterval(timer);
-      window.clearTimeout(fadeTimer.current);
       cancelScroll.current();
+      cancelFade.current();
       // Лента могла остаться погашенной, если размонтировали посреди перехода.
       el.style.opacity = "1";
       el.removeEventListener("pointerdown", touched);
