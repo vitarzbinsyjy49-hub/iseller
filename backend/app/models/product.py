@@ -100,6 +100,10 @@ class Product(Base):
     tags: Mapped[list] = mapped_column(JSON, default=list)
     image: Mapped[str | None] = mapped_column(Text)                 # главная картинка
     images: Mapped[list] = mapped_column(JSON, default=list)         # галерея: упорядоченный список URL
+    # Афиша события — широкий готовый макет для страницы товара. В галерее ей
+    # не место: карточка в ленте квадратная, и постер обрезался бы по центру,
+    # теряя и заголовок, и цену. Заполнена у единиц, у остальных NULL.
+    poster_url: Mapped[str | None] = mapped_column(Text)
     url: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -269,6 +273,7 @@ class Product(Base):
             # галерея для карусели на витрине (главная первой, ≤10); эффективную
             # групповую галерею проставит apply_group_images.
             "images": self._card_gallery(),
+            "poster_url": self.poster_url,  # афиша события; None у обычных товаров
         })
         return d
 
@@ -285,7 +290,8 @@ class Product(Base):
             "availability_mode": self.availability_mode,  # NULL = «вывести из флагов»
             "popularity": self.popularity, "rating": self.rating,
             # Полные поля для формы редактирования в админке (v2)
-            "image": self.image, "images": self.images or [], "description": self.description,
+            "image": self.image, "images": self.images or [], "poster_url": self.poster_url,
+            "description": self.description,
             "specs": self.specs or {}, "tags": self.tags or [],
             "warranty_months": self.warranty_months, "condition": self.condition or "new",
             "color": self.color, "memory": self.memory, "storage": self.storage,

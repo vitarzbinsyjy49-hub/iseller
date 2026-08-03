@@ -72,6 +72,10 @@ export type ProductDetail = ProductCard & {
   stock: number;
   on_sale: boolean;
   is_new: boolean;
+  /** Афиша события: широкий готовый макет. Есть только у единичных позиций и
+   *  только на странице товара — в квадратной карточке ленты постер обрезался
+   *  бы по центру, теряя и заголовок, и цену. */
+  poster_url?: string | null;
 };
 
 export type ManagerRole = "retail" | "wholesale" | "b2b" | "trade_in";

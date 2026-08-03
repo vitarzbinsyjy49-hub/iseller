@@ -74,6 +74,26 @@ def test_flag_is_off_by_default_and_reaches_the_card(db):
     assert rare.to_admin()["is_legendary"] is True
 
 
+def test_poster_reaches_the_detail_page_but_not_the_card(db):
+    """Афиша события — широкий макет, а не снимок товара.
+
+    В ленте карточка квадратная, и постер там обрезался бы по центру, теряя и
+    заголовок, и цену. Поэтому афиша живёт отдельным полем и доезжает только до
+    страницы товара, где под неё есть вся ширина.
+    """
+    p = make_product(db, title="Комплект", is_legendary=True,
+                     poster_url="/assets/promos/gta6-ps5-pro-bundle-v3.webp")
+    assert p.to_detail()["poster_url"] == "/assets/promos/gta6-ps5-pro-bundle-v3.webp"
+    assert "poster_url" not in p.to_card()
+    assert p.to_admin()["poster_url"] == "/assets/promos/gta6-ps5-pro-bundle-v3.webp"
+
+
+def test_poster_is_empty_by_default(db):
+    """Обычный товар без афиши отдаёт None, а не пустую строку: страница
+    решает по «есть/нет», и None здесь однозначнее."""
+    assert make_product(db, title="Обычный").to_detail()["poster_url"] is None
+
+
 def test_legendary_suppresses_the_hot_badge(db):
     """Два «важных» шильдика на одной карточке спорят между собой. Легендарный
     старше — «Хит» на нём не показываем, иначе оранжевый мутит золото."""

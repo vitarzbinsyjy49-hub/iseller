@@ -17,6 +17,7 @@ import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib
 import { canAddToCart } from "../lib/cartMath";
 import { QuantityStepper } from "../components/QuantityStepper";
 import { specChips } from "../lib/specChips";
+import LegendaryProduct from "../components/LegendaryProduct";
 
 type Tab = "desc" | "specs" | "delivery";
 type LoadState = "loading" | "ready" | "not_found" | "error";
@@ -126,6 +127,36 @@ export default function ProductDetails() {
       <div className="skeleton mt-2 h-8 w-1/3 rounded-lg" />
     </div>
   );
+
+  // Легендарная позиция получает событийный экран вместо обычной раскладки.
+  // Именно ЭКРАН, а не отдельный роут: покупка, избранное, «поделиться» и
+  // аналитика остаются этими же — разойтись им негде.
+  if (p.is_legendary) {
+    return (
+      <>
+        <LegendaryProduct
+          product={p}
+          shared={shared}
+          onShare={share}
+          onAskAi={() => navigate(`/ai?product=${p.id}`)}
+          cta={
+            <ProductCta
+              product={p}
+              tone="event"
+              onNotify={() => setLead({ source: "product", preset: `Сообщите, когда появится: ${p.title}` })}
+            />
+          }
+        />
+        {lead && (
+          <LeadForm
+            productId={p.id} productTitle={p.title} productPrice={p.price}
+            source={lead.source} presetMessage={lead.preset}
+            onClose={() => setLead(null)}
+          />
+        )}
+      </>
+    );
+  }
 
   const disc = discountPct(p.price, p.old_price);
   const saving = p.old_price ? p.old_price - p.price : 0;
@@ -459,8 +490,24 @@ export default function ProductDetails() {
  *    поступление в проекте нет, и выдумывать её кнопкой нельзя);
  *  - предзаказ / под заказ: добавить можно, но подпись честно говорит, что это.
  */
-function ProductCta({ product, onNotify }: { product: ProductDetail; onNotify: () => void }) {
+function ProductCta({ product, onNotify, tone = "app" }: {
+  product: ProductDetail; onNotify: () => void;
+  /** Только палитра. Логика доступности одна на все подачи — иначе кнопка на
+   *  событийной странице и проверка на checkout однажды разойдутся. */
+  tone?: "app" | "event";
+}) {
   const navigate = useNavigate();
+  const t = tone === "event"
+    ? {
+        primary: "bg-[#FFB0C4] text-[#241C2E] hover:bg-[#FFC4D3]",
+        secondary: "border-white/25 text-white",
+        note: "text-white/60",
+      }
+    : {
+        primary: "bg-accent text-white hover:bg-accentdark",
+        secondary: "border-border bg-surface text-text",
+        note: "text-muted",
+      };
   const { item, busy } = useCartEntry(product.id);
   const [pending, setPending] = useState(false);
   const mode = product.availability_mode;
@@ -508,12 +555,12 @@ function ProductCta({ product, onNotify }: { product: ProductDetail; onNotify: (
       <div>
         <button
           onClick={onNotify}
-          className="tap w-full rounded-xl2 bg-accent py-3 text-white transition-colors hover:bg-accentdark"
+          className={`tap w-full rounded-xl2 py-3 transition-colors ${t.primary}`}
         >
           <span className="block text-[15px] font-bold leading-5">Узнать о поступлении</span>
-          <span className="block text-[11px] font-medium text-white/80">Сообщим, когда появится</span>
+          <span className="block text-[11px] font-medium opacity-80">Сообщим, когда появится</span>
         </button>
-        <p className="mt-1.5 text-center text-[11px] text-muted">
+        <p className={`mt-1.5 text-center text-[11px] ${t.note}`}>
           {product.availability_label || "Сейчас нет в наличии"}
         </p>
       </div>
@@ -532,12 +579,12 @@ function ProductCta({ product, onNotify }: { product: ProductDetail; onNotify: (
           </div>
           <button
             onClick={() => navigate("/cart?from=product")}
-            className="tap h-11 flex-1 rounded-xl2 bg-accent text-[15px] font-bold text-white transition-colors hover:bg-accentdark"
+            className={`tap h-11 flex-1 rounded-xl2 text-[15px] font-bold transition-colors ${t.primary}`}
           >
             Перейти в корзину
           </button>
         </div>
-        <p className="mt-1.5 text-center text-[11px] text-muted">
+        <p className={`mt-1.5 text-center text-[11px] ${t.note}`}>
           {note || "Итоговую стоимость подтвердит менеджер"}
         </p>
       </div>
@@ -550,19 +597,19 @@ function ProductCta({ product, onNotify }: { product: ProductDetail; onNotify: (
         <button
           onClick={() => add("cta")}
           disabled={pending}
-          className="tap h-11 flex-1 rounded-xl2 bg-accent text-[15px] font-bold text-white transition-opacity hover:bg-accentdark disabled:opacity-60"
+          className={`tap h-11 flex-1 rounded-xl2 text-[15px] font-bold transition-opacity disabled:opacity-60 ${t.primary}`}
         >
           {pending ? "Добавляем…" : "Добавить в корзину"}
         </button>
         <button
           onClick={buyNow}
           disabled={pending}
-          className="tap h-11 shrink-0 rounded-xl2 border border-border bg-surface px-4 text-[13px] font-semibold text-text transition-opacity disabled:opacity-60"
+          className={`tap h-11 shrink-0 rounded-xl2 border px-4 text-[13px] font-semibold transition-opacity disabled:opacity-60 ${t.secondary}`}
         >
           Купить сейчас
         </button>
       </div>
-      <p className="mt-1.5 text-center text-[11px] text-muted">
+      <p className={`mt-1.5 text-center text-[11px] ${t.note}`}>
         {note || "Не оплата и не бронь — заявку подтвердит менеджер"}
       </p>
     </div>
