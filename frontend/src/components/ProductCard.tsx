@@ -65,10 +65,19 @@ function CategorySilhouette({ category }: { category?: string | null }) {
  *    помещается целиком, верх/низ не обрезаются; отступ по реальным пропорциям.
  *  - Нет/битое фото: спокойный серо-белый фон + нейтральный силуэт категории
  *    (не emoji, не яркая пастель), UI не прыгает, broken-image icon не виден.
- *  - compact (узкая карточка в ленте): подпись «Фото скоро появится» скрываем. */
+ *  - compact (узкая карточка в ленте): подпись «Фото скоро появится» скрываем.
+ *
+ *  `bleed` — снимок со СВОИМ фоном, который должен доходить до краёв карточки.
+ *
+ *  Обычные товарные фото вырезаны на белом, и отступ им нужен: без него товар
+ *  упирается в край. У снимка с запечённым фоном всё наоборот — отступ рисует
+ *  вокруг него белую рамку, а `object-contain` при несовпадении пропорций
+ *  добавляет ещё и полосы. Замер на легендарной карточке: фото 4:3 в квадрате
+ *  160×160 занимало 61% площади, сверху и снизу по 26px белого, и шов между
+ *  сиреневым фоном снимка и белым фоном карточки был виден. */
 export function ProductImage({
-  src, title, category, className = "", compact = false,
-}: { src?: string; title: string; category?: string | null; className?: string; compact?: boolean }) {
+  src, title, category, className = "", compact = false, bleed = false,
+}: { src?: string; title: string; category?: string | null; className?: string; compact?: boolean; bleed?: boolean }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const [pad, setPad] = useState<"p-2" | "p-1">("p-2");
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
@@ -88,9 +97,9 @@ export function ProductImage({
           alt={title}
           loading="lazy"
           decoding="async"
-          className={`product-image h-full w-full object-contain object-center ${pad} ${
-            loadedSrc === src ? "product-image-loaded" : ""
-          }`}
+          className={`product-image h-full w-full object-center ${
+            bleed ? "object-cover" : `object-contain ${pad}`
+          } ${loadedSrc === src ? "product-image-loaded" : ""}`}
           onError={() => setFailedSrc(src ?? null)}
           onLoad={(e) => {
             const img = e.currentTarget;
@@ -123,10 +132,10 @@ export function ProductImage({
  *  вертикальный жест по умолчанию уходит родителю. Монтируются только активный
  *  слайд и соседи (lazy). 0–1 фото — обычная карточка без точек и без скролла. */
 function CardCarousel({
-  id, images, title, category, compact, onOpen,
+  id, images, title, category, compact, onOpen, bleed,
 }: {
   id: number; images: string[]; title: string; category?: string | null;
-  compact?: boolean; onOpen: () => void;
+  compact?: boolean; onOpen: () => void; bleed?: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -218,12 +227,12 @@ function CardCarousel({
             <div key={i} className="w-full flex-none snap-center">
               <ProductImage
                 src={isSlideMounted(i, index) ? src : undefined}
-                title={title} category={category} className="aspect-square w-full" compact={compact}
+                title={title} category={category} className="aspect-square w-full" compact={compact} bleed={bleed}
               />
             </div>
           ))
         ) : (
-          <ProductImage src={images[0]} title={title} category={category} className="aspect-square w-full" compact={compact} />
+          <ProductImage src={images[0]} title={title} category={category} className="aspect-square w-full" compact={compact} bleed={bleed} />
         )}
       </div>
 
@@ -375,7 +384,15 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
     <button
       onClick={add}
       aria-label={`Добавить в корзину: ${card.title}`}
-      className="tap flex h-9 w-full items-center justify-center gap-1.5 rounded-field bg-accent text-[13px] font-semibold text-white transition-colors hover:bg-accentdark"
+      // Легендарный товар отличается ЦВЕТОМ ДЕЙСТВИЯ, а не рамкой вокруг
+      // карточки. Текст тёмный, а не белый: белое на этом золоте даёт 2,8:1
+      // при норме 4,5:1, тёмное — 6,9:1. Золото приглушённое (#C8921F), то же,
+      // что было в рамке: менять фирменный тон вместе с носителем незачем.
+      className={`tap flex h-9 w-full items-center justify-center gap-1.5 rounded-field text-[13px] font-semibold transition-colors ${
+        card.is_legendary
+          ? "bg-[#C8921F] text-[#241800] hover:bg-[#b3811a]"
+          : "bg-accent text-white hover:bg-accentdark"
+      }`}
     >
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor"
         strokeWidth="2.4" strokeLinecap="round">
@@ -410,24 +427,25 @@ function ProductCard({ card, compact, onOpen }: Props) {
     <div
       className={`product-card-viewport card-appear lift relative flex h-full flex-col overflow-hidden rounded-xl2 bg-surface lg:hover:shadow-float ${
         compact ? "w-40 shrink-0 lg:w-auto" : ""
-      } ${
-        // Легендарный товар: золотая рамка вместо обычной тени карточки.
-        // Подложку под фотографию НЕ красим — она подкрашивает белый фон
-        // вырезанных снимков, и на светлых товарах это читается как грязь.
-        card.is_legendary
-          ? "shadow-[0_0_0_1.5px_#c8921f,0_6px_18px_-8px_rgba(122,82,0,0.38)]"
-          : "shadow-card"
-      }`}
+      } shadow-card`}
     >
-      {/* relative на карточке выше — ради этого блика: он тянется на всю
-          карточку и обрезается её же overflow-hidden. */}
+      {/* Золотой рамки вокруг легендарной карточки здесь больше нет.
+          Она решала задачу «отличить», но платила за это дорого: спорила с
+          самой фотографией, а нарисованная box-shadow'ом на 1.5px НАРУЖУ —
+          срезалась верхней кромкой любой ленты прокрутки (чинилось в трёх
+          местах разом). Опознание всё равно несёт бейдж «Легендарный», а
+          отличие переехало на кнопку: цвет действия не трогает картинку и
+          подсвечивает то, ради чего карточка существует.
+
+          relative на карточке выше — ради блика: он тянется на всю карточку
+          и обрезается её же overflow-hidden. */}
       {card.is_legendary && <LegendaryGloss />}
       {/* Карусель + бейджи + избранное — соседи в relative-контейнере (валидный DOM,
           вложенных кнопок нет). aspect-square: высота image-области стабильна. */}
       <div className="relative">
         <CardCarousel
           id={card.id} images={gallery} title={card.title} category={card.category}
-          compact={compact} onOpen={open}
+          compact={compact} onOpen={open} bleed={card.is_legendary}
         />
         <div className="pointer-events-none absolute left-2 top-2 z-10 flex flex-col items-start gap-1">
           {/* «Хит» на легендарном товаре гасит backend (to_card): правило одно
