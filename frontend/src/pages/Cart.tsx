@@ -552,7 +552,9 @@ function Suggestions({ title, cards }: { title: string; cards: TCard[] }) {
   return (
     <div className="mt-8">
       <h2 className="text-[17px] font-bold leading-5">{title}</h2>
-      <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0">
+      {/* pt-0.5 — место под рамку легендарной карточки: она нарисована
+          box-shadow'ом наружу коробки, и лента прокрутки срезала её сверху. */}
+      <div className="no-scrollbar stagger -mx-4 mt-2.5 flex gap-3 overflow-x-auto px-4 pb-2 pt-0.5 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0">
         {cards.slice(0, 8).map((c) => <ProductCard key={c.id} card={c} compact />)}
       </div>
     </div>

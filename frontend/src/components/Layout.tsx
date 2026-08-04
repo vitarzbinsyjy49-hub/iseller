@@ -145,7 +145,14 @@ export default function Layout() {
         onScroll={(e) => {
           if (!restoringScroll.current) rememberRouteScroll(routeId, e.currentTarget.scrollTop);
         }}
-        className="pb-nav flex-1 overflow-y-auto px-4 pt-3 lg:px-8 lg:pb-12 lg:pt-6"
+        // scrollbar-gutter резервирует место полосы прокрутки с ОБЕИХ сторон,
+        // и это про выравнивание, а не про полосу. Прокручивается <main>, а
+        // desktop-шапка лежит снаружи него: полоса съедала правый край только у
+        // контента, центрованный внутри блок уезжал влево на половину её
+        // ширины, и колонка не сходилась с логотипом на 8px. Симметричный
+        // резерв возвращает обеим коробкам общую среднюю линию. На мобильных
+        // полоса наложенная, ширина её ноль — правило там ничего не меняет.
+        className="pb-nav flex-1 overflow-y-auto px-4 pt-3 lg:px-8 lg:pb-12 lg:pt-6 lg:[scrollbar-gutter:stable_both-edges]"
       >
         <div className="lg:mx-auto lg:w-full lg:max-w-[1320px]">
           <Outlet />

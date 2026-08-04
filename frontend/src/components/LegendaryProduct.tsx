@@ -52,13 +52,40 @@ export default function LegendaryProduct({
   ).filter((s) => !(items.length > 0 && s.label.trim().toLowerCase() === "в комплекте"));
 
   return (
-    // Выход из отступов <main> (px-4 pt-3): тёмное полотно должно доходить до
-    // краёв экрана, иначе по бокам светятся полосы светлого магазина.
+    // Экран целиком, а не блок внутри страницы.
+    //
+    // Раньше полотно пыталось выйти из отступов <main> отрицательными полями
+    // (`-mx-4 lg:-mx-8`). На мобильном это совпадало, а на desktop нет: контент
+    // внутри <main> центрован в max-w-[1320px], и по бокам оставались светлые
+    // полосы — замер давал по 20px, а после того как <main> получил
+    // scrollbar-gutter, по 28px. Сверху при этом всё равно висела светлая шапка
+    // магазина, снизу — таббар: тёмная афиша была вставлена в светлую рамку.
+    //
+    // Поэтому `fixed inset-0`: страница события занимает вьюпорт и прокручивается
+    // внутри себя. Зеркалить чужие отступы больше не нужно — их просто нет.
+    //
+    // z-50 — тот же уровень, что у desktop-шапки, и этого достаточно: шапка
+    // стоит в разметке ВЫШЕ <main>, а при равном z выигрывает тот, кто ниже по
+    // документу. Модалки (LeadForm, ScenarioSheet) и toast'ы (z-60) остаются
+    // над афишей по той же причине — они рисуются позже.
+    //
+    // overflow-x: hidden не только режет случайный горизонтальный вылет: свайп
+    // «назад» ищет горизонтальные скроллеры на пути жеста и пропускает жест
+    // дальше только если их нет (lib/usePageSwipe). Явный hidden гарантирует,
+    // что афиша не опознается скроллером и не съест жест.
     <div
-      className="-mx-4 -mt-3 min-h-full px-4 pb-cta pt-3 text-white lg:-mx-8 lg:px-8"
-      style={{ background: "#0D0D16" }}
+      className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden overscroll-contain px-4 text-white lg:px-8"
+      style={{
+        background: "#0D0D16",
+        // Вырез статус-бара в Telegram-fullscreen: inset-0 заходит под него.
+        paddingTop: "calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 12px)",
+      }}
     >
-      <div className="mx-auto max-w-md lg:max-w-[1100px]">
+      {/* Нижний отступ — под мобильный док с кнопкой (её высота + воздух +
+          safe-area). На desktop дока нет, кнопка стоит в правой колонке. */}
+      <div
+        className="mx-auto max-w-md pb-[calc(88px+max(0.5rem,var(--app-safe-bottom,env(safe-area-inset-bottom,0px))))] lg:max-w-[1100px] lg:pb-16"
+      >
         <div className="mb-3 flex items-center gap-2">
           <RoundBtn onClick={() => navigate(-1)} label="Назад">
             <path d="M15 18l-6-6 6-6" />
@@ -75,26 +102,30 @@ export default function LegendaryProduct({
           )}
         </div>
 
-        {/* Афиша во всю ширину. Подписей поверх не рисуем: макет уже содержит и
-            заголовок, и цену, и наш текст спорил бы с картинкой. Заголовок
-            страницы стоит НИЖЕ — он же остаётся в alt для screen reader. */}
-        {product.poster_url && (
-          <img
-            src={product.poster_url}
-            alt={product.title}
-            // Афишу не режем нигде: заголовок и цена набраны в самом макете, и
-            // любой кроп их отъедает. На desktop вместо этого ограничиваем
-            // ширину — иначе 4:3 разворачивается на 800+ пикселей высоты и
-            // уводит цену с кнопкой за сгиб.
-            className="card-appear -mx-4 w-[calc(100%+2rem)] max-w-none lg:mx-0 lg:w-full lg:max-w-[720px] lg:rounded-hero"
-            decoding="async"
-          />
-        )}
-
         {/* minmax(0,1fr), а не 1fr: у колонки с длинным заголовком min-content
             больше трека, и на 1fr сетка расползалась вправо за экран. */}
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-12">
           <div>
+            {/* Афиша во всю ширину КОЛОНКИ. Подписей поверх не рисуем: макет уже
+                содержит и заголовок, и цену, и наш текст спорил бы с картинкой.
+                Заголовок страницы стоит НИЖЕ — он же остаётся в alt.
+
+                Раньше афиша висела НАД сеткой и ограничивалась 720px, а сетка
+                под ней занимала все 1100px: у картинки и текста были разные
+                левые и правые границы, и правая колонка с покупкой не
+                выравнивалась ни с чем. Внутри колонки мера одна на всё, и
+                отдельный лимит ширины не нужен — его задаёт сама колонка. */}
+            {product.poster_url && (
+              <img
+                src={product.poster_url}
+                alt={product.title}
+                // Афишу не режем нигде: заголовок и цена набраны в самом макете,
+                // и любой кроп их отъедает.
+                className="card-appear -mx-4 w-[calc(100%+2rem)] max-w-none lg:mx-0 lg:w-full lg:rounded-hero"
+                decoding="async"
+              />
+            )}
+
             <h1 className="mt-6 text-[clamp(2rem,9vw,3.25rem)] font-black uppercase leading-[0.92] tracking-[-0.03em] [text-wrap:balance]">
               {product.title}
             </h1>
@@ -170,7 +201,9 @@ export default function LegendaryProduct({
           </div>
 
           {/* Desktop: покупка стоит рядом с описанием и не уезжает вниз. */}
-          <div className="mt-8 hidden lg:sticky lg:top-6 lg:mt-6 lg:block">
+          {/* lg:mt-0 — верх блока покупки совпадает с верхом афиши: замер давал
+              84 против 60, и колонка выглядела просевшей на 24px. */}
+          <div className="mt-8 hidden lg:sticky lg:top-6 lg:mt-0 lg:block">
             <div className="rounded-hero p-5" style={{ background: "rgba(255,255,255,0.06)" }}>
               {cta}
             </div>
@@ -179,10 +212,17 @@ export default function LegendaryProduct({
       </div>
 
       {/* Mobile: та же кнопка в доке. Фон дока — фон страницы, чтобы под ним не
-          просвечивала светлая полоса магазина. */}
+          просвечивала светлая полоса магазина.
+          Класса .cta-dock здесь больше нет: он резервирует снизу высоту нижней
+          навигации, а под афишей её не видно — резерв стал бы пустой полосой
+          в 80px над кнопкой. Прижимаем к низу, компенсируя только safe-area. */}
       <div
-        className="fixed inset-x-0 cta-dock z-30 border-t px-4 pt-2.5 lg:hidden"
-        style={{ background: "#0D0D16", borderColor: "rgba(255,255,255,0.10)" }}
+        className="fixed inset-x-0 bottom-0 z-30 border-t px-4 pt-2.5 lg:hidden"
+        style={{
+          background: "#0D0D16",
+          borderColor: "rgba(255,255,255,0.10)",
+          paddingBottom: "calc(max(0.5rem, var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))) + 10px)",
+        }}
       >
         <div className="mx-auto max-w-md">{cta}</div>
       </div>

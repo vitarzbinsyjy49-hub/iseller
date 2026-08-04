@@ -1,45 +1,41 @@
-/** Знак бренда — реальные файлы из C:/iseller-demo/frontend/public/assets/brand.
- *  Текст на lockup-версии тёмно-синий: держим её только на светлых
- *  поверхностях (desktop-шапка) или внутри белого чипа (тёмный hero на
- *  мобильном), иначе на тёмном фоне надпись потеряется. */
-export function BrandIcon({
-  size = 36, chip = false, className = "",
-}: { size?: number; chip?: boolean; className?: string }) {
-  const icon = (
-    <img
-      src="/assets/brand/logo-icon.png"
-      alt="АйСеллер"
-      width={size} height={size}
-      className="block"
-      style={{ width: size, height: size }}
-    />
-  );
-  if (!chip) return icon;
-  return (
-    <span className={`inline-flex shrink-0 items-center justify-center rounded-xl bg-white p-[3px] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.35)] ${className}`}>
-      {icon}
-    </span>
-  );
-}
+/** Знак бренда — реальный файл из C:/iseller-demo/frontend/public/assets/brand.
+ *
+ *  Растровый lockup (знак + слово одной картинкой) отсюда убран вместе с
+ *  BrandIcon: обе шапки перешли на BrandWordmark, где слово набрано вёрсткой.
+ *  Мёртвые экспорты держать нельзя — следующий читатель решит, что выбор между
+ *  тремя вариантами знака ещё существует, и добавит четвёртый.
+ */
 
-/** Икона + слово одним файлом (lockup). Высота — единственный параметр,
- *  ширина считается из реальных пропорций файла (1059×259), чтобы не
- *  сплющивать буквы. */
-export function BrandLockup({
-  height = 28, chip = false, className = "",
-}: { height?: number; chip?: boolean; className?: string }) {
-  const img = (
-    <img
-      src="/assets/brand/logo-lockup.png"
-      alt="АйСеллер"
-      height={height}
-      style={{ height, width: "auto" }}
-    />
-  );
-  if (!chip) return <span className={className}>{img}</span>;
+/** Знак + слово, собранные ВЁРСТКОЙ, а не одним растром.
+ *
+ *  Растровый lockup нёс собственный кегль, собственный тёмно-синий и требовал
+ *  белую плашку под себя на тёмном hero — плашка и была тем, что читалось как
+ *  наклейка поверх шапки. Здесь слово — обычный текст: наследует шрифт
+ *  интерфейса, берёт цвет от `currentColor` (значит, живёт и на тёмном, и на
+ *  светлом без подложки) и остаётся резким на любом DPI.
+ *
+ *  `size` — сторона иконки; кегль слова считается от неё, чтобы пропорция
+ *  знака и надписи не разъезжалась при смене размера.
+ */
+export function BrandWordmark({
+  size = 30, className = "",
+}: { size?: number; className?: string }) {
   return (
-    <span className={`inline-flex shrink-0 items-center rounded-xl bg-white px-2 py-1 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.35)] ${className}`}>
-      {img}
+    <span className={`inline-flex items-center gap-2 ${className}`}>
+      <img
+        src="/assets/brand/logo-icon.png"
+        alt=""
+        aria-hidden
+        width={size} height={size}
+        className="block shrink-0 rounded-[22%]"
+        style={{ width: size, height: size }}
+      />
+      <span
+        className="font-bold leading-none tracking-[-0.02em]"
+        style={{ fontSize: Math.round(size * 0.62) }}
+      >
+        АйСеллер
+      </span>
     </span>
   );
 }

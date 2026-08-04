@@ -105,6 +105,19 @@ function animateValue(
   return () => cancelAnimationFrame(frame);
 }
 
+/** Прогнать произвольное число от `from` к `to` своими кадрами.
+ *
+ *  Тот же мотор, что у прокрутки и прозрачности, но без привязки к свойству:
+ *  им пользуется блик легендарной карточки, который двигает не scroll и не
+ *  opacity, а собственную позицию градиента. Возвращает отмену. */
+export function animateNumber(
+  from: number, to: number, durationMs: number,
+  apply: (value: number) => void,
+  done?: () => void,
+): () => void {
+  return animateValue(from, to, durationMs, apply, done);
+}
+
 /** Плавно изменить прозрачность элемента — своими руками, без CSS-перехода.
  *
  *  CSS-переход здесь не годится: на устройствах с выключенной системной

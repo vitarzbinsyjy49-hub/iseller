@@ -22,7 +22,7 @@ import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
 import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
-import { BrandLockup } from "../components/BrandMark";
+import { BrandWordmark } from "../components/BrandMark";
 import { autoplayReady, nextSlideIndex, snapTargetLeft } from "../lib/carousel";
 import { animateScrollTo } from "../lib/motion";
 
@@ -330,38 +330,18 @@ export default function Home() {
       <header className="app-hero -mx-4 -mt-3 rounded-b-hero px-4 pb-5 pt-2 text-white shadow-float lg:hidden">
         <div className="flex items-center justify-between gap-3">
           {/* Логотип крупнее кнопок справа намеренно: это единственная точка
-              бренда на экране. Прибавку в росте гасим более тесной плашкой и
-              подписью, поэтому строка поиска ниже остаётся на прежнем месте. */}
+              бренда на экране. Белой плашки под ним больше нет — слово набрано
+              вёрсткой и берёт белый прямо у hero, а плашка читалась наклейкой. */}
           <div className="min-w-0">
-            <BrandLockup height={32} chip />
-            <p className="mt-1 truncate text-[11px] font-medium leading-4 text-white/70">Техника, которую легко найти</p>
+            <BrandWordmark size={30} />
+            <p className="mt-1.5 truncate text-[11px] font-medium leading-4 text-white/70">Техника, которую легко найти</p>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              onClick={() => navigate("/favorites")}
-              aria-label="Избранное"
-              className="tap flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.12]"
-            >
-              <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20.7 4.3 13a4.6 4.6 0 0 1 0-6.5 4.6 4.6 0 0 1 6.5 0l1.2 1.2 1.2-1.2a4.6 4.6 0 0 1 6.5 0 4.6 4.6 0 0 1 0 6.5z" />
-              </svg>
-            </button>
-            {/* Постоянный вход в корзину: плавающая панель появляется только с
-                товарами, и без этой кнопки пустая корзина была бы недостижима. */}
-            <button
-              onClick={() => { track("cart_open", { source: "home_header" }); navigate("/cart"); }}
-              aria-label={cart.items_count > 0 ? `Корзина: ${cart.items_count}` : "Корзина"}
-              className="tap relative flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.12]"
-            >
-              <CartGlyph className="h-[18px] w-[18px]" />
-              {cart.items_count > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-accentdark">
-                  {cart.items_count}
-                </span>
-              )}
-            </button>
-            <ProfileChip user={user} variant="mobile" />
-          </div>
+          <HeroActions
+            cartCount={cart.items_count}
+            onFavorites={() => navigate("/favorites")}
+            onCart={() => { track("cart_open", { source: "home_header" }); navigate("/cart"); }}
+            profile={<ProfileChip user={user} variant="mobile" />}
+          />
         </div>
 
         {/* Крупный поиск — главный элемент верха (relative: под ним панель подсказок).
@@ -521,7 +501,10 @@ export default function Home() {
           левые 16px — первый баннер вставал вплотную к краю экрана. */}
       <div
         ref={bannerStrip}
-        className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:scroll-px-0 lg:px-0 lg:pb-0"
+        // mt-3, а не mt-4: у ряда плиток выше есть свой pb-1, и вместе с mt-4
+        // просвет выходил 20px против 16px над плитками. Считать надо
+        // расстояние между тем, что видно, а не между контейнерами.
+        className="no-scrollbar -mx-4 mt-3 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:scroll-px-0 lg:px-0 lg:pb-0"
       >
         {(home ? home.banners : Array.from({ length: 2 }, () => null)).map((b, i) =>
           b ? (
@@ -763,6 +746,56 @@ function HeroBanner({
   );
 }
 
+function HeartGlyph({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20.7 4.3 13a4.6 4.6 0 0 1 0-6.5 4.6 4.6 0 0 1 6.5 0l1.2 1.2 1.2-1.2a4.6 4.6 0 0 1 6.5 0 4.6 4.6 0 0 1 0 6.5z" />
+    </svg>
+  );
+}
+
+function CartCount({ count, offset }: { count: number; offset: string }) {
+  if (count <= 0) return null;
+  return (
+    <span className={`absolute ${offset} flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-accentdark`}>
+      {count}
+    </span>
+  );
+}
+
+/** Правый угол шапки: избранное и корзина одной «пилюлей», аватар отдельно.
+ *
+ *  Три одинаковых круглых кнопки подряд читались как три равных по важности
+ *  входа и спорили за внимание с логотипом слева. Избранное и корзина — вещи
+ *  одного рода («мои списки»), поэтому стоят одним объектом; аватар — другого,
+ *  и потому отделён. Вместо трёх конкурирующих кружков в углу два объекта. */
+function HeroActions({
+  cartCount, onFavorites, onCart, profile,
+}: {
+  cartCount: number;
+  onFavorites: () => void;
+  onCart: () => void;
+  profile: React.ReactNode;
+}) {
+  const cartLabel = cartCount > 0 ? `Корзина: ${cartCount}` : "Корзина";
+
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      <div className="flex items-center rounded-full bg-white/[0.12] p-0.5">
+        <button onClick={onFavorites} aria-label="Избранное" className="tap flex h-8 w-9 items-center justify-center rounded-full text-white">
+          <HeartGlyph className="h-[18px] w-[18px]" />
+        </button>
+        <span aria-hidden className="h-4 w-px bg-white/20" />
+        <button onClick={onCart} aria-label={cartLabel} className="tap relative flex h-8 w-9 items-center justify-center rounded-full text-white">
+          <CartGlyph className="h-[18px] w-[18px]" />
+          <CartCount count={cartCount} offset="right-1 top-0.5" />
+        </button>
+      </div>
+      {profile}
+    </div>
+  );
+}
+
 function Section({
   title, subtitle, cards, onAll, grid, onOpen,
 }: {
@@ -787,7 +820,13 @@ function Section({
         </div>
       ) : (
         // mobile — горизонтальная лента, desktop — та же сетка 4/5
-        <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0 wide:grid-cols-5">
+        // pt-0.5 — не «воздух», а место под рамку легендарной карточки. Она
+        // нарисована box-shadow'ом на 1.5px НАРУЖУ коробки, а лента прокрутки
+        // (overflow-x:auto делает вычисленный overflow-y тоже auto) срезает
+        // всё, что вышло за её край. Снизу рамку спасал pb-2, сверху спасать
+        // было нечем — и золотой порог у карточки был только с трёх сторон.
+        // Отступ сверху компенсируем меньшим mt, чтобы просвет не вырос.
+        <div className="no-scrollbar stagger -mx-4 mt-2.5 flex gap-3 overflow-x-auto px-4 pb-2 pt-0.5 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0 wide:grid-cols-5">
           {cards.map((c) => <ProductCard key={c.id} card={c} onOpen={onOpen} compact />)}
         </div>
       )}
@@ -917,7 +956,10 @@ function QuickScenarios({
     // Реальные категории показывает блок категорий — он строится из данных.
   ];
   return (
-    <div className="no-scrollbar stagger -mx-4 mt-3 flex snap-x snap-proximity scroll-px-4 gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1 lg:hidden">
+    // mt-4, а не mt-3: между шапкой, рядом плиток и лентой баннеров теперь
+    // ровно 16px в обоих просветах. Было 12 и 20 — глаз читал это как «плитки
+    // прилипли к шапке и отвалились от ленты».
+    <div className="no-scrollbar stagger -mx-4 mt-4 flex snap-x snap-proximity scroll-px-4 gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1 lg:hidden">
       {items.map((s) => (
         <button
           key={s.key}

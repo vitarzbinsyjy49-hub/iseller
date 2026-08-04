@@ -445,7 +445,9 @@ export default function ProductDetails() {
               </button>
             )}
           </div>
-          <div className="no-scrollbar stagger -mx-4 mt-3 flex gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0 wide:grid-cols-5">
+          {/* pt-0.5 — место под рамку легендарной карточки: она нарисована
+              box-shadow'ом наружу коробки, и лента прокрутки срезала её сверху. */}
+          <div className="no-scrollbar stagger -mx-4 mt-2.5 flex gap-3 overflow-x-auto px-4 pb-2 pt-0.5 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0 lg:pb-0 wide:grid-cols-5">
             {similar.map((c) => (
               <ProductCardView key={c.id} card={c} compact />
             ))}

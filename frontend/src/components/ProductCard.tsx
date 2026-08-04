@@ -17,6 +17,7 @@ import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib
 import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMath";
 import { QuantityStepper } from "./QuantityStepper";
 import { preloadRoute } from "../lib/routePreload";
+import { LegendaryGloss } from "./LegendaryGloss";
 
 const MAX_CARD_IMAGES = 10;
 
@@ -407,7 +408,7 @@ function ProductCard({ card, compact, onOpen }: Props) {
     // h-full + flex-col: в сетке все карточки одной высоты, кнопка прижата вниз.
     // lg:hover — desktop-состояние; tap scale остаётся на mobile.
     <div
-      className={`product-card-viewport card-appear lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface lg:hover:shadow-float ${
+      className={`product-card-viewport card-appear lift relative flex h-full flex-col overflow-hidden rounded-xl2 bg-surface lg:hover:shadow-float ${
         compact ? "w-40 shrink-0 lg:w-auto" : ""
       } ${
         // Легендарный товар: золотая рамка вместо обычной тени карточки.
@@ -418,6 +419,9 @@ function ProductCard({ card, compact, onOpen }: Props) {
           : "shadow-card"
       }`}
     >
+      {/* relative на карточке выше — ради этого блика: он тянется на всю
+          карточку и обрезается её же overflow-hidden. */}
+      {card.is_legendary && <LegendaryGloss />}
       {/* Карусель + бейджи + избранное — соседи в relative-контейнере (валидный DOM,
           вложенных кнопок нет). aspect-square: высота image-области стабильна. */}
       <div className="relative">
