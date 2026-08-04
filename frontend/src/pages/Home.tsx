@@ -501,10 +501,10 @@ export default function Home() {
           левые 16px — первый баннер вставал вплотную к краю экрана. */}
       <div
         ref={bannerStrip}
-        // mt-3, а не mt-4: у ряда плиток выше есть свой pb-1, и вместе с mt-4
-        // просвет выходил 20px против 16px над плитками. Считать надо
-        // расстояние между тем, что видно, а не между контейнерами.
-        className="no-scrollbar -mx-4 mt-3 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:scroll-px-0 lg:px-0 lg:pb-0"
+        // mt-4: ряд плиток выше стал сеткой и лишился собственного pb-1,
+        // которым раньше добиралось расстояние. Просветы над плитками и под
+        // ними снова по 16px.
+        className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:scroll-px-0 lg:px-0 lg:pb-0"
       >
         {(home ? home.banners : Array.from({ length: 2 }, () => null)).map((b, i) =>
           b ? (
@@ -946,32 +946,51 @@ function QuickScenarios({
   onMacbook: () => void;
 }) {
   const items: { key: string; label: string; detail: string; onClick: () => void }[] = [
-    { key: "iphone", label: "iPhone", detail: "Все модели", onClick: () => onCatalog("/catalog?query=iPhone", "buy_iphone") },
-    { key: "macbook", label: "MacBook", detail: "Под ваши задачи", onClick: onMacbook },
     { key: "tradein", label: "Trade-In", detail: "Оценим технику", onClick: () => onScenario("trade_in") },
-    { key: "b2b", label: "Для бизнеса", detail: "С НДС и документами", onClick: () => onScenario("b2b") },
+    // «Счёт юрлицу» вместо «С НДС и документами»: в треть экрана вторая
+    // формулировка ложится второй строкой и одна раздувает высоту всего ряда
+    // на 17px. Короткая при этом говорит ровно то же самое конкретнее.
+    { key: "b2b", label: "Бизнесу", detail: "Счёт юрлицу", onClick: () => onScenario("b2b") },
     { key: "wholesale", label: "Опт", detail: "Цена на партию", onClick: () => onScenario("wholesale") },
     // Плитки «Аксессуары» здесь больше нет: она вела в категорию «аксессуары»,
     // которой в каталоге не существует (кабелей/чехлов/зарядок нет вовсе).
     // Реальные категории показывает блок категорий — он строится из данных.
+    //
+    // iPhone и MacBook отсюда убраны как ТРЕТИЙ показ одного и того же: выше
+    // чипы «Смартфоны/Ноутбуки», ниже баннеры «iPhone в наличии» и «MacBook
+    // для работы». Повтор не помогал выбрать — он забирал место у того, чего
+    // на главной больше нигде нет: обмена, счёта юрлицу и цены на партию.
   ];
   return (
     // mt-4, а не mt-3: между шапкой, рядом плиток и лентой баннеров теперь
     // ровно 16px в обоих просветах. Было 12 и 20 — глаз читал это как «плитки
     // прилипли к шапке и отвалились от ленты».
-    <div className="no-scrollbar stagger -mx-4 mt-4 flex snap-x snap-proximity scroll-px-4 gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1 lg:hidden">
+    // Сетка из трёх, а не лента: три пункта помещаются в ширину экрана
+    // целиком. Лента здесь была третьей подряд — чипы категорий в шапке,
+    // эта, лента баннеров, — и три листающиеся полосы читались одинаково
+    // важными. Плюс лента всегда обрезает пункт по правому краю: человек
+    // видит, что «там ещё что-то есть», но не знает что. Когда видно всё, ни
+    // прокрутка, ни привязка, ни обрез не нужны — их тут больше и нет.
+    //
+    // Тени и обводки сняты намеренно. Это не товар и не карточка: подложка
+    // тоном отделяет пункт от фона, а поднимать его над страницей незачем —
+    // рядом стоят настоящие карточки товаров, и спорить с ними по весу
+    // служебные ссылки не должны.
+    <div className="stagger mt-4 grid grid-cols-3 gap-2 lg:hidden">
       {items.map((s) => (
         <button
           key={s.key}
           onClick={s.onClick}
-          className="card-appear tap flex h-16 w-[clamp(148px,42vw,164px)] shrink-0 snap-start items-center gap-2.5 rounded-xl2 bg-surface px-3 text-left shadow-card ring-1 ring-inset ring-black/[0.035]"
+          className="card-appear tap flex min-w-0 flex-col items-start gap-1.5 rounded-xl2 bg-mutedbg px-2.5 py-2.5 text-left"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface text-accent">
             <ScenarioIcon name={s.key} />
           </span>
           <span className="min-w-0">
             <span className="block truncate text-[13px] font-bold leading-4 text-text">{s.label}</span>
-            <span className="mt-0.5 block truncate text-[11px] font-medium leading-4 text-muted">{s.detail}</span>
+            {/* Две строки разрешены: «С НДС и документами» в треть экрана в одну
+                не влезает, а обрезанное «С НДС и…» не объясняет ничего. */}
+            <span className="mt-0.5 line-clamp-2 block text-[11px] font-medium leading-[1.3] text-muted">{s.detail}</span>
           </span>
         </button>
       ))}
