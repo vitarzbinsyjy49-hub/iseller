@@ -26,7 +26,7 @@ const PRESS_SWEEP_MS = 620;
 const IDLE_GAP_MS = 5_200;
 
 const IDLE_ALPHA = 0.32;
-const PRESS_ALPHA = 0.8;
+const PRESS_ALPHA = 0.7;
 
 export function LegendaryGloss() {
   const ref = useRef<HTMLSpanElement | null>(null);
@@ -40,26 +40,33 @@ export function LegendaryGloss() {
     let timer = 0;
     let visible = false;
 
-    // «Убрать движение» — не «убрать событие»: вместо проезда блик
-    // проявляется и гаснет на месте. Та же линия, что у ленты баннеров.
+    // Блик ВСЕГДА едет, в том числе при «уменьшить движение».
+    //
+    // Здесь стояла подмена: под этой настройкой полоса не двигалась, а
+    // проявлялась и гасла на месте. Формально это следовало правилу «убрать
+    // движение — не убрать событие», но на живом телефоне выглядело вспышкой на
+    // пол-карточки: неподвижное светлое пятно, которое разгорается и тухнет,
+    // читается молнией, а не глянцем. Проезд мягче вспышки, а не наоборот.
+    //
+    // Игнорировать настройку тут можно ровно потому, что кадры считаем мы сами:
+    // это не декоративная CSS-анимация, которую система вправе погасить, а
+    // ответ интерфейса на касание. Смягчаем иначе — ниже яркость и дольше ход,
+    // а фоновые проходы под этой настройкой не запускаем вовсе (см. loop).
     const sweep = (alpha: number, durationMs: number) => {
       cancel();
-      if (prefersReducedMotion()) {
-        el.style.transform = "translateX(0) skewX(-18deg)";
-        cancel = animateNumber(0, 1, durationMs, (t) => {
-          // Треугольник: разгорается к середине, гаснет к концу.
-          el.style.opacity = String(alpha * (1 - Math.abs(t * 2 - 1)));
-        });
-        return;
-      }
-      el.style.opacity = String(alpha);
-      cancel = animateNumber(-140, 240, durationMs, (v) => {
+      const calm = prefersReducedMotion();
+      el.style.opacity = String(calm ? alpha * 0.55 : alpha);
+      cancel = animateNumber(-140, 240, calm ? durationMs * 1.5 : durationMs, (v) => {
         el.style.transform = `translateX(${v}%) skewX(-18deg)`;
       }, () => { el.style.opacity = "0"; });
     };
 
+    // Фоновый проход раз в несколько секунд — украшение, и под «уменьшить
+    // движение» его не запускаем: человек этой настройкой просил интерфейс не
+    // шевелиться сам по себе. Ответ на касание остаётся — его человек вызвал.
     const loop = () => {
       window.clearTimeout(timer);
+      if (prefersReducedMotion()) return;
       timer = window.setTimeout(() => {
         if (visible) sweep(IDLE_ALPHA, SWEEP_MS);
         loop();
@@ -90,7 +97,7 @@ export function LegendaryGloss() {
     <span
       ref={ref}
       aria-hidden
-      className="pointer-events-none absolute inset-y-0 left-0 z-20 w-2/5"
+      className="pointer-events-none absolute inset-y-0 left-0 z-20 w-[30%]"
       style={{
         opacity: 0,
         transform: "translateX(-140%) skewX(-18deg)",
