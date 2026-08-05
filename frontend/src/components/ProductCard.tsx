@@ -17,7 +17,6 @@ import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib
 import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMath";
 import { QuantityStepper } from "./QuantityStepper";
 import { preloadRoute } from "../lib/routePreload";
-import { LegendaryGloss } from "./LegendaryGloss";
 
 const MAX_CARD_IMAGES = 10;
 
@@ -425,21 +424,22 @@ function ProductCard({ card, compact, onOpen }: Props) {
     // h-full + flex-col: в сетке все карточки одной высоты, кнопка прижата вниз.
     // lg:hover — desktop-состояние; tap scale остаётся на mobile.
     <div
-      className={`product-card-viewport card-appear lift relative flex h-full flex-col overflow-hidden rounded-xl2 bg-surface lg:hover:shadow-float ${
+      className={`product-card-viewport card-appear lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface lg:hover:shadow-float ${
         compact ? "w-40 shrink-0 lg:w-auto" : ""
       } shadow-card`}
     >
-      {/* Золотой рамки вокруг легендарной карточки здесь больше нет.
-          Она решала задачу «отличить», но платила за это дорого: спорила с
-          самой фотографией, а нарисованная box-shadow'ом на 1.5px НАРУЖУ —
-          срезалась верхней кромкой любой ленты прокрутки (чинилось в трёх
-          местах разом). Опознание всё равно несёт бейдж «Легендарный», а
-          отличие переехало на кнопку: цвет действия не трогает картинку и
-          подсвечивает то, ради чего карточка существует.
+      {/* Легендарная карточка не отличается ни рамкой, ни бликом.
 
-          relative на карточке выше — ради блика: он тянется на всю карточку
-          и обрезается её же overflow-hidden. */}
-      {card.is_legendary && <LegendaryGloss />}
+          Рамка (box-shadow на 1.5px наружу) срезалась верхней кромкой любой
+          ленты прокрутки — чинилось в трёх местах разом. Блик ездил кадрами из
+          JS и ронял прокрутку на телефоне: каждый кадр двигал полупрозрачный
+          градиент во всю высоту карточки под overflow-hidden со скруглением,
+          то есть заставлял композитор перерисовывать её целиком. Витрина —
+          мобильная, и плавность ленты стоит дороже украшения на одном товаре.
+
+          Опознание несёт бейдж «Легендарный», отличие — цвет кнопки: он не
+          трогает картинку, ничего не анимирует и подсвечивает то, ради чего
+          карточка существует. */}
       {/* Карусель + бейджи + избранное — соседи в relative-контейнере (валидный DOM,
           вложенных кнопок нет). aspect-square: высота image-области стабильна. */}
       <div className="relative">
