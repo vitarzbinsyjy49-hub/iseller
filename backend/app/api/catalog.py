@@ -67,6 +67,7 @@ _SEARCH_ALIASES = {
     "икс-бокс": "xbox", "свитч": "switch", "нинтендо": "nintendo",
     "айпад": "ipad", "ipad": "ipad", "часы": "watch", "вотч": "watch",
     "джибиэль": "jbl", "колонка": "jbl", "леново": "lenovo", "асус": "asus",
+    "м4": "m4", "м5": "m5",
 }
 
 
@@ -99,7 +100,7 @@ def search_products(db: Session, query: str, price_max: float | None = None, lim
         stmt = stmt.where(or_(
             Product.title.ilike(like), Product.brand.ilike(like),
             Product.category.ilike(like), Product.subcategory.ilike(like),
-            Product.sku.ilike(like),
+            Product.sku.ilike(like), Product.cpu.ilike(like),
             func.cast(Product.tags, Text).ilike(like),
         ))
     if price_max:
@@ -189,6 +190,7 @@ def list_catalog(
             stmt = stmt.where(or_(
                 Product.title.ilike(like), Product.brand.ilike(like),
                 Product.category.ilike(like), Product.sku.ilike(like),
+                Product.cpu.ilike(like),
                 func.cast(Product.tags, Text).ilike(like),
             ))
 
