@@ -29,7 +29,10 @@ DELIVERY_METHODS = ("pickup", "delivery", "consult")
 # source остаётся "home"/"product"/"ai"/…, а lead_type задаёт продуктовый сценарий.
 # Обратная совместимость: старый POST без lead_type -> "general" (см. миграцию/схему).
 # cart — общая заявка по корзине: несколько позиций в lead_items.
-LEAD_TYPES = ("general", "product", "trade_in", "b2b", "wholesale", "cart")
+# price_offer — «нашли дешевле»: покупатель прислал ссылку на тот же товар у
+# конкурента, менеджер решает по цене вручную. Ссылка и цена со слов покупателя
+# лежат в metadata; наша цена — в снапшоте product_price самой заявки.
+LEAD_TYPES = ("general", "product", "trade_in", "b2b", "wholesale", "cart", "price_offer")
 DEFAULT_LEAD_TYPE = "general"
 CART_LEAD_TYPE = "cart"
 CART_LEAD_SOURCE = "telegram_mini_app_cart"

@@ -92,6 +92,31 @@ _STATUS_TEXTS: dict[str, tuple[str, str]] = {
     ),
 }
 
+#: Заявка «нашли дешевле» живёт по другой логике: человек не покупку оформлял,
+#: а прислал ссылку и ждёт ответа по ЦЕНЕ. Общие формулировки («состав и цена
+#: согласованы», «товар отложен») в этом разговоре звучат мимо. Оверлей
+#: переопределяет ТОЛЬКО те статусы, где текст отличается; на остальных
+#: работает общий словарь — второй полный список статусов разъехался бы с
+#: первым на ближайшей правке.
+_PRICE_OFFER_STATUS_TEXTS: dict[str, tuple[str, str]] = {
+    "contacted": (
+        "Проверяем вашу ссылку",
+        "Менеджер сверяет цену на площадке и скоро напишет.",
+    ),
+    "confirming": (
+        "Сверяем цену",
+        "Уточняем условия у поставщика — ответим, как только будет ясность.",
+    ),
+    "confirmed": (
+        "Готовы дать эту цену",
+        "Менеджер напишет вам, чтобы договориться о получении.",
+    ),
+    "cancelled": (
+        "По этой ссылке цену повторить не сможем",
+        "Так бывает: у площадки другая поставка или условия. Напишите менеджеру — подберём вариант.",
+    ),
+}
+
 #: Статусы, о которых пишем пользователю. Один источник и для шаблонов, и для
 #: producer'а: список в двух местах разъехался бы на первой же правке.
 NOTIFIABLE_STATUSES: tuple[str, ...] = tuple(_STATUS_TEXTS)
@@ -100,7 +125,7 @@ NOTIFIABLE_STATUSES: tuple[str, ...] = tuple(_STATUS_TEXTS)
 def lead_status_message(
     *, status: str, public_number: str, items_count: int = 0,
     estimated_total: float | None = None, currency: str = "RUB",
-    product_title: str | None = None,
+    product_title: str | None = None, lead_type: str | None = None,
 ) -> Message | None:
     """Уведомление о смене статуса заявки, либо None если статус «немой».
 
@@ -108,8 +133,16 @@ def lead_status_message(
     позиций и предварительной суммой, одиночная — названием товара. Сумму
     называем предварительной, потому что она и есть предварительная: цена
     подтверждается менеджером (то же правило, что на панели корзины).
+
+    `lead_type` меняет только формулировки (см. `_PRICE_OFFER_STATUS_TEXTS`), но
+    не набор уведомляемых статусов: молчим мы везде одинаково.
     """
     entry = _STATUS_TEXTS.get(status)
+    # Оверлей именно ПЕРЕОПРЕДЕЛЯЕТ, а не расширяет: статус, о котором мы молчим
+    # всем, обязан молчать и здесь. Иначе «немой» in_progress заговорил бы у
+    # одного типа заявок, и правило «молчим одинаково» перестало бы быть правдой.
+    if entry is not None and lead_type == "price_offer":
+        entry = _PRICE_OFFER_STATUS_TEXTS.get(status, entry)
     if entry is None:
         return None
     headline, explanation = entry
@@ -131,6 +164,41 @@ def lead_status_message(
             _row(_url_button("💬 Менеджер", settings.MANAGER_RETAIL_URL)),
         ),
     )
+
+
+# ===================== «Нашли дешевле» — владельцу =====================
+def price_offer_message(
+    *, product_title: str, our_price: float | None, competitor_price: float | None,
+    competitor_url: str, competitor_shop: str, username: str | None,
+) -> Message:
+    """Заявка «нашли дешевле» владельцу.
+
+    Ссылку НЕ оборачиваем в <a> и не экранируем как текст ссылки: владельцу
+    нужен виден сам адрес, чтобы оценить площадку ДО перехода. Цена конкурента
+    приходит со слов покупателя — так и подписана, потому что проверить её мы
+    не можем и делать вид, что можем, нельзя.
+    """
+    who = f"@{username}" if username else "покупатель"
+    lines = [
+        "💸 <b>Нашли дешевле</b>",
+        "",
+        f"<b>{_esc(product_title)}</b>",
+        f"Наша цена: {format_money(our_price) or '—'}",
+    ]
+    if competitor_price is not None:
+        lines.append(f"У них: {format_money(competitor_price)} (со слов покупателя)")
+        if our_price is not None and our_price > competitor_price:
+            lines.append(f"Разница: {format_money(our_price - competitor_price)}")
+    else:
+        lines.append("У них: цена не указана")
+    lines += [
+        f"Площадка: {_esc(competitor_shop)}",
+        "",
+        _esc(competitor_url),
+        "",
+        f"От: {_esc(who)}",
+    ]
+    return Message("\n".join(lines))
 
 
 # ========================= Брошенная корзина =========================

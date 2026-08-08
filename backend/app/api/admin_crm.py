@@ -135,6 +135,10 @@ def _notify_status_change(db: Session, lead: Lead, new_status: str) -> None:
         estimated_total=float(lead.estimated_total) if lead.estimated_total is not None else None,
         currency=lead.currency or "RUB",
         product_title=lead.product_title,
+        # Тип меняет формулировки: «нашли дешевле» — разговор про цену, и общее
+        # «состав и цена согласованы» в нём звучит мимо. Набор уведомляемых
+        # статусов при этом общий (см. notification_templates).
+        lead_type=lead.lead_type,
     )
     enqueue(
         db,

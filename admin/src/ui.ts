@@ -110,10 +110,11 @@ export const SOURCE_RU: Record<string, string> = {
 };
 
 // v5.4.0: сценарные типы заявок; cart — общая заявка по корзине
-export const LEAD_TYPES = ["general", "product", "trade_in", "b2b", "wholesale", "cart"];
+// price_offer — «нашли дешевле»: ссылка на тот же товар у конкурента.
+export const LEAD_TYPES = ["general", "product", "trade_in", "b2b", "wholesale", "cart", "price_offer"];
 export const LEAD_TYPE_RU: Record<string, string> = {
   general: "Обычная", product: "Товар", trade_in: "Trade-In", b2b: "Для бизнеса",
-  wholesale: "Опт", cart: "Корзина",
+  wholesale: "Опт", cart: "Корзина", price_offer: "Нашли дешевле",
 };
 
 export const FULFILLMENT_RU: Record<string, string> = {
@@ -170,6 +171,10 @@ const META_KEY_RU: Record<string, string> = {
   intent: "Цель", desired_device: "Хочет получить", equipment: "Оборудование",
   quantity_range: "Количество", company: "Компания", city: "Город",
   category: "Категория", budget: "Бюджет",
+  // «Нашли дешевле». Порядок ключей здесь — это порядок строк на экране:
+  // сначала площадка и цена (по ним решают), потом сам адрес и комментарий.
+  competitor_shop: "Площадка", competitor_price: "Цена там",
+  competitor_url: "Ссылка у конкурента", comment: "Комментарий",
 };
 const META_HIDDEN = new Set(["origin"]);
 

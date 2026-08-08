@@ -15,6 +15,14 @@ META_MAX_KEY_LEN = 40
 META_MAX_STR_LEN = 500
 META_MAX_BYTES = 4000            # сериализованный размер очищенного объекта
 
+# Адресам нужен свой предел: общие 500 символов режут ссылку на товар у
+# конкурента МОЛЧА, и менеджер получает битый адрес, ничего об этом не узнав.
+# Исключение именное, а не «поднимем всем»: длинная строка допустима там, где
+# длина осмысленна, и нигде больше. Значение — тот же лимит, что в
+# services/offer_links (тест держит их равными).
+META_MAX_URL_LEN = 2048
+META_URL_KEYS = frozenset({"competitor_url"})
+
 
 def normalize_lead_type(value: str | None) -> str:
     """Неизвестный/пустой тип -> безопасный дефолт general (обратная совместимость
@@ -36,11 +44,11 @@ def sanitize_lead_metadata(raw) -> dict:
     if not isinstance(raw, dict):
         raise ValueError("metadata must be a JSON object")
 
-    def clean_scalar(v):
+    def clean_scalar(v, limit: int = META_MAX_STR_LEN):
         if isinstance(v, bool) or isinstance(v, (int, float)):
             return v
         if isinstance(v, str):
-            return v.strip()[:META_MAX_STR_LEN]
+            return v.strip()[:limit]
         return None
 
     out: dict = {}
@@ -52,12 +60,13 @@ def sanitize_lead_metadata(raw) -> dict:
         k = key.strip()[:META_MAX_KEY_LEN]
         if not k:
             continue
+        limit = META_MAX_URL_LEN if k in META_URL_KEYS else META_MAX_STR_LEN
         if isinstance(value, list):
-            items = [s for s in (clean_scalar(x) for x in value[:20]) if s is not None and s != ""]
+            items = [s for s in (clean_scalar(x, limit) for x in value[:20]) if s is not None and s != ""]
             if items:
                 out[k] = items
         else:
-            s = clean_scalar(value)
+            s = clean_scalar(value, limit)
             if s is not None and s != "":
                 out[k] = s
 

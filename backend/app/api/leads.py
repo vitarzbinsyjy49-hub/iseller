@@ -3,22 +3,112 @@
 POST /api/leads        — создать заявку (JWT). Пишет событие lead_created.
 GET  /api/leads/my     — мои заявки (JWT), для экрана «Заявки» в Mini App.
 """
+import hashlib
 import logging
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
 from app.models.lead import DEFAULT_LEAD_TYPE, DELIVERY_METHODS, LEAD_SOURCES, Lead
 from app.models.product import Product
 from app.models.user import User
 from app.schemas.ai import LeadIn
+from app.services.offer_links import OfferLinkError, normalize_offer_url, shop_name
 
 logger = logging.getLogger("techshop.leads")
 router = APIRouter(prefix="/leads", tags=["leads"])
+
+PRICE_OFFER_TYPE = "price_offer"
+#: Потолок цены конкурента. Не «правильная» цена, а граница правдоподобия:
+#: всё выше — опечатка или мусор, и в заявке ему делать нечего.
+MAX_COMPETITOR_PRICE = 100_000_000
+
+
+def _competitor_price(raw) -> float | None:
+    """Цена у конкурента со слов покупателя. Пусто — допустимо, мусор — нет.
+
+    Поле необязательное: заставлять человека вводить цифру ради галочки значит
+    потерять часть заявок. Но если цифра пришла, она обязана быть числом —
+    строка «дешевле» в этом поле дороже, чем её отсутствие: менеджер увидит
+    заполненное поле и не станет открывать ссылку.
+    """
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, bool):
+        raise HTTPException(422, "Цена должна быть числом")
+    try:
+        value = float(str(raw).replace(",", ".").replace(" ", ""))
+    except (TypeError, ValueError):
+        raise HTTPException(422, "Цена должна быть числом") from None
+    if value <= 0 or value > MAX_COMPETITOR_PRICE:
+        raise HTTPException(422, "Такой цены не бывает — проверьте цифру")
+    return value
+
+
+def _prepare_price_offer(meta: dict) -> tuple[dict, str]:
+    """Разобрать metadata заявки «нашли дешевле». Возвращает (metadata, ключ).
+
+    Ссылку проверяем на входе, а не при показе: заявка живёт в базе долго, и
+    кривой адрес всплыл бы у менеджера в самый неудобный момент.
+    """
+    try:
+        url = normalize_offer_url(str(meta.get("competitor_url") or ""))
+    except OfferLinkError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+    meta["competitor_url"] = url
+    meta["competitor_shop"] = shop_name(url)
+    price = _competitor_price(meta.get("competitor_price"))
+    if price is None:
+        meta.pop("competitor_price", None)
+    else:
+        meta["competitor_price"] = price
+
+    # Ключ идемпотентности собираем из ТОВАРА и НОРМАЛИЗОВАННОЙ ссылки: двойной
+    # тап и ретрай после таймаута обязаны вернуть ту же заявку, иначе владелец
+    # получит два одинаковых сообщения в Telegram. Хэш — потому что колонка 64
+    # символа, а ссылка бывает длиннее.
+    digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:24]
+    return meta, digest
+
+
+def _notify_owner(db: Session, lead: Lead, meta: dict) -> None:
+    """Поставить владельцу уведомление о заявке «нашли дешевле».
+
+    Сети здесь нет и быть не должно: покупатель нажал «Отправить», и его запрос
+    не имеет права ждать Telegram — тем более падать вместе с ним. Строка уходит
+    в ту же транзакцию, что и заявка.
+    """
+    if not settings.ADMIN_TELEGRAM_ID:
+        return
+    from app.services.notification_templates import price_offer_message
+    from app.services.notifications import enqueue
+
+    try:
+        chat_id = int(settings.ADMIN_TELEGRAM_ID)
+    except (TypeError, ValueError):
+        logger.warning("ADMIN_TELEGRAM_ID не число — уведомление владельцу пропущено")
+        return
+
+    enqueue(
+        db,
+        chat_id=chat_id,
+        kind="price_offer",
+        message=price_offer_message(
+            product_title=lead.product_title or "товар",
+            our_price=float(lead.product_price) if lead.product_price is not None else None,
+            competitor_price=meta.get("competitor_price"),
+            competitor_url=meta["competitor_url"],
+            competitor_shop=meta["competitor_shop"],
+            username=lead.username,
+        ),
+        dedupe_key=f"price_offer:{lead.id}",
+    )
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -34,6 +124,22 @@ def create_lead(body: LeadIn, user: User = Depends(get_current_user), db: Sessio
             product_price = product.price
             product_category = product.category
 
+    lead_type = body.lead_type or DEFAULT_LEAD_TYPE
+    meta = dict(body.metadata or {})
+    idempotency_key = None
+    if lead_type == PRICE_OFFER_TYPE:
+        meta, digest = _prepare_price_offer(meta)
+        idempotency_key = f"po:{body.product_id or 0}:{digest}"
+        existing = db.execute(
+            select(Lead).where(Lead.user_id == user.id,
+                               Lead.idempotency_key == idempotency_key)
+        ).scalars().first()
+        if existing is not None:
+            # Повтор той же ссылки — это тот же запрос, а не второй. Возвращаем
+            # исходную заявку: человек увидит подтверждение, владелец не получит
+            # дубль в Telegram.
+            return existing.to_dict()
+
     lead = Lead(
         user_id=user.id,
         telegram_id=user.telegram_id,
@@ -46,12 +152,19 @@ def create_lead(body: LeadIn, user: User = Depends(get_current_user), db: Sessio
         message=body.message,
         source=body.source if body.source in LEAD_SOURCES else "other",
         # lead_type/metadata уже нормализованы/очищены в схеме LeadIn.
-        lead_type=body.lead_type or DEFAULT_LEAD_TYPE,
-        meta=body.metadata or {},
+        lead_type=lead_type,
+        meta=meta,
+        idempotency_key=idempotency_key,
         delivery_method=body.delivery_method if body.delivery_method in DELIVERY_METHODS else None,
         status="new",
     )
     db.add(lead)
+    if lead_type == PRICE_OFFER_TYPE:
+        # flush, а не commit: id нужен для ключа дедупликации, но уведомление
+        # обязано уехать ТОЙ ЖЕ транзакцией, что и заявка. Иначе владелец
+        # получит ссылку на заявку, которой в базе не окажется.
+        db.flush()
+        _notify_owner(db, lead, meta)
     db.commit()
     db.refresh(lead)
 

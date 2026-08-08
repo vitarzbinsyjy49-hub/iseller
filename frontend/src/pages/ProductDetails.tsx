@@ -19,6 +19,7 @@ import { canAddToCart } from "../lib/cartMath";
 import { QuantityStepper } from "../components/QuantityStepper";
 import { specChips } from "../lib/specChips";
 import LegendaryProduct from "../components/LegendaryProduct";
+import PriceOfferBlock from "../components/PriceOfferBlock";
 
 type Tab = "desc" | "specs" | "delivery";
 type LoadState = "loading" | "ready" | "not_found" | "error";
@@ -353,6 +354,11 @@ export default function ProductDetails() {
         <InfoTile icon="🏬" title="Самовывоз" subtitle="Горбушка, Москва" />
         <InfoTile icon="🚚" title="Доставка" subtitle="По Москве" />
       </div>
+
+      {/* «Нашли дешевле?» — в потоке, рядом с условиями. Легендарный товар сюда
+          не попадает: у него свой экран (см. ветку выше), и торг по ссылке на
+          эксклюзивный комплект смысла не имеет. */}
+      <PriceOfferBlock productId={p.id} ourPrice={p.price} />
 
       {/* Desktop CTA — обычный блок в правой колонке (sticky снизу не нужен: колонка компактная) */}
       <div className="mt-5 hidden lg:block">

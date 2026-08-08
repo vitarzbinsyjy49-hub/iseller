@@ -17,6 +17,8 @@ export const LEAD_TYPE_LABEL: Record<string, string> = {
   trade_in: "Trade-In",
   b2b: "Для бизнеса",
   wholesale: "Опт",
+  cart: "Корзина",
+  price_offer: "Нашли дешевле",
 };
 
 export function leadTypeLabel(t?: string | null): string {
@@ -52,6 +54,10 @@ const KEY_LABELS: Record<string, string> = {
   city: "Город",
   category: "Категория",
   budget: "Бюджет",
+  competitor_url: "Ссылка у конкурента",
+  competitor_shop: "Площадка",
+  competitor_price: "Цена там",
+  comment: "Комментарий",
 };
 
 const HIDDEN_KEYS = new Set(["origin"]);
@@ -98,6 +104,13 @@ export function leadTitle(lead: LeadLike): string {
     case "wholesale": {
       const what = labeled("category");
       return what ? `Оптовая заявка · ${what}` : "Оптовая заявка";
+    }
+    case "price_offer": {
+      // Площадка в заголовке — то, по чему менеджер сортирует такие заявки
+      // глазами: «опять Ozon» читается быстрее, чем название товара.
+      const where = val("competitor_shop");
+      const what = lead.product_title || "товар";
+      return where ? `Нашли дешевле · ${where} · ${what}` : `Нашли дешевле · ${what}`;
     }
     default:
       return lead.product_title || "Консультация";
