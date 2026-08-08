@@ -6,8 +6,27 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api } from "./api";
+import { api, errorText } from "./api";
 import { useAuthStore } from "../store/auth";
+
+describe("errorText", () => {
+  it("берёт detail-строку", () => {
+    expect(errorText({ detail: "Промокод закончился" }, 400)).toBe("Промокод закончился");
+  });
+
+  it("разворачивает detail-объект правил корзины", () => {
+    // Регрессия: объект попадал в текст как есть, и человек видел
+    // «[object Object]» вместо причины отказа.
+    expect(errorText({ detail: { code: "promo_invalid", detail: "Вы уже применяли этот промокод" } }, 400))
+      .toBe("Вы уже применяли этот промокод");
+  });
+
+  it("без внятного текста отдаёт понятный запасной вариант", () => {
+    expect(errorText({ detail: { code: "oops" } }, 500)).toBe("Ошибка запроса (500)");
+    expect(errorText({}, 502)).toBe("Ошибка запроса (502)");
+    expect(errorText(null, 503)).toBe("Ошибка запроса (503)");
+  });
+});
 
 function jsonResponse(body: unknown, status = 200) {
   return {

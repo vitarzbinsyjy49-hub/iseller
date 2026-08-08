@@ -20,6 +20,10 @@ class CartQuantityIn(BaseModel):
     quantity: int = Field(ge=0, le=MAX_ITEM_QUANTITY)
 
 
+class PromoIn(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+
+
 class CheckoutIn(BaseModel):
     name: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=64)
@@ -34,6 +38,9 @@ class CheckoutIn(BaseModel):
     # Ключ идемпотентности генерирует клиент на КАЖДУЮ попытку отправки. Один
     # ключ = одна заявка, сколько бы раз запрос ни повторился.
     idempotency_key: str | None = Field(default=None, max_length=64)
+    # Клиент присылает ТОЛЬКО сам код. Размер скидки и итог считает сервер —
+    # присланной сумме здесь верить нельзя, как и присланной цене товара.
+    promo_code: str | None = Field(default=None, max_length=64)
 
     @field_validator("idempotency_key")
     @classmethod

@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, admin_users, ai, auth, cart, catalog, config as config_api, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, telegram, users
+from app.api import admin, admin_crm, admin_promo, admin_users, ai, auth, cart, catalog, config as config_api, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, telegram, users
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import analytics_event as _analytics_event  # noqa: F401
@@ -21,6 +21,7 @@ from app.models import lead as _lead  # noqa: F401
 from app.models import loyalty as _loyalty  # noqa: F401
 from app.models import notification as _notification  # noqa: F401
 from app.models import product as _product  # noqa: F401
+from app.models import promo as _promo  # noqa: F401
 from app.models import product_image_group as _product_image_group  # noqa: F401
 from app.models import revoked_token as _revoked_token  # noqa: F401
 from app.models import user_product_event as _user_product_event  # noqa: F401
@@ -91,6 +92,8 @@ app.include_router(admin_crm.router, prefix="/api")
 # v5.8.0: лояльность — счёт покупателя и раздел «Клиенты» в админке
 app.include_router(loyalty.router, prefix="/api")
 app.include_router(admin_users.router, prefix="/api")
+# Промокоды: акция на первые заказы, купон списывается только оформлением
+app.include_router(admin_promo.router, prefix="/api")
 # v4: управляемая главная + Import Center + публичная конфигурация
 app.include_router(home.router, prefix="/api")
 app.include_router(home.admin_router, prefix="/api")

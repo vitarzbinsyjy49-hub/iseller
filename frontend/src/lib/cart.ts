@@ -223,6 +223,8 @@ export type CheckoutInput = {
   comment: string;
   consent: boolean;
   idempotency_key: string;
+  /** Только сам код: скидку и итог считает сервер по актуальному каталогу. */
+  promo_code?: string | null;
 };
 
 export type CheckoutResult = {

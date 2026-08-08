@@ -24,12 +24,14 @@ from app.models.cart import MAX_CART_ITEMS, Cart, CartItem
 from app.models.lead import CART_LEAD_SOURCE, CART_LEAD_TYPE, DELIVERY_METHODS, Lead
 from app.models.lead_item import LeadItem
 from app.models.product import Product
+from app.services import promo as promo_service
 from app.services.availability import (
     availability_payload,
     clamp_quantity,
     is_orderable,
     resolve_availability,
 )
+from app.services.promo import PromoError
 
 logger = logging.getLogger("techshop.cart")
 
@@ -307,6 +309,29 @@ def _normalize_fulfillment(value: str | None) -> str:
     return v if v in DELIVERY_METHODS else "consult"
 
 
+def preview_promo(db: Session, user_id: int, raw_code: str) -> dict:
+    """Что даст код на текущей корзине. НИЧЕГО не тратит и не пишет.
+
+    Считается по той же предварительной сумме, что показана покупателю
+    (``cart_payload``), — то есть только по позициям, которые реально можно
+    отправить. Обещать скидку с недоступного товара нельзя.
+    """
+    payload = cart_payload(db, user_id)
+    subtotal = float(payload["estimated_total"])
+    if subtotal <= 0:
+        # Скидка «на ничего» — ответ, который потом придётся объяснять человеку.
+        raise CartError("empty_cart", "Добавьте товары — тогда применим промокод")
+
+    offer = promo_service.validate(db, raw_code, user_id=user_id, order_total=subtotal)
+    return {
+        "code": offer.code,
+        "discount": offer.discount,
+        "subtotal": round(subtotal, 2),
+        "total": offer.total_after,
+        "currency": payload["currency"],
+    }
+
+
 def find_lead_by_idempotency_key(db: Session, user_id: int, key: str | None) -> Lead | None:
     if not key:
         return None
@@ -324,6 +349,7 @@ def checkout(
     fulfillment_type: str | None,
     comment: str | None,
     idempotency_key: str | None = None,
+    promo_code: str | None = None,
 ) -> tuple[Lead, bool]:
     """Превратить корзину в ОДНУ общую заявку.
 
@@ -383,8 +409,34 @@ def checkout(
             {"items": problems},
         )
 
-    estimated_total = round(sum(l["line_total"] for l in lines), 2)
+    subtotal = round(sum(l["line_total"] for l in lines), 2)
     fulfillment = _normalize_fulfillment(fulfillment_type)
+
+    # Промокод проверяется ЗАНОВО и по пересчитанной сумме: клиент присылает
+    # только сам код, а скидку считает сервер. Иначе цена на экране и цена в
+    # заявке однажды разойдутся — по той же причине, по которой мы не доверяем
+    # корзине как источнику цен.
+    #
+    # Строку кода берём под блокировку: без неё два одновременных оформления
+    # заберут двадцать первый купон из двадцати.
+    offer = None
+    if promo_code:
+        promo = promo_service.find(db, promo_service.normalize_code(promo_code), lock=True)
+        offer = promo_service.validate(
+            db, promo.code if promo else promo_code, user_id=user.id, order_total=subtotal,
+        )
+
+    discount = offer.discount if offer else 0.0
+    estimated_total = round(subtotal - discount, 2)
+    meta = {"origin": "cart"}
+    if offer is not None:
+        # Снапшот в заявку: менеджеру нужно видеть, из чего сложился итог, а
+        # настройки кода к моменту разговора могут уже смениться.
+        meta.update({
+            "promo_code": offer.code,
+            "promo_discount": discount,
+            "subtotal": subtotal,
+        })
 
     lead = Lead(
         user_id=user.id,
@@ -401,11 +453,12 @@ def checkout(
         message=(comment or "").strip() or None,
         source=CART_LEAD_SOURCE,
         lead_type=CART_LEAD_TYPE,
-        # Только origin (он в скрытых ключах UI). Число позиций сюда класть
-        # нельзя: metadata рисуется как «подпись: значение», незнакомый ключ
-        # выводится КАК ЕСТЬ — и в админке появлялась строка «positions: 3»
-        # сырым английским ключом. Само число и так видно в таблице состава.
-        meta={"origin": "cart"},
+        # origin (он в скрытых ключах UI) плюс снапшот промокода, если он был.
+        # Число позиций сюда класть нельзя: metadata рисуется как «подпись:
+        # значение», незнакомый ключ выводится КАК ЕСТЬ — и в админке появлялась
+        # строка «positions: 3» сырым английским ключом. Само число и так видно
+        # в таблице состава.
+        meta=meta,
         delivery_method=fulfillment,
         items_count=sum(l["quantity"] for l in lines),
         estimated_total=estimated_total,
@@ -429,6 +482,15 @@ def checkout(
             availability_snapshot=line["mode"],
             image_snapshot=(product.image or "")[:500] or None,
         ))
+
+    # Купон списывается ЗДЕСЬ и только здесь — в той же транзакции, что и
+    # заявка. Не оформил (пустая корзина, недоступный товар, отказ) — код
+    # остался у акции, сколько бы раз его ни вводили в форме.
+    if offer is not None:
+        promo_service.redeem(
+            db, offer.promo, user_id=user.id, lead_id=lead.id,
+            discount=discount, order_total=subtotal,
+        )
 
     # Корзина закрывается ТОЛЬКО вместе с успешно созданной заявкой. Новая
     # активная корзина создастся лениво при следующем добавлении.

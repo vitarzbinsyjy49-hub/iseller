@@ -19,9 +19,10 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
 from app.models.user import User
-from app.schemas.cart import CartItemIn, CartQuantityIn, CheckoutIn
+from app.schemas.cart import CartItemIn, CartQuantityIn, CheckoutIn, PromoIn
 from app.services import cart as cart_service
 from app.services.cart import CartError
+from app.services.promo import PromoError
 
 logger = logging.getLogger("techshop.cart")
 router = APIRouter(prefix="/cart", tags=["cart"])
@@ -38,6 +39,7 @@ _STATUS_BY_CODE = {
     "empty_cart": status.HTTP_400_BAD_REQUEST,
     "consent_required": status.HTTP_400_BAD_REQUEST,
     "phone_required": status.HTTP_400_BAD_REQUEST,
+    "promo_invalid": status.HTTP_400_BAD_REQUEST,
 }
 
 
@@ -102,6 +104,21 @@ def clear(user: User = Depends(get_current_user), db: Session = Depends(get_db))
     return cart_service.cart_payload(db, user.id)
 
 
+@router.post("/promo")
+def preview_promo(body: PromoIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Проверить промокод на текущей корзине.
+
+    Ничего не тратит: купон списывается только оформлением заявки. Поэтому
+    ручку можно дёргать сколько угодно — акции это не стоит ничего.
+    """
+    try:
+        return cart_service.preview_promo(db, user.id, body.code)
+    except PromoError as e:
+        raise _http(CartError("promo_invalid", str(e)))
+    except CartError as e:
+        raise _http(e)
+
+
 @router.post("/checkout", status_code=status.HTTP_201_CREATED)
 def checkout(body: CheckoutIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not body.consent:
@@ -119,7 +136,12 @@ def checkout(body: CheckoutIn, user: User = Depends(get_current_user), db: Sessi
             fulfillment_type=body.fulfillment_type,
             comment=body.comment,
             idempotency_key=body.idempotency_key,
+            promo_code=body.promo_code,
         )
+    except PromoError as e:
+        # Заявку НЕ создаём: человек рассчитывал на скидку и обязан узнать, что
+        # её не будет, а не получить молча заявку по полной цене.
+        raise _http(CartError("promo_invalid", str(e)))
     except CartError as e:
         raise _http(e)
 

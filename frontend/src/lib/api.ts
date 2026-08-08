@@ -14,6 +14,27 @@ export class ApiError extends Error {
   }
 }
 
+/** Человеческий текст ошибки из тела ответа.
+ *
+ *  FastAPI отдаёт `detail` строкой, но правила корзины и промокодов кладут туда
+ *  ОБЪЕКТ (`{code, detail, …}`) — машинный код рядом с текстом, чтобы клиент мог
+ *  различать причины, не разбирая слова. Без этой распаковки объект попадал в
+ *  сообщение как есть, и человек видел «[object Object]» вместо «Вы уже
+ *  применяли этот промокод». Отлавливается только глазами на живом экране:
+ *  запрос при этом отработал верно, ошибка «показана», типы сошлись.
+ */
+export function errorText(body: unknown, status: number): string {
+  const fallback = `Ошибка запроса (${status})`;
+  if (!body || typeof body !== "object") return fallback;
+  const detail = (body as { detail?: unknown }).detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (detail && typeof detail === "object") {
+    const inner = (detail as { detail?: unknown }).detail;
+    if (typeof inner === "string" && inner.trim()) return inner;
+  }
+  return fallback;
+}
+
 async function rawRequest(path: string, options: RequestInit = {}): Promise<Response> {
   const { accessToken } = useAuthStore.getState();
   const headers: Record<string, string> = {
@@ -33,7 +54,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(body.detail || `Ошибка запроса (${res.status})`, res.status);
+    throw new ApiError(errorText(body, res.status), res.status);
   }
   return res.json();
 }

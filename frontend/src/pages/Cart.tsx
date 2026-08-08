@@ -23,6 +23,8 @@ import ProductCard, { ProductImage } from "../components/ProductCard";
 import { QuantityStepper } from "../components/QuantityStepper";
 import { ErrorState } from "../components/StateViews";
 import { CartGlyph } from "../components/CartBar";
+import PromoField, { type AppliedPromo } from "../components/PromoField";
+import { cappedDiscount, forgetCode, totalWithDiscount } from "../lib/promo";
 import {
   checkoutCart, clearCart, hydrateCart, removeCartItem, setItemQuantity, useCart,
 } from "../lib/cart";
@@ -46,6 +48,10 @@ export default function Cart() {
   const [load, setLoad] = useState<LoadState>("loading");
   const [busyItem, setBusyItem] = useState<number | null>(null);
   const [success, setSuccess] = useState<Success | null>(null);
+  // Код уходит на сервер, скидка — только на экран. При оформлении сервер
+  // считает её заново по актуальному каталогу: клиент присылает код, а не сумму.
+  const [promo, setPromo] = useState<AppliedPromo | null>(null);
+  const discount = promo ? cappedDiscount(cart.estimated_total, promo.discount) : 0;
 
   const refresh = () => {
     setLoad("loading");
@@ -169,6 +175,10 @@ export default function Cart() {
         </p>
       </div>
 
+      {/* Промокод. Ввод и проверка купон НЕ тратят — он списывается только
+          вместе с созданной заявкой (services/cart.checkout). */}
+      <PromoField subtotal={cart.estimated_total} onChange={setPromo} />
+
       <button
         onClick={() => {
           track("continue_shopping", { source: "cart" });
@@ -180,7 +190,8 @@ export default function Cart() {
       </button>
 
       <CheckoutBlock
-        cartTotal={cart.estimated_total}
+        cartTotal={totalWithDiscount(cart.estimated_total, discount)}
+        promoCode={promo?.code ?? null}
         itemsCount={cart.items_count}
         blocked={cart.has_unavailable}
         defaultName={user?.first_name ?? ""}
@@ -278,10 +289,11 @@ function Notice({ tone, children }: { tone: "info" | "warn"; children: React.Rea
 
 /* ---------------------------------------------------------------- checkout --- */
 function CheckoutBlock({
-  cartTotal, itemsCount, blocked, defaultName, requirePhone, telegramUsername,
+  cartTotal, promoCode, itemsCount, blocked, defaultName, requirePhone, telegramUsername,
   autoOpen, onSuccess, onRefresh,
 }: {
   cartTotal: number;
+  promoCode: string | null;
   itemsCount: number;
   blocked: boolean;
   defaultName: string;
@@ -326,7 +338,11 @@ function CheckoutBlock({
       const result = await checkoutCart({
         name: name.trim(), phone: phone.trim(), fulfillment_type: fulfillment,
         comment: comment.trim(), consent, idempotency_key: idempotencyKey,
+        promo_code: promoCode,
       });
+      // Купон списан вместе с заявкой — второй раз тот же код не пройдёт,
+      // и держать его в хранилище значит показать скидку, которой уже нет.
+      if (promoCode) forgetCode();
       haptic("light");
       onSuccess({
         number: result.lead.public_number,
