@@ -125,6 +125,53 @@ def test_excluded_brand(db):
     assert apple.id not in ids
 
 
+def test_negation_needs_word_boundary(db):
+    """«покажи МНЕ айфон» — это просьба показать Apple, а не исключить его.
+
+    Регулярка отрицания искала «не» без границы слова, и хвост обычного русского
+    местоимения («м-не», «об-мене») читался как «не apple». Из выдачи вылетал
+    весь бренд — то есть почти весь каталог, — и модель отвечала «каталога нет»
+    на прямой запрос товара, который лежит на витрине.
+    """
+    apple = make_product(db, title="iPhone 17 Pro", brand="Apple", category="смартфоны", price=93700)
+
+    for message in ("покажи мне айфон", "посоветуй мне apple", "что дадите при обмене apple"):
+        f = extract_filters(message)
+        assert "Apple" not in f.excluded_brands, message
+        ids = {p.id for p in retrieve_candidates(db, message, f, limit=10)}
+        assert apple.id in ids, message
+
+    # Настоящее отрицание продолжает работать — рядом, чтобы правку нельзя было
+    # «починить», просто выключив исключения.
+    f = extract_filters("смартфон, но не apple")
+    assert "Apple" in f.excluded_brands
+
+
+def test_missing_brand_falls_back_to_category(db):
+    """Нет запрошенного бренда — показываем соседей по категории, а не пустоту.
+
+    Пустой список кандидатов промпт трактует как «ничего нет» и заставляет
+    модель отвечать «каталога нет» — хотя нет только Samsung, а витрина полна.
+    Бренд снимаем, категорию держим: замена должна быть из того же класса
+    техники, иначе на запрос смартфона приедут пылесосы.
+    """
+    iphone = make_product(db, title="iPhone 17 Pro", brand="Apple", category="смартфоны", price=93700)
+    make_product(db, title="Dyson V15", brand="Dyson", category="бытовая техника", price=54000)
+
+    # Словарь категорий передаём как в бою: без него категория не извлекается.
+    f = extract_filters("нужен смартфон samsung", vocab=category_vocabulary(db))
+    assert f.brand == "Samsung" and f.category == "смартфоны"
+    got = retrieve_candidates(db, "нужен смартфон samsung", f, limit=10)
+    assert [p.id for p in got] == [iphone.id]
+
+
+def test_excluded_brand_is_never_resurrected_by_fallback(db):
+    """Подмена по категории не имеет права вернуть явно отвергнутый бренд."""
+    make_product(db, title="iPhone 17 Pro", brand="Apple", category="смартфоны", price=93700)
+    f = extract_filters("смартфон, но не apple", vocab=category_vocabulary(db))
+    assert retrieve_candidates(db, "смартфон, но не apple", f, limit=10) == []
+
+
 def test_storage_and_color_relevance(db):
     grey = make_product(db, title="MacBook Air 13 M2", brand="Apple", category="ноутбуки",
                         price=115000, storage="256", color="серый", popularity=50)

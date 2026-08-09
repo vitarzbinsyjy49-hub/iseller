@@ -49,8 +49,12 @@ _CONDITION_HINTS = {
 }
 
 
-# «не apple», «без самсунга», «кроме xiaomi» — исключение бренда
-_NEG_BRAND_RE = re.compile(r"(?:не|без|кроме|только не)\s+([a-zа-яё]+)", re.IGNORECASE)
+# «не apple», «без самсунга», «кроме xiaomi» — исключение бренда.
+# \b перед группой обязателен: без него хвост обычного слова читался как
+# отрицание — «покажи МНЕ айфон» и «при обМЕНЕ apple» давали «не apple» и
+# выбрасывали из выдачи весь бренд, то есть почти весь каталог. Держит
+# test_negation_needs_word_boundary.
+_NEG_BRAND_RE = re.compile(r"\b(?:не|без|кроме|только не)\s+([a-zа-яё]+)", re.IGNORECASE)
 
 
 @dataclass
@@ -346,6 +350,27 @@ def retrieve_candidates(db: Session, message: str, f: ExtractedFilters, limit: i
             continue
         seen.add(p.id)
         merged.append(p)
+
+    # 4) ничего не нашли — показываем соседей по категории вместо пустоты.
+    # Пустой список промпт трактует как «в каталоге ничего нет», и на запрос
+    # «смартфон Samsung» человек слышал «каталога нет» при полной витрине
+    # айфонов. Снимаем ТОЛЬКО бренд: он и есть причина промаха, а категория
+    # держит замену в том же классе техники. Отвергнутые бренды сюда не
+    # возвращаются — это был бы прямой спор с просьбой человека.
+    if not merged and f.category and (f.brand or f.excluded_brands):
+        alt = select(Product).where(Product.is_active.is_(True)).where(or_(
+            Product.category == f.category,
+            Product.subcategory == f.category,
+            Product.category.ilike(f"%{f.category}%"),
+            Product.subcategory.ilike(f"%{f.category}%"),
+        ))
+        if f.budget_max:
+            alt = alt.where(Product.price <= f.budget_max)
+        for excluded in f.excluded_brands:
+            alt = alt.where(~Product.brand.ilike(f"%{excluded}%"))
+        alt = alt.order_by(Product.in_stock.desc(), Product.popularity.desc(), Product.id).limit(limit)
+        merged = [p for p in db.execute(alt).scalars().all()
+                  if (p.brand or "").lower() not in excluded_low]
 
     merged.sort(key=lambda p: _score(p, f, tokens), reverse=True)
     return merged[:limit]
