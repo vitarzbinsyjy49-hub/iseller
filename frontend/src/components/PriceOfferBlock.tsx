@@ -168,10 +168,19 @@ export default function PriceOfferBlock({ productId, ourPrice }: Props) {
         onClick={toggle}
         aria-expanded={open}
         aria-controls="price-offer-body"
-        className="tap flex w-full items-center justify-between gap-3 rounded-xl2 border border-border bg-surface px-3.5 py-3 text-left"
+        className="tap flex w-full items-center gap-3 rounded-xl2 border border-accent/25 bg-accent/[0.04] px-3.5 py-3 text-left"
       >
-        <span className="min-w-0">
-          <span className="block text-[13px] font-semibold">Нашли дешевле?</span>
+        {/* Ценовая гарантия — реальный триггер доверия, поэтому у блока свой
+            акцентный значок, а не нейтральная серая полоса наравне с прочими
+            второстепенными пунктами. */}
+        <span
+          aria-hidden
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent/12 text-base text-accent"
+        >
+          🏷️
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-semibold text-accentdark">Нашли дешевле?</span>
           <span className="mt-0.5 block text-[11px] text-muted">
             Пришлите ссылку — сверим цену
           </span>
