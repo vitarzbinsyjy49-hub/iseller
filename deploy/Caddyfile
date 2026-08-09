@@ -1,9 +1,36 @@
 # Caddy автоматически получает и продлевает HTTPS-сертификаты Let's Encrypt.
 # Домены берутся из переменных окружения (см. docker-compose.prod.yml).
-#
+
+# Общие security-заголовки. Вынесены в сниппет, чтобы оба домена (Mini App и
+# админка) не разъезжались: заголовок, добавленный только в одном месте, —
+# ложное чувство защиты. CSP намеренно НЕТ: Mini App грузит telegram-web-app.js
+# с t.me и инлайнит стили Vite, а неверный CSP молча ломает витрину сильнее,
+# чем отсутствие заголовка. Остальное безопасно для SPA в Telegram WebView.
+(security_headers) {
+    header {
+        # Кликджекинг: страницу нельзя встроить во фрейм чужого сайта. Telegram
+        # Mini App живёт не во фрейме стороннего домена, а в webview, поэтому
+        # DENY витрину не ломает.
+        X-Frame-Options "DENY"
+        # Браузер не «угадывает» MIME вопреки Content-Type (защита от подмены
+        # типа загруженного контента).
+        X-Content-Type-Options "nosniff"
+        # HSTS: год, включая поддомены. Домен уже только по HTTPS (редирект 308),
+        # заголовок закрывает окно первого запроса по http.
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        # Реферер наружу не утекает с полным путём.
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Явно отзываем мощные API, которые магазину не нужны.
+        Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
+        # Не раскрываем, что под капотом.
+        -Server
+    }
+}
+
 # Mini App (frontend) — основной домен:
 {$DOMAIN} {
     encode gzip zstd
+    import security_headers
 
     # API идёт в backend...
     handle /api/* {
@@ -19,6 +46,7 @@
 # Админка — отдельный поддомен (второй бесплатный DuckDNS-субдомен):
 {$ADMIN_DOMAIN} {
     encode gzip zstd
+    import security_headers
 
     handle /api/* {
         reverse_proxy backend:8000
