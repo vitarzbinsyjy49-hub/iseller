@@ -394,3 +394,36 @@ def test_base_url_override_is_applied(monkeypatch):
         assert "iseller-ai-gateway.vercel.app" in str(ai_anthropic._client().base_url)
     finally:
         ai_anthropic._client.cache_clear()
+
+
+def test_gateway_goes_through_proxy_when_configured(monkeypatch):
+    """Гейтвей ходит через прокси, если он задан.
+
+    Замер с прода: домен гейтвея резолвится в ДВА адреса Vercel, и до одного из
+    них сеть VPS не доходит вовсе. Прямое соединение виснет на TCP-таймауте
+    (12-24с) примерно в половине попыток — это и есть «ИИ думает десять секунд».
+    Через WARP тот же запрос стабильно укладывается в 0.6с.
+    """
+    monkeypatch.setattr(settings, "AI_ANTHROPIC_API_KEY", "gateway-secret", raising=False)
+    monkeypatch.setattr(settings, "AI_ANTHROPIC_BASE_URL", "https://gw.example/api", raising=False)
+    # http-, а не socks-адрес: конструирование socks-транспорта требует
+    # системного пакета socksio, и тест перестал бы проверять НАШУ логику,
+    # начав проверять окружение. Разбор самой строки закрыт проверкой ниже.
+    monkeypatch.setattr(settings, "AI_GATEWAY_PROXY_URL", "http://172.18.0.1:40000", raising=False)
+    client = ai_anthropic._proxied_http_client()
+    assert client is not None, "с настроенным прокси SDK обязан получить наш httpx, иначе запрос уйдёт напрямую"
+    assert isinstance(client, httpx.AsyncClient)
+
+
+def test_proxy_url_is_read_from_settings(monkeypatch):
+    """socks5-адрес доезжает до клиента как есть — его разбирает httpx."""
+    monkeypatch.setattr(settings, "AI_GATEWAY_PROXY_URL",
+                        "  socks5://172.18.0.1:40000  ", raising=False)
+    assert ai_anthropic._proxy_url() == "socks5://172.18.0.1:40000"
+
+
+def test_no_proxy_by_default(monkeypatch):
+    """Без настройки прокси нет: локальная разработка ходит напрямую."""
+    monkeypatch.setattr(settings, "AI_GATEWAY_PROXY_URL", "", raising=False)
+    assert ai_anthropic._proxy_url() is None
+    assert ai_anthropic._proxied_http_client() is None

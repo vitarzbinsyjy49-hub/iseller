@@ -116,6 +116,83 @@ def test_scans_do_not_run_on_every_tick(monkeypatch):
     assert scans == ["carts", "favorites"], "скан повторился раньше своего интервала"
 
 
+def _quiet_background(monkeypatch):
+    """Фон без работы: тесты прогрева не должны зависеть от сканов и очереди."""
+    monkeypatch.setattr(bp, "_schema_ready", lambda state: True)
+
+    class FakeSession:
+        def __enter__(self):
+            return "db"
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr("app.db.session.SessionLocal", lambda: FakeSession())
+    monkeypatch.setattr("app.services.cart_reminders.scan", lambda db: {"queued": 0})
+    monkeypatch.setattr("app.services.favorite_watch.scan", lambda db: {})
+    monkeypatch.setattr("app.services.notifications.drain",
+                        lambda db, limit: {"sent": 0, "failed": 0, "retry": 0})
+
+
+def test_gateway_warm_ping_runs_on_its_own_interval(monkeypatch):
+    """Прогрев гейтвея идёт реже опроса и не чаще своего интервала.
+
+    Холодный вызов функции на Vercel стоит ~6с ещё ДО обращения к модели, и
+    платит их первый человек после простоя. Пинг в каждом тике (30с) — это уже
+    не прогрев, а лишний трафик.
+    """
+    _quiet_background(monkeypatch)
+    monkeypatch.setattr(bp.settings, "AI_PROVIDER", "anthropic")
+    monkeypatch.setattr(bp.settings, "AI_ANTHROPIC_BASE_URL", "https://gw.example/api")
+    monkeypatch.setattr(bp.settings, "AI_GATEWAY_WARM_MINUTES", 5)
+
+    pings = []
+    monkeypatch.setattr(bp.httpx, "get", lambda url, **kw: pings.append(url))
+
+    state: dict = {}
+    bp._tick(state)
+    bp._tick(state)
+    bp._tick(state)
+
+    assert pings == ["https://gw.example/api/v1/messages"], "прогрев повторился раньше интервала"
+
+
+def test_gateway_warm_ping_never_breaks_the_tick(monkeypatch):
+    """Недоступный гейтвей не имеет права остановить уведомления.
+
+    Прогрев — необязательная оптимизация. Если его ошибка утащит за собой
+    drain, мы разменяем секунды ожидания на неотправленные сообщения.
+    """
+    _quiet_background(monkeypatch)
+    monkeypatch.setattr(bp.settings, "AI_PROVIDER", "anthropic")
+    monkeypatch.setattr(bp.settings, "AI_ANTHROPIC_BASE_URL", "https://gw.example/api")
+    monkeypatch.setattr(bp.settings, "AI_GATEWAY_WARM_MINUTES", 5)
+
+    drained = []
+    monkeypatch.setattr("app.services.notifications.drain",
+                        lambda db, limit: drained.append(1) or {"sent": 0, "failed": 0, "retry": 0})
+
+    def unreachable(url, **kw):
+        raise OSError("сеть недоступна")
+
+    monkeypatch.setattr(bp.httpx, "get", unreachable)
+
+    bp._tick({})
+    assert drained == [1], "очередь уведомлений должна разбираться независимо от прогрева"
+
+
+def test_no_warm_ping_without_anthropic_gateway(monkeypatch):
+    """Без гейтвея греть нечего: fallback и Ollama живут не на Vercel."""
+    _quiet_background(monkeypatch)
+    monkeypatch.setattr(bp.settings, "AI_PROVIDER", "fallback")
+    monkeypatch.setattr(bp.settings, "AI_ANTHROPIC_BASE_URL", "https://gw.example/api")
+    monkeypatch.setattr(bp.settings, "AI_GATEWAY_WARM_MINUTES", 5)
+
+    monkeypatch.setattr(bp.httpx, "get",
+                        lambda url, **kw: pytest.fail("прогрев не нужен без гейтвея"))
+    bp._tick({})
+
+
 class FakeInspector:
     """Инспектор схемы: какие таблицы есть и какие у них колонки."""
 

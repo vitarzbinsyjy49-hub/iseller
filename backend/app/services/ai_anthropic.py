@@ -22,6 +22,7 @@ import time
 from functools import lru_cache
 
 import anthropic
+import httpx
 from anthropic import AsyncAnthropic
 
 from app.core.config import settings
@@ -111,6 +112,24 @@ def build_user_message(*, message: str, context: str, candidates: list[dict]) ->
     return "\n\n".join(parts)
 
 
+def _proxy_url() -> str | None:
+    """Прокси до гейтвея, если он настроен. Отдельная функция — ради теста."""
+    return (settings.AI_GATEWAY_PROXY_URL or "").strip() or None
+
+
+def _proxied_http_client() -> httpx.AsyncClient | None:
+    """httpx-клиент через прокси, или None — тогда SDK создаёт свой, прямой.
+
+    Вынесено из `_client` отдельно, чтобы проверяться тестом напрямую: подмена
+    самого `httpx.AsyncClient` ломает isinstance-проверку внутри SDK, то есть
+    тест начинал бы падать на чужой реализации, а не на нашей ошибке.
+    """
+    proxy = _proxy_url()
+    if not proxy:
+        return None
+    return httpx.AsyncClient(proxy=proxy, timeout=settings.AI_ANTHROPIC_TIMEOUT_SECONDS)
+
+
 @lru_cache(maxsize=1)
 def _client() -> AsyncAnthropic:
     """Клиент переиспользуется процессом ради пула соединений.
@@ -125,6 +144,13 @@ def _client() -> AsyncAnthropic:
     # /v1/messages, поэтому base_url задаётся без этого хвоста.
     if settings.AI_ANTHROPIC_BASE_URL:
         kwargs["base_url"] = settings.AI_ANTHROPIC_BASE_URL
+    # Тот же WARP, что уносит Telegram: домен гейтвея резолвится в несколько
+    # адресов Vercel, и до части из них сеть VPS не доходит — соединение виснет
+    # на TCP-таймауте, а не отвечает отказом, поэтому лечится это маршрутом, а
+    # не ретраями. Клиент передаём свой: SDK иначе создаёт httpx без прокси.
+    http_client = _proxied_http_client()
+    if http_client is not None:
+        kwargs["http_client"] = http_client
     return AsyncAnthropic(**kwargs)
 
 

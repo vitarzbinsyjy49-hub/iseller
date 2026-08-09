@@ -119,6 +119,34 @@ def _due(last: float | None, now: float, interval: float) -> bool:
     return last is None or now - last >= interval
 
 
+def _warm_gateway(state: dict, now: float) -> None:
+    """Держать serverless-функцию гейтвея тёплой.
+
+    Замер с прода: холодный вызов `/api/v1/messages` — 6.0с ещё ДО обращения к
+    модели, тёплый — 0.5с. Эти пять секунд платит первый человек после простоя,
+    то есть ровно тот, кто только что открыл приложение и ждёт первый ответ.
+
+    Греем обычным GET: функция отвечает на него 405 и до Anthropic не доходит —
+    ни ключа в запросе, ни расхода токенов. Отдельного пингера (внешний cron,
+    UptimeRobot) не заводим по той же причине, по которой в проекте нет
+    планировщика: этот процесс уже крутится, а внешний сервис — ещё одна
+    зависимость, о падении которой мы узнаем последними.
+    """
+    minutes = settings.AI_GATEWAY_WARM_MINUTES
+    base = (settings.AI_ANTHROPIC_BASE_URL or "").strip().rstrip("/")
+    # Греть имеет смысл только gateway: fallback отвечает из БД, а Ollama живёт
+    # на Mac mini и холодным стартом не страдает.
+    if minutes <= 0 or not base or settings.AI_PROVIDER.lower() != "anthropic":
+        return
+    if not _due(state.get("last_gateway_warm"), now, minutes * 60):
+        return
+    state["last_gateway_warm"] = now
+    try:
+        httpx.get(f"{base}/v1/messages", timeout=10)
+    except Exception:  # noqa: BLE001 — прогрев необязателен, отказ не событие
+        logger.debug("прогрев гейтвея не удался", exc_info=True)
+
+
 def _tick(state: dict) -> None:
     """Фоновая работа между опросами Telegram (патч 1.1).
 
@@ -136,6 +164,12 @@ def _tick(state: dict) -> None:
     from app.services.notifications import drain
 
     now = time.monotonic()
+
+    # Прогрев гейтвея — в своём try, ДО работы с БД: это необязательная
+    # оптимизация, и её отказ не имеет права утащить за собой очередь
+    # уведомлений. Ошибку глотаем молча (кроме debug): гейтвей может лежать,
+    # это чинится сам собой к следующему интервалу.
+    _warm_gateway(state, now)
 
     try:
         if not _schema_ready(state):
