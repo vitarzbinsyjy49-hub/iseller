@@ -72,11 +72,21 @@ describe("availabilityText", () => {
     expect(availabilityText({ availability_mode: "unavailable", in_stock: false })).toBe("Недоступен");
   });
 
-  it("наличие и «сегодня» показываются как раньше", () => {
+  it("«сегодня» в подпись не попадает — она про наличие, и только", () => {
+    // Раньше к «В наличии» приписывалось «· Сегодня». Пока флаг стоял у
+    // единиц, это была полезная пометка; когда его получили все товары в
+    // наличии, приписка оказалась на каждой карточке и перестала что-либо
+    // сообщать. Срок получения живёт на карточке товара, в блоке условий.
     expect(availabilityText({ availability_mode: "in_stock", in_stock: true })).toBe("В наличии");
-    expect(availabilityText({ availability_mode: "limited", in_stock: true, is_available_today: true }))
-      .toBe("В наличии · Сегодня");
     expect(availabilityTone({ availability_mode: "in_stock" })).toBe("text-green");
+
+    // Через переменную, а не литералом: карточка приходит с сервера со ВСЕМИ
+    // полями, включая is_available_today, и проверять надо именно такой объект
+    // — что наличие флага на подпись не влияет. Литерал бы отверг компилятор
+    // (лишнее свойство), и вместе с ним пропал бы сам страж.
+    const flagged = { availability_mode: "limited" as const, in_stock: true, is_available_today: true };
+    expect(availabilityText(flagged)).toBe("В наличии");
+    expect(availabilityText({ ...flagged, availability_mode: undefined })).toBe("В наличии");
   });
 
   it("ответ без режима читается по in_stock — старые данные не меняют смысл", () => {

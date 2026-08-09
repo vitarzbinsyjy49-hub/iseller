@@ -75,19 +75,24 @@ export function canAddToCart(mode?: AvailabilityMode | null): boolean {
  *
  *  Ответ без режима (кэш прошлого визита, фикстура AI) читается как раньше —
  *  по in_stock: старые данные не должны менять смысл подписи.
+ *
+ *  Про «сегодня» подпись молчит намеренно. Приписка «· Сегодня» имела смысл,
+ *  пока флаг стоял у единичных товаров; после того как его получили все
+ *  позиции в наличии, она встала на каждую карточку — а пометка, которая есть
+ *  у всех, не сообщает ничего. Срок получения живёт на карточке товара, где он
+ *  часть блока условий рядом с самовывозом и доставкой.
  */
 export function availabilityText(
-  card: { availability_mode?: AvailabilityMode | null; in_stock?: boolean; is_available_today?: boolean },
+  card: { availability_mode?: AvailabilityMode | null; in_stock?: boolean },
 ): string {
-  const inStockLabel = card.is_available_today ? "В наличии · Сегодня" : "В наличии";
   switch (card.availability_mode) {
     case "preorder": return "Предзаказ";
     case "on_request": return "Под заказ";
     case "out_of_stock": return "Нет в наличии";
     case "unavailable": return "Недоступен";
     case "in_stock":
-    case "limited": return inStockLabel;
-    default: return card.in_stock ? inStockLabel : "Под заказ";
+    case "limited": return "В наличии";
+    default: return card.in_stock ? "В наличии" : "Под заказ";
   }
 }
 

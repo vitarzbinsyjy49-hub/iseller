@@ -482,11 +482,13 @@ function ProductCard({ card, compact, onOpen }: Props) {
           {card.is_hot && <Badge color="orange"><Icon name="flame" className="h-3 w-3" strokeWidth={2.2} />Хит</Badge>}
           {disc && <Badge color="red">−{disc}%</Badge>}
         </div>
-        {card.is_available_today && card.in_stock && (
-          <span className="pointer-events-none absolute bottom-2 left-2 z-10">
-            <Badge color="green">Сегодня</Badge>
-          </span>
-        )}
+        {/* Бейджа «Сегодня» здесь нет намеренно. Он отмечал исключение, пока
+            забрать в день обращения можно было единичные позиции. Сейчас флаг
+            стоит у всех товаров в наличии, и бейдж оказывался на каждой плитке
+            — поверх фото, рядом с «Хит» и скидкой, ничего не различая. Срок
+            получения остался на карточке товара (плитка «В наличии · Забрать
+            сегодня» и раздел «Доставка и получение»), где он отвечает на
+            вопрос, который человек к тому моменту действительно задал. */}
         {/* right-0.5/top-0.5, а не right-2/top-2: обёртка стала 44px, кружок
             внутри неё смещён на 6px — итоговый отступ кружка тот же 8px. */}
         <FavButton id={card.id} className="absolute right-0.5 top-0.5 z-10" />
