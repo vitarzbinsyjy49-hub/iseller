@@ -17,6 +17,7 @@ import { pushSearchQuery } from "../lib/searchHistory";
 import { actionRoute, safeExternalUrl, safeInternalRoute } from "../lib/route";
 import { loadCachedCategories, saveCachedCategories } from "../lib/categoryCache";
 import { SegmentedToggle } from "../components/SegmentedToggle";
+import { Icon, type IconName } from "../components/icons";
 import { navTiles, type NavAxis, type NavChip } from "../lib/navTiles";
 import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
 import { CartGlyph } from "../components/CartBar";
@@ -403,7 +404,7 @@ export default function Home() {
               aria-label={search.trim() ? `Спросить AI: ${search.trim()}` : "Открыть AI-подбор"}
               className="tap flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 text-[13px] font-semibold text-white"
             >
-              <span aria-hidden>✨</span>
+              <Icon name="sparkles" className="h-4 w-4" strokeWidth={2} />
               ИИ
             </button>
           </div>
@@ -451,14 +452,14 @@ export default function Home() {
             <button
               key={c.key}
               onClick={() => navigate(safeInternalRoute(c.route))}
-              className="tap shrink-0 whitespace-nowrap rounded-full bg-white/[0.13] px-4 py-2 text-[13px] font-semibold text-[color:var(--app-hero-chip-ink)] transition-colors hover:bg-white/20"
+              className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-full bg-white/[0.13] px-4 text-[13px] font-semibold text-[color:var(--app-hero-chip-ink)] outline-none transition-colors hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white/70"
             >
               {c.label}
             </button>
           ))}
           <button
             onClick={() => navigate("/catalog")}
-            className="tap shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-semibold text-white/90 ring-1 ring-inset ring-white/25 transition-colors hover:bg-white/10"
+            className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-full px-4 text-[13px] font-semibold text-white/90 outline-none ring-1 ring-inset ring-white/25 transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/70"
           >
             {axis === "brand" ? "Все бренды →" : "Все категории →"}
           </button>
@@ -619,9 +620,10 @@ export default function Home() {
             track("empty_state_action_clicked", { source: "home_footer_manager" });
             setConsult(true);
           }}
-          className="tap mt-3 rounded-field bg-mutedbg px-5 py-2.5 text-[13px] font-semibold text-text transition-colors hover:bg-accent hover:text-white"
+          className="tap mt-3 inline-flex items-center gap-2 rounded-field bg-mutedbg px-5 py-2.5 text-[13px] font-semibold text-text transition-colors hover:bg-accent hover:text-white"
         >
-          💬 Оставить заявку
+          <Icon name="chat" className="h-4 w-4" />
+          Оставить заявку
         </button>
       </div>
 
@@ -781,14 +783,16 @@ function HeroActions({
 
   return (
     <div className="flex shrink-0 items-center gap-2">
-      <div className="flex items-center rounded-full bg-white/[0.12] p-0.5">
-        <button onClick={onFavorites} aria-label="Избранное" className="tap flex h-8 w-9 items-center justify-center rounded-full text-white">
+      {/* Пилюля выросла с 36 до 44px: избранное и корзина — самые верхние
+          действия экрана, и 32px высоты по правилу 44×44 им мало. */}
+      <div className="flex items-center rounded-full bg-white/[0.12]">
+        <button onClick={onFavorites} aria-label="Избранное" className="tap flex h-11 w-11 items-center justify-center rounded-full text-white outline-none focus-visible:ring-2 focus-visible:ring-white/70">
           <HeartGlyph className="h-[18px] w-[18px]" />
         </button>
         <span aria-hidden className="h-4 w-px bg-white/20" />
-        <button onClick={onCart} aria-label={cartLabel} className="tap relative flex h-8 w-9 items-center justify-center rounded-full text-white">
+        <button onClick={onCart} aria-label={cartLabel} className="tap relative flex h-11 w-11 items-center justify-center rounded-full text-white outline-none focus-visible:ring-2 focus-visible:ring-white/70">
           <CartGlyph className="h-[18px] w-[18px]" />
-          <CartCount count={cartCount} offset="right-1 top-0.5" />
+          <CartCount count={cartCount} offset="right-2 top-1.5" />
         </button>
       </div>
       {profile}
@@ -811,7 +815,9 @@ function Section({
           <h2 className="text-[17px] font-bold leading-5">{title}</h2>
           {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
         </div>
-        <button onClick={onAll} className="shrink-0 text-xs font-medium text-accent">Смотреть все</button>
+        {/* -my-3 + py-3: область нажатия 44px, при этом ссылка визуально стоит
+            там же, где стояла — вертикальный ритм секции не меняется. */}
+        <button onClick={onAll} className="-my-3.5 shrink-0 rounded-field px-1 py-3.5 text-xs font-medium text-accent outline-none focus-visible:ring-2 focus-visible:ring-accent">Смотреть все</button>
       </div>
       {grid ? (
         // mobile 2 кол -> tablet 3 -> desktop 4 -> wide 5
@@ -848,11 +854,11 @@ function HomeSidebar({
 }) {
   // Опт/бизнес/Trade-In открывают встроенную сценарную заявку; «Написать
   // менеджеру» — прямой Telegram (fallback внутри onManager).
-  const actions: { icon: string; label: string; sub: string; onClick: () => void }[] = [
-    { icon: "📦", label: "Опт", sub: "Партии от 5 шт", onClick: () => onScenario("wholesale") },
-    { icon: "🏢", label: "Поставка для компании", sub: "Документы для юрлиц", onClick: () => onScenario("b2b") },
-    { icon: "🔄", label: "Trade-In", sub: "Обмен и выкуп техники", onClick: () => onScenario("trade_in") },
-    { icon: "💬", label: "Написать менеджеру", sub: "Ответим быстро", onClick: onManager },
+  const actions: { icon: IconName; label: string; sub: string; onClick: () => void }[] = [
+    { icon: "box", label: "Опт", sub: "Партии от 5 шт", onClick: () => onScenario("wholesale") },
+    { icon: "building", label: "Поставка для компании", sub: "Документы для юрлиц", onClick: () => onScenario("b2b") },
+    { icon: "refresh", label: "Trade-In", sub: "Обмен и выкуп техники", onClick: () => onScenario("trade_in") },
+    { icon: "chat", label: "Написать менеджеру", sub: "Ответим быстро", onClick: onManager },
   ];
 
   return (
@@ -893,7 +899,9 @@ function HomeSidebar({
             onClick={a.onClick}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-mutedbg"
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mutedbg text-lg">{a.icon}</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mutedbg text-muted">
+              <Icon name={a.icon} className="h-[18px] w-[18px]" />
+            </span>
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold">{a.label}</span>
               <span className="block truncate text-xs text-muted">{a.sub}</span>

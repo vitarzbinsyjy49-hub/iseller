@@ -7,6 +7,7 @@ import { loadCachedCategories, saveCachedCategories, sanitizeCategories, NavCate
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
+import { Icon } from "../components/icons";
 
 /** Вкладка «Все» — единственная, что не приходит с сервера: она снимает фильтр,
  *  а не выбирает категорию. Сам список категорий строится из каталога
@@ -269,7 +270,12 @@ export default function Catalog() {
             }}
             className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-muted"
           />
-          {q && <button onClick={() => setQ("")} aria-label="Очистить поиск" className="text-muted">✕</button>}
+          {q && (
+            <button onClick={() => setQ("")} aria-label="Очистить поиск"
+              className="tap -mr-2 flex h-11 w-11 shrink-0 items-center justify-center text-muted">
+              <Icon name="close" className="h-4 w-4" strokeWidth={2} />
+            </button>
+          )}
         </div>
 
         {/* Desktop controls row: сортировки и «В наличии» слева, «Фильтры»
@@ -410,7 +416,9 @@ function NoResults({ query, onAskAi, onReset }: {
 }) {
   return (
     <div className="fade-in mt-6 rounded-xl2 bg-surface p-6 text-center shadow-soft">
-      <div className="text-3xl">🔍</div>
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-mutedbg text-muted">
+        <Icon name="search" className="h-7 w-7" strokeWidth={1.6} />
+      </div>
       <p className="mt-2 text-[15px] font-bold">
         {query ? <>По запросу «{query}» ничего не нашлось</> : "Ничего не найдено"}
       </p>
@@ -419,8 +427,9 @@ function NoResults({ query, onAskAi, onReset }: {
       </p>
       <div className="mx-auto mt-4 flex max-w-xs flex-col gap-2">
         <button onClick={onAskAi}
-          className="tap rounded-field bg-accent px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-accentdark">
-          ✨ Спросить AI{query ? ` «${query.length > 24 ? `${query.slice(0, 24)}…` : query}»` : ""}
+          className="tap flex items-center justify-center gap-1.5 rounded-field bg-accent px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-accentdark">
+          <Icon name="sparkles" className="h-4 w-4" strokeWidth={2} />
+          Спросить AI{query ? ` «${query.length > 24 ? `${query.slice(0, 24)}…` : query}»` : ""}
         </button>
         <button onClick={onReset}
           className="tap rounded-field bg-mutedbg px-4 py-2.5 text-[13px] font-semibold text-text">

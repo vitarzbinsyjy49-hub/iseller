@@ -5,6 +5,7 @@ import { track } from "../lib/analytics";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
+import { Icon } from "../components/icons";
 
 /** История просмотров (/history): существующий /catalog/recently-viewed,
  *  никакой новой таблицы. Карточки с избранным и переходом в ProductDetails.
@@ -43,7 +44,9 @@ export default function History() {
         </div>
       ) : cards.length === 0 ? (
         <div className="fade-in mt-14 text-center">
-          <div className="text-4xl">🕐</div>
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-mutedbg text-muted">
+            <Icon name="clock" className="h-7 w-7" strokeWidth={1.6} />
+          </div>
           <p className="mt-3 text-[15px] font-bold">Вы пока ничего не смотрели</p>
           <p className="mx-auto mt-1 max-w-[280px] text-sm text-muted">
             Открывайте карточки товаров — они появятся здесь, чтобы к ним было легко вернуться.
@@ -63,9 +66,10 @@ export default function History() {
                 track("empty_state_action_clicked", { source: "history_ai" });
                 navigate("/ai");
               }}
-              className="tap rounded-xl2 bg-surface px-5 py-2.5 text-sm font-semibold text-accent shadow-soft"
+              className="tap flex items-center justify-center gap-2 rounded-xl2 bg-surface px-5 py-2.5 text-sm font-semibold text-accent shadow-soft"
             >
-              ✨ Подобрать через AI
+              <Icon name="sparkles" className="h-4 w-4" strokeWidth={2} />
+              Подобрать через AI
             </button>
           </div>
         </div>

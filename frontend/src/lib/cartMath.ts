@@ -189,13 +189,18 @@ export function shouldShowCartBar(pathname: string, itemsCount: number): boolean
  *  то же правило, что у сценарных заявок и на backend. Просить контакт,
  *  который уже известен, — лишний шаг.
  */
+export type CheckoutField = "phone" | "consent";
+export type CheckoutProblem = { field: CheckoutField; message: string };
+
 export function validateCheckout(input: {
   phone: string; consent: boolean; requirePhone: boolean;
-}): string | null {
+}): CheckoutProblem | null {
   if (input.requirePhone && !input.phone.trim()) {
-    return "Укажите телефон — менеджеру нужно с вами связаться";
+    return { field: "phone", message: "Укажите телефон — менеджеру нужно с вами связаться" };
   }
-  if (!input.consent) return "Нужно согласие на обработку данных и связь";
+  if (!input.consent) {
+    return { field: "consent", message: "Нужно согласие на обработку данных и связь" };
+  }
   return null;
 }
 

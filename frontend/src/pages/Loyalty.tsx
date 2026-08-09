@@ -10,6 +10,7 @@ import {
   fetchLoyalty, formatPoints, formatRate, progressPercent, KIND_LABEL,
   type LoyaltyAccount, type LoyaltyLevel,
 } from "../lib/loyalty";
+import { Icon } from "../components/icons";
 
 const LoyaltyRoadmapSheet = lazy(() => import("../components/LoyaltyRoadmapSheet"));
 
@@ -29,7 +30,7 @@ function LevelRow({ level, index, current, reached }: {
       }`}>
         {/* Ступень, а не ставка: ставка стоит строкой ниже, и «0,25» в кружке
             было бы вторым написанием того же числа — мелким и хуже читаемым. */}
-        {reached ? "✓" : index + 1}
+        {reached ? <Icon name="check" className="h-4 w-4" strokeWidth={2.6} /> : index + 1}
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-[14px] font-semibold leading-5">
@@ -115,8 +116,8 @@ export default function Loyalty() {
         onClick={openRoadmap}
         className="tap mt-3 flex w-full items-center gap-3 rounded-xl2 bg-surface p-4 text-left shadow-soft"
       >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-xl">
-          ✨
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
+          <Icon name="sparkles" className="h-5 w-5" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-bold">Что будет дальше</span>

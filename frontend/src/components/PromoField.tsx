@@ -150,7 +150,7 @@ export default function PromoField({ subtotal, onChange }: Props) {
         </button>
       </div>
       {state === "error" && error && (
-        <p className="mt-2 text-[12px] leading-4 text-[#ff3b30]">{error}</p>
+        <p className="mt-2 text-[12px] leading-4 text-danger">{error}</p>
       )}
     </div>
   );

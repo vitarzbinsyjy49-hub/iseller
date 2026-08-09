@@ -190,17 +190,26 @@ describe("shouldShowCartBar", () => {
 
 describe("validateCheckout", () => {
   it("телефон обязателен, только когда в Telegram ответить некуда", () => {
-    expect(validateCheckout({ phone: "", consent: true, requirePhone: true })).toMatch(/телефон/i);
+    expect(validateCheckout({ phone: "", consent: true, requirePhone: true }))
+      .toMatchObject({ field: "phone", message: expect.stringMatching(/телефон/i) });
     expect(validateCheckout({ phone: "", consent: true, requirePhone: false })).toBeNull();
   });
 
   it("без согласия заявку не отправляем", () => {
     expect(validateCheckout({ phone: "+79990000000", consent: false, requirePhone: true }))
-      .toMatch(/соглас/i);
+      .toMatchObject({ field: "consent", message: expect.stringMatching(/соглас/i) });
   });
 
   it("заполненная форма проходит", () => {
     expect(validateCheckout({ phone: "+79990000000", consent: true, requirePhone: true })).toBeNull();
+  });
+
+  // Поле в ответе — не украшение: по нему форма ставит фокус и подпись ошибки
+  // ПОД нужным полем. Пока ответом была голая строка, обе формы показывали
+  // ошибку одним абзацем над кнопкой, и на длинной форме было неясно, что чинить.
+  it("называет поле, на котором споткнулись", () => {
+    const problem = validateCheckout({ phone: "", consent: false, requirePhone: true });
+    expect(problem?.field).toBe("phone");
   });
 });
 

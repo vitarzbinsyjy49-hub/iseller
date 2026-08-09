@@ -17,6 +17,7 @@ import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib
 import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMath";
 import { QuantityStepper } from "./QuantityStepper";
 import { preloadRoute } from "../lib/routePreload";
+import { Icon } from "./icons";
 
 const MAX_CARD_IMAGES = 10;
 
@@ -236,9 +237,16 @@ function CardCarousel({
       </div>
 
       {/* Точки-индикаторы (как в Лавке): по центру внизу фото, до 10 шт. Кнопки —
-          отдельные от свайп-области (не вложенные), чтобы DOM был валиден. */}
+          отдельные от свайп-области (не вложенные), чтобы DOM был валиден.
+
+          Сама точка — 6px, попасть по ней пальцем нельзя: правило просит 44px.
+          Целиком 44 здесь недостижимо — десять точек по 44px не помещаются в
+          карточку шириной 160px, а полоса такой высоты над фото съела бы свайп
+          (кнопки лежат вне скролл-контейнера, жест по ним галерею не листает).
+          Компромисс: кнопка 28px в высоту и прозрачные поля по бокам, видимое
+          не изменилось. Основной жест здесь свайп, точки — вспомогательный. */}
       {hasCarousel && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center gap-1.5">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center">
           {images.map((_, i) => (
             <button
               key={i}
@@ -246,10 +254,14 @@ function CardCarousel({
               aria-label={`Показать фото ${i + 1}`}
               aria-current={i === index}
               onClick={(e) => { e.stopPropagation(); goToDot(i); }}
-              className={`pointer-events-auto h-1.5 rounded-full shadow-soft transition-[width,background-color] duration-150 ${
-                i === index ? "w-4 bg-white" : "w-1.5 bg-white/60"
-              }`}
-            />
+              className="pointer-events-auto flex h-7 shrink-0 items-end justify-center px-1 pb-2 outline-none"
+            >
+              <span
+                className={`block h-1.5 rounded-full shadow-soft transition-[width,background-color] duration-150 ${
+                  i === index ? "w-4 bg-white" : "w-1.5 bg-white/60"
+                }`}
+              />
+            </button>
           ))}
         </div>
       )}
@@ -260,7 +272,15 @@ function CardCarousel({
 /** Сердечко «в избранное»: серверное хранение, оптимистичный тоггл с откатом,
  *  тактильный отклик, toast и короткая scale-анимация. stopPropagation —
  *  тап по сердцу не открывает карточку товара. */
-export function FavButton({ id, className = "" }: { id: number; className?: string }) {
+export function FavButton({
+  id, className = "", visualClassName = "h-8 w-8 bg-white shadow-card",
+}: {
+  id: number;
+  /** Позиционирование внешней (нажимаемой) области. Размер её не задавать. */
+  className?: string;
+  /** Видимый кружок: размер, фон, рамка. Область нажатия всегда 44×44. */
+  visualClassName?: string;
+}) {
   const [fav, toggle, busy] = useFavorite(id);
   const [pop, setPop] = useState(false);
 
@@ -280,18 +300,24 @@ export function FavButton({ id, className = "" }: { id: number; className?: stri
   }
 
   return (
+    // Кружок остался 32px, нажимаемая область — 44px: белый круг во всю зону
+    // нажатия закрыл бы четверть фото на узкой карточке. Растёт прозрачная
+    // обёртка, видимое не меняется. Позицию компенсирует вызывающая сторона
+    // (right-0.5/top-0.5 вместо right-2/top-2 — круг остаётся на месте).
     <button
       type="button"
       onClick={onClick}
       aria-pressed={fav}
       aria-label={fav ? "Убрать из избранного" : "В избранное"}
-      className={`tap flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-card ${className}`}
+      className={`tap flex h-11 w-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent ${className}`}
     >
-      <svg viewBox="0 0 24 24" className={`h-[18px] w-[18px] transition-colors ${pop ? "favorite-pop" : ""}`}
-        fill={fav ? "#ff3b30" : "none"} stroke={fav ? "#ff3b30" : "#9aa1ab"}
-        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M19 14c1.5-1.5 2.5-3 2.5-5A5.5 5.5 0 0 0 12 5.6 5.5 5.5 0 0 0 2.5 9c0 2 1 3.5 2.5 5l7 7z" />
-      </svg>
+      <span className={`flex items-center justify-center rounded-full ${visualClassName}`}>
+        <svg viewBox="0 0 24 24" className={`h-[18px] w-[18px] transition-colors ${pop ? "favorite-pop" : ""}`}
+          fill={fav ? "rgb(var(--app-danger))" : "none"} stroke={fav ? "rgb(var(--app-danger))" : "#9aa1ab"}
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 14c1.5-1.5 2.5-3 2.5-5A5.5 5.5 0 0 0 12 5.6 5.5 5.5 0 0 0 2.5 9c0 2 1 3.5 2.5 5l7 7z" />
+        </svg>
+      </span>
     </button>
   );
 }
@@ -300,7 +326,7 @@ export function Badge({ color, children }: {
   color: "red" | "blue" | "green" | "orange" | "gold"; children: ReactNode;
 }) {
   const map = {
-    red: "bg-[#ff3b30] text-white",
+    red: "bg-danger text-white",
     blue: "bg-accent text-white",
     green: "bg-green text-white",
     orange: "bg-orange text-white",
@@ -308,8 +334,10 @@ export function Badge({ color, children }: {
     // контраст. Отсюда тёмно-коричневая подложка, а не золотая заливка.
     gold: "bg-[#2b1c00] text-[#ffce6a]",
   };
+  // inline-flex + gap: у бейджа может быть иконка перед подписью («Хит»), и она
+  // обязана стоять на общей вертикальной оси с текстом, а не «висеть» рядом.
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4 ${map[color]}`}>{children}</span>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-4 ${map[color]}`}>{children}</span>
   );
 }
 
@@ -359,7 +387,7 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
     return (
       <button
         onClick={(e) => { e.stopPropagation(); onOpen(); }}
-        className="tap h-9 w-full rounded-field bg-mutedbg text-[12px] font-semibold text-muted"
+        className="tap h-11 w-full rounded-field bg-mutedbg text-[12px] font-semibold text-muted outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         Узнать о поступлении
       </button>
@@ -387,7 +415,7 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
       // карточки. Текст тёмный, а не белый: белое на этом золоте даёт 2,8:1
       // при норме 4,5:1, тёмное — 6,9:1. Золото приглушённое (#C8921F), то же,
       // что было в рамке: менять фирменный тон вместе с носителем незачем.
-      className={`tap flex h-9 w-full items-center justify-center gap-1.5 rounded-field text-[13px] font-semibold transition-colors ${
+      className={`tap flex h-11 w-full items-center justify-center gap-1.5 rounded-field text-[13px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
         card.is_legendary
           ? "bg-[#C8921F] text-[#241800] hover:bg-[#b3811a]"
           : "bg-accent text-white hover:bg-accentdark"
@@ -451,7 +479,7 @@ function ProductCard({ card, compact, onOpen }: Props) {
           {/* «Хит» на легендарном товаре гасит backend (to_card): правило одно
               на все места, где рисуется карточка, а не продублировано в вёрстке. */}
           {card.is_legendary && <Badge color="gold">Легендарный</Badge>}
-          {card.is_hot && <Badge color="orange">🔥 Хит</Badge>}
+          {card.is_hot && <Badge color="orange"><Icon name="flame" className="h-3 w-3" strokeWidth={2.2} />Хит</Badge>}
           {disc && <Badge color="red">−{disc}%</Badge>}
         </div>
         {card.is_available_today && card.in_stock && (
@@ -459,7 +487,9 @@ function ProductCard({ card, compact, onOpen }: Props) {
             <Badge color="green">Сегодня</Badge>
           </span>
         )}
-        <FavButton id={card.id} className="absolute right-2 top-2 z-10" />
+        {/* right-0.5/top-0.5, а не right-2/top-2: обёртка стала 44px, кружок
+            внутри неё смещён на 6px — итоговый отступ кружка тот же 8px. */}
+        <FavButton id={card.id} className="absolute right-0.5 top-0.5 z-10" />
       </div>
 
       <div className="flex flex-1 flex-col p-3">
@@ -481,19 +511,22 @@ function ProductCard({ card, compact, onOpen }: Props) {
             in_stock=true, и карточка писала «В наличии», хотя в корзине тот же
             товар честно помечен предзаказом. Две разные правды об одном товаре
             на соседних экранах — хуже, чем одна скучная. */}
-        <p className={`mt-1 text-[11px] font-medium ${availabilityTone(card)}`}>
+        {/* 12px, а не 11: наличие — обещание магазина, и набирать его ниже
+            читаемого минимума значит прятать самое проверяемое утверждение
+            карточки. То же у остатка и социального доказательства ниже. */}
+        <p className={`mt-1 text-[12px] font-medium ${availabilityTone(card)}`}>
           {availabilityText(card)}
         </p>
         {/* Остаток — только у лимитированных товаров (флаг из админки), а не у
             всего, где склад меньше пяти штук: иначе срочность ложная. */}
         {card.is_limited && card.in_stock && card.stock != null && card.stock > 0 && (
-          <p className="mt-0.5 text-[11px] font-medium text-orange">Осталось {card.stock} шт</p>
+          <p className="mt-0.5 text-[12px] font-medium text-orange">Осталось {card.stock} шт</p>
         )}
         {/* Социальное доказательство: строка приходит с backend посчитанной.
             В плитке она обрезается одной строкой — карточки в сетке обязаны
             остаться одной высоты, иначе ряд «поедет». */}
         {card.social_proof && (
-          <p className="mt-0.5 truncate text-[11px] text-muted">{card.social_proof}</p>
+          <p className="mt-0.5 truncate text-[12px] text-muted">{card.social_proof}</p>
         )}
         {/* Спейсер прижимает действие к низу карточки при разной высоте контента */}
         <span aria-hidden className="flex-1" />

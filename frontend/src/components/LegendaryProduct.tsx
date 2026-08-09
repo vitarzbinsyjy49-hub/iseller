@@ -7,6 +7,7 @@ import { bundleItems } from "../lib/bundle";
 import { indexFromScroll } from "../lib/carousel";
 import { openExternalLink } from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
+import { Icon } from "./icons";
 
 /** Событийная страница легендарного товара.
  *
@@ -86,7 +87,9 @@ export default function LegendaryProduct({
       <div
         className="mx-auto max-w-md pb-[calc(88px+max(0.5rem,var(--app-safe-bottom,env(safe-area-inset-bottom,0px))))] lg:max-w-[1100px] lg:pb-16"
       >
-        <div className="mb-3 flex items-center gap-2">
+        {/* gap-0 и -mx-1: обёртки кнопок стали 44px с 4px прозрачного поля,
+            и прежний зазор в 8px между кружками получается сам. */}
+        <div className="-mx-1 mb-2 flex items-center">
           <RoundBtn onClick={() => navigate(-1)} label="Назад">
             <path d="M15 18l-6-6 6-6" />
           </RoundBtn>
@@ -94,7 +97,7 @@ export default function LegendaryProduct({
           <RoundBtn onClick={onShare} label="Поделиться">
             <path d="M12 3v12M12 3 8 7M12 3l4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
           </RoundBtn>
-          <FavButton id={product.id} className="h-9 w-9" />
+          <FavButton id={product.id} visualClassName="h-9 w-9 bg-white shadow-card" />
           {shared && (
             <span className="pop-in absolute right-4 top-14 z-10 rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-[#241C2E]">
               Ссылка скопирована
@@ -195,8 +198,12 @@ export default function LegendaryProduct({
             </section>
 
             <div className="mt-8 flex flex-wrap gap-2">
-              <GhostBtn onClick={onAskAi}>✨ Спросить AI</GhostBtn>
-              <GhostBtn onClick={() => openExternalLink(config.manager_retail_url)}>💬 Написать менеджеру</GhostBtn>
+              <GhostBtn onClick={onAskAi}>
+                <Icon name="sparkles" className="h-4 w-4" strokeWidth={2} />Спросить AI
+              </GhostBtn>
+              <GhostBtn onClick={() => openExternalLink(config.manager_retail_url)}>
+                <Icon name="chat" className="h-4 w-4" />Написать менеджеру
+              </GhostBtn>
             </div>
           </div>
 
@@ -282,7 +289,7 @@ function GhostBtn({ onClick, children }: { onClick: () => void; children: ReactN
   return (
     <button
       onClick={onClick}
-      className="tap flex-1 rounded-field border px-4 py-2.5 text-[13px] font-medium text-white"
+      className="tap flex flex-1 items-center justify-center gap-1.5 rounded-field border px-4 py-2.5 text-[13px] font-medium text-white"
       style={{ borderColor: "rgba(255,255,255,0.22)" }}
     >
       {children}
@@ -292,12 +299,15 @@ function GhostBtn({ onClick, children }: { onClick: () => void; children: ReactN
 
 function RoundBtn({ onClick, label, children }: { onClick: () => void; label: string; children: ReactNode }) {
   return (
+    // Кружок 36px, область нажатия 44px (см. TopBtn на карточке товара).
     <button onClick={onClick} aria-label={label}
-      className="tap flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#241C2E]">
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor"
-        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        {children}
-      </svg>
+      className="tap flex h-11 w-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white">
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#241C2E]">
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor"
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {children}
+        </svg>
+      </span>
     </button>
   );
 }

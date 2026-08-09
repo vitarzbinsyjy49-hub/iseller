@@ -30,9 +30,12 @@ export function ProfileChip({ user, variant }: { user: User | null; variant: "mo
       onClick={() => navigate("/profile")}
       aria-label={`Профиль: ${name}`}
       title={name}
-      className="tap flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white"
+      className="tap flex h-11 w-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/70"
     >
-      {init}
+      {/* Кружок 36px, область нажатия 44px — как у остальных круглых кнопок. */}
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white">
+        {init}
+      </span>
     </button>
   );
 }

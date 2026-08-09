@@ -5,6 +5,7 @@ import { ProductImage } from "./ProductCard";
 import { formatPrice } from "../lib/format";
 import { useLiveSearch, MIN_QUERY_LEN } from "../lib/liveSearch";
 import { clearSearchHistory, loadSearchHistory } from "../lib/searchHistory";
+import { Icon } from "./icons";
 
 /** Сценарные чипы поиска: только маршруты, которые каталог реально понимает
  *  (query/category/today) — никаких выдуманных фильтров. Консультационные
@@ -110,8 +111,9 @@ export default function SearchPanel({
             </p>
             <div className="mt-3 flex flex-col gap-2">
               <button onClick={askAi}
-                className="tap rounded-field bg-accent px-4 py-2.5 text-[13px] font-semibold text-white">
-                ✨ Спросить AI «{trimmed.length > 28 ? `${trimmed.slice(0, 28)}…` : trimmed}»
+                className="tap flex items-center justify-center gap-1.5 rounded-field bg-accent px-4 py-2.5 text-[13px] font-semibold text-white">
+                <Icon name="sparkles" className="h-4 w-4" strokeWidth={2} />
+                Спросить AI «{trimmed.length > 28 ? `${trimmed.slice(0, 28)}…` : trimmed}»
               </button>
               <button onClick={() => onNavigate("/catalog")}
                 className="tap rounded-field bg-mutedbg px-4 py-2.5 text-[13px] font-semibold text-text">
@@ -211,10 +213,10 @@ export default function SearchPanel({
         onClick={askAi}
         className="tap mt-3.5 flex w-full items-center gap-3 rounded-field bg-accent/10 px-3.5 py-3 text-left"
       >
-        <span aria-hidden className="text-lg">✨</span>
+        <Icon name="sparkles" className="h-5 w-5 shrink-0 text-accent" />
         <span className="min-w-0">
           <span className="block text-[13px] font-semibold text-accent">Спросить AI</span>
-          <span className="block text-[11px] text-muted">Опишите задачу — подберём из реального наличия</span>
+          <span className="block text-[12px] text-muted">Опишите задачу — подберём из реального наличия</span>
         </span>
       </button>
     </div>

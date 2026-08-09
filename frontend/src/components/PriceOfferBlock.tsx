@@ -11,6 +11,7 @@ import {
   validateOfferPrice,
   validateOfferUrl,
 } from "../lib/priceOffer";
+import { Icon } from "./icons";
 
 const OPEN_MS = 240;
 
@@ -173,26 +174,22 @@ export default function PriceOfferBlock({ productId, ourPrice }: Props) {
         {/* Ценовая гарантия — реальный триггер доверия, поэтому у блока свой
             акцентный значок, а не нейтральная серая полоса наравне с прочими
             второстепенными пунктами. */}
-        <span
-          aria-hidden
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent/12 text-base text-accent"
-        >
-          🏷️
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent/12 text-accent">
+          <Icon name="shield" className="h-[18px] w-[18px]" strokeWidth={2} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[13px] font-semibold text-accentdark">Нашли дешевле?</span>
-          <span className="mt-0.5 block text-[11px] text-muted">
+          <span className="mt-0.5 block text-[12px] text-muted">
             Пришлите ссылку — сверим цену
           </span>
         </span>
         {/* Стрелка поворачивается через inline-стиль: это состояние, а не
             анимация, и гашение системной анимации ему не мешает. */}
         <span
-          aria-hidden
           className="shrink-0 text-muted"
           style={{ transform: open ? "rotate(180deg)" : "none" }}
         >
-          ⌄
+          <Icon name="chevron-down" className="h-4 w-4" strokeWidth={2} />
         </span>
       </button>
 
@@ -207,7 +204,10 @@ export default function PriceOfferBlock({ productId, ourPrice }: Props) {
           <div ref={bodyRef} className="pt-2">
             {state === "done" ? (
               <div className="rounded-xl2 border border-border bg-mutedbg p-4">
-                <p className="text-[13px] font-semibold">✓ Запрос принят</p>
+                <p className="flex items-center gap-1.5 text-[13px] font-semibold">
+                  <Icon name="check" className="h-4 w-4 text-green" strokeWidth={2.4} />
+                  Запрос принят
+                </p>
                 <p className="mt-1 text-xs text-muted">
                   Менеджер сверит цену и напишет вам в Telegram.
                 </p>
@@ -256,7 +256,7 @@ export default function PriceOfferBlock({ productId, ourPrice }: Props) {
                   </p>
                 )}
                 {priceError && price.trim() && (
-                  <p className="mt-1.5 text-[11px] text-[#ff3b30]">{priceError}</p>
+                  <p className="mt-1.5 text-[11px] text-danger">{priceError}</p>
                 )}
 
                 <input
@@ -269,10 +269,10 @@ export default function PriceOfferBlock({ productId, ourPrice }: Props) {
                 {/* Ошибку ссылки показываем только после ввода: пустое поле при
                     открытии формы — не ошибка человека, а её начало. */}
                 {urlError && url.trim() && (
-                  <p className="mt-2 text-[11px] text-[#ff3b30]">{urlError}</p>
+                  <p className="mt-2 text-[11px] text-danger">{urlError}</p>
                 )}
                 {state === "error" && error && (
-                  <p className="mt-2 text-[11px] text-[#ff3b30]">{error}</p>
+                  <p className="mt-2 text-[11px] text-danger">{error}</p>
                 )}
 
                 <button

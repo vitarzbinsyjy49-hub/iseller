@@ -21,6 +21,9 @@ export default {
         accentdark: "rgb(var(--app-accent-dark) / <alpha-value>)",
         green: "rgb(var(--app-green) / <alpha-value>)",
         orange: "rgb(var(--app-orange) / <alpha-value>)",
+        danger: "rgb(var(--app-danger) / <alpha-value>)",
+        dangerink: "rgb(var(--app-danger-ink) / <alpha-value>)",
+        dangerbg: "rgb(var(--app-danger-bg) / <alpha-value>)",
       },
       // Единая шкала радиусов (v5.2.8): field → card → xl2 → hero. Без случайных значений.
       borderRadius: {

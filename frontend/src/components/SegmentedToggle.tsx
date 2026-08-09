@@ -43,7 +43,9 @@ export function SegmentedToggle<T extends string>({
       role="tablist"
       aria-label={ariaLabel}
       onKeyDown={onKeyDown}
-      className={`inline-flex h-9 shrink-0 items-center gap-0.5 rounded-full p-0.5 ${track}`}
+      // h-11, а не h-9: положения тумблера — обычные кнопки, и 32px высоты им
+      // мало по правилу 44×44. Высота по-прежнему фиксированная (см. выше).
+      className={`inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full p-0.5 ${track}`}
     >
       {options.map((o) => {
         const selected = o.value === value;
@@ -54,7 +56,7 @@ export function SegmentedToggle<T extends string>({
             aria-selected={selected}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(o.value)}
-            className={`tap h-8 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors ${selected ? active : idle}`}
+            className={`tap h-10 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${selected ? active : idle}`}
           >
             {o.label}
           </button>

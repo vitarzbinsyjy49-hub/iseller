@@ -22,8 +22,11 @@ export function QuantityStepper({
   ariaLabel?: string;
 }) {
   const atMax = max > 0 && quantity >= max;
+  // sm тоже 44px в высоту: «−» и «+» — самые частые нажатия в корзине, и 36px
+  // им мало (правило 44×44). От md отличается теперь только шириной кнопок и
+  // кеглем счётчика — компактность нужна была по ширине, а не по высоте.
   const dims = size === "sm"
-    ? { box: "h-9", btn: "h-9 w-9", value: "min-w-[1.75rem] text-[13px]" }
+    ? { box: "h-11", btn: "h-11 w-10", value: "min-w-[1.75rem] text-[13px]" }
     : { box: "h-11", btn: "h-11 w-11", value: "min-w-[2.25rem] text-[15px]" };
 
   return (
@@ -74,7 +77,7 @@ function StepBtn({
       title={label}
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); e.preventDefault(); onClick(); }}
-      className={`tap flex ${className} items-center justify-center rounded-field text-text transition-opacity disabled:opacity-35`}
+      className={`tap flex ${className} items-center justify-center rounded-field text-text outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-35`}
     >
       <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor"
         strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">

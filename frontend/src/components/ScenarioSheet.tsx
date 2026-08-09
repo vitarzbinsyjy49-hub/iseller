@@ -25,6 +25,7 @@ import {
   type Field,
   type ScenarioKey,
 } from "../lib/scenario";
+import { Icon } from "./icons";
 
 export type { ScenarioKey, ChoiceItem } from "../lib/scenario";
 
@@ -131,10 +132,15 @@ function DragHandle() {
 
 function CloseButton({ onClose }: { onClose: () => void }) {
   return (
+    // Кружок 32px, область нажатия 44px — как у остальных круглых кнопок.
     <button
       onClick={onClose} aria-label="Закрыть"
-      className="tap flex h-8 w-8 items-center justify-center rounded-full bg-mutedbg text-muted"
-    >✕</button>
+      className="tap -mr-1.5 flex h-11 w-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-mutedbg text-muted">
+        <Icon name="close" className="h-4 w-4" strokeWidth={2} />
+      </span>
+    </button>
   );
 }
 
@@ -205,7 +211,9 @@ export function ScenarioRequestSheet({
           <>
             <DragHandle />
             <div className="pop-in px-5 pb-5 pt-2 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green/15 text-3xl">✅</div>
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green/15 text-green">
+                <Icon name="check" className="h-8 w-8" strokeWidth={2.2} />
+              </div>
               <p id="scenario-done-title" className="mt-4 text-lg font-bold">Заявка отправлена</p>
               <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
                 Менеджер изучит информацию и свяжется с вами в Telegram. Статус можно посмотреть в разделе «Заявки».
@@ -252,7 +260,7 @@ export function ScenarioRequestSheet({
               {cfg.fields.map((f) => (
                 <div key={f.key}>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">
-                {f.label}{"required" in f && f.required && <span className="text-[#ff3b30]"> *</span>}
+                {f.label}{"required" in f && f.required && <span className="text-danger"> *</span>}
               </label>
               {f.kind === "chips" ? (
                 <div className="flex flex-wrap gap-2">
@@ -290,7 +298,7 @@ export function ScenarioRequestSheet({
               (есть @username); иначе обязателен. */}
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">
-              Телефон{requirePhone ? <span className="text-[#ff3b30]"> *</span> : " (необязательно)"}
+              Телефон{requirePhone ? <span className="text-danger"> *</span> : " (необязательно)"}
             </label>
             <input
               value={phone} onChange={(e) => setPhone(e.target.value)}
@@ -301,7 +309,7 @@ export function ScenarioRequestSheet({
             )}
           </div>
 
-              {error && <p className="text-sm text-[#ff3b30]">{error}</p>}
+              {error && <p className="text-sm text-danger">{error}</p>}
             </div>
           </div>
 

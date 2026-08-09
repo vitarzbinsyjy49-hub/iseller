@@ -12,6 +12,7 @@ import SearchPanel from "./SearchPanel";
 import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
 import { preloadRoute } from "../lib/routePreload";
 import { BrandWordmark } from "./BrandMark";
+import { Icon } from "./icons";
 
 /** Desktop-шапка (>=1024px): логотип, навигация, поиск, действия.
  *  Видна только на lg+ — mobile UX (BottomNav + градиентный header) не трогаем.
@@ -164,7 +165,7 @@ export default function DesktopHeader() {
             />
             {q && (
               <button onClick={() => setQ("")} aria-label="Очистить поиск" className="shrink-0 text-muted hover:text-text">
-                ✕
+                <Icon name="close" className="h-4 w-4" strokeWidth={2} />
               </button>
             )}
             {/* Та же кнопка, что на главной, и с тем же поведением: одинаковые
@@ -181,7 +182,7 @@ export default function DesktopHeader() {
               aria-label={q.trim() ? `Спросить AI: ${q.trim()}` : "Открыть AI-подбор"}
               className="tap my-1.5 flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3 text-[13px] font-semibold text-white"
             >
-              <span aria-hidden>✨</span>
+              <Icon name="sparkles" className="h-4 w-4" strokeWidth={2} />
               ИИ
             </button>
           </div>
@@ -237,7 +238,7 @@ export default function DesktopHeader() {
             aria-label="Написать менеджеру"
             className="hidden rounded-xl2 border border-border bg-surface px-3 py-2.5 text-sm font-medium text-text transition-colors hover:bg-mutedbg xl:block wide:px-4"
           >
-            💬<span className="hidden wide:ml-1 wide:inline">Менеджер</span>
+            <Icon name="chat" className="h-4 w-4" /><span className="hidden wide:ml-1 wide:inline">Менеджер</span>
           </button>
           <ProfileChip user={user} variant="desktop" />
         </div>

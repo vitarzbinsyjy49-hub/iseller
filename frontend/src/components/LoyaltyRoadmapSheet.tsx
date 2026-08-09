@@ -9,6 +9,7 @@
  *  вторую ловушку фокуса и вторую блокировку скролла, которые расходятся молча.
  */
 import { SheetShell } from "./ScenarioSheet";
+import { Icon } from "./icons";
 
 type Step = {
   title: string;
@@ -59,8 +60,8 @@ export default function LoyaltyRoadmapSheet({ onClose }: { onClose: () => void }
           <div className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-border" aria-hidden />
 
           <div className="flex items-start gap-3 px-5 pb-3 pt-4">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-xl">
-              ✨
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
+              <Icon name="sparkles" className="h-5 w-5" />
             </span>
             <div className="min-w-0 flex-1">
               <h2 id="loyalty-roadmap-title" className="text-[17px] font-bold leading-6">

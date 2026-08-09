@@ -41,12 +41,18 @@ export default function Toaster() {
     // html.has-cart-bar и поднимает стек над панелью корзины. Инлайновый style
     // ещё и перебивал lg:bottom-8, поэтому на desktop toast стоял на мобильной
     // высоте.
+    // role/aria-live: toast — единственный канал для «Не удалось добавить в
+    // корзину», и без объявления эта ошибка существовала только визуально.
+    // Ошибка идёт как alert (перебивает), обычное подтверждение — как status
+    // (дожидается паузы): «Добавлено в избранное» не должно рвать чтение.
     <div className="toast-dock pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-2 px-4">
       {items.map((t) => (
         <div
           key={t.id}
+          role={t.kind === "error" ? "alert" : "status"}
+          aria-live={t.kind === "error" ? "assertive" : "polite"}
           className={`${t.closing ? "toast-out" : "toast-in"} pointer-events-auto max-w-xs rounded-full px-4 py-2 text-center text-[13px] font-medium text-white shadow-sheet ${
-            t.kind === "error" ? "bg-[#d92c3c]/95" : "bg-text/95"
+            t.kind === "error" ? "bg-danger/95" : "bg-text/95"
           }`}
         >
           {t.message}

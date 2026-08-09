@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { Icon } from "./icons";
 
 /** Ловит любые render-ошибки и показывает дружелюбный экран вместо
  *  белого экрана смерти. Кнопка перезагружает Mini App целиком. */
@@ -21,7 +22,9 @@ export default class ErrorBoundary extends Component<
     if (!this.state.error) return this.props.children;
     return (
       <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-        <div className="text-4xl">😔</div>
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-mutedbg text-muted">
+          <Icon name="alert" className="h-7 w-7" strokeWidth={1.6} />
+        </div>
         <p className="mt-4 text-lg font-bold">Что-то пошло не так</p>
         <p className="mt-1.5 text-sm text-muted">
           Попробуйте обновить приложение. Если не поможет — напишите менеджеру.

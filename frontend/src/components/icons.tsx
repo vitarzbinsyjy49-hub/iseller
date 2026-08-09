@@ -1,0 +1,69 @@
+/** Иконки интерфейса — один набор, одна манера рисунка.
+ *
+ *  Появился потому, что emoji стояли ровно в тех местах, где решается доверие:
+ *  выбор доставки, гарантия, оплата, подтверждение заявки. Emoji рисует система,
+ *  а не мы: на Android это шрифт Noto, на iOS — Apple Color Emoji, и один и тот
+ *  же экран выглядит по-разному на разных телефонах. Цветом и толщиной линии они
+ *  тоже не управляются, поэтому в тёмной строке или на цветной подложке ведут
+ *  себя непредсказуемо.
+ *
+ *  Манера — та же, что у нижней навигации и силуэтов категорий: viewBox 24,
+ *  contour-only, `currentColor`, толщина 1.8 (у мелких размеров читается тоньше
+ *  и не «жирнит» строку). Заливок нет — набор одноуровневый, и смешивать filled
+ *  с outline в одном ряду нельзя.
+ *
+ *  Чего здесь СОЗНАТЕЛЬНО нет: иконок категорий и плиток главной. Они приходят
+ *  из базы (`home_categories.emoji`, `navTiles.FALLBACK_ICON`) и редактируются
+ *  в админке — это данные, а не вёрстка. Подменять их набором из кода значит
+ *  завести второй источник правды ровно там, где проект от него уже уходил.
+ */
+
+import type { ReactElement } from "react";
+
+export type IconName =
+  | "store" | "truck" | "globe" | "card" | "shield" | "chat"
+  | "sparkles" | "flame" | "check" | "close" | "clock" | "chevron-down"
+  | "search" | "doc" | "pin" | "info" | "box" | "building" | "refresh"
+  | "heart" | "phone" | "bot" | "alert";
+
+const paths: Record<IconName, ReactElement> = {
+  store: <><path d="M4 9.5V20h16V9.5" /><path d="M3 9.5 4.8 4.5h14.4L21 9.5z" /><path d="M9.5 20v-5.5h5V20" /></>,
+  truck: <><path d="M3 6.5h11v9H3z" /><path d="M14 9.5h3.6l2.4 3v3h-6" /><circle cx="7" cy="18" r="1.8" /><circle cx="17" cy="18" r="1.8" /></>,
+  globe: <><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17" /><path d="M12 3.5c2.2 2.3 3.4 5.3 3.4 8.5S14.2 18.2 12 20.5c-2.2-2.3-3.4-5.3-3.4-8.5S9.8 5.8 12 3.5z" /></>,
+  card: <><rect x="3" y="5.5" width="18" height="13" rx="2.2" /><path d="M3 10h18" /><path d="M6.5 14.5h4" /></>,
+  shield: <><path d="M12 3.2 5 6v6c0 4 2.9 7.2 7 8.8 4.1-1.6 7-4.8 7-8.8V6z" /><path d="m9 12 2.2 2.2L15.4 10" /></>,
+  chat: <><path d="M20.5 12c0 4-3.8 7.2-8.5 7.2-1 0-2-.15-2.9-.42L4 20.5l1.4-3.7C4.1 15.5 3.5 13.8 3.5 12c0-4 3.8-7.2 8.5-7.2s8.5 3.2 8.5 7.2z" /></>,
+  sparkles: <><path d="M12 3.5 13.6 8 18 9.6 13.6 11.2 12 15.7l-1.6-4.5L6 9.6 10.4 8z" /><path d="M18.2 15.4l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z" /></>,
+  flame: <><path d="M12.5 3c.4 2.6-.9 3.9-2.2 5.2C8.9 9.6 7.5 11 7.5 13.5a4.5 4.5 0 0 0 9 0c0-1.7-.6-2.9-1.4-4" /><path d="M12 20a2.6 2.6 0 0 0 2.6-2.6c0-1.4-1.3-2.2-2.6-3.9-1.3 1.7-2.6 2.5-2.6 3.9A2.6 2.6 0 0 0 12 20z" /></>,
+  check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  close: <path d="M6 6l12 12M18 6 6 18" />,
+  clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5.3l3.4 2" /></>,
+  "chevron-down": <path d="m6 9.5 6 6 6-6" />,
+  search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
+  doc: <><rect x="4.5" y="3.5" width="15" height="17" rx="2.5" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4.5" /></>,
+  pin: <><path d="M12 21c4-4.4 6-7.6 6-10a6 6 0 1 0-12 0c0 2.4 2 5.6 6 10z" /><circle cx="12" cy="10.8" r="2.3" /></>,
+  info: <><circle cx="12" cy="12" r="8.5" /><path d="M12 11v5.5" /><path d="M12 7.6h.01" /></>,
+  box: <><path d="M3.5 7.6 12 3.5l8.5 4.1v8.8L12 20.5l-8.5-4.1z" /><path d="M3.5 7.6 12 11.8l8.5-4.2M12 11.8v8.7" /></>,
+  building: <><rect x="4.5" y="3.5" width="15" height="17" rx="2" /><path d="M8.5 8h2M13.5 8h2M8.5 12h2M13.5 12h2M10 20.5v-4h4v4" /></>,
+  refresh: <><path d="M20 12a8 8 0 0 1-13.7 5.6M4 12a8 8 0 0 1 13.7-5.6" /><path d="M4 20v-5h5M20 4v5h-5" /></>,
+  heart: <path d="M19 14c1.5-1.5 2.5-3 2.5-5A5.5 5.5 0 0 0 12 5.6 5.5 5.5 0 0 0 2.5 9c0 2 1 3.5 2.5 5l7 7z" />,
+  phone: <><rect x="7" y="2.8" width="10" height="18.4" rx="2.4" /><path d="M10.8 18.4h2.4" /></>,
+  bot: <><rect x="4" y="8" width="16" height="11" rx="3" /><path d="M12 8V4.5M9.5 13v1.5M14.5 13v1.5" /><circle cx="12" cy="3.6" r="1.2" /></>,
+  alert: <><path d="M12 4.2 21 19.5H3z" /><path d="M12 10v4" /><path d="M12 16.6h.01" /></>,
+};
+
+/** По умолчанию `aria-hidden`: иконка почти всегда стоит рядом с подписью, и
+ *  скринридеру её дублировать незачем. Одиночной иконке подпись даёт кнопка. */
+export function Icon({
+  name, className = "h-5 w-5", strokeWidth = 1.8,
+}: { name: IconName; className?: string; strokeWidth?: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24" className={className} aria-hidden
+      fill="none" stroke="currentColor" strokeWidth={strokeWidth}
+      strokeLinecap="round" strokeLinejoin="round"
+    >
+      {paths[name]}
+    </svg>
+  );
+}

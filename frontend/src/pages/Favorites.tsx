@@ -6,6 +6,7 @@ import ProductCard, { ProductImage } from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
 import { useFavoriteIds } from "../lib/favorites";
 import { track } from "../lib/analytics";
+import { Icon } from "../components/icons";
 
 /** Экран «Избранное»: карточки серверного избранного. Удаление сердечком —
  *  карточка исчезает сразу (фильтр по актуальным id), без перезагрузки. */
@@ -99,9 +100,10 @@ function EmptyFavorites({
         </button>
         <button
           onClick={onAi}
-          className="tap rounded-xl2 bg-surface px-5 py-2.5 text-sm font-semibold text-accent shadow-soft"
+          className="tap flex items-center justify-center gap-2 rounded-xl2 bg-surface px-5 py-2.5 text-sm font-semibold text-accent shadow-soft"
         >
-          ✨ Подобрать через AI
+          <Icon name="sparkles" className="h-4 w-4" strokeWidth={2} />
+          Подобрать через AI
         </button>
       </div>
 

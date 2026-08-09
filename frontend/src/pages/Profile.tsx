@@ -12,6 +12,7 @@ import {
 import { usePublicConfig } from "../lib/appConfig";
 import { useFavoriteIds } from "../lib/favorites";
 import { ScenarioRequestSheet } from "../components/ScenarioSheet";
+import { Icon, type IconName } from "../components/icons";
 import type { ScenarioKey } from "../lib/scenario";
 import { track } from "../lib/analytics";
 import { fetchLoyalty, formatRate, type LoyaltyAccount } from "../lib/loyalty";
@@ -106,8 +107,9 @@ export default function Profile() {
               : "Копите кэшбек с покупок"}
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-surface px-3 py-1.5 text-sm font-bold shadow-soft">
-          {loyalty ? loyalty.balance.toLocaleString("ru-RU") : "—"} ✨
+        <span className="flex shrink-0 items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-sm font-bold shadow-soft">
+          {loyalty ? loyalty.balance.toLocaleString("ru-RU") : "—"}
+          <Icon name="sparkles" className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
         </span>
       </button>
 
@@ -116,8 +118,8 @@ export default function Profile() {
           «есть, но неактивен»: неработающая кнопка обесценивает соседние. */}
       {homeScreen === "missed" && (
         <div className="pop-in mt-3 flex items-center gap-3 rounded-xl2 bg-surface p-4 shadow-soft">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-xl">
-            📲
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
+            <Icon name="phone" className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold">Магазин на домашний экран</p>
@@ -136,16 +138,16 @@ export default function Profile() {
 
       {/* Меню */}
       <div className="mt-3 overflow-hidden rounded-xl2 bg-surface shadow-soft">
-        <MenuRow icon="❤️" title="Избранное"
+        <MenuRow icon="heart" title="Избранное"
           badge={favCount > 0 ? String(favCount) : undefined}
           subtitle={favCount > 0 ? undefined : "Сохраняйте понравившиеся товары"}
           onClick={() => navigate("/favorites")} />
-        <MenuRow icon="📋" title="Мои заявки" badge={leadCount === null ? "…" : String(leadCount)}
+        <MenuRow icon="doc" title="Мои заявки" badge={leadCount === null ? "…" : String(leadCount)}
           onClick={() => navigate("/requests")} />
-        <MenuRow icon="🕐" title="История просмотров" subtitle="Товары, которые вы открывали"
+        <MenuRow icon="clock" title="История просмотров" subtitle="Товары, которые вы открывали"
           onClick={() => navigate("/history")} />
-        <MenuRow icon="📍" title="Точка выдачи" subtitle="Горбушка, Москва — ежедневно 10:00–21:00" />
-        <MenuRow icon="ℹ️" title="О магазине" subtitle="Техника с Горбушки: проверка при вас, гарантия" last />
+        <MenuRow icon="pin" title="Точка выдачи" subtitle="Горбушка, Москва — ежедневно 10:00–21:00" />
+        <MenuRow icon="info" title="О магазине" subtitle="Техника с Горбушки: проверка при вас, гарантия" last />
       </div>
       </div>{/* /левая колонка */}
 
@@ -154,13 +156,13 @@ export default function Profile() {
           во фронтенде контактов нет. Пустая специальная ссылка -> розничный менеджер. */}
       <h2 className="mt-5 text-[17px] font-bold lg:mt-0">Связаться с нами</h2>
       <div className="mt-2 overflow-hidden rounded-xl2 bg-surface shadow-soft">
-        <MenuRow icon="💬" title="Написать менеджеру" subtitle="Вопросы по товарам и заказам — ответим быстро"
+        <MenuRow icon="chat" title="Написать менеджеру" subtitle="Вопросы по товарам и заказам — ответим быстро"
           onClick={() => openManager(config.manager_retail_url)} />
-        <MenuRow icon="📦" title="Оптовая закупка" subtitle="Партии от 5 шт, спеццены"
+        <MenuRow icon="box" title="Оптовая закупка" subtitle="Партии от 5 шт, спеццены"
           onClick={() => openScenario("wholesale")} />
-        <MenuRow icon="🏢" title="Поставка для компании" subtitle="Техника для офиса, документы для юрлиц"
+        <MenuRow icon="building" title="Поставка для компании" subtitle="Техника для офиса, документы для юрлиц"
           onClick={() => openScenario("b2b")} />
-        <MenuRow icon="🔄" title="Trade-In / предложить технику" subtitle="Обменяйте старое устройство или продайте нам" last
+        <MenuRow icon="refresh" title="Trade-In / предложить технику" subtitle="Обменяйте старое устройство или продайте нам" last
           onClick={() => openScenario("trade_in")} />
       </div>
       </div>{/* /правая колонка */}
@@ -180,13 +182,15 @@ export default function Profile() {
 
 function MenuRow({
   icon, title, subtitle, badge, onClick, last,
-}: { icon: string; title: string; subtitle?: string; badge?: string; onClick?: () => void; last?: boolean }) {
+}: { icon: IconName; title: string; subtitle?: string; badge?: string; onClick?: () => void; last?: boolean }) {
   return (
     <button
       onClick={onClick} disabled={!onClick}
       className={`tap flex w-full items-center gap-3 px-4 py-3.5 text-left ${last ? "" : "border-b border-border"}`}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mutedbg text-lg">{icon}</span>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mutedbg text-muted">
+        <Icon name={icon} className="h-[18px] w-[18px]" />
+      </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">{title}</span>
         {subtitle && <span className="mt-0.5 block truncate text-xs text-muted">{subtitle}</span>}

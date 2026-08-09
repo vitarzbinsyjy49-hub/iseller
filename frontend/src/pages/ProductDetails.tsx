@@ -8,6 +8,7 @@ import { ProductCard as TCard, ProductDetail } from "../components/ai/types";
 import ProductCardView from "../components/ProductCard";
 import { formatPrice, discountPct } from "../lib/format";
 import { ProductImage, Badge, FavButton } from "../components/ProductCard";
+import { Icon, type IconName } from "../components/icons";
 import { ErrorState } from "../components/StateViews";
 import LeadForm from "../components/LeadForm";
 import { haptic, isInsideTelegram, openExternalLink } from "../lib/telegram";
@@ -196,7 +197,7 @@ export default function ProductDetails() {
           она вставала по КОНТЕНТ-краю main, и в 12px-полосе его padding-top над
           панелью просвечивало фото (fullscreen, замер: IMG над баром). Теперь
           панель кроет эту полосу; скачка нет (rest == stuck). */}
-      <div className="sticky -top-3 z-30 -mx-4 -mt-3 mb-3 flex items-center gap-2 bg-bg px-4 py-2 lg:hidden">
+      <div className="sticky -top-3 z-30 -mx-4 -mt-3 mb-3 flex items-center bg-bg px-3 py-1 lg:hidden">
         <TopBtn onClick={() => navigate(-1)} label="Назад">
           <path d="M15 18l-6-6 6-6" />
         </TopBtn>
@@ -207,7 +208,7 @@ export default function ProductDetails() {
         <TopBtn onClick={share} label="Поделиться">
           <path d="M12 3v12M12 3 8 7M12 3l4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
         </TopBtn>
-        <FavButton id={p.id} />
+        <FavButton id={p.id} visualClassName="h-9 w-9 bg-surface shadow-soft" />
         {shared && (
           <span className="pop-in absolute right-4 top-12 rounded-full bg-text px-3 py-1.5 text-[11px] font-medium text-white">
             Ссылка скопирована
@@ -229,7 +230,7 @@ export default function ProductDetails() {
         category={p.category}
         badges={
           <>
-            {p.is_hot && <Badge color="orange">🔥 Хит</Badge>}
+            {p.is_hot && <Badge color="orange"><Icon name="flame" className="h-3 w-3" strokeWidth={2.2} />Хит</Badge>}
             {p.in_stock && <Badge color="green">В наличии</Badge>}
             {disc && <Badge color="red">−{disc}%</Badge>}
           </>
@@ -251,7 +252,7 @@ export default function ProductDetails() {
           <ActionBtn onClick={share} label="Поделиться">
             <path d="M12 3v12M12 3 8 7M12 3l4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
           </ActionBtn>
-          <FavButton id={p.id} className="h-[42px] w-[42px] border border-border" />
+          <FavButton id={p.id} visualClassName="h-[42px] w-[42px] border border-border bg-surface" />
         </div>
         {shared && (
           <span className="pop-in absolute right-0 top-[52px] z-10 rounded-full bg-text px-3 py-1.5 text-[11px] font-medium text-white">
@@ -328,9 +329,10 @@ export default function ProductDetails() {
             // нельзя. Намерение человек выбирает на экране AI.
             navigate(`/ai?product=${p.id}`);
           }}
-          className="tap flex-1 rounded-xl2 border border-border bg-surface py-2.5 text-xs font-medium text-muted"
+          className="tap flex flex-1 items-center justify-center gap-1.5 rounded-xl2 border border-border bg-surface py-2.5 text-xs font-medium text-muted"
         >
-          ✨ Спросить AI
+          <Icon name="sparkles" className="h-4 w-4" />
+          Спросить AI
         </button>
         <button
           onClick={() => {
@@ -340,19 +342,20 @@ export default function ProductDetails() {
               setLead({ source: "manager", preset: `Вопрос по товару: ${p.title}` });
             }
           }}
-          className="tap flex-1 rounded-xl2 border border-border bg-surface py-2.5 text-xs font-medium text-muted"
+          className="tap flex flex-1 items-center justify-center gap-1.5 rounded-xl2 border border-border bg-surface py-2.5 text-xs font-medium text-muted"
         >
-          💬 Написать менеджеру
+          <Icon name="chat" className="h-4 w-4" />
+          Написать менеджеру
         </button>
       </div>
 
       {/* Условия: наличие / гарантия / самовывоз / доставка */}
       <div className="stagger mt-4 grid grid-cols-2 gap-2">
-        <InfoTile icon={p.in_stock ? "✅" : "🕐"} title={p.in_stock ? "В наличии" : "Под заказ"}
+        <InfoTile icon={p.in_stock ? "check" : "clock"} title={p.in_stock ? "В наличии" : "Под заказ"}
           subtitle={p.in_stock ? (p.is_available_today ? "Забрать сегодня" : "1–2 дня") : "Уточнит менеджер"} />
-        <InfoTile icon="🛡️" title="Гарантия" subtitle={`${p.warranty_months} мес.`} />
-        <InfoTile icon="🏬" title="Самовывоз" subtitle="Горбушка, Москва" />
-        <InfoTile icon="🚚" title="Доставка" subtitle="По Москве" />
+        <InfoTile icon="shield" title="Гарантия" subtitle={`${p.warranty_months} мес.`} />
+        <InfoTile icon="store" title="Самовывоз" subtitle="Горбушка, Москва" />
+        <InfoTile icon="truck" title="Доставка" subtitle="По Москве" />
       </div>
 
       {/* «Нашли дешевле?» — в потоке, рядом с условиями. Легендарный товар сюда
@@ -414,20 +417,20 @@ export default function ProductDetails() {
           <section>
             <SubHead>Доставка и получение</SubHead>
             <div className="space-y-2">
-              <DeliveryRow icon="🏬" title="Самовывоз — Горбушка, Москва"
+              <DeliveryRow icon="store" title="Самовывоз — Горбушка, Москва"
                 subtitle={p.in_stock && p.is_available_today ? "Можно забрать сегодня, 10:00–21:00" : "Обычно на следующий день, 10:00–21:00"} />
-              <DeliveryRow icon="🚚" title="Доставка по Москве" subtitle="1–2 дня, сроки и стоимость уточнит менеджер" />
-              <DeliveryRow icon="🌍" title="В другие города" subtitle="Отправка транспортной компанией — способ зависит от адреса" />
+              <DeliveryRow icon="truck" title="Доставка по Москве" subtitle="1–2 дня, сроки и стоимость уточнит менеджер" />
+              <DeliveryRow icon="globe" title="В другие города" subtitle="Отправка транспортной компанией — способ зависит от адреса" />
             </div>
           </section>
           <section>
             <SubHead>Гарантия</SubHead>
-            <DeliveryRow icon="🛡️" title={`Гарантия ${p.warranty_months} мес.`}
+            <DeliveryRow icon="shield" title={`Гарантия ${p.warranty_months} мес.`}
               subtitle={p.condition === "used" ? "Проверка товара при получении" : "Проверка при вас, обмен по гарантии"} />
           </section>
           <section>
             <SubHead>Оплата</SubHead>
-            <DeliveryRow icon="💳" title="Оплата при получении"
+            <DeliveryRow icon="card" title="Оплата при получении"
               subtitle="Наличными или переводом — удобный способ подскажет менеджер" />
           </section>
         </div>
@@ -687,13 +690,18 @@ function Gallery({
   );
 }
 
+/** Кружок 36px, нажимаемая область 44px: видимое прежнее, промахов меньше.
+ *  Ряд, где они стоят, идёт с gap-0 — 4px прозрачной обёртки с каждой стороны
+ *  дают ровно тот же зазор в 8px, что раньше давал gap-2. */
 function TopBtn({ onClick, label, children }: { onClick: () => void; label: string; children: ReactNode }) {
   return (
     <button onClick={onClick} aria-label={label}
-      className="tap flex h-9 w-9 items-center justify-center rounded-full bg-surface shadow-soft">
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        {children}
-      </svg>
+      className="tap flex h-11 w-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface shadow-soft">
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {children}
+        </svg>
+      </span>
     </button>
   );
 }
@@ -727,13 +735,16 @@ function BackBtn({ onClick }: { onClick: () => void }) {
   );
 }
 
-function InfoTile({ icon, title, subtitle }: { icon: string; title: string; subtitle: string }) {
+/** Плитка условия (наличие / гарантия / самовывоз / доставка). Иконка —
+ *  акцентная: это блок доверия, и он должен читаться как утверждение магазина,
+ *  а не как серая служебная строка. */
+function InfoTile({ icon, title, subtitle }: { icon: IconName; title: string; subtitle: string }) {
   return (
     <div className="card-appear flex items-center gap-2.5 rounded-xl2 bg-surface px-3 py-2.5 shadow-soft">
-      <span className="text-lg">{icon}</span>
+      <Icon name={icon} className="h-5 w-5 shrink-0 text-accent" />
       <div className="min-w-0">
         <p className="text-[13px] font-semibold leading-4">{title}</p>
-        <p className="mt-0.5 truncate text-[11px] text-muted">{subtitle}</p>
+        <p className="mt-0.5 truncate text-[12px] text-muted">{subtitle}</p>
       </div>
     </div>
   );
@@ -743,10 +754,10 @@ function SubHead({ children }: { children: ReactNode }) {
   return <p className="mb-1.5 px-1 text-[13px] font-bold text-text">{children}</p>;
 }
 
-function DeliveryRow({ icon, title, subtitle }: { icon: string; title: string; subtitle: string }) {
+function DeliveryRow({ icon, title, subtitle }: { icon: IconName; title: string; subtitle: string }) {
   return (
     <div className="card-appear flex items-center gap-3 rounded-xl2 bg-surface px-4 py-3 shadow-soft">
-      <span className="text-xl">{icon}</span>
+      <Icon name={icon} className="h-6 w-6 shrink-0 text-accent" />
       <div className="min-w-0">
         <p className="text-sm font-semibold">{title}</p>
         <p className="mt-0.5 text-xs text-muted">{subtitle}</p>

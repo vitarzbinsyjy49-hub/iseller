@@ -16,6 +16,7 @@ import { aiEntryAction, clearAiHistory, loadAiHistory, pushAiQuery } from "../li
 import { prefersReducedMotion, revealDurationMs, revealedChars } from "../lib/answerReveal";
 import AnswerBody from "../components/AnswerBody";
 import { parseAnswer, plainText } from "../lib/answerFormat";
+import { Icon } from "../components/icons";
 
 /** Намерения для товара, с карточки которого пришли. Формулировки короткие и
  *  от лица покупателя — они уходят в чат как его реплика. Товар в тексте не
@@ -449,7 +450,9 @@ export default function AiSearch() {
       {/* Desktop empty-state */}
       {chat.length === 0 && (
         <div className="mt-6 hidden rounded-xl2 border border-dashed border-border bg-surface/60 px-6 py-10 text-center lg:block">
-          <span className="text-3xl">🤖</span>
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-mutedbg text-muted">
+            <Icon name="bot" className="h-7 w-7" strokeWidth={1.6} />
+          </span>
           <p className="mt-2 text-sm text-muted">
             Выберите быстрый запрос слева или опишите задачу своими словами в строке ниже —
             подберём варианты из наличия.

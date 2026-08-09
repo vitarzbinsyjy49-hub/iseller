@@ -29,12 +29,18 @@ import {
   checkoutCart, clearCart, hydrateCart, removeCartItem, setItemQuantity, useCart,
 } from "../lib/cart";
 import {
-  type CartItemRow, newIdempotencyKey, pluralItems, validateCheckout,
+  type CartItemRow, type CheckoutProblem,
+  newIdempotencyKey, pluralItems, validateCheckout,
 } from "../lib/cartMath";
+import { FormError, TextAreaField, TextField } from "../components/Field";
+import { Icon, type IconName } from "../components/icons";
 
 type Fulfillment = "pickup" | "delivery" | "consult";
 type LoadState = "loading" | "ready" | "error";
 type SubmitState = "idle" | "sending" | "error";
+
+/** Отдельной константой, потому что по этому id форма уводит фокус на телефон. */
+const PHONE_ID = "checkout-phone";
 
 type Success = { number: string; itemsCount: number; total: number | null };
 
@@ -132,7 +138,7 @@ export default function Cart() {
         </div>
         <button
           onClick={onClear}
-          className="tap shrink-0 text-xs font-medium text-muted transition-colors hover:text-[#ff3b30]"
+          className="tap shrink-0 text-xs font-medium text-muted transition-colors hover:text-danger"
         >
           Очистить
         </button>
@@ -215,7 +221,7 @@ function CartRow({
   return (
     <div
       className={`card-appear flex gap-3 rounded-xl2 bg-surface p-3 shadow-soft ${
-        unavailable ? "opacity-75 ring-1 ring-[#ffd9d5]" : ""
+        unavailable ? "opacity-75 ring-1 ring-danger/25" : ""
       }`}
     >
       <button onClick={onOpen} className="h-20 w-20 shrink-0 overflow-hidden rounded-xl" aria-label={item.title}>
@@ -228,7 +234,7 @@ function CartRow({
         </button>
 
         {/* SKU — служебная строка: показываем мелко и только когда он есть. */}
-        {item.sku && <p className="mt-0.5 text-[10px] uppercase tracking-wide text-muted">Арт. {item.sku}</p>}
+        {item.sku && <p className="mt-0.5 text-[11px] uppercase tracking-wide text-muted">Арт. {item.sku}</p>}
 
         <div className="mt-1 flex items-baseline gap-2">
           <span className="text-[15px] font-bold tabular-nums">
@@ -246,7 +252,7 @@ function CartRow({
           <p className="mt-0.5 text-[11px] font-medium text-orange">Цена обновилась</p>
         )}
         {item.availability_note && (
-          <p className={`mt-0.5 text-[11px] font-medium ${unavailable ? "text-[#ff3b30]" : "text-muted"}`}>
+          <p className={`mt-0.5 text-[11px] font-medium ${unavailable ? "text-danger" : "text-muted"}`}>
             {item.availability_note}
           </p>
         )}
@@ -282,7 +288,7 @@ function CartRow({
 
 function Notice({ tone, children }: { tone: "info" | "warn"; children: React.ReactNode }) {
   const cls = tone === "warn"
-    ? "bg-[#fff1ef] text-[#b4342a]"
+    ? "bg-dangerbg text-dangerink"
     : "bg-accent/[0.08] text-accentdark";
   return <p className={`fade-in mt-3 rounded-xl2 px-4 py-3 text-[12px] leading-4 ${cls}`}>{children}</p>;
 }
@@ -309,6 +315,11 @@ function CheckoutBlock({
   const [fulfillment, setFulfillment] = useState<Fulfillment>("pickup");
   const [consent, setConsent] = useState(false);
   const [state, setState] = useState<SubmitState>("idle");
+  // Две разные ошибки, и путать их нельзя. `problem` принадлежит конкретному
+  // полю и живёт под ним; `error` — общая для формы (сеть, 409, недоступные
+  // товары), ей место рядом с кнопкой. Раньше обе шли одной строкой над
+  // кнопкой, и «укажите телефон» выглядело как отказ сервера.
+  const [problem, setProblem] = useState<CheckoutProblem | null>(null);
   const [error, setError] = useState("");
   // Ключ идемпотентности живёт до УСПЕХА: повтор после таймаута обязан
   // переиспользовать его, иначе ретрай создаст вторую заявку.
@@ -324,8 +335,14 @@ function CheckoutBlock({
 
   async function submit() {
     if (state === "sending") return;            // защита от двойного нажатия
-    const problem = validateCheckout({ phone, consent, requirePhone });
-    if (problem) { setError(problem); return; }
+    const found = validateCheckout({ phone, consent, requirePhone });
+    if (found) {
+      setProblem(found);
+      // Увести фокус на поле, которое просят заполнить: иначе на длинной форме
+      // человек видит подпись об ошибке, но не знает, куда возвращаться.
+      if (found.field === "phone") document.getElementById(PHONE_ID)?.focus();
+      return;
+    }
     if (blocked) {
       setError("Сначала уберите недоступные товары");
       return;
@@ -368,9 +385,6 @@ function CheckoutBlock({
     setState("idle");
   }
 
-  const inputCls =
-    "w-full rounded-xl2 border border-border bg-mutedbg px-4 py-3 text-sm outline-none transition-colors focus:border-accent focus:bg-surface";
-
   return (
     <div className="mt-4 rounded-xl2 bg-surface p-4 shadow-soft">
       <h2 className="text-[17px] font-bold">Оформление</h2>
@@ -379,54 +393,77 @@ function CheckoutBlock({
       </p>
 
       <div className="mt-3 space-y-3">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ваше имя" className={inputCls} />
-        <input
-          value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel"
-          placeholder={requirePhone ? "Телефон *" : "Телефон (необязательно)"}
-          className={inputCls}
+        <TextField
+          id="checkout-name" label="Ваше имя" autoComplete="name"
+          value={name} onChange={(e) => setName(e.target.value)}
         />
-        {/* Контакт, который уже известен, не просим вводить второй раз. */}
-        {telegramUsername && (
-          <p className="text-[11px] text-muted">
-            Менеджер сможет ответить в Telegram: <span className="font-medium text-text">@{telegramUsername}</span>
-          </p>
-        )}
-        <textarea
-          value={comment} onChange={(e) => setComment(e.target.value)} rows={2}
-          placeholder="Комментарий (необязательно)" className={`${inputCls} resize-none`}
+        <TextField
+          id={PHONE_ID} label="Телефон" type="tel" inputMode="tel" autoComplete="tel"
+          required={requirePhone}
+          value={phone}
+          error={problem?.field === "phone" ? problem.message : null}
+          // Проверка на blur, а не только по кнопке: человек узнаёт о пустом
+          // телефоне, когда уходит с поля, а не после попытки отправить заявку.
+          onBlur={() => {
+            if (requirePhone && !phone.trim()) {
+              setProblem(validateCheckout({ phone, consent: true, requirePhone }));
+            } else if (problem?.field === "phone") setProblem(null);
+          }}
+          onChange={(e) => {
+            setPhone(e.target.value);
+            if (problem?.field === "phone") setProblem(null);
+          }}
+          // Контакт, который уже известен, не просим вводить второй раз.
+          hint={telegramUsername
+            ? <>Менеджер сможет ответить в Telegram: <span className="font-medium text-text">@{telegramUsername}</span></>
+            : undefined}
+        />
+        <TextAreaField
+          id="checkout-comment" label="Комментарий" rows={2}
+          hint="Необязательно"
+          value={comment} onChange={(e) => setComment(e.target.value)}
         />
       </div>
 
       <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">Способ получения</p>
       <div className="mt-2 grid grid-cols-3 gap-2">
         <FulfillmentOption active={fulfillment === "pickup"} onClick={() => setFulfillment("pickup")}
-          icon="🏬" title="Самовывоз" subtitle="Горбушка" />
+          icon="store" title="Самовывоз" subtitle="Горбушка" />
         <FulfillmentOption active={fulfillment === "delivery"} onClick={() => setFulfillment("delivery")}
-          icon="🚚" title="Доставка" subtitle="По Москве" />
+          icon="truck" title="Доставка" subtitle="По Москве" />
         <FulfillmentOption active={fulfillment === "consult"} onClick={() => setFulfillment("consult")}
-          icon="💬" title="Уточнить" subtitle="С менеджером" />
+          icon="chat" title="Уточнить" subtitle="С менеджером" />
       </div>
 
-      <label className="mt-4 flex cursor-pointer items-start gap-2.5">
+      {/* py-2 + min-h: строка согласия — тоже кнопка, и в 16px высоты (кегль
+          подписи) по ней промахиваются. Растёт только область нажатия. */}
+      <label className="mt-3 flex min-h-[44px] cursor-pointer items-center gap-2.5 py-2">
         <input
-          type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 accent-[color:rgb(var(--app-accent))]"
+          type="checkbox" checked={consent}
+          aria-invalid={problem?.field === "consent" ? true : undefined}
+          aria-describedby={problem?.field === "consent" ? "checkout-consent-error" : undefined}
+          onChange={(e) => {
+            setConsent(e.target.checked);
+            if (e.target.checked && problem?.field === "consent") setProblem(null);
+          }}
+          className="h-5 w-5 shrink-0 accent-[color:rgb(var(--app-accent))]"
         />
         <span className="text-[12px] leading-4 text-muted">
           Согласен на обработку персональных данных и связь по заявке
         </span>
       </label>
-
-      {error && (
-        <p role="alert" className="mt-3 rounded-xl2 bg-[#fff1ef] px-3 py-2 text-[13px] text-[#b4342a]">
-          {error}
+      {problem?.field === "consent" && (
+        <p id="checkout-consent-error" role="alert" className="text-[12px] font-medium text-dangerink">
+          {problem.message}
         </p>
       )}
+
+      {error && <FormError>{error}</FormError>}
 
       <button
         onClick={submit}
         disabled={state === "sending"}
-        className="tap mt-4 w-full rounded-xl2 bg-accent py-3.5 text-white transition-opacity disabled:opacity-50"
+        className="tap mt-4 w-full rounded-xl2 bg-accent py-3.5 text-white outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 disabled:opacity-50"
       >
         <span className="block text-[15px] font-bold leading-5">
           {state === "sending" ? "Отправляем…" : "Отправить заявку"}
@@ -441,18 +478,18 @@ function CheckoutBlock({
 
 function FulfillmentOption({
   active, onClick, icon, title, subtitle,
-}: { active: boolean; onClick: () => void; icon: string; title: string; subtitle: string }) {
+}: { active: boolean; onClick: () => void; icon: IconName; title: string; subtitle: string }) {
   return (
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`tap rounded-xl2 border-2 px-2 py-2.5 text-left transition-colors ${
+      className={`tap rounded-xl2 border-2 px-2 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
         active ? "border-accent bg-accent/5" : "border-border bg-surface"
       }`}
     >
-      <span className="text-base">{icon}</span>
-      <p className="mt-0.5 text-[12px] font-semibold leading-4">{title}</p>
-      <p className="truncate text-[10px] leading-3 text-muted">{subtitle}</p>
+      <Icon name={icon} className={`h-5 w-5 ${active ? "text-accent" : "text-muted"}`} />
+      <p className="mt-1 text-[12px] font-semibold leading-4">{title}</p>
+      <p className="truncate text-[11px] leading-4 text-muted">{subtitle}</p>
     </button>
   );
 }
@@ -464,8 +501,8 @@ function SuccessView({ result, managerUrl }: { result: Success; managerUrl?: str
 
   return (
     <div className="mx-auto max-w-md pt-8 text-center lg:max-w-lg">
-      <div className="pop-in mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green/15 text-3xl">
-        ✅
+      <div className="pop-in mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green/15 text-green">
+        <Icon name="check" className="h-8 w-8" strokeWidth={2.2} />
       </div>
       <p className="mt-4 text-xl font-bold">Заявка {result.number} отправлена</p>
       <p className="mx-auto mt-2 max-w-[300px] text-sm text-muted">
@@ -493,9 +530,10 @@ function SuccessView({ result, managerUrl }: { result: Success; managerUrl?: str
         </button>
         <button
           onClick={() => { if (!openExternalLink(managerUrl)) navigate("/ai"); }}
-          className="tap rounded-xl2 py-3 text-sm font-medium text-muted"
+          className="tap flex items-center justify-center gap-2 rounded-xl2 py-3 text-sm font-medium text-muted"
         >
-          💬 Написать менеджеру
+          <Icon name="chat" className="h-4 w-4" />
+          Написать менеджеру
         </button>
       </div>
     </div>
@@ -551,9 +589,10 @@ function EmptyCart() {
               track("empty_state_action_clicked", { source: "cart_ai" });
               navigate("/ai");
             }}
-            className="tap rounded-xl2 bg-surface px-5 py-2.5 text-sm font-semibold text-accent shadow-soft"
+            className="tap flex items-center gap-2 rounded-xl2 bg-surface px-5 py-2.5 text-sm font-semibold text-accent shadow-soft"
           >
-            ✨ Подобрать с AI
+            <Icon name="sparkles" className="h-4 w-4" />
+            Подобрать с AI
           </button>
         </div>
       </div>

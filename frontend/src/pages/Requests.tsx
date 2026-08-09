@@ -5,6 +5,7 @@ import { track } from "../lib/analytics";
 import { formatPrice } from "../lib/format";
 import { ErrorState } from "../components/StateViews";
 import { leadTitle, leadTypeLabel, leadMetadataRows } from "../lib/leads";
+import { Icon } from "../components/icons";
 
 type Lead = {
   id: number; product_id: number | null; product_title: string | null; product_price: number | null;
@@ -24,9 +25,11 @@ const STATUS_STYLE: Record<string, string> = {
   completed: "bg-green/15 text-green",
   cancelled: "bg-mutedbg text-muted",
 };
+/** Подписи без emoji: это обычная строка текста в карточке заявки, и значок
+ *  здесь ничего не добавлял, кроме системного шрифта посреди нашего. */
 const DELIVERY_LABEL: Record<string, string> = {
-  pickup: "🏬 Самовывоз · Горбушка",
-  delivery: "🚚 Доставка по Москве",
+  pickup: "Самовывоз · Горбушка",
+  delivery: "Доставка по Москве",
 };
 
 const FILTERS = [
@@ -84,7 +87,9 @@ export default function Requests() {
         </div>
       ) : visible.length === 0 ? (
         <div className="fade-in mt-14 text-center">
-          <div className="text-4xl">📋</div>
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-mutedbg text-muted">
+            <Icon name="doc" className="h-7 w-7" strokeWidth={1.6} />
+          </div>
           <p className="mt-3 text-[15px] font-bold">Заявок пока нет</p>
           <p className="mx-auto mt-1 max-w-[280px] text-sm text-muted">
             Заявка создаётся из карточки товара («Оставить заявку») или из AI-подбора —
@@ -105,9 +110,10 @@ export default function Requests() {
                 track("empty_state_action_clicked", { source: "requests_ai" });
                 navigate("/ai");
               }}
-              className="tap rounded-xl2 bg-surface px-5 py-2.5 text-sm font-semibold text-accent shadow-soft"
+              className="tap flex items-center justify-center gap-2 rounded-xl2 bg-surface px-5 py-2.5 text-sm font-semibold text-accent shadow-soft"
             >
-              ✨ Подобрать через AI
+              <Icon name="sparkles" className="h-4 w-4" strokeWidth={2} />
+              Подобрать через AI
             </button>
           </div>
         </div>
