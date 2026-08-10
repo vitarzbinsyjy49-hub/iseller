@@ -44,6 +44,9 @@ def public_config():
         "manager_tradein_url": settings.MANAGER_TRADEIN_URL.strip() or retail,
         "telegram_channel_url": settings.TELEGRAM_CHANNEL_URL.strip(),
         "mini_app_url": settings.MINI_APP_URL.strip(),
+        # Телефон для раздела «Контакты»: тап по нему открывает набор номера.
+        # Отдаём как есть, форматирование для показа — дело витрины.
+        "shop_phone": settings.SHOP_PHONE.strip(),
         # @username бота без «@». Не секрет: он и так стоит в каждой кнопке
         # каждого поста канала. Фронту нужен, чтобы «поделиться товаром» слал
         # deep link t.me/<bot>?start=product_<id>, а не внутренний адрес Mini

@@ -21,6 +21,7 @@ export const routeLoaders = {
   history: withStaleChunkReload(() => import("../pages/History")),
   profile: withStaleChunkReload(() => import("../pages/Profile")),
   loyalty: withStaleChunkReload(() => import("../pages/Loyalty")),
+  info: withStaleChunkReload(() => import("../pages/Info")),
 };
 
 const started = new Set<keyof typeof routeLoaders>();
@@ -35,6 +36,7 @@ function routeKey(pathname: string): keyof typeof routeLoaders | null {
   if (pathname.startsWith("/history")) return "history";
   if (pathname.startsWith("/profile")) return "profile";
   if (pathname.startsWith("/loyalty")) return "loyalty";
+  if (pathname.startsWith("/info")) return "info";
   return null;
 }
 

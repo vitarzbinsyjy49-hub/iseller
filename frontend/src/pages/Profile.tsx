@@ -146,8 +146,10 @@ export default function Profile() {
           onClick={() => navigate("/requests")} />
         <MenuRow icon="clock" title="История просмотров" subtitle="Товары, которые вы открывали"
           onClick={() => navigate("/history")} />
-        <MenuRow icon="pin" title="Точка выдачи" subtitle="Горбушка, Москва — ежедневно 10:00–21:00" />
-        <MenuRow icon="info" title="О магазине" subtitle="Техника с Горбушки: проверка при вас, гарантия" last />
+        <MenuRow icon="pin" title="Точка выдачи" subtitle="Горбушка, Москва — ежедневно 10:00–21:00"
+          onClick={() => navigate("/info#contacts")} />
+        <MenuRow icon="info" title="О магазине" subtitle="Доставка, оплата, гарантия и контакты" last
+          onClick={() => navigate("/info")} />
       </div>
       </div>{/* /левая колонка */}
 

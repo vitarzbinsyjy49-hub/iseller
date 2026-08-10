@@ -110,13 +110,20 @@ def ensure_info_drafts(db: Session) -> list[ChannelPost]:
 
 
 def section_links(db: Session) -> dict[str, str]:
-    """Ссылки на уже опубликованные прайс-посты — для кнопок «Раздел прайса»."""
+    """Ссылки на уже опубликованные посты канала — для кнопок «Раздел».
+
+    Инфо-посты сюда входят наравне с прайсовыми. Раньше отбор шёл только по
+    PRICE_KIND, и кнопка на раздел «Доставка» или «Гарантия» молча уезжала в
+    deep link бота вместо сообщения в канале — то есть уводила человека из
+    группы туда, где он этого текста не увидит. Пост-навигатор со ссылками на
+    условия без этого собрать нельзя.
+    """
     from app.services.price_posts import message_link
 
     return {
         slug: message_link(row.channel_id or channel_id(), row.telegram_message_id)
         for slug, row in _existing(db).items()
-        if row.kind == PRICE_KIND and row.telegram_message_id
+        if row.kind in (PRICE_KIND, INFO_KIND) and row.telegram_message_id
     }
 
 

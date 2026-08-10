@@ -196,7 +196,10 @@ DEFAULT_BANNERS = [
     dict(title="Подберём лучшую цену", subtitle="AI-консультант найдёт вариант", emoji="🤖",
          background_gradient="linear-gradient(135deg,#0e9f6e,#0694a2)", action_type="ai",
          action_value="", position=4),
-    dict(title="Техника с гарантией", subtitle="Официальная гарантия до 24 мес", emoji="🛡️",
+    # «до 24 мес» здесь стояло с первых версий и давно разошлось с делом:
+    # warranty_months равен 1 у всех товаров каталога, и плитка обещала срок
+    # в двадцать четыре раза больший, чем карточка того же товара.
+    dict(title="Техника с гарантией", subtitle="Гарантия 1 месяц и проверка при вас", emoji="🛡️",
          background_gradient="linear-gradient(135deg,#d97706,#db2777)", action_type="collection",
          action_value="hot", position=5),
 ]

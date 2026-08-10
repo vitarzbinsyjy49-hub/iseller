@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { track, trackProduct } from "../lib/analytics";
@@ -24,6 +24,8 @@ import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
 import { BrandWordmark } from "../components/BrandMark";
+
+const BetaRoadmapSheet = lazy(() => import("../components/BetaRoadmapSheet"));
 import { autoplayReady, nextSlideIndex, snapTargetLeft } from "../lib/carousel";
 import { animateScrollTo } from "../lib/motion";
 
@@ -49,7 +51,10 @@ const FALLBACK_PROMOS: HomeBanner[] = [
   { id: -2, title: "MacBook для работы", subtitle: "Подборка под ваши задачи", action_type: "ai", action_value: "MacBook для работы" },
   { id: -3, title: "PlayStation сегодня", subtitle: "PS5 и игры в наличии", action_type: "search", action_value: "playstation" },
   { id: -4, title: "Подберём лучшую цену", subtitle: "Claude сравнит варианты каталога", action_type: "ai", action_value: "" },
-  { id: -5, title: "Техника с гарантией", subtitle: "Проверка и гарантия до 24 месяцев", action_type: "collection", action_value: "hot" },
+  // Срок держим равным тому, что стоит в карточке товара (warranty_months).
+  // Запасная плитка видна, когда backend недоступен, — и именно тогда ошибиться
+  // в обещании легче всего: проверить его не по чему.
+  { id: -5, title: "Техника с гарантией", subtitle: "Гарантия 1 месяц и проверка при вас", action_type: "collection", action_value: "hot" },
 ];
 
 type CuratedPromo = {
@@ -228,6 +233,7 @@ export default function Home() {
   const [extra, setExtra] = useState<{ sale: TCard[]; apple: TCard[]; gaming: TCard[] } | null>(null);
   // Консультационная заявка без товара (fallback, когда ссылка менеджера пуста)
   const [consult, setConsult] = useState(false);
+  const [beta, setBeta] = useState(false);
   const [search, setSearch] = useState("");
   // Панель умного поиска: открыта по фокусу (полезное пустое состояние) или
   // при вводе (live-результаты). Содержимое — SearchPanel; debounce и отмена
@@ -334,7 +340,22 @@ export default function Home() {
               бренда на экране. Белой плашки под ним больше нет — слово набрано
               вёрсткой и берёт белый прямо у hero, а плашка читалась наклейкой. */}
           <div className="min-w-0">
-            <BrandWordmark size={30} />
+            <div className="flex items-center gap-2">
+              <BrandWordmark size={30} />
+              {/* Чип, а не боковой ярлык: на 375px прикреплённая к краю плашка
+                  встаёт ровно в зону горизонтального свайпа между страницами
+                  (lib/usePageSwipe) и начинает ловить чужие жесты. Здесь она
+                  ничего не перекрывает и не требует «закрыть навсегда». */}
+              <button
+                onClick={() => { track("beta_roadmap_opened", { source: "home_hero" }); setBeta(true); }}
+                aria-label="Бета-версия: что уже работает и что будет дальше"
+                // -my-2.5 + py-2.5: сама плашка остаётся 23px в высоту, а зона
+                // нажатия дотягивается до 44px и при этом не растит строку.
+                className="tap -my-3 flex shrink-0 items-center rounded-full px-2.5 py-3 text-[10px] font-bold uppercase tracking-[0.08em] text-white/80 outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/70"
+              >
+                <span className="rounded-full px-2 py-1 ring-1 ring-inset ring-white/30">Beta</span>
+              </button>
+            </div>
             <p className="mt-1.5 truncate text-[11px] font-medium leading-4 text-white/70">Техника, которую легко найти</p>
           </div>
           <HeroActions
@@ -636,6 +657,13 @@ export default function Home() {
           source="manager" presetMessage="Ищу модель, которой нет в каталоге"
           onClose={() => setConsult(false)}
         />
+      )}
+
+      {/* Отдельным chunk'ом: роудмап открывают единицы, а весит он как экран. */}
+      {beta && (
+        <Suspense fallback={null}>
+          <BetaRoadmapSheet onClose={() => setBeta(false)} />
+        </Suspense>
       )}
 
       {/* v5.4.0: встроенные сценарные заявки (Trade-In / Для бизнеса / Опт) */}

@@ -146,6 +146,8 @@ ALLOWED_EVENTS = {
     "loyalty_roadmap_opened",
     # Переход в AI с карточки товара (контекст товара в чате).
     "ai_product_context_opened",
+    # Чип BETA на главной: интерес к тому, куда движется проект.
+    "beta_roadmap_opened",
 }
 
 

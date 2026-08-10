@@ -85,26 +85,49 @@ def test_repeated_generation_does_not_overwrite_written_text(db):
     assert row.body == "Наши настоящие условия гарантии."
 
 
-def test_default_drafts_mark_what_must_be_filled_in():
-    """Сроки возврата и способы оплаты выдумывать нельзя — это обязательства."""
+def test_drafts_are_filled_and_ready():
+    """Заготовки описывают РЕАЛЬНЫЕ условия магазина и публикуются как есть.
+
+    Раньше половина заготовок намеренно шла с «[уточнить]»: условий доставки,
+    оплаты и возврата проект не знал. Владелец их назвал, и незаполненных мест
+    не осталось. Проверка обратная по смыслу, но защищает то же самое — что в
+    канал не уедет черновик.
+    """
+    for info in INFO_POSTS:
+        assert not has_placeholders(info.default_text), info.slug
+
+
+def test_drafts_promise_only_what_the_shop_does():
+    """Сроки и тарифы не называются, гарантия совпадает с каталогом (1 месяц)."""
     by_slug = {info.slug: info for info in INFO_POSTS}
-    for slug in ("info_warranty", "info_delivery", "info_payment", "info_preorder"):
-        assert has_placeholders(by_slug[slug].default_text), slug
 
-
-def test_about_post_needs_no_filling():
-    """Пост о магазине собран из фактов проекта и готов к публикации сразу."""
-    about = {info.slug: info for info in INFO_POSTS}["info_about"]
-    assert not has_placeholders(about.default_text)
-    assert "14 дней" in about.default_text
+    about = by_slug["info_about"]
+    assert "1 месяц" in about.default_text
     assert "Горбушки" in about.default_text
+    # Прежний срок из первых версий не должен вернуться ни в один пост:
+    # в карточке товара стоит warranty_months=1, и две разные правды об одном
+    # обязательстве хуже, чем одна скучная.
+    for info in INFO_POSTS:
+        assert "14 дней" not in info.default_text, info.slug
+
+    # Доставку и возврат определяет человек — пост обязан отправлять к нему,
+    # а не называть срок, которого магазин не обещал.
+    assert "менеджер" in by_slug["info_delivery"].default_text.lower()
+    assert "менеджер" in by_slug["info_returns"].default_text.lower()
 
 
 # ---------------------------------------------------------------- публикация
 
 def test_unfilled_post_is_not_published(db, telegram):
-    """«[уточнить]» в канале читается как забытый черновик."""
+    """«[уточнить]» в канале читается как забытый черновик.
+
+    Заготовки теперь заполнены целиком, поэтому незаполненное место вносим
+    сами: проверяется предохранитель, а не конкретный раздел. Иначе тест
+    молча перестал бы что-либо проверять, как только тексты дописали.
+    """
     price_channel.ensure_info_drafts(db)
+    fill(db, "info_warranty", f"🛡 Гарантия. Возврат: {PLACEHOLDER} — впишите условия.")
+
     result = price_channel.apply_info_posts(db)
 
     assert telegram.sent == [] or all(

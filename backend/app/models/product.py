@@ -82,7 +82,11 @@ class Product(Base):
     # (out_of_stock) и «предзаказ» (preorder). См. services/availability.py.
     availability_mode: Mapped[str | None] = mapped_column(String(20))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)             # вкл/выкл в каталоге (админка)
-    warranty_months: Mapped[int] = mapped_column(Integer, default=12)
+    # 1, а не 12: гарантия магазина — один месяц, и это единственный срок,
+    # который мы вправе обещать. Значение по умолчанию видно там, где колонки
+    # нет в файле импорта, то есть у большинства новых товаров, — и прежняя
+    # дюжина тихо возвращала бы в каталог обещание, которого магазин не даёт.
+    warranty_months: Mapped[int] = mapped_column(Integer, default=1)
     condition: Mapped[str] = mapped_column(String(20), default="new")  # new / used / refurbished
     color: Mapped[str | None] = mapped_column(String(50))
     memory: Mapped[str | None] = mapped_column(String(50))             # оперативная/встроенная, как в прайсе
