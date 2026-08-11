@@ -70,6 +70,11 @@ export default function Profile() {
 
   const name = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || "Гость";
   const source = isInsideTelegram() ? "Telegram Mini App" : "Веб (dev-режим)";
+  // Ссылка на аватар может протухнуть (Telegram хранит их не вечно) —
+  // тогда откатываемся на инициалы, а не показываем битую картинку. Тот же
+  // паттерн, что и у ProfileChip в шапке.
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const showPhoto = !!user?.photo_url && !photoFailed;
 
   return (
     <div className="mx-auto max-w-md lg:max-w-5xl">
@@ -77,9 +82,18 @@ export default function Profile() {
 
       {/* Карточка пользователя — профильный header на всю ширину */}
       <div className="mt-4 flex items-center gap-4 rounded-xl2 bg-surface p-4 shadow-soft lg:p-6">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 text-xl font-bold text-accent">
-          {name[0]?.toUpperCase() ?? "?"}
-        </div>
+        {showPhoto ? (
+          <img
+            src={user!.photo_url!}
+            alt=""
+            onError={() => setPhotoFailed(true)}
+            className="h-14 w-14 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent/10 text-xl font-bold text-accent">
+            {name[0]?.toUpperCase() ?? "?"}
+          </div>
+        )}
         <div className="min-w-0">
           <p className="truncate text-[16px] font-bold">{name}</p>
           {user?.username && <p className="text-sm text-muted">@{user.username}</p>}
