@@ -172,11 +172,15 @@ def _score(p: Product, aff: Affinity) -> float:
     return s
 
 
-def _diversify(products: list[Product], limit: int,
-               max_share: float = 0.4, max_consecutive: int = 2) -> list[Product]:
+def diversify_by_category(products: list[Product], limit: int,
+                          max_share: float = 0.4, max_consecutive: int = 2) -> list[Product]:
     """Дедуп вариантов по группе + ограничения разнообразия: доля одной категории
     <= max_share, не более max_consecutive подряд из одной категории. Переполнение
-    откладывается и добирается в конце, если не хватает до limit."""
+    откладывается и добирается в конце, если не хватает до limit.
+
+    Публичная — переиспользуется в api/catalog.py для сортировки «Популярные»:
+    та же проблема (спрос сконцентрирован в одной категории — сейчас в
+    смартфонах), то же решение."""
     products = dedupe_by_group(products)
     cap = max(2, int(limit * max_share))
     out: list[Product] = []
@@ -254,7 +258,7 @@ def recommend(db: Session, user_id: int, limit: int = 12) -> tuple[list[Product]
         # не рекомендуем только что просмотренные (пусть «Для вас» показывает новое)
         ranked = [p for p in ranked if p.id not in aff.recent_ids]
 
-    diverse = _diversify(ranked, limit)
+    diverse = diversify_by_category(ranked, limit)
     reasons = {p.id: (_reason_for(p, aff, default_reason) if mode != "cold"
                       else ("new" if p.is_new else "popular")) for p in diverse}
     return diverse, reasons, mode

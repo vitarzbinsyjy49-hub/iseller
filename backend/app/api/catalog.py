@@ -26,7 +26,7 @@ from app.services.image_groups import (
 )
 from app.services.catalog_nav import list_categories
 from app.services.ranking import default_order
-from app.services.recommendations import recently_viewed, recommend
+from app.services.recommendations import diversify_by_category, recently_viewed, recommend
 from app.services.social_proof import apply_social_proof
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -263,7 +263,16 @@ def list_catalog(
     products = list(db.execute(stmt).scalars().all())
     # Товары без реального фото — в конец выдачи (не пропадают из каталога),
     # выбранная сортировка сохраняется внутри каждой из двух групп.
-    products = _photo_last(db, products)[:limit]
+    products = _photo_last(db, products)
+    # «Популярные» без сужающих фильтров — это дефолтный обзорный экран
+    # каталога. Спрос сейчас сконцентрирован в смартфонах (их и в каталоге
+    # больше всего), и без перемешивания категория за категорией шла бы
+    # блоками. Явные сортировки (цена/рейтинг) и любой сузивший фильтр это
+    # не трогает — там смешение категорий не нужно и не ожидается.
+    if sort == "popularity" and not category and not brand and not collection and not query:
+        products = diversify_by_category(products, limit)
+    else:
+        products = products[:limit]
     cards = [p.to_card() for p in products]
     apply_group_images(db, products, cards)
     apply_social_proof(db, products, cards)

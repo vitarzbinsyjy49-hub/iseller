@@ -10,9 +10,12 @@
 Поэтому приор берём из уже принятого решения: порядок плиток на главной
 (`home_categories.position`), который редактируется в админке.
 """
+from datetime import datetime, timedelta, timezone
+
 from app.models.home import HomeCategory
 from app.models.product import Product
-from app.services.ranking import NO_TILE_RANK, category_priority, product_sort_key
+from app.models.user_product_event import UserProductEvent
+from app.services.ranking import NO_TILE_RANK, category_priority, product_sort_key, view_counts
 from tests.conftest import make_product
 
 
@@ -120,3 +123,44 @@ def test_no_tiles_at_all_does_not_crash(db):
         make_product(db, title="Дорогой", category="смартфоны", popularity=0, price=9000),
     ]
     assert _titles_in_order(db, items) == ["Дорогой", "Дешёвый"]
+
+
+# ---------------------------------------------------------------- view_counts
+
+def _view(db, product_id, *, days_ago: float = 0.0, user_id: int = 1):
+    db.add(UserProductEvent(
+        user_id=user_id, product_id=product_id, event_type="product_view",
+        created_at=datetime.now(timezone.utc) - timedelta(days=days_ago),
+    ))
+    db.commit()
+
+
+def test_view_counts_counts_product_views(db):
+    a = make_product(db, title="A")
+    b = make_product(db, title="B")
+    _view(db, a.id, user_id=1)
+    _view(db, a.id, user_id=2)
+    _view(db, b.id, user_id=1)
+    counts = view_counts(db)
+    assert counts == {a.id: 2, b.id: 1}
+
+
+def test_view_counts_ignores_other_event_types(db):
+    """Только product_view — заявки/избранное считает social_proof.py, не это."""
+    p = make_product(db, title="P")
+    db.add(UserProductEvent(user_id=1, product_id=p.id, event_type="lead_created"))
+    db.add(UserProductEvent(user_id=1, product_id=p.id, event_type="favorite_add"))
+    db.commit()
+    assert view_counts(db) == {}
+
+
+def test_view_counts_respects_window(db):
+    p = make_product(db, title="P")
+    _view(db, p.id, days_ago=200)   # за пределами окна по умолчанию (90 дн.)
+    assert view_counts(db) == {}
+    assert view_counts(db, window_days=365) == {p.id: 1}
+
+
+def test_view_counts_empty_when_no_events(db):
+    make_product(db, title="P")
+    assert view_counts(db) == {}

@@ -25,15 +25,45 @@
 5. `id` — чтобы не осталось ни одной неразличимой пары. Без этого шага равные
    ключи снова дают произвольный порядок, то есть исходную проблему.
 """
-from sqlalchemy import case, select
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.models.home import HomeCategory
 from app.models.product import Product
+from app.models.user_product_event import UserProductEvent
 from app.services.catalog_nav import SALE_KEY
 
 #: Ранг категории, для которой плитки нет. Заведомо больше любой позиции.
 NO_TILE_RANK = 10_000
+
+#: Окно, за которое считаем просмотры для popularity. Старые просмотры выпадают
+#: из счёта сами при следующем пересчёте — отдельной ручки «забыть» не нужно.
+VIEW_WINDOW_DAYS = 90
+
+
+def view_counts(db: Session, window_days: int = VIEW_WINDOW_DAYS) -> dict[int, int]:
+    """{product_id: число просмотров за window_days} — источник для Product.popularity.
+
+    `product_view` пишется через тот же клиентский `POST /api/events/product`,
+    что и остальные события recommendations.py. `services/social_proof.py`
+    сознательно не берёт эти события для чисел, которые ВИДИТ покупатель
+    («Заказывали N раз») — подкрутка там была бы прямой ложью витрины. Здесь
+    другое: popularity — это внутренний сигнал порядка выдачи, не заявление
+    факта; подкрутка сдвинет ранжирование, а не соврёт покупателю напрямую.
+    На заказы (`social_proof.order_counts`) и избранное сигнал не переводим —
+    их пока единицы, признак попросту не наберёт данных.
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=window_days)
+    rows = db.execute(
+        select(UserProductEvent.product_id, func.count())
+        .where(UserProductEvent.event_type == "product_view",
+               UserProductEvent.product_id.is_not(None),
+               UserProductEvent.created_at >= since)
+        .group_by(UserProductEvent.product_id)
+    ).all()
+    return {pid: int(n) for pid, n in rows}
 
 
 def category_priority(db: Session) -> dict[str, int]:
