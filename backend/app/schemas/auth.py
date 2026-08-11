@@ -26,6 +26,7 @@ class UserOut(BaseModel):
     username: str | None
     first_name: str | None
     last_name: str | None
+    photo_url: str | None
     role: str
 
     class Config:

@@ -236,9 +236,13 @@ export default function DesktopHeader() {
             onClick={() => { if (!openExternalLink(config.manager_retail_url)) navigate("/ai"); }}
             title="Написать менеджеру"
             aria-label="Написать менеджеру"
-            className="hidden rounded-xl2 border border-border bg-surface px-3 py-2.5 text-sm font-medium text-text transition-colors hover:bg-mutedbg xl:block wide:px-4"
+            className="hidden items-center rounded-xl2 border border-border bg-surface px-3 py-2.5 text-sm font-medium text-text transition-colors hover:bg-mutedbg xl:flex wide:px-4"
           >
-            <Icon name="chat" className="h-4 w-4" /><span className="hidden wide:ml-1 wide:inline">Менеджер</span>
+            {/* Раньше иконка и текст были соседями без flex — выравнивались
+                по базовой линии текста, и SVG повисал чуть ниже строки:
+                на глаз читалось как «неровная» кнопка рядом с чипом
+                профиля. items-center на самой кнопке ставит их на одну ось. */}
+            <Icon name="chat" className="h-4 w-4 shrink-0" /><span className="hidden wide:ml-1.5 wide:inline">Менеджер</span>
           </button>
           <ProfileChip user={user} variant="desktop" />
         </div>

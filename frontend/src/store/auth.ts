@@ -6,6 +6,9 @@ export type User = {
   username: string | null;
   first_name: string | null;
   last_name: string | null;
+  /** Аватар из Telegram initData. Не у всех есть — закрытый профиль или
+   *  профиль без фото присылает null, тогда витрина показывает инициалы. */
+  photo_url: string | null;
   role: string;
 };
 

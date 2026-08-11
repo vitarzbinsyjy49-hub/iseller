@@ -203,6 +203,11 @@ def _apply_demo_migrations() -> None:
         "UPDATE products SET sku = specs->>'sku' WHERE sku IS NULL AND specs->>'sku' IS NOT NULL",
         # pre-launch: sku канонизируем в верхний регистр (ключ импорта/матчинга фото)
         "UPDATE products SET sku = upper(trim(sku)) WHERE sku IS NOT NULL AND sku <> upper(trim(sku))",
+        # Аватар из Telegram initData вместо инициалов в чипе профиля. NULL у
+        # уже существующих пользователей — заполнится следующим их входом
+        # (auth_telegram пишет photo_url при каждом логине), досрочно ничего
+        # не дозаполняем.
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url VARCHAR(512)",
     ]
     for stmt in statements:
         try:

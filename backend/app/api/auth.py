@@ -34,6 +34,7 @@ def _get_or_create_user(db: Session, tg_user: dict, request: Request) -> User:
     user.username = tg_user.get("username")
     user.first_name = tg_user.get("first_name")
     user.last_name = tg_user.get("last_name")
+    user.photo_url = tg_user.get("photo_url")
     db.commit()
     db.refresh(user)
     audit(db, f"tg:{user.telegram_id}", "register" if created else "login", ip=client_ip(request))
