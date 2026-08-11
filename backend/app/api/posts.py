@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from html import escape
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -9,7 +10,15 @@ from app.api.deps import get_current_admin
 from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.post import ChannelPost
-from app.services.telegram_publisher import TelegramContentTooLong, TelegramPublishError, publish_post
+from app.services.telegram_publisher import (
+    MAX_CAPTION_LENGTH,
+    MAX_MESSAGE_LENGTH,
+    TelegramContentTooLong,
+    TelegramPublishError,
+    edit_caption,
+    edit_message,
+    publish_post,
+)
 
 router = APIRouter(prefix="/admin/posts", tags=["admin-posts"], dependencies=[Depends(get_current_admin)])
 
@@ -76,14 +85,37 @@ def create_post(payload: PostCreate, db: Session = Depends(get_db)):
 @router.patch("/{post_id}")
 def update_post(post_id: int, payload: PostPatch, admin: str = Depends(get_current_admin), db: Session = Depends(get_db)):
     post = _get(db, post_id)
-    if post.status == "published":
-        raise HTTPException(409, "Published posts cannot be edited")
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(post, key, value)
     post.content_version += 1
-    # Any edit invalidates approval. This prevents publishing content that was not reviewed.
-    post.status = "draft"
-    post.approved_version = None
+
+    if post.status == "published":
+        # Пост уже в канале — правка обновляет то же сообщение на месте,
+        # а не переводит его обратно в черновик (публикация уже случилась).
+        text = f"<b>{escape(post.title)}</b>\n\n{escape(post.body)}".strip()
+        limit = MAX_CAPTION_LENGTH if post.image_url else MAX_MESSAGE_LENGTH
+        if len(text) > limit:
+            db.rollback()
+            raise HTTPException(
+                400,
+                f"Текст{' с фото' if post.image_url else ''} ограничен {limit} символами "
+                f"(сейчас {len(text)})",
+            )
+        try:
+            if post.image_url:
+                edit_caption(message_id=post.telegram_message_id, caption=text)
+            else:
+                edit_message(message_id=post.telegram_message_id, text=text)
+        except TelegramPublishError as exc:
+            db.rollback()
+            raise HTTPException(502, str(exc)) from exc
+        post.approved_version = post.content_version
+    else:
+        # Правка неопубликованного поста снимает одобрение — публиковать
+        # непроверенный контент нельзя.
+        post.status = "draft"
+        post.approved_version = None
+
     _audit(db, admin, "post_edited", post.id)
     db.commit()
     db.refresh(post)

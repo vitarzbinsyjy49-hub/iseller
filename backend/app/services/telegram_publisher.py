@@ -149,6 +149,33 @@ def edit_message(
         raise
 
 
+def edit_caption(
+    *, message_id: int, caption: str,
+    channel_id: str | int | None = None,
+) -> bool:
+    """Переписать подпись фото ранее опубликованного сообщения.
+
+    Отдельная ручка Bot API от editMessageText: сообщение с фото хранит текст
+    в caption, а editMessageText на нём отвечает «there is no text in the
+    message to edit».
+    """
+    payload: dict = {
+        "chat_id": _channel(channel_id),
+        "message_id": message_id,
+        "caption": caption,
+        "parse_mode": "HTML",
+    }
+    try:
+        call("editMessageCaption", payload)
+        return True
+    except TelegramRateLimited:
+        raise
+    except TelegramPublishError as exc:
+        if "not modified" in str(exc).lower():
+            return False
+        raise
+
+
 def edit_reply_markup(
     *, message_id: int, keyboard: list[list[dict]],
     channel_id: str | int | None = None,
