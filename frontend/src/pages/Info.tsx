@@ -16,7 +16,8 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { usePublicConfig } from "../lib/appConfig";
-import { openExternalLink } from "../lib/telegram";
+import { haptic, openExternalLink } from "../lib/telegram";
+import { toast } from "../lib/toast";
 import { Icon, type IconName } from "../components/icons";
 
 type Section = {
@@ -184,14 +185,25 @@ export default function Info() {
 
           <div className="mt-3 space-y-2">
             {phone && (
+              // Ссылка остаётся `tel:` — там, где клиент её понимает, открывается
+              // звонилка, и это лучший исход. Но WebView Telegram не-http схемы
+              // чаще всего глотает: нажатие просто не делает НИЧЕГО, и человек
+              // решает, что сломано. Поэтому одновременно кладём номер в буфер
+              // и говорим об этом: тап всегда заканчивается результатом.
               <a
                 href={`tel:${phone}`}
+                onClick={() => {
+                  haptic("light");
+                  navigator.clipboard?.writeText(phoneLabel)
+                    .then(() => toast("Номер скопирован"))
+                    .catch(() => { /* буфер недоступен — звонилка ещё может открыться */ });
+                }}
                 className="tap flex min-h-[52px] items-center gap-3 rounded-field bg-mutedbg px-3.5 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <Icon name="phone" className="h-5 w-5 shrink-0 text-accent" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[14px] font-semibold">{phoneLabel}</span>
-                  <span className="block text-[12px] text-muted">Позвонить в магазин</span>
+                  <span className="block text-[12px] text-muted">Позвонить или скопировать номер</span>
                 </span>
               </a>
             )}

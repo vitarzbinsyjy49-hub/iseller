@@ -162,3 +162,28 @@ def test_whole_mac_dump_parses_without_losses():
     duplicates = {s for s in skus if skus.count(s) > 1}
     assert not duplicates, f"дубли артикулов: {duplicates}"
     assert len(items) >= 60
+
+
+def test_seven_digit_price_without_separators():
+    """«1020000» — миллион, а не сто две тысячи.
+
+    Регрессия: предел \d{4,6} обрезал число до шести цифр, и Mac Studio за
+    1 020 000 уходил в каталог по 102 000. Поймано предпросмотром поста, где
+    «Mac Studio — от 101 500 ₽» бросилось в глаза рядом с трёхмиллионными.
+    """
+    from app.services.bsa_parser import parse_mac_line
+
+    assert parse_mac_line("Mac Studio M4 Max 128 2TB - 1020000").price == 1020000
+    assert parse_mac_line("Mac Studio M4 Max 128 4TB - 1170000").price == 1170000
+    # С разделителями разбиралось и раньше — проверяем, что не сломали.
+    assert parse_mac_line("Mac Studio M3 Ultra 512 1TB - 2.800.000").price == 2800000
+
+
+def test_cheapest_mac_studio_is_the_real_minimum():
+    """Минимум по семье уходит в пост «от N ₽» — ошибка тут видна покупателю."""
+    from app.services.bsa_parser import parse_mac
+
+    items, _ = parse_mac(MAC_DUMP.read_text(encoding="utf-8"))
+    studio = [i.price for i in items if i.title.lower().startswith("mac studio")]
+    assert min(studio) == 490000
+    assert max(studio) == 3800000
