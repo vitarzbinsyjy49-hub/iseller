@@ -87,3 +87,78 @@ def test_counts_match_the_source(model, expected):
     """Счётчики по моделям — защита от «разобралось, но не всё»."""
     items, _ = parse(DUMP.read_text(encoding="utf-8"))
     assert sum(1 for i in items if i.model == model) == expected
+
+
+# ------------------------------------------------- компьютеры и мониторы
+
+MAC_DUMP = DUMP.parent / "bsa_mac_2026_08_11.txt"
+
+
+def test_mac_mini_with_bracket_article():
+    from app.services.bsa_parser import parse_mac_line
+
+    item = parse_mac_line("🇮🇳🇺🇸🇭🇰🍏[MU9D3] Mac Mini M4 (16/256)—63.000*")
+    assert item.price == 63000
+    assert item.article == "MU9D3"
+    assert item.title == "Mac Mini M4 (16/256)"
+    assert item.regions == ["IN", "US", "HK"]
+    assert item.category == "компьютеры"
+
+
+def test_display_article_after_pipe():
+    from app.services.bsa_parser import parse_mac_line
+
+    item = parse_mac_line("🇷🇺Studio Display Standart Glass Tilt Stand | MYJG3R  - 189.000")
+    assert item.price == 189000
+    assert item.article == "MYJG3R"
+    assert item.category == "мониторы"
+
+
+def test_article_with_digits_is_not_read_as_price():
+    """«Z1E800069» содержит 800069 — без снятия артикула это стало бы ценой."""
+    from app.services.bsa_parser import parse_mac_line
+
+    item = parse_mac_line("🇸🇬🖥[Z1E800069] iMac M4 (8/8/16/256) Orange Рус 🔌 — 178500")
+    assert item.price == 178500
+    assert item.article == "Z1E800069"
+    assert item.title == "iMac M4 (8/8/16/256) Orange"
+
+
+def test_same_article_in_two_regions_stays_two_products():
+    """MWUU3 в прайсе дважды: 🇺🇸 192 000 и 🇷🇺 194 000 — это разные позиции."""
+    from app.services.bsa_parser import parse_mac_line
+
+    us = parse_mac_line("🇺🇸🖥[MWUU3] iMac M4 (10/10/16/256) Silver — 192000")
+    ru = parse_mac_line("🇷🇺🖥[MWUU3] iMac M4 (10/10/16/256) Silver — 194000")
+    assert us.sku != ru.sku
+    assert (us.price, ru.price) == (192000, 194000)
+
+
+def test_mac_studio_without_article_or_flags():
+    from app.services.bsa_parser import parse_mac_line
+
+    item = parse_mac_line("Mac Studio M3 Ultra 32 80 96GB 1TB - 850000")
+    assert item.price == 850000
+    assert item.regions == []
+    assert item.category == "компьютеры"
+    assert "Mac Studio M3 Ultra" in item.title
+
+
+def test_accessory_goes_to_its_own_category():
+    from app.services.bsa_parser import parse_mac_line
+
+    item = parse_mac_line("🇷🇺Magic Keyboard с Touch ID MK293RS/A  — 16.600")
+    assert item.price == 16600
+    assert item.category == "аксессуары"
+
+
+def test_whole_mac_dump_parses_without_losses():
+    from app.services.bsa_parser import parse_mac
+
+    items, failed = parse_mac(MAC_DUMP.read_text(encoding="utf-8"))
+    assert failed == [], f"не разобраны: {failed}"
+
+    skus = [i.sku for i in items]
+    duplicates = {s for s in skus if skus.count(s) > 1}
+    assert not duplicates, f"дубли артикулов: {duplicates}"
+    assert len(items) >= 60

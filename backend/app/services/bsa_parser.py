@@ -180,6 +180,117 @@ def parse_line(line: str) -> Item | None:
     )
 
 
+# --------------------------------------------------------------- компьютеры
+
+#: Декоративные эмодзи прайса: яблоко, монитор, вилка. Смысла не несут.
+_DECOR_RE = re.compile("[\U0001F34F\U0001F5A5\U0001F50C️✅\U0001F525\*]")
+#: Артикул в скобках, после «|» или отдельным словом: MU9D3, Z1E800069, MK2A3RS/A.
+_ARTICLE_BRACKET_RE = re.compile(r"\[([A-Z0-9/]{4,})\]")
+_ARTICLE_PIPE_RE = re.compile(r"\|\s*([A-Z0-9/]{4,})")
+_ARTICLE_BARE_RE = re.compile(r"(?<![A-Za-z0-9])([A-Z][A-Z0-9]{3,}(?:/[A-Z])?)(?![A-Za-z0-9])")
+
+#: Куда положить позицию. Порядок важен: «Studio Display» встречается раньше,
+#: чем «Display», а «Mac Studio» не должен утащить дисплеи к компьютерам.
+_CATEGORY_RULES: tuple[tuple[str, str], ...] = (
+    ("studio display", "мониторы"),
+    ("pro display", "мониторы"),
+    ("vesa", "мониторы"),
+    ("pro stand", "мониторы"),
+    ("magic keyboard", "аксессуары"),
+    ("mac mini", "компьютеры"),
+    ("mac studio", "компьютеры"),
+    ("imac", "компьютеры"),
+)
+
+_MIN_PRICE_MAC = 5_000
+
+
+@dataclass
+class MacItem:
+    title: str
+    price: int
+    category: str
+    article: str = ""
+    regions: list[str] = field(default_factory=list)
+
+    @property
+    def full_title(self) -> str:
+        """Название с регионом в скобках — как у iPhone, ради общих флагов."""
+        return f"Apple {self.title} ({'-'.join(self.regions)})" if self.regions \
+            else f"Apple {self.title}"
+
+    @property
+    def sku(self) -> str:
+        """Артикул производителя, если он есть, — он уникальнее наших выдумок.
+
+        Регион в артикул входит: один и тот же MWUU3 стоит в прайсе дважды,
+        🇺🇸 за 192 000 и 🇷🇺 за 194 000. Без региона вторая строка затёрла бы
+        первую, и одна из двух цен молча исчезла бы из каталога.
+        """
+        base = self.article or re.sub(r"[^A-Za-z0-9]+", "-", self.title).strip("-")
+        region = "".join(self.regions) or "NA"
+        return f"{base}-{region}".upper()
+
+
+def parse_mac_line(line: str) -> MacItem | None:
+    raw = line.strip()
+    if not raw or raw.startswith("#"):
+        return None
+
+    regions = [FLAG_TO_CODE[f] for f in _FLAG_RE.findall(raw) if f in FLAG_TO_CODE]
+    body = _DECOR_RE.sub(" ", _FLAG_RE.sub(" ", raw))
+
+    # Артикул убираем ДО поиска цены: «Z1E800069» иначе читается как число.
+    article = ""
+    for pattern in (_ARTICLE_BRACKET_RE, _ARTICLE_PIPE_RE):
+        match = pattern.search(body)
+        if match:
+            article = match.group(1)
+            body = body[:match.start()] + " " + body[match.end():]
+            break
+
+    price = None
+    for match in _PRICE_RE.finditer(body):
+        value = int(re.sub(r"[.\s]", "", match.group(1)))
+        if value >= _MIN_PRICE_MAC:
+            price, cut = value, match
+    if price is None:
+        return None
+    body = body[:cut.start()]
+
+    if not article:
+        bare = _ARTICLE_BARE_RE.search(body)
+        if bare and bare.group(1).lower() not in ("tb", "gb", "xdr", "vesa"):
+            article = bare.group(1)
+            body = body[:bare.start()] + " " + body[bare.end():]
+
+    title = re.sub(r"\s+", " ", body).strip(" -–—|")
+    title = re.sub(r"\s*Рус\s*$", "", title).strip()
+    if not title:
+        return None
+
+    low = title.lower()
+    category = next((c for key, c in _CATEGORY_RULES if key in low), "компьютеры")
+    return MacItem(title=title, price=price, category=category,
+                   article=article, regions=regions)
+
+
+def parse_mac(text: str) -> tuple[list[MacItem], list[str]]:
+    """Блок компьютеров/мониторов/аксессуаров -> позиции + нераспознанное."""
+    items: list[MacItem] = []
+    failed: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        item = parse_mac_line(stripped)
+        if item is not None:
+            items.append(item)
+        elif _PRICE_RE.search(_FLAG_RE.sub(" ", stripped)):
+            failed.append(stripped)
+    return items, failed
+
+
 def parse(text: str) -> tuple[list[Item], list[str]]:
     """Весь прайс -> (позиции, нераспознанные строки товаров).
 

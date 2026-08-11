@@ -1,0 +1,90 @@
+# Выгрузка BSA от 11.08.2026 — компьютеры, мониторы, аксессуары.
+#
+# Строки товаров скопированы ДОСЛОВНО, включая разнобой в разделителях и
+# написании. Убраны только декоративные эмодзи-разделители между блоками и
+# ссылки на другие посты канала. Ничего не «причёсано»: любая нормализация
+# должна жить в парсере, иначе через месяц никто не отличит исходник от
+# чьей-то правки.
+
+## Mac mini
+🇮🇳🇺🇸🇭🇰🍏[MU9D3] Mac Mini M4 (16/256)—63.000*
+🇮🇳🇺🇸🇭🇰🍏[MU9E3] Mac Mini M4 (16/512)-74.000
+🇮🇳🇺🇸🇭🇰🍏[MCYT4] Mac Mini M4 (24/512)-106.000
+🇮🇳🇺🇸🇭🇰🍏[MCX44] Mac Mini M4 Pro (24/512)-134.500
+🍏MMFK3 Mac Mini M2 8/10/8/512 -52.000
+
+## Mac Studio
+Mac Studio M3 Ultra 512 1TB - 2.800.000
+Mac Studio M3 Ultra 512 2TB - 3.050.000
+Mac Studio M3 Ultra 512 4TB - 3.300.000
+Mac Studio M3 Ultra 512 8TB - 3.550.000
+Mac Studio M3 Ultra 512 16TB - 3.800.000
+Mac Studio M3 Ultra 256 1TB - 1.600.000
+Mac Studio M3 Ultra 256 2TB - 1.700.000
+Mac Studio M3 Ultra 256 4TB - 1.800.000
+Mac Studio M3 Ultra 256 8TB - 1.900.000
+Mac Studio M3 Ultra 256 16TB - 2.000.000
+Mac Studio M3 Ultra 28 60 96GB 1TB - 700000
+Mac Studio M3 Ultra 32 80 96GB 1TB - 850000
+Mac Studio M3 Ultra 32 80 96GB 2TB - 890000
+Mac Studio M3 Ultra 32 80 96GB 4TB - 970000
+Mac Studio M4 Max 128 1TB - 920000
+Mac Studio M4 Max 128 2TB - 1020000
+Mac Studio M4 Max 128 4TB - 1170000
+Mac Studio M4 Max 64 1TB - 620000
+Mac Studio M4 Max 64 2TB - 670000
+Mac Studio M4 Max 36 1TB - 490000
+
+## Мониторы
+🇷🇺🖥 [MFEX4] Studio Display 2026 (Standard glass, tilt)  — 178500
+🇷🇺🖥 [MFEW4] Studio Display 2026 (Standard glass, tilt & height)  — 216500
+🇷🇺🖥 [MFEL4] Studio Display XDR 2026 (Standard glass, tilt & height)  — 358500
+🇷🇺🖥 [MFEP4] Studio Display XDR 2026 (Nano-texture glass, tilt & height)  — 385500
+🇷🇺Studio Display Standart Glass Tilt Stand | MYJG3R  - 189.000
+🇷🇺Studio Display Nano Glass Tilt Stand | MYJK3  - 203.000
+🇺🇸Studio Display Nano Glass Tilt Stand | MMYW3  - 200.000
+🇷🇺Studio Display Nano Glass VESA Mount Adapter  MYJL3  - 208.000
+🇷🇺Studio Display Standart Glass VESA Mount Adapter | MYJH3  - 200.000
+🇷🇺Apple Pro Display XDR 32 Standard Glass | MYLH3  - 605.000
+🇷🇺Apple Pro Stand | MX5N3  - 128000
+🇷🇺Apple VESA Mount Adapter | MX5M3 - 39.000
+
+## iMac
+🇸🇬🖥[MQRQ3] iMac M3 (8/10/256) Blue — 130000
+🇸🇬🖥[MQRR3] iMac M3 (8/10/512) Blue — 150000
+🇷🇺🖥[Z19F000DD] iMac M3 (8/10/24/1Tb) Yellow — 210000
+🇷🇺🖥[MWUC3] iMac M4 (8/8/16/256) Silver — 178500
+🇸🇬🖥[Z1E800069] iMac M4 (8/8/16/256) Orange Рус 🔌 — 178500
+🇸🇬🖥[Z1E70005L] iMac M4 (8/8/16/256) Purple Рус 🔌 — 178500
+🇸🇬🖥[Z1E30005L] iMac M4 (8/8/16/256) Yellow Рус 🔌 — 178500
+🇺🇸🖥[MWUU3] iMac M4 (10/10/16/256) Silver — 192000
+🇷🇺🖥[MWUU3] iMac M4 (10/10/16/256) Silver — 194000
+🇸🇬🖥[Z1EV0005K] iMac M4 (10/10/16/256) Orange Рус 🔌 — 194000
+🇸🇬🖥[Z1ET0005K] iMac M4 (10/10/16/256) Purple Рус 🔌 — 194000
+🇷🇺🖥[Z1ET000MF] iMac M4 (10/10/16/256) Purple — 194000
+🇸🇬🖥[Z1EK0005K] iMac M4 (10/10/16/256) Yellow Рус 🔌 — 194000
+🇷🇺🖥[Z1E5000JW] iMac M4 (8/8/16/512) Blue — 197000
+🇬🇧🖥[MWUV3] iMac M4 (10/10/16/512) Silver — 212500
+🇷🇺🖥[MWUV3] iMac M4 (10/10/16/512) Silver — 214000
+🇸🇬🖥[Z1EH0005N] iMac M4 (10/10/16/512) Silver Рус 🔌 — 214000
+🇸🇬🖥[Z1EP0005N] iMac M4 (10/10/16/512) Blue Рус 🔌 — 214000
+🇸🇬🖥[Z1EM0005N] iMac M4 (10/10/16/512) Green Рус 🔌 — 214000
+🇸🇬🖥[Z1EW00051] iMac M4 (10/10/16/512) Orange Рус 🔌 — 214000
+🇸🇬🖥[Z1ER0005N] iMac M4 (10/10/16/512) Pink Рус 🔌 — 214000
+🇸🇬🖥[Z1EU00051] iMac M4 (10/10/16/512) Purple Рус 🔌 — 214000
+🇷🇺🖥[Z1EP000T5] iMac M4 (10/10/16/1Tb) Blue — 237500
+🇷🇺🖥[Z1EL000DS] iMac M4 (10/10/16/1Tb) Yellow — 237500
+🇸🇬🖥[Z1EH0005W] iMac M4 (10/10/24/512) Silver Рус 🔌 — 237500
+🇷🇺🖥[MCR24] iMac M4 (10/10/24/512) Silver — 237500
+🇸🇬🖥[Z1EP0005W] iMac M4 (10/10/24/512) Blue Рус 🔌 — 237500
+🇸🇬🖥[Z1EM0005W] iMac M4 (10/10/24/512) Green Рус 🔌 — 237500
+🇸🇬🖥[Z1K800048] iMac M4 (10/10/24/512) Orange Рус 🔌 — 237500
+🇸🇬🖥[Z1ER0005W] iMac M4 (10/10/24/512) Pink Рус 🔌 — 237500
+🇸🇬🖥[Z1K700048] iMac M4 (10/10/24/512) Purple Рус 🔌 — 237500
+🇸🇬🖥[Z1K200048] iMac M4 (10/10/24/512) Yellow Рус 🔌 — 237500
+
+## Аксессуары
+🇷🇺Magic Keyboard MK2A3 — 12.200
+🇷🇺Magic Keyboard MK2A3RS/A  — 13.300
+🇷🇺Magic Keyboard Numeric MQ052 — 14.800
+🇷🇺Magic Keyboard с Touch ID MK293RS/A  — 16.600
