@@ -32,18 +32,76 @@ export const chip = (active: boolean): CSSProperties => ({
   background: active ? C.accent : C.surface, color: active ? "#fff" : C.sub,
 });
 
+const ACCESS_KEY = "admin_access_token";
+const REFRESH_KEY = "admin_refresh_token";
+
+export function storeTokens(accessToken: string, refreshToken: string) {
+  sessionStorage.setItem(ACCESS_KEY, accessToken);
+  sessionStorage.setItem(REFRESH_KEY, refreshToken);
+}
+export function clearTokens() {
+  sessionStorage.removeItem(ACCESS_KEY);
+  sessionStorage.removeItem(REFRESH_KEY);
+}
+export function loadStoredAccessToken(): string | null {
+  return sessionStorage.getItem(ACCESS_KEY);
+}
+
+type TokenListener = (accessToken: string) => void;
+let tokenListener: TokenListener | null = null;
+/** Shell вызывает это при монтировании, чтобы синхронизировать своё состояние
+ *  token с токеном, который тихо обновился внутри apiSend/apiGet другого экрана. */
+export function onTokenRefreshed(listener: TokenListener | null) {
+  tokenListener = listener;
+}
+
+let refreshInFlight: Promise<string | null> | null = null;
+/** Обменять refresh-токен на новую пару. Один запрос на все параллельные 401 —
+ *  backend/app/api/auth.py::refresh одноразовый, повтор тем же refresh-токеном
+ *  отклоняется как кража/повтор. */
+function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = sessionStorage.getItem(REFRESH_KEY);
+  if (!refreshToken) return Promise.resolve(null);
+  if (!refreshInFlight) {
+    refreshInFlight = fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+      .then(async (r) => {
+        if (!r.ok) { clearTokens(); return null; }
+        const data = await r.json();
+        storeTokens(data.access_token, data.refresh_token);
+        tokenListener?.(data.access_token);
+        return data.access_token as string;
+      })
+      .catch(() => null)
+      .finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+}
+
 export async function apiGet<T>(path: string, token: string): Promise<T> {
-  const r = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  let r = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (r.status === 401) {
+    const fresh = await refreshAccessToken();
+    if (fresh) r = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${fresh}` } });
+  }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
 
 export async function apiSend<T>(method: string, path: string, token: string, body?: unknown): Promise<T> {
-  const r = await fetch(`/api${path}`, {
+  const doFetch = (tok: string) => fetch(`/api${path}`, {
     method,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  let r = await doFetch(token);
+  if (r.status === 401) {
+    const fresh = await refreshAccessToken();
+    if (fresh) r = await doFetch(fresh);
+  }
   if (!r.ok) {
     const data = await r.json().catch(() => ({}));
     throw new Error(data.detail || `HTTP ${r.status}`);
@@ -58,11 +116,16 @@ export const apiPost = <T,>(path: string, token: string, body: unknown) => apiSe
 export async function apiUpload<T>(path: string, token: string, file: File): Promise<T> {
   const fd = new FormData();
   fd.append("file", file);
-  const r = await fetch(`/api${path}`, {
+  const doFetch = (tok: string) => fetch(`/api${path}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${tok}` },
     body: fd,
   });
+  let r = await doFetch(token);
+  if (r.status === 401) {
+    const fresh = await refreshAccessToken();
+    if (fresh) r = await doFetch(fresh);
+  }
   if (!r.ok) {
     const data = await r.json().catch(() => ({}));
     throw new Error(data.detail || `HTTP ${r.status}`);
@@ -75,11 +138,16 @@ export async function apiUpload<T>(path: string, token: string, file: File): Pro
 export async function apiUploadMany<T>(path: string, token: string, files: File[]): Promise<T> {
   const fd = new FormData();
   for (const f of files) fd.append("files", f);
-  const r = await fetch(`/api${path}`, {
+  const doFetch = (tok: string) => fetch(`/api${path}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${tok}` },
     body: fd,
   });
+  let r = await doFetch(token);
+  if (r.status === 401) {
+    const fresh = await refreshAccessToken();
+    if (fresh) r = await doFetch(fresh);
+  }
   if (!r.ok) {
     const data = await r.json().catch(() => ({}));
     throw new Error(data.detail || `HTTP ${r.status}`);

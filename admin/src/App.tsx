@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   C, card, input, btn, btnGhost, chip, apiGet, apiPatch, fmtPrice, fmtDateTime, storefrontUrl,
   STATUSES, STATUS_RU, SOURCE_RU, LEAD_TYPES, LEAD_TYPE_RU, FULFILLMENT_RU, AVAILABILITY_RU,
-  leadMetaRows,
+  leadMetaRows, storeTokens, clearTokens, loadStoredAccessToken, onTokenRefreshed,
 } from "./ui";
 import { Products } from "./Products";
 import { Analytics, AiLogs } from "./Analytics";
@@ -14,8 +14,14 @@ import { Customers } from "./Customers";
 import PromoCodes from "./PromoCodes";
 
 export default function App() {
-  const [token, setToken] = useState<string | null>(null);
-  return token ? <Shell token={token} onLogout={() => setToken(null)} /> : <Login onToken={setToken} />;
+  const [token, setToken] = useState<string | null>(() => loadStoredAccessToken());
+  useEffect(() => {
+    onTokenRefreshed((fresh) => setToken(fresh));
+    return () => onTokenRefreshed(null);
+  }, []);
+  return token
+    ? <Shell token={token} onLogout={() => { clearTokens(); setToken(null); }} />
+    : <Login onToken={setToken} />;
 }
 
 // ---------- Login ----------
@@ -52,7 +58,9 @@ function Login({ onToken }: { onToken: (t: string) => void }) {
       setError("Тестовый вход недоступен: сервер запущен не в DEV_MODE");
       return;
     }
-    onToken((await res.json()).access_token);
+    const data = await res.json();
+    storeTokens(data.access_token, data.refresh_token);
+    onToken(data.access_token);
   }
 
   async function submit() {
@@ -63,6 +71,7 @@ function Login({ onToken }: { onToken: (t: string) => void }) {
     });
     if (!res.ok) { setError("Неверный email или пароль"); return; }
     const data = await res.json();
+    storeTokens(data.access_token, data.refresh_token);
     onToken(data.access_token);
   }
 
