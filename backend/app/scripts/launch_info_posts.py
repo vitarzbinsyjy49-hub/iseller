@@ -82,8 +82,15 @@ PUBLISH_SLUGS = (
 )
 
 
-def prepare(db, *, dry_run: bool) -> list[str]:
-    """Шаги 1–3: тексты. Возвращает список того, что изменилось."""
+def prepare(db) -> list[str]:
+    """Шаги 1–3: тексты. Возвращает список того, что изменилось.
+
+    Новые тексты ставятся на объекты сессии ВСЕГДА, даже в предпросмотре, и
+    фиксируются коммитом только по --confirm (иначе вызывающий делает
+    rollback). Иначе предпросмотр врёт: проверка «[уточнить]» и сравнение с
+    опубликованным читали бы старые тексты и обещали пропустить как раз те
+    посты, ради которых всё и затевалось.
+    """
     changed: list[str] = []
 
     created = price_channel.ensure_info_drafts(db)
@@ -91,30 +98,25 @@ def prepare(db, *, dry_run: bool) -> list[str]:
 
     rows = {row.slug: row for row in db.query(ChannelPost).filter_by(kind=INFO_KIND).all()}
 
-    for slug in RESET_SLUGS:
-        row, draft = rows.get(slug), INFO_BY_SLUG.get(slug)
-        if row is None or draft is None or row.body == draft.default_text:
-            continue
-        if not dry_run:
-            row.title = draft.title
-            row.body = draft.default_text
-            if row.telegram_message_id:
-                row.status = "outdated"
-        changed.append(f"заготовка возвращена: {slug}")
-
-    for slug, (title, body) in CUSTOM_POSTS.items():
+    def rewrite(slug: str, title: str, body: str, reason: str) -> None:
         row = rows.get(slug)
         if row is None or (row.body == body and row.title == title):
-            continue
-        if not dry_run:
-            row.title = title
-            row.body = body
-            if row.telegram_message_id:
-                row.status = "outdated"
-        changed.append(f"текст переписан: {slug}")
+            return
+        row.title = title
+        row.body = body
+        if row.telegram_message_id:
+            row.status = "outdated"
+        changed.append(f"{reason}: {slug}")
 
-    if not dry_run:
-        db.commit()
+    for slug in RESET_SLUGS:
+        draft = INFO_BY_SLUG.get(slug)
+        if draft is not None:
+            rewrite(slug, draft.title, draft.default_text, "заготовка возвращена")
+
+    for slug, (title, body) in CUSTOM_POSTS.items():
+        rewrite(slug, title, body, "текст переписан")
+
+    db.flush()
     return changed
 
 
@@ -128,8 +130,10 @@ def main() -> int:
     db = SessionLocal()
     try:
         print("== 1-3. Тексты ==")
-        for line in prepare(db, dry_run=dry_run) or ["изменений нет"]:
+        for line in prepare(db) or ["изменений нет"]:
             print("  ", line)
+        if not dry_run:
+            db.commit()
 
         # Пост с незаполненным местом система публиковать откажется — но лучше
         # увидеть это списком до отправки, чем в отчёте об ошибках после.
@@ -157,7 +161,14 @@ def main() -> int:
         print("   ошибки:   ", nav.failed)
 
         if dry_run:
-            print("\nЭто был предпросмотр. Для выполнения добавьте --confirm.")
+            # Тексты стояли на объектах сессии ради честного предпросмотра —
+            # снимаем их, чтобы предпросмотр остался предпросмотром.
+            db.rollback()
+            print("\nЭто был предпросмотр: в канал ничего не ушло, тексты в базе "
+                  "не изменены. Недостающие черновики при этом создаются — "
+                  "ensure_info_drafts коммитит сам, и это безвредно: черновик "
+                  "без публикации никому не виден.\n"
+                  "Для выполнения добавьте --confirm.")
         return 1 if (result.failed or nav.failed) else 0
     finally:
         db.close()
