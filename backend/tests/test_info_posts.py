@@ -14,6 +14,7 @@ from app.main import app
 from app.models.post import ChannelPost
 from app.services import price_channel
 from app.services.info_posts import (
+    INFO_BY_SLUG,
     INFO_KIND,
     INFO_POSTS,
     PLACEHOLDER,
@@ -223,6 +224,42 @@ def client(db):
     app.dependency_overrides[get_current_admin] = lambda: "admin:test"
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+
+def test_api_reset_returns_draft_from_code(client, db, telegram):
+    """«Вернуть заготовку» — явное «да, возьми версию из кода».
+
+    Генерация чужие правки не трогает и трогать не должна. Но когда заготовку
+    в коде переписали, вернуть её было нечем, кроме копипаста HTML в поле.
+    """
+    client.post("/api/admin/price-posts/info/generate")
+    fill(db, "info_payment", "Старый текст с [уточнить].")
+
+    response = client.post("/api/admin/price-posts/info/info_payment/reset")
+
+    assert response.status_code == 200
+    row = db.query(ChannelPost).filter_by(slug="info_payment").one()
+    assert row.body == INFO_BY_SLUG["info_payment"].default_text
+    assert PLACEHOLDER not in row.body
+
+
+def test_api_reset_marks_published_post_outdated(client, db, telegram):
+    """Опубликованный пост после сброса расходится с каналом — как при правке."""
+    client.post("/api/admin/price-posts/info/generate")
+    price_channel.apply_info_posts(db, slugs=["info_about"])
+    fill(db, "info_about", "Совсем другой текст.")
+
+    client.post("/api/admin/price-posts/info/info_about/reset")
+
+    assert db.query(ChannelPost).filter_by(slug="info_about").one().status == "outdated"
+
+
+def test_api_reset_refuses_post_without_draft(client, db):
+    """Свой пост из админки возвращать не к чему — заготовки у него нет."""
+    client.post("/api/admin/price-posts/info",
+                json={"slug": "info_custom", "title": "Свой", "body": "Текст"})
+
+    assert client.post("/api/admin/price-posts/info/info_custom/reset").status_code == 404
 
 
 def test_api_generate_and_edit(client, db, telegram):

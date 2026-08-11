@@ -18,6 +18,8 @@ type Post = {
   telegram_message_id: number | null; channel_id: string | null;
   body: string | null; buttons: ButtonSpec[] | null;
   has_placeholders: boolean; editable: boolean;
+  /** Есть ли заготовка в коде — от этого зависит кнопка «вернуть заготовку». */
+  has_draft: boolean;
   last_synced_at: string | null; last_error: string | null; length: number;
 };
 
@@ -74,6 +76,16 @@ export function ChannelPosts({ token }: { token: string }) {
   }
 
   const createDefaults = () => run(() => apiPost("/admin/price-posts/info/generate", token, {}));
+
+  // Генерация чужой текст не трогает — и правильно делает. Но когда заготовку
+  // в коде переписали, вернуть её было нечем, кроме копипаста HTML в поле.
+  const askReset = (slug: string, title: string) => setConfirm({
+    title: "Вернуть заготовку",
+    message: `Текст поста «${title}» будет заменён версией из кода. `
+      + "Ваши правки в этом посте пропадут. В канал изменение само не уйдёт — "
+      + "понадобится «Обновить в канале».",
+    run: () => run(() => apiPost(`/admin/price-posts/info/${slug}/reset`, token, {})),
+  });
 
   const askPublish = (slugs?: string[]) => setConfirm({
     title: slugs ? "Опубликовать пост" : "Опубликовать все готовые посты",
@@ -178,6 +190,12 @@ export function ChannelPosts({ token }: { token: string }) {
                 <button style={smallGhost} disabled={busy} onClick={() => setEditing(post)}>
                   Редактировать
                 </button>
+                {post.has_draft && (
+                  <button style={smallGhost} disabled={busy}
+                    onClick={() => askReset(post.slug, post.title)}>
+                    Вернуть заготовку
+                  </button>
+                )}
                 {!post.has_placeholders && (
                   <button style={smallBtn} disabled={busy} onClick={() => askPublish([post.slug])}>
                     {post.telegram_message_id ? "Обновить в канале" : "Опубликовать"}

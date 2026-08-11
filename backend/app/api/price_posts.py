@@ -69,6 +69,9 @@ def _out(row: ChannelPost) -> dict:
         "buttons": row.button_spec if row.kind == INFO_KIND else None,
         "has_placeholders": has_placeholders(row.body) if row.kind == INFO_KIND else False,
         "editable": row.kind == INFO_KIND,
+        # Есть ли для поста заготовка в коде — от этого зависит, показывать ли
+        # «вернуть заготовку». У постов, созданных в админке, её нет.
+        "has_draft": row.slug in INFO_BY_SLUG,
     }
 
 
@@ -150,6 +153,41 @@ def edit_info(slug: str, payload: InfoTextRequest, db: Session = Depends(get_db)
     if row.telegram_message_id:
         row.status = "outdated"
     _audit(db, admin, "info_post_edited", slug)
+    db.commit()
+    db.refresh(row)
+    return _out(row)
+
+
+@router.post("/info/{slug}/reset")
+def reset_info(slug: str, db: Session = Depends(get_db),
+               admin: str = Depends(get_current_admin)):
+    """Вернуть посту заготовку из кода. В канал само по себе не уходит.
+
+    Заготовки намеренно не перезаписывают текст, который уже лежит в базе:
+    инфо-пост пишет человек, и генерация не вправе затирать его правки
+    (см. price_channel.ensure_info_drafts). Но когда заготовку в коде
+    переписали — например, условия магазина наконец назвали, — вернуть её
+    было нечем: оставался копипаст HTML в текстовое поле, где разметку легко
+    сломать. Эта ручка и есть явное «да, возьми версию из кода».
+
+    Работает только для разделов, у которых заготовка есть. Свои посты,
+    созданные в админке, возвращать не к чему — им отвечаем 404.
+    """
+    draft = INFO_BY_SLUG.get(slug)
+    if draft is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND,
+                            "У этого поста нет заготовки в коде")
+    row = db.query(ChannelPost).filter_by(slug=slug, kind=INFO_KIND).one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Инфо-пост не найден")
+
+    row.title = draft.title
+    row.body = draft.default_text
+    # Опубликованный пост расходится с каналом до повторной отправки — тот же
+    # признак, что ставит ручное редактирование.
+    if row.telegram_message_id:
+        row.status = "outdated"
+    _audit(db, admin, "info_post_reset", slug)
     db.commit()
     db.refresh(row)
     return _out(row)
