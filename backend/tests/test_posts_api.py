@@ -78,6 +78,31 @@ def test_published_post_edit_rejects_oversized_caption(client, db, monkeypatch):
     assert row.body == "B"
 
 
+def test_list_excludes_price_and_info_posts(client, db):
+    """/admin/posts — только редакционные посты, не прайс/инфо-контент канала.
+
+    ChannelPost — общая модель для редакционных постов (эта вкладка) и
+    прайс/инфо-постов канала (price_channel.py). Без фильтра по kind сюда
+    протекает весь контент вкладок «Прайс канала» и «Посты канала».
+    """
+    from app.models.post import ChannelPost
+
+    db.add(ChannelPost(title="Прайс", body="B", kind="price", slug="price-1", status="draft"))
+    db.add(ChannelPost(title="Инфо", body="B", kind="info", slug="info-1", status="draft"))
+    db.add(ChannelPost(title="Навигация", body="B", kind="price_nav", slug="price_nav", status="draft"))
+    db.commit()
+
+    editorial = client.post("/api/admin/posts", json={
+        "title": "Новость", "body": "B", "kind": "news", "sources": [],
+    }).json()
+
+    resp = client.get("/api/admin/posts")
+    assert resp.status_code == 200
+    titles = [p["title"] for p in resp.json()["posts"]]
+    assert titles == ["Новость"]
+    assert resp.json()["posts"][0]["id"] == editorial["id"]
+
+
 def test_draft_edit_still_resets_approval(client, db):
     """Неопубликованный пост — старое поведение: правка снимает одобрение."""
     post = client.post("/api/admin/posts", json={

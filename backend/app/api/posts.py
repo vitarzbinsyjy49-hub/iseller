@@ -10,6 +10,8 @@ from app.api.deps import get_current_admin
 from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.post import ChannelPost
+from app.services.info_posts import INFO_KIND
+from app.services.price_channel import NAVIGATION_KIND, PRICE_KIND
 from app.services.telegram_publisher import (
     MAX_CAPTION_LENGTH,
     MAX_MESSAGE_LENGTH,
@@ -21,6 +23,10 @@ from app.services.telegram_publisher import (
 )
 
 router = APIRouter(prefix="/admin/posts", tags=["admin-posts"], dependencies=[Depends(get_current_admin)])
+
+# ChannelPost также хранит прайс- и инфо-посты канала (price_channel.py) —
+# они живут во вкладках «Прайс канала»/«Посты канала», а не здесь.
+_NON_EDITORIAL_KINDS = (PRICE_KIND, NAVIGATION_KIND, INFO_KIND)
 
 
 class PostCreate(BaseModel):
@@ -67,7 +73,7 @@ def _audit(db: Session, admin: str, action: str, post_id: int) -> None:
 
 @router.get("")
 def list_posts(status_filter: str | None = None, db: Session = Depends(get_db)):
-    stmt = select(ChannelPost).order_by(ChannelPost.id.desc())
+    stmt = select(ChannelPost).where(ChannelPost.kind.notin_(_NON_EDITORIAL_KINDS)).order_by(ChannelPost.id.desc())
     if status_filter:
         stmt = stmt.where(ChannelPost.status == status_filter)
     return {"posts": [_out(p) for p in db.execute(stmt.limit(100)).scalars()]}
