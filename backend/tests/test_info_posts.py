@@ -151,6 +151,52 @@ def test_filled_post_is_published_with_buttons(db, telegram):
     assert labels == ["🛍 Открыть каталог", "💬 Задать вопрос менеджеру"]
 
 
+def test_deleted_message_is_republished_next_run(db, telegram, monkeypatch):
+    """Пост, удалённый из канала руками, не залипает в ошибке навсегда.
+
+    Реальный случай: сообщение info_pin_catalog удалили, а message_id остался
+    в базе — и каждая публикация пыталась править то, чего нет. Забываем id,
+    и следующий запуск отправляет пост заново.
+    """
+    price_channel.ensure_info_drafts(db)
+    fill(db, "info_about", "Текст поста.")
+    price_channel.apply_info_posts(db, slugs=["info_about"])
+    published_id = db.query(ChannelPost).filter_by(slug="info_about").one().telegram_message_id
+    assert published_id is not None
+
+    def gone(**kw):
+        raise TelegramPublishError("Bad Request: message to edit not found")
+
+    monkeypatch.setattr(price_channel, "edit_message", gone)
+    fill(db, "info_about", "Изменённый текст.")
+    result = price_channel.apply_info_posts(db, slugs=["info_about"])
+
+    assert [slug for slug, _ in result.failed] == ["info_about"]
+    assert db.query(ChannelPost).filter_by(slug="info_about").one().telegram_message_id is None
+
+    # Следующий запуск — уже обычная отправка, без ручного вмешательства.
+    monkeypatch.setattr(price_channel, "edit_message", telegram.edit_message)
+    again = price_channel.apply_info_posts(db, slugs=["info_about"])
+    assert again.created == ["info_about"]
+    assert telegram.sent[-1]["text"] == "Изменённый текст."
+
+
+def test_lost_edit_rights_keeps_message_id(db, telegram, monkeypatch):
+    """Другая ошибка правки id НЕ сбрасывает — иначе в канале появится дубль."""
+    price_channel.ensure_info_drafts(db)
+    fill(db, "info_about", "Текст поста.")
+    price_channel.apply_info_posts(db, slugs=["info_about"])
+
+    def forbidden(**kw):
+        raise TelegramPublishError("Forbidden: not enough rights to edit a message")
+
+    monkeypatch.setattr(price_channel, "edit_message", forbidden)
+    fill(db, "info_about", "Изменённый текст.")
+    price_channel.apply_info_posts(db, slugs=["info_about"])
+
+    assert db.query(ChannelPost).filter_by(slug="info_about").one().telegram_message_id is not None
+
+
 def test_info_buttons_are_url_only(db):
     """В канале web_app-кнопки запрещены (BUTTON_TYPE_INVALID)."""
     keyboard = info_keyboard("https://shop.example.com", "https://t.me/m", "isellerAIbot")

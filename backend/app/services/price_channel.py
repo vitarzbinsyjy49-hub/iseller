@@ -58,6 +58,10 @@ NAVIGATION_KIND = "price_nav"
 #: Суффикс второй и следующих частей длинного раздела: price_iphone_p2.
 _PART_SUFFIX = re.compile(r"_p\d+$")
 
+#: Ответ Telegram, означающий, что править нечего: сообщение удалили из канала.
+#: Узкая формулировка намеренно — см. обработчик ошибок в apply_info_posts.
+_MESSAGE_GONE = re.compile(r"message to edit not found", re.I)
+
 
 def channel_id() -> str:
     return settings.TELEGRAM_CHANNEL_ID
@@ -188,6 +192,18 @@ def apply_info_posts(
             if row is not None:
                 row.status = "error"
                 row.last_error = str(exc)[:500]
+                # Сообщение удалили из канала руками, а message_id остался в
+                # базе — и пост залипает в ошибке навсегда: каждая следующая
+                # попытка снова правит то, чего нет. Забываем id, чтобы
+                # следующий запуск отправил пост заново.
+                #
+                # Только на этой формулировке Telegram. «Нет прав на правку»
+                # или «сообщение не изменено» приходят другими текстами, и
+                # сбрасывать id по ним нельзя: сообщение живо, и мы получили бы
+                # в канале дубль вместо исправления.
+                if _MESSAGE_GONE.search(str(exc)):
+                    row.telegram_message_id = None
+                    row.published_body = None
                 db.commit()
             logger.warning("инфо-пост %s: %s", row.slug if row else "?", exc)
             result.failed.append((row.slug if row else "?", str(exc)))
