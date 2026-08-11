@@ -79,7 +79,7 @@ def _out(row: ChannelPost) -> dict:
 def list_price_posts(db: Session = Depends(get_db)):
     """Список прайс-постов + разделы, которых ещё нет в БД."""
     rows = db.query(ChannelPost).filter(
-        ChannelPost.kind.in_([price_channel.PRICE_KIND, price_channel.NAVIGATION_KIND])
+        ChannelPost.kind.in_([price_channel.PRICE_KIND, price_channel.NAVIGATION_KIND, INFO_KIND])
     ).order_by(ChannelPost.sort_order).all()
     known = {row.slug for row in rows}
     return {

@@ -342,6 +342,15 @@ def test_api_edit_unknown_post_is_404(client):
                         json={"body": "x"}).status_code == 404
 
 
+def test_api_list_includes_info_posts(client, db, telegram):
+    """Экран «Посты канала» читает /admin/price-posts — инфо-посты обязаны
+    попадать в этот список, иначе экран показывает «Постов пока нет»."""
+    client.post("/api/admin/price-posts/info/generate")
+    response = client.get("/api/admin/price-posts")
+    kinds = {p["kind"] for p in response.json()["posts"]}
+    assert "info" in kinds
+
+
 # ---------------------------------------------------------------- кнопки
 
 def test_button_spec_resolves_to_urls(db):
