@@ -131,3 +131,32 @@ def test_feed_has_four_sections_recommended_dedup(client, db):
     rec_ids = {c["id"] for c in data["recommended"]}
     assert rec_ids.isdisjoint(shown)         # рекомендуем не дублирует hot/new
     assert len(data["recommended"]) >= 1
+
+
+def test_card_splits_region_flags_out_of_title():
+    """Регион показывается флагом, а не кодом внутри названия.
+
+    В канале это делается давно, на витрине название приходило как есть — и
+    на узкой карточке «(HK-KR, SIM+eSIM)» ещё и обрезалось. Разбирает строку
+    тот же split_region, поэтому канал и приложение не могут разойтись.
+    """
+    from app.models.product import Product
+
+    card = Product(title="Apple iPhone 17 Pro 256 ГБ Blue (HK-KR, SIM+eSIM)",
+                   price=99800, category="смартфоны").to_card()
+
+    assert card["region_flags"] == "🇭🇰🇰🇷"
+    assert card["title_clean"] == "Apple iPhone 17 Pro 256 ГБ Blue (SIM+eSIM)"
+    # Оригинал не трогаем: по нему ищут, им делятся, он уходит в AI.
+    assert card["title"] == "Apple iPhone 17 Pro 256 ГБ Blue (HK-KR, SIM+eSIM)"
+
+
+def test_card_without_region_keeps_title_intact():
+    """Нет кода страны — нет флагов, название остаётся прежним."""
+    from app.models.product import Product
+
+    card = Product(title="Dyson Airwrap Complete", price=45000,
+                   category="красота").to_card()
+
+    assert card["region_flags"] == ""
+    assert card["title_clean"] == "Dyson Airwrap Complete"

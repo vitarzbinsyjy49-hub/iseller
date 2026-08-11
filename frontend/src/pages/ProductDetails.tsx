@@ -264,7 +264,13 @@ export default function ProductDetails() {
       <p className="mt-4 text-xs text-muted lg:hidden">{p.brand}{p.category ? ` · ${p.category}` : ""}</p>
       {/* Заголовок занимает всю ширину колонки и переносится полностью:
           ни truncate, ни line-clamp — действия больше не стоят поверх него. */}
-      <h1 className="mt-1 text-xl font-bold leading-6 lg:mt-0 lg:text-[28px] lg:leading-9">{p.title}</h1>
+      <h1 className="mt-1 text-xl font-bold leading-6 lg:mt-0 lg:text-[28px] lg:leading-9">
+        {p.region_flags && <span className="mr-1.5 align-baseline" aria-hidden>{p.region_flags}</span>}
+        {p.title_clean || p.title}
+      </h1>
+      {/* Флаг — картинка, скринридеру он молчит. Регион словами: у товара это
+          не украшение, а условие покупки (комплект, вариант SIM, гарантия). */}
+      {p.region_flags && <p className="sr-only">Регион поставки указан флагом страны</p>}
 
       {/* Состояние + ключевые характеристики одной строкой */}
       {(p.condition === "used" || p.condition === "refurbished" || p.color || p.memory || p.storage) && (

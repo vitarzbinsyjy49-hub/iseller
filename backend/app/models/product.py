@@ -168,10 +168,23 @@ class Product(Base):
         # не должен второй раз выводить правила из in_stock/is_limited — иначе
         # кнопка «в корзину» и проверка на checkout разойдутся.
         from app.services.availability import availability_payload
+        # Регион поставки лежит в скобках названия («… (HK-KR, SIM+eSIM)») и в
+        # постах канала давно показывается флагом. На витрине он до сих пор
+        # выводился кодом внутри названия: покупатель видел «(HK-KR, SIM+eSIM)»
+        # и, на узкой карточке, чаще всего обрезанным. Разбирает строку тот же
+        # split_region, что и канал, — два разных разбора одного названия
+        # разъехались бы на первом же нестандартном товаре.
+        from app.services.price_posts import split_region
+        region_flags, title_clean = split_region(self.title)
         return {
             "id": self.id,
             "sku": self.sku,
+            # Оригинал остаётся: по нему ищут, им делятся, он же уходит в AI.
             "title": self.title,
+            # Название без кода страны + сам код флагами. Витрина показывает
+            # эту пару; пусто — значит региона в названии не было.
+            "title_clean": title_clean,
+            "region_flags": region_flags,
             "brand": self.brand,
             "category": self.category,
             "price": float(self.price),

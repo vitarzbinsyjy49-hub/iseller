@@ -15,7 +15,14 @@ export type CardButton = {
 export type ProductCard = {
   id: number;
   sku?: string | null;
+  /** Оригинальное название с кодом страны — по нему ищут и им делятся. */
   title: string;
+  /** Название без кода страны: его и показываем рядом с флагами.
+   *  Разбирает backend (services/price_posts.split_region) — тот же разбор,
+   *  что и в постах канала, чтобы они не разошлись. */
+  title_clean?: string;
+  /** Флаги стран поставки, вынутые из названия («🇭🇰🇰🇷»). Пусто — региона нет. */
+  region_flags?: string;
   brand: string | null;
   category?: string | null;
   price: number;

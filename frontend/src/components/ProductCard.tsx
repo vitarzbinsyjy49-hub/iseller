@@ -322,6 +322,16 @@ export function FavButton({
   );
 }
 
+/** Название для показа: без кода страны и с брендом впереди, если его в
+ *  названии нет. `title_clean` приходит с backend; старый ответ без него
+ *  (кэш прошлого визита, фикстура AI) читается по `title`, как раньше. */
+export function productName(card: Pick<TCard, "title" | "title_clean" | "brand">): string {
+  const name = card.title_clean || card.title;
+  return card.brand && !name.toLowerCase().includes(card.brand.toLowerCase())
+    ? `${card.brand} ${name}`
+    : name;
+}
+
 export function Badge({ color, children }: {
   color: "red" | "blue" | "green" | "orange" | "gold"; children: ReactNode;
 }) {
@@ -503,10 +513,15 @@ function ProductCard({ card, compact, onOpen }: Props) {
           )}
         </div>
         <button onClick={open} onPointerDown={() => preloadRoute("/product")} className="block w-full text-left">
+          {/* Флаг региона впереди названия, а не кодом внутри него. На узкой
+              карточке «(HK-KR, SIM+eSIM)» съедало строку и чаще всего
+              обрезалось на середине — покупатель видел обрывок кода вместо
+              страны. Разбор делает backend, здесь только показ. */}
           <p className="mt-1 line-clamp-2 min-h-[2.35rem] text-[13px] font-medium leading-[1.35]">
-            {card.brand && !card.title.toLowerCase().includes(card.brand.toLowerCase())
-              ? `${card.brand} ${card.title}`
-              : card.title}
+            {card.region_flags && (
+              <span className="mr-1 align-baseline" aria-hidden>{card.region_flags}</span>
+            )}
+            {productName(card)}
           </p>
         </button>
         {/* Подпись наличия читает РЕЖИМ, а не голый in_stock: у предзаказа
