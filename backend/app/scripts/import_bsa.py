@@ -108,8 +108,48 @@ def photo_for_mac(item: MacItem) -> str | None:
     return None
 
 
+#: Префикс названия -> подкатегория. Порядок важен: «Mac Studio» и «Mac mini»
+#: должны проверяться раньше общих правил, иначе ничего бы не отличало их.
+#: «Pro Stand» и «VESA Mount Adapter» — не отдельная категория, а штатные
+#: аксессуары именно Pro Display XDR (Apple продаёт их только к нему),
+#: поэтому идут в ту же подкатегорию, а не в общую «Аксессуары».
+_MAC_SUBCATEGORY_RULES: tuple[tuple[str, str], ...] = (
+    ("mac mini", "Mac mini"),
+    ("mac studio", "Mac Studio"),
+    ("imac", "iMac"),
+    ("studio display", "Studio Display"),
+    ("pro display", "Pro Display XDR"),
+    ("pro stand", "Pro Display XDR"),
+    ("vesa", "Pro Display XDR"),
+    ("magic keyboard", "Magic Keyboard"),
+)
+
+
+def mac_subcategory(title: str) -> str:
+    """Подкатегория по названию: «Mac Mini M4 (16/256)» -> «Mac mini».
+
+    Нужна для того же, для чего у iPhone подкатегория «iPhone», — раздел
+    прайса в канале отбирает товары ИМЕННО по ней (services/price_posts.
+    matches), а не по индивидуальному вхождению текста. Без подкатегории
+    товар в базе есть, а раздел прайса его никогда не найдёт — ровно так
+    и не заметили, что 175 позиций BSA не попадают ни в один раздел.
+
+    Слово «Apple» в начале строки снимаем перед сравнением: в дампе
+    поставщика оно есть не у всех строк («Mac Mini M4 …», но «Apple Pro
+    Display XDR …») — случайность форматирования прайса, не сигнал о разных
+    брендах.
+    """
+    low = title.lower()
+    if low.startswith("apple "):
+        low = low[len("apple "):]
+    for key, label in _MAC_SUBCATEGORY_RULES:
+        if low.startswith(key):
+            return label
+    return "Аксессуары"
+
+
 def upsert(db, *, sku: str, title: str, price: int, category: str,
-           brand: str, photo_name: str | None, dry_run: bool) -> str:
+           subcategory: str, brand: str, photo_name: str | None, dry_run: bool) -> str:
     """Создать или обновить позицию. Возвращает «создан»/«обновлён»/«без изменений»."""
     row = db.query(Product).filter_by(sku=sku).one_or_none()
     final_price = max(price - NAKIDKA, 0)
@@ -118,6 +158,7 @@ def upsert(db, *, sku: str, title: str, price: int, category: str,
         if dry_run:
             return "создан"
         row = Product(sku=sku, title=title, brand=brand, category=category,
+                      subcategory=subcategory,
                       price=final_price, in_stock=True, stock=1, is_active=True,
                       warranty_months=1, source="bsa")
         if photo_name:
@@ -132,6 +173,7 @@ def upsert(db, *, sku: str, title: str, price: int, category: str,
         row.price = final_price
         row.title = title
         row.category = category
+        row.subcategory = subcategory
         row.warranty_months = 1
         row.in_stock = True
         row.is_active = True
@@ -170,7 +212,7 @@ def main() -> int:
             if photo is None:
                 no_photo.append(item.sku)
             result = upsert(db, sku=item.sku, title=item.title, price=item.price,
-                            category="смартфоны", brand="Apple",
+                            category="смартфоны", subcategory="iPhone", brand="Apple",
                             photo_name=photo, dry_run=dry_run)
             stats[result] = stats.get(result, 0) + 1
 
@@ -179,8 +221,8 @@ def main() -> int:
             if photo is None:
                 no_photo.append(mac.sku)
             result = upsert(db, sku=mac.sku, title=mac.full_title, price=mac.price,
-                            category=mac.category, brand="Apple",
-                            photo_name=photo, dry_run=dry_run)
+                            category=mac.category, subcategory=mac_subcategory(mac.title),
+                            brand="Apple", photo_name=photo, dry_run=dry_run)
             stats[result] = stats.get(result, 0) + 1
 
         if dry_run:

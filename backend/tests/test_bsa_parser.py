@@ -187,3 +187,51 @@ def test_cheapest_mac_studio_is_the_real_minimum():
     studio = [i.price for i in items if i.title.lower().startswith("mac studio")]
     assert min(studio) == 490000
     assert max(studio) == 3800000
+
+
+# ------------------------------------------------- подкатегория для прайс-постов
+
+def test_mac_subcategory_matches_price_post_sections():
+    """Подкатегория нужна разделу прайса, чтобы найти товар (price_posts.matches).
+
+    Без неё товар есть в базе, но ни один раздел канала его не подхватит —
+    ровно так и осталась незамеченной вся заливка BSA: 175 позиций легли в
+    базу с subcategory=NULL, и price_iphone (matches по subcategory=='iPhone')
+    их просто не видел.
+    """
+    from app.scripts.import_bsa import mac_subcategory
+
+    assert mac_subcategory("Mac Mini M4 (16/256)") == "Mac mini"
+    assert mac_subcategory("Mac Studio M3 Ultra 512 1TB") == "Mac Studio"
+    assert mac_subcategory("iMac M4 (10/10/16/256) Silver (SG)") == "iMac"
+    assert mac_subcategory("Studio Display 2026 (Standard glass, tilt)") == "Studio Display"
+    assert mac_subcategory("Pro Display XDR 32 Standard Glass") == "Pro Display XDR"
+    assert mac_subcategory("Magic Keyboard MK2A3") == "Magic Keyboard"
+
+
+def test_apple_prefix_does_not_hide_the_family():
+    """В дампе слово «Apple» есть не у всех строк одной и той же линейки."""
+    from app.scripts.import_bsa import mac_subcategory
+
+    assert mac_subcategory("Apple Pro Display XDR 32 Standard Glass") == "Pro Display XDR"
+    assert mac_subcategory("Pro Display XDR 32 Standard Glass") == "Pro Display XDR"
+
+
+def test_display_stands_join_the_display_they_are_sold_for():
+    """Pro Stand и VESA Mount Adapter продаются только к Pro Display XDR."""
+    from app.scripts.import_bsa import mac_subcategory
+
+    assert mac_subcategory("Apple Pro Stand") == "Pro Display XDR"
+    assert mac_subcategory("Apple VESA Mount Adapter") == "Pro Display XDR"
+
+
+def test_all_parsed_mac_items_get_a_known_subcategory():
+    """Ни один товар не должен провалиться в общую свалку «Аксессуары» молча."""
+    from app.scripts.import_bsa import mac_subcategory
+    from app.services.bsa_parser import parse_mac
+
+    items, _ = parse_mac(MAC_DUMP.read_text(encoding="utf-8"))
+    fallback = [i.title for i in items if mac_subcategory(i.title) == "Аксессуары"]
+    # Единственное, что законно попадает в «Аксессуары», — сам Magic Keyboard
+    # (см. правило выше); всё остальное должно узнаваться по префиксу.
+    assert all("keyboard" in t.lower() for t in fallback), fallback
