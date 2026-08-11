@@ -191,3 +191,54 @@ def test_candidate_payload_shape(db):
     # описание -- недоверенный текст, в контекст LLM не попадает
     assert "description" not in payload[0]
     assert "СЕКРЕТНАЯ" not in str(payload)
+
+
+# ------------------------------------------------- фразы «мак мини» / «аймак»
+
+def test_mac_mini_phrase_is_not_hijacked_by_the_macbook_alias():
+    """«мак» в одиночку значит macbook; «мак мини» — новый продукт, не ноутбук.
+
+    Регрессия: _SEARCH_ALIASES["мак"]="macbook" был верен, пока MacBook
+    оставался единственным Mac-товаром. После заливки BSA «мак мини»
+    токенизировался как ["macbook", "мини"] — второе слово ни с чем не
+    совпадает (кириллица), и AI-поиск отдавал ноль результатов.
+    """
+    from app.services.ai_retrieval import _query_tokens
+
+    tokens = _query_tokens("хочу мак мини для дома")
+    assert "mac" in tokens
+    assert "mini" in tokens
+    assert "macbook" not in tokens
+
+
+def test_latin_mac_mini_is_not_hijacked_either():
+    """Латиница ловится тем же «mac» -> «macbook» коллайдером, что кириллица."""
+    from app.services.ai_retrieval import _query_tokens
+
+    tokens = _query_tokens("Mac Mini 16 256")
+    assert "mac" in tokens
+    assert "mini" in tokens
+    assert "macbook" not in tokens
+
+
+def test_bare_mac_still_means_macbook():
+    """Без уточнения «мак» остаётся ноутбуком — так было и должно остаться."""
+    from app.services.ai_retrieval import _query_tokens
+
+    assert "macbook" in _query_tokens("нужен мак для монтажа видео")
+
+
+def test_mac_studio_and_imac_phrases():
+    from app.services.ai_retrieval import _query_tokens
+
+    assert {"mac", "studio"} <= set(_query_tokens("мак студио 96 гб"))
+    assert "imac" in _query_tokens("аймак с большим экраном")
+
+
+def test_catalog_search_resolves_the_same_phrase():
+    """Живой поиск каталога использует ту же точку расширения фраз."""
+    from app.api.catalog import extract_phrase_tokens
+
+    resolved, remainder = extract_phrase_tokens("Мак Мини на подарок")
+    assert resolved == ["mac", "mini"]
+    assert "мак" not in remainder

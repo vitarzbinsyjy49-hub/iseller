@@ -82,6 +82,55 @@ def _alias(word: str) -> str:
     return word
 
 
+#: Кириллические фразы из двух-трёх слов -> латинское название. Проверяются
+#: ДО разбора на отдельные токены и до одиночного _alias("мак").
+#:
+#: «мак» -> «macbook» в _SEARCH_ALIASES было верно, пока MacBook оставался
+#: единственным Mac-товаром в каталоге. С приходом Mac mini / Mac Studio /
+#: iMac (заливка BSA) «мак мини» стало искать «macbook» + слово «мини»,
+#: которого нет ни в одном названии, — ноль результатов на ровном месте.
+#: Трогать одиночный алиас «мак» нельзя: без уточнения он почти всегда
+#: значит «ноутбук», и это поведение менять не просили.
+_PHRASE_ALIASES: tuple[tuple[str, str], ...] = (
+    ("мак мини", "mac mini"),
+    ("мак-мини", "mac mini"),
+    ("макмини", "mac mini"),
+    # Латиница ловится тем же механизмом и не просто так: "mac" сам по себе —
+    # тоже ключ _SEARCH_ALIASES (-> "macbook"), и без явного извлечения фразы
+    # запрос "Mac Mini" точно так же уезжал бы в "macbook" + "mini".
+    ("mac mini", "mac mini"),
+    ("mac-mini", "mac mini"),
+    ("мак студио", "mac studio"),
+    ("мак-студио", "mac studio"),
+    ("макстудио", "mac studio"),
+    ("мак стьюдио", "mac studio"),
+    ("mac studio", "mac studio"),
+    ("аймак", "imac"),
+    ("ай мак", "imac"),
+)
+
+
+def extract_phrase_tokens(text: str) -> tuple[list[str], str]:
+    """Найти известные фразы, вернуть их токены ОТДЕЛЬНО и остаток текста.
+
+    Наивная текстовая замена («мак студио» -> «mac studio» прямо в строке)
+    не работает: получившееся «mac» проходит через _alias() ПОВТОРНО вместе
+    с остальными словами запроса, а _alias() ловит его же префиксным
+    сопоставлением ("mac".startswith у ключа "macbook") и откатывает обратно
+    в «macbook» — фраза распадается ровно там же, где и без фикса.
+    Поэтому токены найденной фразы сразу помечаются готовыми и в общий
+    проход по _alias() больше не попадают; из текста фраза вырезается,
+    чтобы не отработать дважды.
+    """
+    low = text.lower()
+    resolved: list[str] = []
+    for phrase, replacement in _PHRASE_ALIASES:
+        if phrase in low:
+            resolved.extend(replacement.split())
+            low = low.replace(phrase, " ")
+    return resolved, low
+
+
 def _photo_last(db: Session, products: list[Product]) -> list[Product]:
     """Стабильно переставить товары без реального фото (плейсхолдер/пусто) в
     конец списка — остальной порядок (уже заданный SQL ORDER BY) сохраняется."""
@@ -185,7 +234,9 @@ def list_catalog(
     if price_max is not None:
         stmt = stmt.where(Product.price <= price_max)
     if query:
-        for word in [_alias(w) for w in query.split() if len(w) >= 2][:5]:
+        phrase_tokens, remainder = extract_phrase_tokens(query)
+        alias_tokens = [_alias(w) for w in remainder.split() if len(w) >= 2]
+        for word in (phrase_tokens + alias_tokens)[:5]:
             like = f"%{word}%"
             stmt = stmt.where(or_(
                 Product.title.ilike(like), Product.brand.ilike(like),

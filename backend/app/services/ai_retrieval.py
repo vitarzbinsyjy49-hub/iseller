@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import case, func, literal, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.catalog import _alias, search_products  # переиспользуем алиасы live-поиска
+from app.api.catalog import _alias, extract_phrase_tokens, search_products  # переиспользуем алиасы live-поиска
 from app.models.product import Product
 from app.services.ai_provider import _extract_price_max, _detect_category
 
@@ -144,8 +144,9 @@ def _num(value: str | None) -> int | None:
 
 
 def _query_tokens(message: str) -> list[str]:
-    return [
-        _alias(t) for t in _TOKEN_RE.findall(message.lower())
+    phrase_tokens, remainder = extract_phrase_tokens(message)
+    return phrase_tokens + [
+        _alias(t) for t in _TOKEN_RE.findall(remainder)
         if len(t) >= 2 and t not in _STOPWORDS
     ]
 
