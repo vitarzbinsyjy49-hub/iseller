@@ -9,7 +9,7 @@ from app.api.deps import get_current_admin
 from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.post import ChannelPost
-from app.services.telegram_publisher import TelegramPublishError, publish_post
+from app.services.telegram_publisher import TelegramContentTooLong, TelegramPublishError, publish_post
 
 router = APIRouter(prefix="/admin/posts", tags=["admin-posts"], dependencies=[Depends(get_current_admin)])
 
@@ -125,6 +125,8 @@ def publish(post_id: int, payload: PublishRequest, admin: str = Depends(get_curr
         raise HTTPException(409, "Approve the current version before publishing")
     try:
         message_id = publish_post(title=post.title, body=post.body, image_url=post.image_url)
+    except TelegramContentTooLong as exc:
+        raise HTTPException(400, str(exc)) from exc
     except TelegramPublishError as exc:
         raise HTTPException(502, str(exc)) from exc
     post.status = "published"

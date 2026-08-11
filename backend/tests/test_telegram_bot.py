@@ -293,6 +293,35 @@ def test_channel_publishing_uses_the_same_proxy(monkeypatch):
     assert seen.get("proxy") == "socks5://127.0.0.1:40000"
 
 
+def test_publish_post_rejects_oversized_photo_caption(monkeypatch):
+    """Подпись к фото ограничена 1024 символами Telegram. Раньше текст молча
+    резался (text[:1024]) — админ получал «успех» и обрезанный пост в канале."""
+    import app.services.telegram_publisher as publisher
+
+    monkeypatch.setattr(settings, "TELEGRAM_CHANNEL_ID", "@channel", raising=False)
+
+    def fail_post(*a, **kw):
+        raise AssertionError("не должно дойти до сети — лимит проверяется раньше")
+
+    monkeypatch.setattr(publisher.httpx, "post", fail_post)
+    with pytest.raises(publisher.TelegramContentTooLong):
+        publisher.publish_post(title="T", body="x" * 1100, image_url="https://example.com/a.jpg")
+
+
+def test_publish_post_rejects_oversized_text_message(monkeypatch):
+    """Обычное сообщение (без фото) ограничено 4096 символами."""
+    import app.services.telegram_publisher as publisher
+
+    monkeypatch.setattr(settings, "TELEGRAM_CHANNEL_ID", "@channel", raising=False)
+
+    def fail_post(*a, **kw):
+        raise AssertionError("не должно дойти до сети — лимит проверяется раньше")
+
+    monkeypatch.setattr(publisher.httpx, "post", fail_post)
+    with pytest.raises(publisher.TelegramContentTooLong):
+        publisher.publish_post(title="T", body="x" * 4200, image_url=None)
+
+
 # ------------------------------------------------- deep link из канала
 
 def test_start_payload_is_parsed():

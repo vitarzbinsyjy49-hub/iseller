@@ -36,6 +36,18 @@ class TelegramRateLimited(TelegramPublishError):
         self.retry_after = retry_after
 
 
+class TelegramContentTooLong(TelegramPublishError):
+    """Собранный текст превышает лимит Telegram (подпись к фото — 1024 симв.,
+    обычное сообщение — 4096). Раньше это резалось молча (text[:N]) — админ
+    получал успех в ответе и обрезанный текст в канале."""
+
+
+#: Подпись к фото — Bot API режет caption на этой длине.
+MAX_CAPTION_LENGTH = 1024
+#: Обычное текстовое сообщение без фото.
+MAX_MESSAGE_LENGTH = 4096
+
+
 def _sleep(seconds: float) -> None:  # вынесено ради подмены в тестах
     time.sleep(seconds)
 
@@ -183,16 +195,25 @@ def publish_post(*, title: str, body: str, image_url: str | None) -> int:
         image_url = f"{public_base}{image_url}" if public_base else None
 
     if image_url:
+        if len(text) > MAX_CAPTION_LENGTH:
+            raise TelegramContentTooLong(
+                f"Текст с фото ограничен {MAX_CAPTION_LENGTH} символами "
+                f"(сейчас {len(text)}). Сократите текст или уберите изображение."
+            )
         result = call("sendPhoto", {
             "chat_id": settings.TELEGRAM_CHANNEL_ID,
             "photo": image_url,
-            "caption": text[:1024],
+            "caption": text,
             "parse_mode": "HTML",
         })
     else:
+        if len(text) > MAX_MESSAGE_LENGTH:
+            raise TelegramContentTooLong(
+                f"Текст ограничен {MAX_MESSAGE_LENGTH} символами (сейчас {len(text)})."
+            )
         result = call("sendMessage", {
             "chat_id": settings.TELEGRAM_CHANNEL_ID,
-            "text": text[:4096],
+            "text": text,
             "parse_mode": "HTML",
         })
     return int(result["message_id"])
