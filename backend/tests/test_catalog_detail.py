@@ -133,30 +133,34 @@ def test_feed_has_four_sections_recommended_dedup(client, db):
     assert len(data["recommended"]) >= 1
 
 
-def test_card_splits_region_flags_out_of_title():
-    """Регион показывается флагом, а не кодом внутри названия.
+def test_card_splits_region_codes_out_of_title():
+    """Регион отдаётся списком кодов, а не эмодзи-строкой и не кодом в названии.
 
-    В канале это делается давно, на витрине название приходило как есть — и
-    на узкой карточке «(HK-KR, SIM+eSIM)» ещё и обрезалось. Разбирает строку
-    тот же split_region, поэтому канал и приложение не могут разойтись.
+    В канале регион давно показывается эмодзи-флагом, на витрине название
+    приходило как есть — и на узкой карточке «(HK-KR, SIM+eSIM)» ещё и
+    обрезалось. Список кодов, а не готовые эмодзи: Windows штатно не
+    собирает пару «региональных индикаторов» в картинку флага и показывает
+    их как есть, буквами («🇮🇳🇺🇸🇭🇰» -> нечитаемое «INUSHK») — витрина рисует
+    коды своими SVG. Разбирает тот же split_region_codes, что и канал
+    (через обёртку split_region), поэтому они не могут разойтись.
     """
     from app.models.product import Product
 
     card = Product(title="Apple iPhone 17 Pro 256 ГБ Blue (HK-KR, SIM+eSIM)",
                    price=99800, category="смартфоны").to_card()
 
-    assert card["region_flags"] == "🇭🇰🇰🇷"
+    assert card["region_codes"] == ["HK", "KR"]
     assert card["title_clean"] == "Apple iPhone 17 Pro 256 ГБ Blue (SIM+eSIM)"
     # Оригинал не трогаем: по нему ищут, им делятся, он уходит в AI.
     assert card["title"] == "Apple iPhone 17 Pro 256 ГБ Blue (HK-KR, SIM+eSIM)"
 
 
 def test_card_without_region_keeps_title_intact():
-    """Нет кода страны — нет флагов, название остаётся прежним."""
+    """Нет кода страны — пустой список кодов, название остаётся прежним."""
     from app.models.product import Product
 
     card = Product(title="Dyson Airwrap Complete", price=45000,
                    category="красота").to_card()
 
-    assert card["region_flags"] == ""
+    assert card["region_codes"] == []
     assert card["title_clean"] == "Dyson Airwrap Complete"

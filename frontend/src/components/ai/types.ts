@@ -18,11 +18,13 @@ export type ProductCard = {
   /** Оригинальное название с кодом страны — по нему ищут и им делятся. */
   title: string;
   /** Название без кода страны: его и показываем рядом с флагами.
-   *  Разбирает backend (services/price_posts.split_region) — тот же разбор,
-   *  что и в постах канала, чтобы они не разошлись. */
+   *  Разбирает backend (services/price_posts.split_region_codes) — тот же
+   *  разбор, что и в постах канала, чтобы они не разошлись. */
   title_clean?: string;
-  /** Флаги стран поставки, вынутые из названия («🇭🇰🇰🇷»). Пусто — региона нет. */
-  region_flags?: string;
+  /** Коды регионов поставки, вынутые из названия (["HK","KR"]). Пусто — региона
+   *  нет. Список кодов, а не готовая строка эмодзи: рисуем сами SVG-флагами
+   *  (components/flags.tsx) — Windows не собирает эмодзи-флаги в картинку. */
+  region_codes?: string[];
   brand: string | null;
   category?: string | null;
   price: number;

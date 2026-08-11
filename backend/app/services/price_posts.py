@@ -104,23 +104,30 @@ REGION_FLAGS: dict[str, str] = {
 _PARENS_RE = re.compile(r"\s*\(([^)]*)\)")
 
 
-def _flags_for(token: str) -> str | None:
-    """Флаги для «HK» или «HK-KR», иначе None (значит это не регион)."""
+def _codes_for(token: str) -> list[str] | None:
+    """Коды для «HK» или «HK-KR», иначе None (значит это не регион)."""
     parts = [p.strip().upper() for p in token.split("-") if p.strip()]
     if not parts or not all(p in REGION_FLAGS for p in parts):
         return None
-    return "".join(REGION_FLAGS[p] for p in parts)
+    return parts
 
 
-def split_region(title: str) -> tuple[str, str]:
-    """Вынести флаги страны из названия: («🇭🇰🇰🇷», «iPhone 17 Pro (SIM+eSIM)»).
+def split_region_codes(title: str) -> tuple[list[str], str]:
+    """Вынести регион из названия как СПИСОК КОДОВ (не готовую строку эмодзи).
+
+    Общая основа для split_region (эмодзи для постов канала — там свой шрифт
+    Telegram, эмодзи-флаги рисуются надёжно) и для витрины, где вместо эмодзи
+    нужны SVG-иконки: Windows штатно НЕ собирает пару «региональных индикаторов»
+    в картинку флага и показывает их как есть, буквами («🇮🇳🇺🇸🇭🇰» превращается в
+    нечитаемое «INUSHK»). Список кодов вместо строки даёт фронту материал для
+    любого рендера — эмодзи, SVG, текст с разделителями.
 
     В скобках у товара может лежать и регион, и важное уточнение
-    (SIM+eSIM, Case, конфигурация памяти). Флагом заменяем ТОЛЬКО то, что
+    (SIM+eSIM, Case, конфигурация памяти). Кодом заменяем ТОЛЬКО то, что
     целиком является кодом страны; всё остальное остаётся в названии как было —
     потерять «SIM+eSIM» или «16GB/512GB» значит слить разные позиции в одну.
     """
-    flags: list[str] = []
+    codes: list[str] = []
 
     def replace(match: re.Match) -> str:
         kept: list[str] = []
@@ -128,15 +135,26 @@ def split_region(title: str) -> tuple[str, str]:
             token = part.strip()
             if not token:
                 continue
-            found = _flags_for(token)
+            found = _codes_for(token)
             if found:
-                flags.append(found)
+                codes.extend(found)
             else:
                 kept.append(token)
         return f" ({', '.join(kept)})" if kept else ""
 
     cleaned = _PARENS_RE.sub(replace, title).strip()
-    return "".join(flags), cleaned
+    return codes, cleaned
+
+
+def split_region(title: str) -> tuple[str, str]:
+    """Вынести флаги страны из названия: («🇭🇰🇰🇷», «iPhone 17 Pro (SIM+eSIM)»).
+
+    Обёртка над split_region_codes для постов канала — там эмодзи-флаги
+    рендерятся надёжно (свой шрифт Telegram-клиента). На витрине этой строкой
+    больше не пользуемся, см. split_region_codes.
+    """
+    codes, cleaned = split_region_codes(title)
+    return "".join(REGION_FLAGS[c] for c in codes), cleaned
 
 
 _MEMORY_RE = re.compile(r"^\d+\s*(ГБ|ТБ|GB|TB)$", re.IGNORECASE)

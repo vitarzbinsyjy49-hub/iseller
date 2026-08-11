@@ -513,14 +513,11 @@ function ProductCard({ card, compact, onOpen }: Props) {
           )}
         </div>
         <button onClick={open} onPointerDown={() => preloadRoute("/product")} className="block w-full text-left">
-          {/* Флаг региона впереди названия, а не кодом внутри него. На узкой
-              карточке «(HK-KR, SIM+eSIM)» съедало строку и чаще всего
-              обрезалось на середине — покупатель видел обрывок кода вместо
-              страны. Разбор делает backend, здесь только показ. */}
+          {/* Название на карточке — чистое, без приставки региона: товары
+              должны начинаться с модели («iPhone 17 Pro…»), а не с флага
+              перед ней. title_clean уже вырезает «(HK-KR, SIM+eSIM)» из
+              текста; сам регион — на странице товара, во вкладке «Описание». */}
           <p className="mt-1 line-clamp-2 min-h-[2.35rem] text-[13px] font-medium leading-[1.35]">
-            {card.region_flags && (
-              <span className="mr-1 align-baseline" aria-hidden>{card.region_flags}</span>
-            )}
             {productName(card)}
           </p>
         </button>

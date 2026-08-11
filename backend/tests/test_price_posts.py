@@ -429,6 +429,23 @@ def test_non_region_parentheses_survive():
     assert cleaned == "Apple MacBook Pro 14 (M5 16GB 512GB)"
 
 
+def test_split_region_codes_gives_the_raw_list_for_the_storefront():
+    """Витрина берёт список кодов, а не готовую строку эмодзи.
+
+    split_region (эмодзи) — тонкая обёртка над этой функцией для постов
+    канала. Одна и та же разборка правил, два разных представления региона.
+    """
+    from app.services.price_posts import split_region_codes
+
+    codes, cleaned = split_region_codes("Apple iPhone 17 Pro 1 ТБ Blue (HK-KR, SIM+eSIM)")
+    assert codes == ["HK", "KR"]
+    assert cleaned == "Apple iPhone 17 Pro 1 ТБ Blue (SIM+eSIM)"
+
+    codes, cleaned = split_region_codes("Dyson Airwrap Complete")
+    assert codes == []
+    assert cleaned == "Dyson Airwrap Complete"
+
+
 def test_product_without_region_keeps_the_bullet():
     section = SECTIONS_BY_SLUG["price_iphone"]
     line = product_line(product(title="Apple iPhone 17 Pro"), section)

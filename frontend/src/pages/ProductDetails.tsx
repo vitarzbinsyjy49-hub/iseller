@@ -9,6 +9,7 @@ import ProductCardView from "../components/ProductCard";
 import { formatPrice, discountPct } from "../lib/format";
 import { ProductImage, Badge, FavButton } from "../components/ProductCard";
 import { Icon, type IconName } from "../components/icons";
+import { RegionFlags } from "../components/flags";
 import { ErrorState } from "../components/StateViews";
 import LeadForm from "../components/LeadForm";
 import { haptic, isInsideTelegram, openExternalLink } from "../lib/telegram";
@@ -264,13 +265,14 @@ export default function ProductDetails() {
       <p className="mt-4 text-xs text-muted lg:hidden">{p.brand}{p.category ? ` · ${p.category}` : ""}</p>
       {/* Заголовок занимает всю ширину колонки и переносится полностью:
           ни truncate, ни line-clamp — действия больше не стоят поверх него. */}
+      {/* Флаг региона убран из заголовка намеренно: название должно начинаться
+          с модели («iPhone 17 Pro…», «Mac Mini…»), а не с приставки перед ней.
+          Регион — условие покупки не менее нужное, чем гарантия, но живёт в
+          описании (см. вкладку «Описание»), а не занимает место в заголовке
+          каждой карточки и каждого товара. */}
       <h1 className="mt-1 text-xl font-bold leading-6 lg:mt-0 lg:text-[28px] lg:leading-9">
-        {p.region_flags && <span className="mr-1.5 align-baseline" aria-hidden>{p.region_flags}</span>}
         {p.title_clean || p.title}
       </h1>
-      {/* Флаг — картинка, скринридеру он молчит. Регион словами: у товара это
-          не украшение, а условие покупки (комплект, вариант SIM, гарантия). */}
-      {p.region_flags && <p className="sr-only">Регион поставки указан флагом страны</p>}
 
       {/* Состояние + ключевые характеристики одной строкой */}
       {(p.condition === "used" || p.condition === "refurbished" || p.color || p.memory || p.storage) && (
@@ -388,6 +390,16 @@ export default function ProductDetails() {
 
       {tab === "desc" && (
         <div className="fade-in mt-3 rounded-xl2 bg-surface p-4 shadow-soft">
+          {/* Регион переехал сюда из заголовка: он важен для покупки (комплект,
+              вариант SIM), но не должен занимать место перед названием
+              товара на каждой карточке. */}
+          {p.region_codes && p.region_codes.length > 0 && (
+            <div className="mb-3 flex items-center gap-2 border-b border-border pb-3">
+              <span className="text-xs text-muted">Регион поставки:</span>
+              <RegionFlags codes={p.region_codes} />
+              <span className="text-xs font-medium">{p.region_codes.join(", ")}</span>
+            </div>
+          )}
           <p className="text-sm leading-relaxed text-muted">
             {p.description || "Описание уточняется — задайте вопрос менеджеру, ответим быстро."}
           </p>
