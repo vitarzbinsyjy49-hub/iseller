@@ -13,10 +13,14 @@ const STATUS: Record<PostStatus, string> = {
 };
 const KIND: Record<string, string> = { news: "Новость", guide: "Польза", opinion: "Разбор" };
 
+type PostDraft = Pick<ChannelPost, "title" | "body" | "image_url" | "kind" | "sources">;
+const BLANK_DRAFT: PostDraft = { title: "", body: "", image_url: null, kind: "news", sources: [] };
+
 export function Posts({ token }: { token: string }) {
   const [posts, setPosts] = useState<ChannelPost[]>([]);
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<ChannelPost | null>(null);
+  const [creating, setCreating] = useState<PostDraft | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -30,7 +34,7 @@ export function Posts({ token }: { token: string }) {
 
   async function action(path: string, body: unknown = {}) {
     setError("");
-    try { await apiPost(path, token, body); load(); } catch (e) { setError(String(e)); }
+    try { await apiPost(path, token, body); load(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
 
   async function save() {
@@ -42,7 +46,16 @@ export function Posts({ token }: { token: string }) {
         kind: editing.kind, sources: editing.sources,
       });
       setEditing(null); load();
-    } catch (e) { setError(String(e)); }
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+
+  async function createPost() {
+    if (!creating) return;
+    setError("");
+    try {
+      await apiPost("/admin/posts", token, creating);
+      setCreating(null); load();
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
 
   async function publish(post: ChannelPost) {
@@ -55,6 +68,7 @@ export function Posts({ token }: { token: string }) {
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap", marginBottom: 16 }}>
         <div><h2 style={{ margin: 0, fontSize: 22 }}>Посты</h2><p style={{ color: C.sub, margin: "5px 0 0" }}>Черновики не публикуются без вашего подтверждения.</p></div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button style={btn} onClick={() => setCreating({ ...BLANK_DRAFT })}>Новый пост</button>
           {["", "draft", "approved", "published", "rejected"].map((s) =>
             <button key={s || "all"} style={chip(filter === s)} onClick={() => setFilter(s)}>{s ? STATUS[s as PostStatus] : "Все"}</button>)}
         </div>
@@ -65,7 +79,8 @@ export function Posts({ token }: { token: string }) {
           {posts.map((p) => <PostCard key={p.id} post={p} onEdit={() => setEditing({ ...p })}
             onApprove={() => action(`/admin/posts/${p.id}/approve`)} onReject={() => action(`/admin/posts/${p.id}/reject`)} onPublish={() => publish(p)} />)}
         </div>}
-      {editing && <Editor post={editing} setPost={setEditing} onClose={() => setEditing(null)} onSave={save} />}
+      {editing && <Editor post={editing} setPost={setEditing} onClose={() => setEditing(null)} onSave={save} published={editing.status === "published"} />}
+      {creating && <Editor post={creating} setPost={setCreating} onClose={() => setCreating(null)} onSave={createPost} isNew />}
     </div>
   );
 }
@@ -87,7 +102,7 @@ function PostCard({ post, onEdit, onApprove, onReject, onPublish }: { post: Chan
       <p style={{ margin: 0, color: C.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{post.body}</p>
       {post.sources.length > 0 && <div style={{ marginTop: 8, color: C.sub, fontSize: 12 }}>Источники: {post.sources.length}</div>}
       <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-        {post.status !== "published" && <button style={btnGhost} onClick={onEdit}>Редактировать</button>}
+        <button style={btnGhost} onClick={onEdit}>Редактировать</button>
         {post.status !== "approved" && post.status !== "published" && <button style={btn} onClick={onApprove}>Одобрить</button>}
         {post.status === "approved" && <button style={{ ...btn, background: C.green }} onClick={onPublish}>Опубликовать</button>}
         {post.status !== "rejected" && post.status !== "published" && <button style={{ ...btnGhost, color: C.red }} onClick={onReject}>Отклонить</button>}
@@ -96,16 +111,37 @@ function PostCard({ post, onEdit, onApprove, onReject, onPublish }: { post: Chan
   </article>;
 }
 
-function Editor({ post, setPost, onClose, onSave }: { post: ChannelPost; setPost: (p: ChannelPost) => void; onClose: () => void; onSave: () => void }) {
+function Editor<T extends PostDraft>({
+  post, setPost, onClose, onSave, isNew, published,
+}: {
+  post: T; setPost: (p: T) => void; onClose: () => void; onSave: () => void;
+  isNew?: boolean; published?: boolean;
+}) {
+  const limit = post.image_url ? 1024 : 4096;
+  const overLimit = post.body.length > limit;
   return <div style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,.45)", display: "grid", placeItems: "center", zIndex: 50, padding: 16 }} onMouseDown={onClose}>
     <div style={{ ...card, width: "min(720px, 100%)", maxHeight: "90vh", overflowY: "auto" }} onMouseDown={(e) => e.stopPropagation()}>
-      <h2 style={{ marginTop: 0 }}>Редактирование поста</h2>
+      <h2 style={{ marginTop: 0 }}>{isNew ? "Новый пост" : "Редактирование поста"}</h2>
       <label style={{ color: C.sub, fontSize: 13 }}>Заголовок<input style={input} value={post.title} onChange={(e) => setPost({ ...post, title: e.target.value })} /></label>
       <label style={{ color: C.sub, fontSize: 13, display: "block", marginTop: 12 }}>Текст<textarea style={{ ...input, minHeight: 190, resize: "vertical" }} value={post.body} onChange={(e) => setPost({ ...post, body: e.target.value })} /></label>
+      <div style={{ color: overLimit ? C.red : C.sub, fontSize: 12, marginTop: 4 }}>
+        {post.body.length}/{limit} символов{post.image_url ? " (с фото лимит короче)" : ""}
+      </div>
       <label style={{ color: C.sub, fontSize: 13, display: "block", marginTop: 12 }}>URL изображения<input style={input} value={post.image_url || ""} onChange={(e) => setPost({ ...post, image_url: e.target.value || null })} /></label>
       <label style={{ color: C.sub, fontSize: 13, display: "block", marginTop: 12 }}>Источники — по одному URL на строку<textarea style={{ ...input, minHeight: 80 }} value={post.sources.join("\n")} onChange={(e) => setPost({ ...post, sources: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean) })} /></label>
-      <p style={{ color: C.sub, fontSize: 12 }}>После изменения прежнее одобрение автоматически снимается.</p>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><button style={btnGhost} onClick={onClose}>Отмена</button><button style={btn} onClick={onSave}>Сохранить черновик</button></div>
+      <p style={{ color: C.sub, fontSize: 12 }}>
+        {isNew
+          ? "Черновик не публикуется без вашего подтверждения."
+          : published
+            ? "Пост уже опубликован — правка сразу обновит текст в канале на том же сообщении."
+            : "После изменения прежнее одобрение автоматически снимается."}
+      </p>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <button style={btnGhost} onClick={onClose}>Отмена</button>
+        <button style={btn} disabled={!post.title.trim() || !post.body.trim() || overLimit} onClick={onSave}>
+          {isNew ? "Создать черновик" : "Сохранить"}
+        </button>
+      </div>
     </div>
   </div>;
 }
