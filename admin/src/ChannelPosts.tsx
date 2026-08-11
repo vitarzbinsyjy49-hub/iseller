@@ -66,7 +66,13 @@ export function ChannelPosts({ token }: { token: string }) {
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { apiGet<KindsResp>("/admin/price-posts/info/button-kinds", token).then(setKinds).catch(() => {}); }, [token]);
+  useEffect(() => {
+    apiGet<KindsResp>("/admin/price-posts/info/button-kinds", token)
+      .then(setKinds)
+      .catch((e) => setError(e instanceof Error
+        ? e.message
+        : "Не удалось загрузить типы кнопок — «Новый пост» и «Редактировать» не откроются"));
+  }, [token]);
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true); setError(""); setResult(null);
