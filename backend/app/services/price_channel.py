@@ -396,6 +396,13 @@ def apply_plan(
                 db.add(row)
             row.status = "error"
             row.last_error = str(exc)[:500]
+            # Сообщение удалили из канала руками, а message_id остался в базе —
+            # пост залипает в ошибке навсегда: каждая следующая попытка снова
+            # правит то, чего нет. Забываем id, чтобы следующий запуск отправил
+            # пост заново. Та же защита, что у apply_info_posts (см. там же
+            # объяснение, почему только по этой формулировке ошибки).
+            if _MESSAGE_GONE.search(str(exc)):
+                row.telegram_message_id = None
             db.commit()
             logger.warning("прайс-пост %s: %s", plan.slug, exc)
             result.failed.append((plan.slug, str(exc)))

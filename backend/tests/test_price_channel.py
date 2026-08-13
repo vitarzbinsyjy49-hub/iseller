@@ -185,6 +185,36 @@ def test_failure_is_recorded_on_the_post(db, catalog, telegram):
     assert rows and "Too Many Requests" in (rows[0].last_error or "")
 
 
+def test_deleted_price_post_is_republished_next_run(db, catalog, telegram, monkeypatch):
+    """Прайс-пост, удалённый из канала руками, не залипает в ошибке навсегда.
+
+    Реальный случай на проде: price_iphone_p3 удалили из канала, message_id
+    остался в базе — каждая правка пыталась редактировать то, чего нет, и
+    статус молча оставался «published». Та же защита, что у
+    apply_info_posts (test_info_posts.py::test_deleted_message_is_republished_next_run),
+    только apply_plan её раньше не имел вовсе."""
+    price_channel.apply_plan(db, on_date=TODAY, slugs=["price_iphone"])
+    published_id = db.query(ChannelPost).filter_by(slug="price_iphone").one().telegram_message_id
+    assert published_id is not None
+
+    def gone(**kw):
+        raise TelegramPublishError("Bad Request: message to edit not found")
+
+    monkeypatch.setattr(price_channel, "edit_message", gone)
+    catalog[0].price = 87000
+    db.commit()
+    result = price_channel.apply_plan(db, on_date=TODAY, slugs=["price_iphone"])
+
+    assert [slug for slug, _ in result.failed] == ["price_iphone"]
+    assert db.query(ChannelPost).filter_by(slug="price_iphone").one().telegram_message_id is None
+
+    # Следующий запуск — уже обычная отправка, без ручного вмешательства.
+    monkeypatch.setattr(price_channel, "edit_message", telegram.edit_message)
+    again = price_channel.apply_plan(db, on_date=TODAY, slugs=["price_iphone"])
+    assert again.created == ["price_iphone"]
+    assert db.query(ChannelPost).filter_by(slug="price_iphone").one().telegram_message_id is not None
+
+
 def test_dry_run_touches_nothing(db, catalog, telegram):
     result = price_channel.apply_plan(db, on_date=TODAY, dry_run=True)
 
