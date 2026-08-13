@@ -213,6 +213,41 @@ def test_long_section_is_split_without_cutting_product_lines():
     assert total == len(products)
 
 
+def test_tail_page_merges_into_previous_when_it_safely_fits():
+    """Реальный инцидент на проде: 148 iPhone разъехались на 3 сообщения,
+    третье — «Часть 3 из 3» с единственным товаром (iPhone Air 1 ТБ White),
+    потому что последний блок не влез в SAFE_TEXT_LIMIT предыдущей страницы
+    буквально впритык. У хвоста расти уже некуда, поэтому для НЕГО меряем
+    настоящий лимит Telegram, а не запасливый SAFE_TEXT_LIMIT — и он
+    приклеивается к предыдущей странице вместо отдельного сообщения.
+
+    165 одинаковых товаров — минимальное воспроизведение того же разрыва:
+    без объединения это 163+2 (см. test_tail_page_does_not_merge_when_it_does_not_fit
+    для точки, где приклеивание корректно НЕ происходит)."""
+    section = SECTIONS_BY_SLUG["price_iphone"]
+    products = [product(sku=f"S{i}", title="iPhone 17", price=90000 + i) for i in range(165)]
+
+    posts = render_section(products, section, TODAY, MINI_APP, MANAGER)
+
+    assert len(posts) == 1                        # не 2 с огрызком в 2 товара
+    assert posts[0].item_count == 165
+    assert len(posts[0].text) <= TELEGRAM_TEXT_LIMIT
+
+
+def test_tail_page_does_not_merge_when_it_does_not_fit():
+    """Приклеивание — не любой ценой: если реально не влезает в лимит
+    Telegram, страница остаётся отдельной, а не переполняет сообщение."""
+    section = SECTIONS_BY_SLUG["price_iphone"]
+    products = [product(sku=f"S{i}", title="Apple iPhone 17 Pro Max Deep Blue Titanium Ultra", price=90000 + i)
+                for i in range(72)]
+
+    posts = render_section(products, section, TODAY, MINI_APP, MANAGER)
+
+    assert len(posts) == 2
+    assert all(len(p.text) <= TELEGRAM_TEXT_LIMIT for p in posts)
+    assert sum(p.item_count for p in posts) == len(products)
+
+
 def test_first_part_keeps_the_base_slug():
     """Иначе уже опубликованный раздел «переедет» на новый id, когда впервые разделится."""
     section = SECTIONS_BY_SLUG["price_iphone"]
