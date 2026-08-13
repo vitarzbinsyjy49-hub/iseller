@@ -30,6 +30,18 @@ def bot_settings(monkeypatch):
     monkeypatch.setattr(settings, "TELEGRAM_WEBHOOK_SECRET", SECRET, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def clear_bot_message_tracking():
+    """`_last_bot_message` — состояние процесса, общее для всех тестов.
+
+    Без сброса тест, использующий chat_id 555 (стандартный в этом файле),
+    может неожиданно унаследовать message_id от предыдущего теста и получить
+    лишний вызов deleteMessage."""
+    telegram_bot._last_bot_message.clear()
+    yield
+    telegram_bot._last_bot_message.clear()
+
+
 def private_message(text: str, chat_id: int = 555) -> dict:
     return {
         "update_id": 1,
@@ -71,6 +83,13 @@ def test_start_text_matches_spec():
     assert reply.text.startswith("Добро пожаловать в AI Seller 👋")
     assert "Техника Apple, Dyson и PlayStation по актуальным ценам." in reply.text
     assert "AI-подбором" in reply.text
+
+
+def test_welcome_includes_legal_disclaimer():
+    """Снимает риск квалификации как «дистанционной торговли»: сделка (оплата,
+    передача товара) идёт очно, а не через бота/приложение."""
+    assert "не интернет-магазин" in telegram_bot.WELCOME
+    assert "очно" in telegram_bot.WELCOME
 
 
 def test_start_keyboard_layout_and_routes():
@@ -200,20 +219,25 @@ def test_webhook_is_disabled_when_secret_not_configured(client, monkeypatch):
 
 def test_webhook_sends_reply(client, monkeypatch):
     sent: list[tuple] = []
-    monkeypatch.setattr(telegram_bot, "send_reply", lambda chat_id, reply: sent.append((chat_id, reply)))
-    monkeypatch.setattr("app.api.telegram.send_reply", lambda chat_id, reply: sent.append((chat_id, reply)))
+
+    def fake_send(chat_id, reply, incoming_message_id=None):
+        sent.append((chat_id, reply, incoming_message_id))
+
+    monkeypatch.setattr(telegram_bot, "send_reply", fake_send)
+    monkeypatch.setattr("app.api.telegram.send_reply", fake_send)
     r = client.post("/api/telegram/webhook", json=private_message("/start", chat_id=777),
                     headers={"X-Telegram-Bot-Api-Secret-Token": SECRET})
     assert r.status_code == 200 and r.json() == {"ok": True}
     assert len(sent) == 1
-    chat_id, reply = sent[0]
+    chat_id, reply, incoming_message_id = sent[0]
     assert chat_id == 777
     assert reply.text.startswith("Добро пожаловать")
+    assert incoming_message_id == 10  # message_id из private_message()
 
 
 def test_webhook_answers_200_even_if_sending_fails(client, monkeypatch):
     """Иначе Telegram будет ретраить и пользователь получит дубли ответов."""
-    def boom(chat_id, reply):
+    def boom(chat_id, reply, incoming_message_id=None):
         raise RuntimeError("Telegram недоступен")
     monkeypatch.setattr("app.api.telegram.send_reply", boom)
     r = client.post("/api/telegram/webhook", json=private_message("/start"),
@@ -229,7 +253,7 @@ def test_webhook_survives_broken_body(client):
 
 
 def test_webhook_does_not_leak_internals(client, monkeypatch):
-    def boom(chat_id, reply):
+    def boom(chat_id, reply, incoming_message_id=None):
         raise RuntimeError("секрет в тексте ошибки")
     monkeypatch.setattr("app.api.telegram.send_reply", boom)
     r = client.post("/api/telegram/webhook", json=private_message("/start"),
@@ -447,6 +471,67 @@ def test_send_reply_retries_through_the_publisher(monkeypatch):
     with pytest.raises(TelegramPublishError):
         telegram_bot.send_reply(555, Reply("привет"))
     assert len(calls) == MAX_ATTEMPTS, "отправка обязана повторяться, а не сдаваться сразу"
+
+
+# --------------------------------------- чистый чат: одно сообщение бота, входящая команда удаляется
+
+def test_send_reply_deletes_previous_bot_message_before_sending_a_new_one(monkeypatch):
+    """Второй ответ бота в тот же чат удаляет первый — правило действует для
+    любой команды (/catalog, /ai, главное меню), а не только для кликов по
+    кнопкам канала, как было в мини-фиксе."""
+    calls = []
+    monkeypatch.setattr(
+        "app.services.telegram_publisher.call",
+        lambda method, payload: calls.append((method, payload)) or {"message_id": len(calls) + 100},
+    )
+
+    telegram_bot.send_reply(555, Reply("раздел 1"))
+    telegram_bot.send_reply(555, Reply("раздел 2"))
+
+    assert [c[0] for c in calls] == ["sendMessage", "deleteMessage", "sendMessage"]
+    assert calls[1][1] == {"chat_id": 555, "message_id": 101}
+
+
+def test_send_reply_deletes_the_incoming_command_message(monkeypatch):
+    """/start, /catalog и т.п., отправленные самим пользователем, не должны
+    оставаться в чате — удаляются вместе с отправкой ответа."""
+    calls = []
+    monkeypatch.setattr(
+        "app.services.telegram_publisher.call",
+        lambda method, payload: calls.append((method, payload)) or {"message_id": 1},
+    )
+
+    telegram_bot.send_reply(555, Reply("ответ"), incoming_message_id=42)
+
+    assert ("deleteMessage", {"chat_id": 555, "message_id": 42}) in calls
+
+
+def test_send_reply_without_incoming_message_id_does_not_delete_anything_extra(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "app.services.telegram_publisher.call",
+        lambda method, payload: calls.append((method, payload)) or {"message_id": 1},
+    )
+
+    telegram_bot.send_reply(555, Reply("ответ"))
+
+    assert [c[0] for c in calls] == ["sendMessage"]
+
+
+def test_send_reply_ignores_delete_failures(monkeypatch):
+    """Сообщение могло быть уже удалено вручную (своё или чужое) — апдейт
+    всё равно должен обработаться, а не упасть на удалении."""
+    from app.services.telegram_publisher import TelegramPublishError
+
+    def fake_call(method, payload):
+        if method == "deleteMessage":
+            raise TelegramPublishError("message to delete not found")
+        return {"message_id": 1}
+
+    monkeypatch.setattr("app.services.telegram_publisher.call", fake_call)
+    telegram_bot._last_bot_message[555] = 999
+
+    telegram_bot.send_reply(555, Reply("раздел"), incoming_message_id=42)  # не должно бросить
 
 
 def test_section_reply_escapes_the_title(monkeypatch):

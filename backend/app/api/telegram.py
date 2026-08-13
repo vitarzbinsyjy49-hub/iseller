@@ -52,10 +52,11 @@ async def telegram_webhook(
         reply = build_reply(update)
         if reply is None:
             return {"ok": True}
-        chat_id = ((update.get("message") or {}).get("chat") or {}).get("id")
+        message = update.get("message") or {}
+        chat_id = (message.get("chat") or {}).get("id")
         if chat_id is None:
             return {"ok": True}
-        send_reply(chat_id, reply)
+        send_reply(chat_id, reply, incoming_message_id=message.get("message_id"))
     except Exception:  # noqa: BLE001 — см. пункт 1 в докстринге модуля
         logger.exception(
             "telegram webhook: не удалось обработать апдейт %s",

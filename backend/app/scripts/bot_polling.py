@@ -287,10 +287,11 @@ def run() -> int:
                     reply = build_reply(update)
                     if reply is None:
                         continue
-                    chat_id = ((update.get("message") or {}).get("chat") or {}).get("id")
+                    message = update.get("message") or {}
+                    chat_id = (message.get("chat") or {}).get("id")
                     if chat_id is None:
                         continue
-                    send_reply(chat_id, reply)
+                    send_reply(chat_id, reply, incoming_message_id=message.get("message_id"))
                     logger.info("ответ отправлен в чат %s", chat_id)
                 except Exception:  # noqa: BLE001 — один плохой апдейт не роняет бота
                     logger.exception("не удалось обработать апдейт %s", update.get("update_id"))
