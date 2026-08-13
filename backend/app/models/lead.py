@@ -6,7 +6,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Index, Integer, Numeric, String, Text, func, text
+from sqlalchemy import JSON, BigInteger, DateTime, Index, Integer, Numeric, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -54,7 +54,9 @@ class Lead(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int | None] = mapped_column(Integer, index=True)
-    telegram_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    # BigInteger, как у users.telegram_id: Telegram уже выдаёт id за пределами
+    # 32-битного INTEGER (например 7678374811) — заявка падала на INSERT.
+    telegram_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
     name: Mapped[str | None] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(64))
     username: Mapped[str | None] = mapped_column(String(200))

@@ -208,6 +208,12 @@ def _apply_demo_migrations() -> None:
         # (auth_telegram пишет photo_url при каждом логине), досрочно ничего
         # не дозаполняем.
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url VARCHAR(512)",
+        # telegram_id заявки был 32-битным INTEGER — Telegram уже выдаёт id за
+        # пределами этого диапазона (например 7678374811), и INSERT падал с
+        # "integer out of range" на ЛЮБОЙ заявке такого пользователя (корзина,
+        # price_offer, сценарные). users.telegram_id уже BigInteger, здесь —
+        # тот же тип, что и должен был быть с самого начала.
+        "ALTER TABLE leads ALTER COLUMN telegram_id TYPE BIGINT",
     ]
     for stmt in statements:
         try:

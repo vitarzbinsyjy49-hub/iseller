@@ -5,6 +5,7 @@
 """
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import BigInteger
 
 from app.api.deps import get_current_admin, get_current_user
 from app.db.session import get_db
@@ -13,6 +14,16 @@ from app.models.lead import Lead
 from app.models.notification import Notification
 from app.models.user import User
 from tests.conftest import make_product
+
+
+def test_lead_telegram_id_column_is_big_integer():
+    """Регрессия на проде: telegram_id стал 32-битным Integer, а Telegram уже
+    выдаёт id за пределами этого диапазона (например 7678374811) — любая
+    заявка (price_offer, корзина) падала на INSERT с "integer out of range".
+    SQLite это не ловит (нет типовых границ), поэтому проверяем саму
+    объявленную колонку, а не round-trip значения. users.telegram_id и
+    notifications.chat_id уже BigInteger — leads был единственным исключением."""
+    assert isinstance(Lead.__table__.c.telegram_id.type, BigInteger)
 
 
 @pytest.fixture()
