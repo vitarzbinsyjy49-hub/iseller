@@ -73,7 +73,9 @@ export type AppEvent =
   // Переход в AI с карточки товара. Payload — только product_id.
   | "ai_product_context_opened"
   // Чип BETA на главной: сколько людей вообще интересуются, куда идёт проект.
-  | "beta_roadmap_opened";
+  | "beta_roadmap_opened"
+  // Ссылка «О сервисе» в самом низу главной (юридический дисклеймер).
+  | "about_service_opened";
 
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();

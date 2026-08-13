@@ -26,6 +26,7 @@ import { ClaudeMark } from "../components/ClaudeMark";
 import { BrandWordmark } from "../components/BrandMark";
 
 const BetaRoadmapSheet = lazy(() => import("../components/BetaRoadmapSheet"));
+const AboutServiceSheet = lazy(() => import("../components/AboutServiceSheet"));
 import { autoplayReady, nextSlideIndex, snapTargetLeft } from "../lib/carousel";
 import { animateScrollTo } from "../lib/motion";
 
@@ -234,6 +235,7 @@ export default function Home() {
   // Консультационная заявка без товара (fallback, когда ссылка менеджера пуста)
   const [consult, setConsult] = useState(false);
   const [beta, setBeta] = useState(false);
+  const [about, setAbout] = useState(false);
   const [search, setSearch] = useState("");
   // Панель умного поиска: открыта по фокусу (полезное пустое состояние) или
   // при вводе (live-результаты). Содержимое — SearchPanel; debounce и отмена
@@ -648,6 +650,16 @@ export default function Home() {
         </button>
       </div>
 
+      {/* Юридический дисклеймер: неяркая ссылка в самом низу главной, не
+          спорит по весу с товарными секциями и CTA выше. */}
+      <button
+        onClick={() => { track("about_service_opened", { source: "home_footer" }); setAbout(true); }}
+        className="tap mt-6 flex w-full items-center justify-center gap-1 py-2 text-[11px] text-muted/70 outline-none hover:text-muted focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <Icon name="info" className="h-3.5 w-3.5" />
+        О сервисе
+      </button>
+
         </div>{/* /контент */}
       </div>{/* /desktop grid */}
 
@@ -663,6 +675,11 @@ export default function Home() {
       {beta && (
         <Suspense fallback={null}>
           <BetaRoadmapSheet onClose={() => setBeta(false)} />
+        </Suspense>
+      )}
+      {about && (
+        <Suspense fallback={null}>
+          <AboutServiceSheet onClose={() => setAbout(false)} />
         </Suspense>
       )}
 

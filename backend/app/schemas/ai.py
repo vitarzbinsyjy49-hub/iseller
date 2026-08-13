@@ -148,6 +148,8 @@ ALLOWED_EVENTS = {
     "ai_product_context_opened",
     # Чип BETA на главной: интерес к тому, куда движется проект.
     "beta_roadmap_opened",
+    # Ссылка «О сервисе» в самом низу главной (юридический дисклеймер).
+    "about_service_opened",
 }
 
 
