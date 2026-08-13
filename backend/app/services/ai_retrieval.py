@@ -21,7 +21,8 @@ logger = logging.getLogger("techshop.ai.retrieval")
 
 # Бренды каталога: расширяемый словарь «как пишут -> как в БД»
 _BRAND_HINTS = {
-    "apple": "Apple", "эпл": "Apple", "iphone": "Apple", "айфон": "Apple", "macbook": "Apple",
+    "apple": "Apple", "эпл": "Apple", "iphone": "Apple", "айфон": "Apple",
+    "macbook": "Apple", "макбук": "Apple",
     "samsung": "Samsung", "самсунг": "Samsung",
     "xiaomi": "Xiaomi", "сяоми": "Xiaomi", "ксиаоми": "Xiaomi",
     "sony": "Sony", "сони": "Sony", "playstation": "Sony",

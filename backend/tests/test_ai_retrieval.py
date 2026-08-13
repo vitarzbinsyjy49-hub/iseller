@@ -29,6 +29,15 @@ def test_extract_brand_and_condition():
     assert f.budget_max == 60000
 
 
+def test_cyrillic_macbook_resolves_to_apple_brand():
+    """«iphone»/«айфон» оба ведут в Apple, а «macbook» — только латиницей.
+
+    Асимметрия: запрос «макбук» кириллицей не находил бренд, хотя тот же
+    словарь для айфона написан симметрично на двух алфавитах."""
+    f = extract_filters("макбук за 150000")
+    assert f.brand == "Apple"
+
+
 def test_history_merge_newer_wins(db):
     make_product(db, title="MacBook Air 13", category="ноутбуки", subcategory="MacBook Air")
     f = extract_filters("а до 100 тысяч?", history=["нужен ноутбук до 150 тысяч"],
