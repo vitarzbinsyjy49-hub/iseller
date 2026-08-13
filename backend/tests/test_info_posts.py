@@ -35,7 +35,7 @@ def channel_settings(monkeypatch):
 
 class FakeTelegram:
     def __init__(self):
-        self.sent, self.edited = [], []
+        self.sent, self.edited, self.sent_photos, self.edited_captions = [], [], [], []
         self.next_id = 200
 
     def send_message(self, *, text, keyboard=None, channel_id=None, **kw):
@@ -50,6 +50,16 @@ class FakeTelegram:
     def edit_reply_markup(self, *, message_id, keyboard, channel_id=None):
         return True
 
+    def send_photo(self, *, photo, caption, keyboard=None, channel_id=None, **kw):
+        self.next_id += 1
+        self.sent_photos.append({"photo": photo, "caption": caption, "keyboard": keyboard,
+                                 "message_id": self.next_id})
+        return self.next_id
+
+    def edit_caption(self, *, message_id, caption, keyboard=None, channel_id=None):
+        self.edited_captions.append({"message_id": message_id, "caption": caption, "keyboard": keyboard})
+        return True
+
 
 @pytest.fixture()
 def telegram(monkeypatch):
@@ -57,6 +67,8 @@ def telegram(monkeypatch):
     monkeypatch.setattr(price_channel, "send_message", fake.send_message)
     monkeypatch.setattr(price_channel, "edit_message", fake.edit_message)
     monkeypatch.setattr(price_channel, "edit_reply_markup", fake.edit_reply_markup)
+    monkeypatch.setattr(price_channel, "send_photo", fake.send_photo)
+    monkeypatch.setattr(price_channel, "edit_caption", fake.edit_caption)
     return fake
 
 
@@ -438,3 +450,67 @@ def test_api_rejects_duplicate_slug(client, db, telegram):
 def test_api_rejects_bad_slug(client):
     assert client.post("/api/admin/price-posts/info", json={
         "slug": "плохой слаг!", "title": "A", "body": "b"}).status_code == 400
+
+
+# ---------------------------------------------------------------- посты с фото
+
+def test_api_create_custom_post_with_image(client, db, telegram):
+    response = client.post("/api/admin/price-posts/info", json={
+        "slug": "info_launch2", "title": "Открытие",
+        "body": "🚀 <b>Открытие</b>", "image_url": "https://example.com/banner.jpg",
+    })
+    assert response.status_code == 200
+    assert response.json()["image_url"] == "https://example.com/banner.jpg"
+    row = db.query(ChannelPost).filter_by(slug="info_launch2").one()
+    assert row.image_url == "https://example.com/banner.jpg"
+
+
+def test_post_with_image_publishes_via_send_photo(db, telegram):
+    """С картинкой публикация уходит через sendPhoto (подпись), а не sendMessage."""
+    price_channel.ensure_info_drafts(db)
+    fill(db, "info_about", "Готовый текст.")
+    row = db.query(ChannelPost).filter_by(slug="info_about").one()
+    row.image_url = "https://example.com/banner.jpg"
+    db.commit()
+
+    result = price_channel.apply_info_posts(db, slugs=["info_about"])
+
+    assert result.created == ["info_about"]
+    assert telegram.sent == []                          # не sendMessage
+    assert len(telegram.sent_photos) == 1
+    assert telegram.sent_photos[0]["photo"] == "https://example.com/banner.jpg"
+    assert telegram.sent_photos[0]["caption"] == "Готовый текст."
+    assert telegram.sent_photos[0]["keyboard"]           # клавиатура на месте
+
+
+def test_post_with_image_uses_public_url_for_uploads(db, telegram):
+    """Загруженное у нас фото (/api/uploads/...) уходит в Telegram абсолютным
+    URL — Bot API сам скачивает картинку и относительный путь не разрешит."""
+    price_channel.ensure_info_drafts(db)
+    fill(db, "info_about", "Текст.")
+    row = db.query(ChannelPost).filter_by(slug="info_about").one()
+    row.image_url = "/api/uploads/banner.jpg"
+    db.commit()
+
+    price_channel.apply_info_posts(db, slugs=["info_about"])
+
+    assert telegram.sent_photos[0]["photo"] == "https://shop.example.com/api/uploads/banner.jpg"
+
+
+def test_published_photo_post_edit_uses_edit_caption(db, telegram):
+    """Правка текста/кнопок уже опубликованного поста с фото — editMessageCaption,
+    не editMessageText (та отвечает «there is no text to edit» на фото)."""
+    price_channel.ensure_info_drafts(db)
+    fill(db, "info_about", "Версия 1.")
+    row = db.query(ChannelPost).filter_by(slug="info_about").one()
+    row.image_url = "https://example.com/banner.jpg"
+    db.commit()
+    price_channel.apply_info_posts(db, slugs=["info_about"])
+
+    fill(db, "info_about", "Версия 2.")
+    result = price_channel.apply_info_posts(db, slugs=["info_about"])
+
+    assert result.updated == ["info_about"]
+    assert telegram.edited == []                        # не editMessageText
+    assert telegram.edited_captions[-1]["caption"] == "Версия 2."
+    assert telegram.edited_captions[-1]["keyboard"]

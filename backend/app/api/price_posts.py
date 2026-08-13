@@ -31,6 +31,7 @@ class InfoTextRequest(BaseModel):
     title: str | None = None
     body: str | None = None
     buttons: list[dict] | None = None
+    image_url: str | None = None
 
 
 class CreatePostRequest(BaseModel):
@@ -38,6 +39,7 @@ class CreatePostRequest(BaseModel):
     title: str
     body: str
     buttons: list[dict] | None = None
+    image_url: str | None = None
 
 
 class ConfirmRequest(BaseModel):
@@ -67,6 +69,7 @@ def _out(row: ChannelPost) -> dict:
         "sort_order": row.sort_order,
         "body": row.body if row.kind == INFO_KIND else None,
         "buttons": row.button_spec if row.kind == INFO_KIND else None,
+        "image_url": row.image_url if row.kind == INFO_KIND else None,
         "has_placeholders": has_placeholders(row.body) if row.kind == INFO_KIND else False,
         "editable": row.kind == INFO_KIND,
         # Есть ли для поста заготовка в коде — от этого зависит, показывать ли
@@ -128,7 +131,7 @@ def create_info(payload: CreatePostRequest, db: Session = Depends(get_db),
     row = ChannelPost(
         slug=slug, kind=INFO_KIND, status="draft", title=payload.title,
         body=payload.body, button_spec=payload.buttons or list(DEFAULT_BUTTONS),
-        sort_order=2000 + last,
+        image_url=payload.image_url, sort_order=2000 + last,
     )
     db.add(row)
     _audit(db, admin, "info_post_created", slug)
@@ -150,6 +153,8 @@ def edit_info(slug: str, payload: InfoTextRequest, db: Session = Depends(get_db)
         row.body = payload.body
     if payload.buttons is not None:
         row.button_spec = payload.buttons
+    if payload.image_url is not None:
+        row.image_url = payload.image_url
     if row.telegram_message_id:
         row.status = "outdated"
     _audit(db, admin, "info_post_edited", slug)

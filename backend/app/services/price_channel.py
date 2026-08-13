@@ -45,9 +45,12 @@ from app.services.info_posts import (
 )
 from app.services.telegram_publisher import (
     TelegramPublishError,
+    edit_caption,
     edit_message,
     edit_reply_markup,
+    public_image_url,
     send_message,
+    send_photo,
 )
 
 logger = logging.getLogger("techshop.price")
@@ -171,9 +174,23 @@ def apply_info_posts(
 
         try:
             if row.telegram_message_id:
-                edit_message(message_id=row.telegram_message_id, text=row.body,
-                             keyboard=keyboard, channel_id=channel_id())
+                # Смена САМОЙ картинки на уже опубликованном посте — не этот
+                # путь (нужен editMessageMedia, отдельная операция); подпись
+                # и клавиатура редактируются на месте независимо от того,
+                # есть фото или нет.
+                if row.image_url:
+                    edit_caption(message_id=row.telegram_message_id, caption=row.body,
+                                keyboard=keyboard, channel_id=channel_id())
+                else:
+                    edit_message(message_id=row.telegram_message_id, text=row.body,
+                                 keyboard=keyboard, channel_id=channel_id())
                 result.updated.append(row.slug)
+            elif row.image_url:
+                row.telegram_message_id = send_photo(
+                    photo=public_image_url(row.image_url), caption=row.body, keyboard=keyboard,
+                    channel_id=channel_id())
+                row.published_at = now
+                result.created.append(row.slug)
             else:
                 row.telegram_message_id = send_message(
                     text=row.body, keyboard=keyboard, channel_id=channel_id())

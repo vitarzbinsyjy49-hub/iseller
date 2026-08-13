@@ -119,6 +119,33 @@ def send_message(
     return int(call("sendMessage", payload)["message_id"])
 
 
+def send_photo(
+    *, photo: str, caption: str, keyboard: list[list[dict]] | None = None,
+    channel_id: str | int | None = None, disable_notification: bool = False,
+) -> int:
+    """Опубликовать фото с подписью и необязательной inline-клавиатурой.
+
+    Подпись ограничена MAX_CAPTION_LENGTH (Bot API), не TELEGRAM_TEXT_LIMIT
+    обычного сообщения — тот же лимит, что publish_post уже проверяет
+    для редакционных постов с фото.
+    """
+    if len(caption) > MAX_CAPTION_LENGTH:
+        raise TelegramContentTooLong(
+            f"Подпись к фото ограничена {MAX_CAPTION_LENGTH} символами "
+            f"(сейчас {len(caption)}). Сократите текст или уберите изображение."
+        )
+    payload: dict = {
+        "chat_id": _channel(channel_id),
+        "photo": photo,
+        "caption": caption,
+        "parse_mode": "HTML",
+        "disable_notification": disable_notification,
+    }
+    if keyboard:
+        payload["reply_markup"] = {"inline_keyboard": keyboard}
+    return int(call("sendPhoto", payload)["message_id"])
+
+
 def edit_message(
     *, message_id: int, text: str, keyboard: list[list[dict]] | None = None,
     channel_id: str | int | None = None,
@@ -150,14 +177,16 @@ def edit_message(
 
 
 def edit_caption(
-    *, message_id: int, caption: str,
+    *, message_id: int, caption: str, keyboard: list[list[dict]] | None = None,
     channel_id: str | int | None = None,
 ) -> bool:
-    """Переписать подпись фото ранее опубликованного сообщения.
+    """Переписать подпись фото (и, при передаче, клавиатуру) ранее
+    опубликованного сообщения.
 
     Отдельная ручка Bot API от editMessageText: сообщение с фото хранит текст
     в caption, а editMessageText на нём отвечает «there is no text in the
-    message to edit».
+    message to edit». editMessageCaption принимает reply_markup тем же
+    вызовом — отдельный editMessageReplyMarkup для этого случая не нужен.
     """
     payload: dict = {
         "chat_id": _channel(channel_id),
@@ -165,6 +194,8 @@ def edit_caption(
         "caption": caption,
         "parse_mode": "HTML",
     }
+    if keyboard:
+        payload["reply_markup"] = {"inline_keyboard": keyboard}
     try:
         call("editMessageCaption", payload)
         return True
@@ -205,6 +236,19 @@ def pin_message(*, message_id: int, channel_id: str | int | None = None) -> None
     })
 
 
+def public_image_url(image_url: str | None) -> str | None:
+    """Абсолютная ссылка на картинку — Telegram скачивает фото по URL сам.
+
+    Наши загрузки хранятся как относительный путь (/api/uploads/...);
+    префиксуем публичным доменом Mini App. Уже абсолютные ссылки (внешние
+    URL) не трогаем.
+    """
+    if image_url and image_url.startswith("/"):
+        public_base = settings.MINI_APP_URL.rstrip("/")
+        return f"{public_base}{image_url}" if public_base else None
+    return image_url
+
+
 def publish_post(*, title: str, body: str, image_url: str | None) -> int:
     """Опубликовать одобренный новостной пост и вернуть message_id.
 
@@ -215,11 +259,7 @@ def publish_post(*, title: str, body: str, image_url: str | None) -> int:
         raise TelegramPublishError("Telegram publishing is not configured")
 
     text = f"<b>{escape(title)}</b>\n\n{escape(body)}".strip()
-    # Telegram скачивает фото по URL сам, поэтому ссылка обязана быть абсолютной.
-    # Наши загрузки (/api/uploads/...) префиксуем публичным доменом Mini App.
-    if image_url and image_url.startswith("/"):
-        public_base = settings.MINI_APP_URL.rstrip("/")
-        image_url = f"{public_base}{image_url}" if public_base else None
+    image_url = public_image_url(image_url)
 
     if image_url:
         if len(text) > MAX_CAPTION_LENGTH:
