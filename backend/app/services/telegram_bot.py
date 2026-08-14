@@ -184,6 +184,11 @@ def reply_for_payload(payload: str) -> Reply | None:
         return build_reply({"message": {"chat": {"type": "private"}, "text": "/catalog"}})
     if payload == "ai":
         return build_reply({"message": {"chat": {"type": "private"}, "text": "/ai"}})
+    # Кнопка "Мои заявки" (kind=requests) в конструкторе инфо-постов админки
+    # собирает именно такой payload — без этой ветки он не резолвился и молча
+    # падал в общее меню вместо фокусированного экрана заявок.
+    if payload == "requests":
+        return build_reply({"message": {"chat": {"type": "private"}, "text": "/orders"}})
 
     # Товар, которым поделились. НАЗВАНИЕ ТОВАРА ЗДЕСЬ НЕ ЧИТАЕТСЯ ИЗ БАЗЫ
     # намеренно: build_reply и reply_for_payload не ходят в БД и не ходят в

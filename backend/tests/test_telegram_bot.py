@@ -380,6 +380,19 @@ def test_generic_payloads_open_expected_screens(payload, expected):
     assert any(u.endswith(expected) for u in urls)
 
 
+def test_requests_payload_opens_the_orders_screen_focused():
+    """Админка предлагает кнопку "Мои заявки" (kind=requests, BUTTON_KINDS в
+    info_posts.py), но до этого фикса payload "requests" не резолвился в
+    reply_for_payload и молча падал в ОБЩЕЕ меню. Общее меню тоже содержит
+    кнопку с URL, оканчивающимся на /requests (среди прочих) — поэтому
+    достаточно широкая проверка "есть такая кнопка" её бы не поймала:
+    нужен именно фокусированный ответ /orders, а не всё меню сразу."""
+    reply = build_reply(private_message("/start requests"))
+    assert reply.text == "Ваши заявки и их статусы."
+    assert len(reply.keyboard) == 1 and len(reply.keyboard[0]) == 1
+    assert reply.keyboard[0][0]["web_app"]["url"].endswith("/requests")
+
+
 def test_unknown_payload_falls_back_to_the_main_menu():
     """Устаревшая ссылка из старого поста не должна упираться в тишину."""
     reply = build_reply(private_message("/start price_deleted_section"))
