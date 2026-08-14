@@ -28,11 +28,18 @@ export type AppEvent =
   // v5.4.0: встроенные сценарные заявки + карусель фото карточек.
   // Payload — только безопасные метаданные (scenario, source, product_id,
   // image_count, from_index/to_index). НЕ телефон/имя/модель/комментарий.
+  // scenario_sheet_opened: форма (ScenarioRequestSheet) заменена AI-чатом
+  // (scenario_chat_opened) — имя оставлено, чтобы старые вкладки не ловили 400.
   | "scenario_sheet_opened"
   | "scenario_option_selected"
   | "scenario_lead_submitted"
   | "scenario_lead_success"
   | "scenario_lead_failed"
+  // v6: сценарный AI-чат вместо форм (/apply/<scenario>). opened — открытие
+  // экрана; ai_escalated — шаг реально ушёл в модель (метрика того, что
+  // скрипт держит нагрузку сам, не жжёт токены на каждую реплику).
+  | "scenario_chat_opened"
+  | "scenario_chat_ai_escalated"
   | "product_gallery_swiped"
   | "product_gallery_dot_clicked"
   | "photo_coverage_opened"
