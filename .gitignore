@@ -24,3 +24,5 @@ deploy/caddy_config/
 # os
 .DS_Store
 Thumbs.db
+
+.worktrees/
