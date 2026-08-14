@@ -59,6 +59,14 @@ _MANAGER_LABEL = {
     "b2b": "B2B-менеджер", "trade_in": "Оценить устройство",
 }
 
+# CTA действия «Оформить заявку» — приоритетнее ухода к менеджеру: заявка
+# формируется прямо в приложении, менеджер уже видит структурированные данные.
+_SCENARIO_CTA = {
+    "trade_in": "Оформить Trade-In",
+    "b2b": "Оставить заявку для бизнеса",
+    "wholesale": "Оставить оптовую заявку",
+}
+
 _ABOUT_RE = re.compile(
     r"^(ты\s+(ии|ai|бот|робот)|кто\s+ты|что\s+ты\s+(умеешь|можешь)|как\s+ты\s+работаешь|привет|здравствуй)",
     re.IGNORECASE,
@@ -155,8 +163,11 @@ def _deterministic_answer(message: str) -> dict | None:
         # «не хочу менеджера, подбери сам» — это запрос на подбор, а не контакт
         if intent == "manager" and (_MANAGER_NEGATION_RE.search(low) or substantive):
             continue
-        return {"text": answer, "cards": [],
-                "actions": [{"type": "manager", "label": _MANAGER_LABEL[role], "manager_role": role}],
+        actions: list[dict] = []
+        if intent in _SCENARIO_CTA:
+            actions.append({"type": "scenario", "label": _SCENARIO_CTA[intent], "scenario": intent})
+        actions.append({"type": "manager", "label": _MANAGER_LABEL[role], "manager_role": role})
+        return {"text": answer, "cards": [], "actions": actions,
                 "meta": {"source": "rules", "intent": intent}}
     return None
 
@@ -343,6 +354,8 @@ async def answer_via_local_ai(
     ]
     if structured.next_action == "open_manager" or structured.intent in ("wholesale", "b2b", "trade_in", "manager"):
         role = structured.intent if structured.intent in ("wholesale", "b2b", "trade_in") else "retail"
+        if structured.intent in _SCENARIO_CTA:
+            actions.append({"type": "scenario", "label": _SCENARIO_CTA[structured.intent], "scenario": structured.intent})
         actions.append({"type": "manager", "label": _MANAGER_LABEL[role], "manager_role": role})
     if structured.next_action == "create_lead" and products:
         actions.append({"type": "lead", "label": "Оставить заявку", "product_id": products[0].id})

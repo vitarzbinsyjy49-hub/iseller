@@ -43,6 +43,36 @@ def test_deterministic_intents_skip_llm(db, q, intent, monkeypatch):
     assert ans["text"]
 
 
+@pytest.mark.parametrize("q,intent", [
+    ("хочу оптом партию", "wholesale"),
+    ("что такое trade-in?", "trade_in"),
+    ("поставка для компании со счётом", "b2b"),
+])
+def test_deterministic_scenario_intents_offer_scenario_action(db, q, intent, monkeypatch):
+    """Trade-In/бизнес/опт получают действие «Оформить заявку» ПЕРВЫМ —
+    заявка внутри приложения важнее ухода в Telegram к менеджеру."""
+    async def boom(**kwargs):
+        raise AssertionError("gateway must not be called for deterministic intents")
+    monkeypatch.setattr(orch, "call_gateway", boom)
+    ans = run(orch.answer_via_local_ai(db, q, []))
+    types = [a["type"] for a in ans["actions"]]
+    assert types == ["scenario", "manager"]
+    scenario_action = ans["actions"][0]
+    assert scenario_action["scenario"] == intent
+    assert scenario_action["label"]
+
+
+def test_llm_scenario_intent_offers_scenario_action(db, monkeypatch):
+    """Тот же приоритет и на пути через модель (не только детерминированный)."""
+    monkeypatch.setattr(orch, "call_gateway", _gw_response({
+        "answer": "Понял, поможем с оптом.", "intent": "wholesale", "next_action": "open_manager",
+    }))
+    ans = run(orch.answer_via_local_ai(db, "нужна партия ноутбуков от 30 штук", []))
+    types = [a["type"] for a in ans["actions"]]
+    assert types == ["scenario", "manager"]
+    assert ans["actions"][0]["scenario"] == "wholesale"
+
+
 # ---------- галлюцинации ----------
 
 def test_unknown_product_ids_dropped(db, monkeypatch):
