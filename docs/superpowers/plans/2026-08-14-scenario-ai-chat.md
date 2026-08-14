@@ -15,6 +15,7 @@
 - `scenario_chat.py` поддерживает **только** `AI_PROVIDER=anthropic` (прод-транспорт); для остальных значений (`ollama_remote`/`ai`/`fallback`/`mock`) сразу возвращает `{"type":"unclear"}` без сетевого вызова — реализация Mac-mini гейтвея для сценарного чата вне скоупа.
 - AI никогда не выдумывает цифры/сроки вне зафиксированного FAQ-блока в `backend/app/prompts/scenario_chat_system.md`.
 - Локальный dev-стенд по умолчанию `AI_PROVIDER=fallback` (`docker-compose.demo.yml`) — эскалация в проде вручную не проверяется без ключа, но обязана возвращать `unclear`, не падать.
+- `POST /api/scenario-chat/turn` **никогда не возвращает 429/5xx** на исчерпание rate-limit (ни минутного, ни дневного) — тихо деградирует в `{"type":"unclear"}`, HTTP 200. Это отличается от `/ai/chat`, у которого минутный лимит честно даёт 429: там это основной канал, здесь — вспомогательный шаг, отказ которого не должен ронять флоу заявки. Делит тот же rate-limit ключ и тот же дневной AI-бюджет (`AI_CHAT_DAILY_LIMIT_PER_USER`), что `/ai/chat` — отдельный счётчик не заводим.
 - Новые события аналитики регистрируются **и** в `frontend/src/lib/analytics.ts` (`AppEvent`), **и** в `backend/app/schemas/ai.py` (`ALLOWED_EVENTS`) — иначе `test_event_allowlist_sync.py` падает.
 - Frontend: только vitest на чистую логику (`.test.ts`, без DOM) — в проекте нет тестов React-компонентов страниц, конвенцию не нарушаем.
 - Backend-тесты: `cd backend && python -m pytest -q`. Frontend: `cd frontend && npx tsc --noEmit && npx vitest run && npm run build`.
@@ -732,13 +733,35 @@ def test_turn_endpoint_rejects_unknown_scenario(api_ctx):
     assert res.status_code == 422
 
 
-def test_turn_endpoint_rate_limited(monkeypatch, api_ctx):
+def test_turn_endpoint_minute_limit_degrades_to_unclear(monkeypatch, api_ctx):
+    """Спека требует: rate-limit исчерпан -> тихая деградация в unclear, БЕЗ
+    429 — этот эндпоинт вспомогательный, ронять им флоу заявки нельзя."""
     monkeypatch.setattr("app.api.scenario_chat.check_rate_limit", lambda *a, **kw: False)
     res = api_ctx.post(
         "/api/scenario-chat/turn",
         json={"scenario": "trade_in", "field_key": "condition", "options": [], "message": "x"},
     )
-    assert res.status_code == 429
+    assert res.status_code == 200
+    assert res.json() == {"type": "unclear", "value": None, "reply": None}
+
+
+def test_turn_endpoint_daily_limit_degrades_to_unclear(monkeypatch, api_ctx):
+    """Тот же дневной AI-бюджет, что /ai/chat (см. app/api/ai.py,
+    AI_CHAT_DAILY_LIMIT_PER_USER) — исчерпание тоже деградирует тихо."""
+    calls: list[str] = []
+
+    def fake_check(key, limit=None, window_seconds=None):
+        calls.append(key)
+        return not key.startswith("ai_daily:")  # минутный ок, дневной исчерпан
+
+    monkeypatch.setattr("app.api.scenario_chat.check_rate_limit", fake_check)
+    res = api_ctx.post(
+        "/api/scenario-chat/turn",
+        json={"scenario": "trade_in", "field_key": "condition", "options": [], "message": "x"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"type": "unclear", "value": None, "reply": None}
+    assert any(k.startswith("ai_daily:") for k in calls)
 ```
 
 - [ ] **Step 2: Убедиться, что тесты падают**
@@ -755,18 +778,27 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'app.api.scenario_chat'
 
 Вызывается фронтом ТОЛЬКО когда клиентский скрипт сам не смог разобрать ответ
 покупателя — см. docs/superpowers/specs/2026-08-14-scenario-ai-chat-design.md.
-Использует тот же rate-limit ключ, что /ai/chat: это тот же AI-бюджет
-пользователя, отдельный счётчик не заводим.
+Делит тот же rate-limit ключ и тот же дневной AI-бюджет, что /ai/chat
+(app/api/ai.py, AI_CHAT_DAILY_LIMIT_PER_USER) — отдельный счётчик не заводим.
+
+Недоступность AI здесь НИКОГДА не даёт 429/5xx: этот эндпоинт — вспомогательный
+шаг сценарного чата (см. услуги answer_scenario_turn, которая по той же причине
+не бросает исключений), и его отказ не должен ронять флоу заявки. Поэтому
+исчерпание минутного ИЛИ дневного лимита тихо деградирует в {"type":"unclear"}
+— тот же контракт, что при недоступности гейтвея внутри answer_scenario_turn.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request
 
 from app.api.deps import client_ip, get_current_user
+from app.core.config import settings
 from app.core.rate_limit import check_rate_limit
 from app.models.user import User
 from app.schemas.ai import ScenarioChatTurnIn
 from app.services.scenario_chat import answer_scenario_turn
 
 router = APIRouter(prefix="/scenario-chat", tags=["scenario-chat"])
+
+_UNCLEAR: dict = {"type": "unclear", "value": None, "reply": None}
 
 
 @router.post("/turn")
@@ -777,10 +809,12 @@ async def turn(
 ):
     rl_key = f"user:{user.id}" if getattr(user, "id", None) else f"ip:{client_ip(request)}"
     if not check_rate_limit(rl_key):
-        raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            "Too many AI requests. Please try again later.",
-        )
+        return dict(_UNCLEAR)
+    daily_limit_reached = not check_rate_limit(
+        f"ai_daily:{rl_key}", limit=settings.AI_CHAT_DAILY_LIMIT_PER_USER, window_seconds=86400,
+    )
+    if daily_limit_reached:
+        return dict(_UNCLEAR)
     options = [{"value": o.value, "label": o.label} for o in body.options]
     return await answer_scenario_turn(
         scenario=body.scenario, field_key=body.field_key, options=options, message=body.message,
