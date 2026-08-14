@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { formatPrice } from "./format";
 import { leadMetadataRows, leadTitle, leadTypeLabel } from "./leads";
 
 describe("leadTypeLabel", () => {
@@ -45,6 +46,16 @@ describe("leadMetadataRows", () => {
   it("неизвестный ключ показывается нейтрально", () => {
     const rows = leadMetadataRows({ custom_field: "значение" });
     expect(rows).toEqual([{ label: "custom_field", value: "значение" }]);
+  });
+  it("промокод из корзины — локализованные подписи и деньги, не сырые ключи", () => {
+    const rows = leadMetadataRows({
+      origin: "cart", promo_code: "START20", promo_discount: 500, subtotal: 12000,
+    });
+    const byLabel = Object.fromEntries(rows.map((r) => [r.label, r.value]));
+    expect(byLabel["Промокод"]).toBe("START20");
+    expect(byLabel["Скидка по промокоду"]).toBe(formatPrice(500));
+    expect(byLabel["Сумма без скидки"]).toBe(formatPrice(12000));
+    expect("promo_code" in byLabel).toBe(false);
   });
   it("пустой/невалидный metadata -> []", () => {
     expect(leadMetadataRows(null)).toEqual([]);

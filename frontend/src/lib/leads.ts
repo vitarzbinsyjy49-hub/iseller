@@ -5,6 +5,8 @@
  *  сырой JSON. Неизвестные ключи выводятся нейтрально, пустые — скрываются.
  */
 
+import { formatPrice } from "./format";
+
 export type LeadLike = {
   lead_type?: string | null;
   metadata?: Record<string, unknown> | null;
@@ -58,7 +60,16 @@ const KEY_LABELS: Record<string, string> = {
   competitor_shop: "Площадка",
   competitor_price: "Цена там",
   comment: "Комментарий",
+  // Заявка из корзины со скидкой (services/cart.checkout) — снапшот на момент
+  // оформления, настройки промокода к моменту разговора могут уже смениться.
+  promo_code: "Промокод",
+  promo_discount: "Скидка по промокоду",
+  subtotal: "Сумма без скидки",
 };
+
+// promo_discount/subtotal — суммы в рублях, а не произвольный текст: без
+// этого в заявке было бы голое число "500" вместо "500 ₽".
+const MONEY_KEYS = new Set(["promo_discount", "subtotal"]);
 
 const HIDDEN_KEYS = new Set(["origin"]);
 
@@ -77,7 +88,7 @@ export function leadMetadataRows(metadata?: Record<string, unknown> | null): { l
     if (!value.trim()) return;
     seen.add(key);
     const label = KEY_LABELS[key] ?? key;
-    const localized = VALUE_LABELS[key]?.[value] ?? value;
+    const localized = MONEY_KEYS.has(key) ? formatPrice(Number(raw)) : (VALUE_LABELS[key]?.[value] ?? value);
     rows.push({ label, value: localized });
   };
 
