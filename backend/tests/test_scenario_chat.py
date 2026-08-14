@@ -172,10 +172,32 @@ def test_turn_endpoint_rejects_unknown_scenario(api_ctx):
     assert res.status_code == 422
 
 
-def test_turn_endpoint_rate_limited(monkeypatch, api_ctx):
+def test_turn_endpoint_minute_limit_degrades_to_unclear(monkeypatch, api_ctx):
+    """Спека требует: rate-limit исчерпан -> тихая деградация в unclear, БЕЗ
+    429 — этот эндпоинт вспомогательный, ронять им флоу заявки нельзя."""
     monkeypatch.setattr("app.api.scenario_chat.check_rate_limit", lambda *a, **kw: False)
     res = api_ctx.post(
         "/api/scenario-chat/turn",
         json={"scenario": "trade_in", "field_key": "condition", "options": [], "message": "x"},
     )
-    assert res.status_code == 429
+    assert res.status_code == 200
+    assert res.json() == {"type": "unclear", "value": None, "reply": None}
+
+
+def test_turn_endpoint_daily_limit_degrades_to_unclear(monkeypatch, api_ctx):
+    """Тот же дневной AI-бюджет, что /ai/chat (см. app/api/ai.py,
+    AI_CHAT_DAILY_LIMIT_PER_USER) — исчерпание тоже деградирует тихо."""
+    calls: list[str] = []
+
+    def fake_check(key, limit=None, window_seconds=None):
+        calls.append(key)
+        return not key.startswith("ai_daily:")  # минутный ок, дневной исчерпан
+
+    monkeypatch.setattr("app.api.scenario_chat.check_rate_limit", fake_check)
+    res = api_ctx.post(
+        "/api/scenario-chat/turn",
+        json={"scenario": "trade_in", "field_key": "condition", "options": [], "message": "x"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"type": "unclear", "value": None, "reply": None}
+    assert any(k.startswith("ai_daily:") for k in calls)
