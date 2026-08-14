@@ -243,7 +243,14 @@ const META_KEY_RU: Record<string, string> = {
   // сначала площадка и цена (по ним решают), потом сам адрес и комментарий.
   competitor_shop: "Площадка", competitor_price: "Цена там",
   competitor_url: "Ссылка у конкурента", comment: "Комментарий",
+  // Заявка из корзины со скидкой (services/cart.checkout) — снапшот на момент
+  // оформления, настройки промокода к моменту разговора могут уже смениться.
+  promo_code: "Промокод", promo_discount: "Скидка по промокоду",
+  subtotal: "Сумма без скидки",
 };
+// promo_discount/subtotal — суммы в рублях, а не произвольный текст: без
+// этого в заявке было бы голое число "500" вместо "500 ₽".
+const META_MONEY_KEYS = new Set(["promo_discount", "subtotal"]);
 const META_HIDDEN = new Set(["origin"]);
 
 /** Локализованные строки metadata заявки (без origin/пустых). Неизвестные ключи
@@ -259,7 +266,8 @@ export function leadMetaRows(metadata?: Record<string, unknown> | null): { label
     const value = Array.isArray(raw) ? raw.map(String).join(", ") : String(raw);
     if (!value.trim()) return;
     seen.add(key);
-    rows.push({ label: META_KEY_RU[key] ?? key, value: META_VALUE_RU[key]?.[value] ?? value });
+    const shown = META_MONEY_KEYS.has(key) ? fmtPrice(Number(raw)) : (META_VALUE_RU[key]?.[value] ?? value);
+    rows.push({ label: META_KEY_RU[key] ?? key, value: shown });
   };
   for (const key of Object.keys(META_KEY_RU)) if (key in metadata) push(key);
   for (const key of Object.keys(metadata)) push(key);
