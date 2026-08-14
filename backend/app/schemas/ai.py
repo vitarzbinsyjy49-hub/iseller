@@ -109,6 +109,11 @@ ALLOWED_EVENTS = {
     "scenario_lead_submitted",
     "scenario_lead_success",
     "scenario_lead_failed",
+    # v6: сценарный AI-чат вместо форм. scenario_chat_opened — открытие
+    # экрана /apply/<scenario>; scenario_chat_ai_escalated — сколько раз шаг
+    # реально ушёл в модель (метрика того, что скрипт держит нагрузку сам).
+    "scenario_chat_opened",
+    "scenario_chat_ai_escalated",
     "product_gallery_swiped",
     "product_gallery_dot_clicked",
     "photo_coverage_opened",
@@ -168,6 +173,20 @@ class AiChatIn(BaseModel):
     # закрепит его первым кандидатом. Чужой или снятый id безопасен — он просто
     # не закрепится, поиск отработает как обычно.
     product_id: int | None = Field(default=None, ge=1)
+
+
+class ScenarioChatOptionIn(BaseModel):
+    value: str = Field(min_length=1, max_length=40)
+    label: str = Field(min_length=1, max_length=80)
+
+
+class ScenarioChatTurnIn(BaseModel):
+    """Вход POST /api/scenario-chat/turn — AI-эскалация сценарного чата.
+    Отправляется фронтом ТОЛЬКО когда клиентский матчинг не справился."""
+    scenario: str = Field(pattern="^(trade_in|b2b|wholesale)$")
+    field_key: str = Field(min_length=1, max_length=40)
+    options: list[ScenarioChatOptionIn] = Field(default_factory=list, max_length=10)
+    message: str = Field(min_length=1, max_length=500)
 
 
 class EventIn(BaseModel):
