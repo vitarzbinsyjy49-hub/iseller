@@ -83,6 +83,10 @@ export default function AiSearch() {
       void submit(action.label);
       return;
     }
+    if (action.type === "scenario" && action.scenario) {
+      navigate(`/apply/${action.scenario}`);
+      return;
+    }
     if (action.type === "manager") {
       const urlByRole: Record<string, string> = {
         retail: config.manager_retail_url,
