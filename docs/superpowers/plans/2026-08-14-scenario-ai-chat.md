@@ -1883,7 +1883,12 @@ function ScenarioChatScreen({ scenario }: { scenario: ScenarioKey }) {
         </div>
       )}
 
-      {((currentStep.kind === "field" && currentStep.field.kind !== "chips") || currentStep.kind === "phone") && (
+      {/* Строка ввода видна и на chips-шагах тоже: покупатель может напечатать
+          свободный текст ВМЕСТО тапа по чипу (см. lib/scenarioChat.ts —
+          matchChip/needsEscalation рассчитаны именно на этот случай). Раньше
+          строка скрывалась на chips-полях, и весь локальный матчинг синонимов
+          и эскалация к AI были физически недостижимы через UI. */}
+      {(currentStep.kind === "field" || currentStep.kind === "phone") && (
         <div className="mt-3 flex gap-2 px-4">
           <input
             value={inputValue} onChange={(e) => setInputValue(e.target.value)}
