@@ -1,5 +1,6 @@
 /** Типы ответа AI-моста и карточек товаров (Demo MVP). */
 import type { AvailabilityMode } from "../../lib/cartMath";
+import type { ScenarioKey } from "../../lib/scenario";
 
 export type { AvailabilityMode };
 
@@ -92,12 +93,15 @@ export type ManagerRole = "retail" | "wholesale" | "b2b" | "trade_in";
 export type AiAction = {
   /** quick_reply — готовый ответ покупателя на уточняющий вопрос: нажатие
    *  отправляет label как обычное сообщение. Заменил кнопку "refine", которая
-   *  только фокусировала поле ввода и выглядела бездействующей. */
-  type: "compare" | "quick_reply" | "manager" | "lead";
+   *  только фокусировала поле ввода и выглядела бездействующей.
+   *  scenario — переход в AI-чат заявки (/apply/<scenario>): Trade-In/бизнес/
+   *  опт формируются там, а не «Написать менеджеру». */
+  type: "compare" | "quick_reply" | "manager" | "lead" | "scenario";
   label: string;
   product_ids?: number[];
   product_id?: number;        // для type="lead": проверенный backend'ом товар
   manager_role?: ManagerRole; // для type="manager": какого менеджера открыть
+  scenario?: ScenarioKey;     // для type="scenario": куда вести
 };
 
 export type AiAnswer = {
