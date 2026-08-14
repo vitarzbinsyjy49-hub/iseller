@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode, useEffect, useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useNavigate } from "react-router-dom";
 import { api } from "./lib/api";
-import { getTelegram, isInsideTelegram, initTelegramUi } from "./lib/telegram";
+import { getStartParam, getTelegram, isInsideTelegram, initTelegramUi } from "./lib/telegram";
 import { hydrateFavorites } from "./lib/favorites";
 import { hydrateCart } from "./lib/cart";
 import { useAuthStore, User } from "./store/auth";
@@ -28,6 +28,7 @@ export default function App() {
   const { setTokens, setUser } = useAuthStore();
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorText, setErrorText] = useState("");
+  const navigate = useNavigate();
 
   // Вся инициализация Telegram UI (ready/expand/fullscreen/цвета/viewport
   // listeners) — в одном месте, с корректным снятием подписок.
@@ -51,6 +52,21 @@ export default function App() {
         // Корзина: локальный кэш уже отрисован, здесь берём серверное состояние
         // как истину — цены и наличие могли измениться между визитами.
         void hydrateCart();
+        // Патч 2.0: запуск по t.me/<bot>/<app>?startapp=<payload> — кнопка
+        // канала ведёт сразу в Mini App, минуя чат с ботом. Тот же payload,
+        // что раньше нёс /start в бота, здесь приходит в start_param;
+        // резолвит его тот же источник правды, что и сам бот для web_app-кнопок
+        // (backend: resolve_payload_path). Неизвестный/устаревший payload —
+        // остаёмся на главной, тихо, как и бот в этом случае падает в меню.
+        const payload = getStartParam();
+        if (payload) {
+          try {
+            const { route } = await api<{ route: string }>(`/deeplink/${encodeURIComponent(payload)}`);
+            navigate(route, { replace: true });
+          } catch {
+            /* неизвестный payload — тихо остаёмся на главной */
+          }
+        }
         setStatus("ready");
       } catch (e) {
         setErrorText(e instanceof Error ? e.message : "Неизвестная ошибка");

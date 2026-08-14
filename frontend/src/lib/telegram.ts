@@ -12,6 +12,10 @@ type SafeAreaInset = { top: number; bottom: number; left: number; right: number 
 
 type TelegramWebApp = {
   initData: string;
+  // Патч 2.0: startapp-запуск (t.me/<bot>/<app>?startapp=<payload>) — Mini App
+  // открывается СРАЗУ, минуя чат с ботом; payload приходит сюда, а не в
+  // текстовое сообщение (см. getStartParam/startParamFrom ниже).
+  initDataUnsafe?: { start_param?: string };
   ready: () => void;
   expand: () => void;
   colorScheme: "light" | "dark";
@@ -52,6 +56,17 @@ export function getTelegram(): TelegramWebApp | null {
 export function isInsideTelegram(): boolean {
   const tg = getTelegram();
   return !!tg && tg.initData.length > 0;
+}
+
+/** Payload из startapp-запуска, или null. Чистая функция (tg — аргумент), по
+ *  тому же паттерну, что applyTelegramColors — тестируется без DOM. */
+export function startParamFrom(tg: Pick<TelegramWebApp, "initDataUnsafe"> | null): string | null {
+  const raw = tg?.initDataUnsafe?.start_param;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
+export function getStartParam(): string | null {
+  return startParamFrom(getTelegram());
 }
 
 /** Раскрыть Mini App на весь экран.
