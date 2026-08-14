@@ -6,7 +6,7 @@ import { useAuthStore } from "../store/auth";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
-import { ScenarioRequestSheet, ScenarioChoiceSheet } from "../components/ScenarioSheet";
+import { ScenarioChoiceSheet } from "../components/ScenarioSheet";
 import { MACBOOK_CHOICES, type ChoiceItem, type ScenarioKey } from "../lib/scenario";
 import { usePublicConfig } from "../lib/appConfig";
 import { openExternalLink } from "../lib/telegram";
@@ -191,20 +191,14 @@ export default function Home() {
   const navigate = useNavigate();
   const config = usePublicConfig();
   const cart = useCart();
-  // v5.4.0: встроенные сценарные заявки (Trade-In/бизнес/опт) и меню MacBook.
-  const [scenario, setScenario] = useState<ScenarioKey | null>(null);
+  // v6: Trade-In/бизнес/опт ведут в AI-чат заявки (/apply/:scenario) вместо
+  // встроенного bottom-sheet. Меню MacBook (v5.4.0) остаётся как есть — это
+  // prefill в /ai, не lead-сценарий.
   const [macbookOpen, setMacbookOpen] = useState(false);
-  // Контакт обязателен, только если менеджеру некуда ответить в Telegram
-  // (у пользователя нет @username) — тогда просим телефон.
-  const requirePhone = !user?.username;
-  const managerUrlFor = (k: ScenarioKey): string =>
-    (k === "trade_in" ? config.manager_tradein_url
-      : k === "b2b" ? config.manager_b2b_url
-      : config.manager_wholesale_url) || config.manager_retail_url;
 
   function openScenario(k: ScenarioKey) {
     track("quick_scenario_clicked", { scenario: k });
-    setScenario(k);
+    navigate(`/apply/${k}`);
   }
   function openMacbook() {
     track("quick_scenario_clicked", { scenario: "pick_macbook" });
@@ -683,15 +677,6 @@ export default function Home() {
         </Suspense>
       )}
 
-      {/* v5.4.0: встроенные сценарные заявки (Trade-In / Для бизнеса / Опт) */}
-      {scenario && (
-        <ScenarioRequestSheet
-          scenario={scenario}
-          managerUrl={managerUrlFor(scenario)}
-          requirePhone={requirePhone}
-          onClose={() => setScenario(null)}
-        />
-      )}
       {/* v5.4.0: меню «Подобрать MacBook» (AI prefill, без заявки и авто-отправки) */}
       {macbookOpen && (
         <ScenarioChoiceSheet
