@@ -154,8 +154,9 @@ def _extract_first_object(text: str) -> str | None:
     return None
 
 
-def parse_structured_answer(raw: str) -> AiStructuredAnswer:
-    """Строгий парс -> одна попытка repair -> AiAnswerParseError."""
+def _repair_to_dict(raw: str) -> dict:
+    """Строгий парс -> одна попытка repair -> словарь. Общий шаг для всех
+    структурированных ответов LLM (основной чат и сценарный чат)."""
     if not raw or not raw.strip():
         raise AiAnswerParseError("empty LLM output")
 
@@ -173,7 +174,50 @@ def parse_structured_answer(raw: str) -> AiStructuredAnswer:
             data = json.loads(candidate)
             if not isinstance(data, dict):
                 raise ValueError("top-level JSON is not an object")
-            return AiStructuredAnswer.model_validate(data)
-        except (ValueError, ValidationError) as e:
+            return data
+        except (ValueError,) as e:
             last_error = e
     raise AiAnswerParseError(f"unparseable LLM output: {last_error}") from last_error
+
+
+def parse_structured_answer(raw: str) -> AiStructuredAnswer:
+    try:
+        return AiStructuredAnswer.model_validate(_repair_to_dict(raw))
+    except ValidationError as e:
+        raise AiAnswerParseError(f"unparseable LLM output: {e}") from e
+
+
+# ---------- сценарный чат (Trade-In/бизнес/опт, v6) ----------
+# Компактный контракт AI-эскалации: см.
+# docs/superpowers/specs/2026-08-14-scenario-ai-chat-design.md. Вызывается
+# ТОЛЬКО когда клиентский скрипт не смог сам разобрать ответ покупателя.
+
+SCENARIO_TURN_TYPES = {"field_value", "answer_question", "unclear"}
+
+
+class ScenarioTurnAnswer(BaseModel):
+    type: str = "unclear"
+    value: str | None = Field(default=None, max_length=40)
+    reply: str | None = Field(default=None, max_length=300)
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def _type_known(cls, v):
+        v = str(v or "").strip().lower()
+        return v if v in SCENARIO_TURN_TYPES else "unclear"
+
+    @field_validator("reply", mode="before")
+    @classmethod
+    def _cap_reply_length(cls, v):
+        if v is None:
+            return None
+        text = str(v)
+        return text[:300] if len(text) > 300 else text
+
+
+def parse_scenario_turn(raw: str) -> ScenarioTurnAnswer:
+    """Строгий парс ответа AI-эскалации сценарного чата -> repair -> валидация."""
+    try:
+        return ScenarioTurnAnswer.model_validate(_repair_to_dict(raw))
+    except ValidationError as e:
+        raise AiAnswerParseError(f"unparseable LLM output: {e}") from e

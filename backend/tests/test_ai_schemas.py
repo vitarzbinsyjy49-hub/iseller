@@ -103,3 +103,43 @@ def test_quick_replies_collapse_whitespace():
 @pytest.mark.parametrize("bad", [None, "строка", 42, {"a": 1}])
 def test_quick_replies_survive_garbage(bad):
     assert _answer(quick_replies=bad).quick_replies == []
+
+
+# ---------- сценарный чат (Trade-In/бизнес/опт) ----------
+
+from app.services.ai_schemas import ScenarioTurnAnswer, parse_scenario_turn  # noqa: E402
+
+
+def test_parse_scenario_turn_field_value():
+    a = parse_scenario_turn('{"type": "field_value", "value": "damaged", "reply": null}')
+    assert a.type == "field_value"
+    assert a.value == "damaged"
+    assert a.reply is None
+
+
+def test_parse_scenario_turn_answer_question():
+    a = parse_scenario_turn('{"type": "answer_question", "value": null, "reply": "Гарантия 1 месяц."}')
+    assert a.type == "answer_question"
+    assert a.reply == "Гарантия 1 месяц."
+
+
+def test_parse_scenario_turn_fenced_json():
+    a = parse_scenario_turn('```json\n{"type": "unclear", "value": null, "reply": "Не понял"}\n```')
+    assert a.type == "unclear"
+
+
+def test_parse_scenario_turn_unknown_type_becomes_unclear():
+    a = parse_scenario_turn('{"type": "delete_database", "value": null, "reply": null}')
+    assert a.type == "unclear"
+
+
+@pytest.mark.parametrize("raw", ["", "   ", "не json вообще", '{"type": }'])
+def test_parse_scenario_turn_unrepairable_raises(raw):
+    with pytest.raises(AiAnswerParseError):
+        parse_scenario_turn(raw)
+
+
+def test_scenario_turn_reply_length_capped():
+    long_reply = "x" * 500
+    a = ScenarioTurnAnswer.model_validate({"type": "answer_question", "reply": long_reply})
+    assert len(a.reply) <= 300
