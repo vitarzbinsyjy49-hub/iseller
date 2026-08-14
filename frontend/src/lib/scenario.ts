@@ -7,7 +7,7 @@
 
 export type ScenarioKey = "trade_in" | "b2b" | "wholesale";
 
-export type OptionItem = { value: string; label: string };
+export type OptionItem = { value: string; label: string; synonyms?: string[] };
 export type Field =
   | { kind: "chips"; key: string; label: string; required?: boolean; options: OptionItem[] }
   | { kind: "text"; key: string; label: string; required?: boolean; placeholder?: string; target: "metadata" }
@@ -20,6 +20,10 @@ export type ScenarioConfig = {
   cta: string;
   managerRole: "trade_in" | "b2b" | "wholesale";
   fields: Field[];
+  /** Вступительная реплика AI-чата (scenario_chat.ts) — статика, без модели. */
+  intro: string;
+  /** Реплика перед кнопкой отправки заявки — статика, без модели. */
+  closingHook: string;
 };
 
 /** prefill-пункт меню (MacBook). soft — мягкий пошаговый подбор. */
@@ -35,18 +39,28 @@ export const SCENARIOS: Record<ScenarioKey, ScenarioConfig> = {
     subtitle: "Пара шагов, и менеджер пришлёт оценку",
     cta: "Получить оценку",
     managerRole: "trade_in",
+    intro: "Оценим вашу технику и предложим обмен на новое устройство или выкуп. "
+      + "Самовывоз в Москве ежедневно 10:00–21:00 — можно приехать в день обращения, "
+      + "оценка и расчёт при проверке устройства.",
+    closingHook: "Проверьте данные ниже и отправьте заявку — её рассмотрит trade-in "
+      + "менеджер, обычно в течение дня.",
     fields: [
       { kind: "chips", key: "device_type", label: "Тип устройства", required: true, options: [
-        { value: "iphone", label: "iPhone" }, { value: "macbook", label: "MacBook" },
-        { value: "ipad", label: "iPad" }, { value: "apple_watch", label: "Apple Watch" },
-        { value: "other", label: "Другое" }] },
+        { value: "iphone", label: "iPhone", synonyms: ["айфон", "apple phone"] },
+        { value: "macbook", label: "MacBook", synonyms: ["макбук", "ноутбук apple"] },
+        { value: "ipad", label: "iPad", synonyms: ["айпад", "планшет apple"] },
+        { value: "apple_watch", label: "Apple Watch", synonyms: ["часы", "эпл вотч", "эппл вотч"] },
+        { value: "other", label: "Другое", synonyms: ["другое", "иное"] }] },
       { kind: "text", key: "model", label: "Модель", required: true, placeholder: "Напр. iPhone 15 Pro", target: "metadata" },
       { kind: "text", key: "memory", label: "Память (необязательно)", placeholder: "256 ГБ", target: "metadata" },
       { kind: "chips", key: "condition", label: "Состояние", required: true, options: [
-        { value: "excellent", label: "Отличное" }, { value: "normal", label: "Нормальное" },
-        { value: "damaged", label: "Есть повреждения" }, { value: "dead", label: "Не включается" }] },
+        { value: "excellent", label: "Отличное", synonyms: ["идеальное", "как новый", "без царапин"] },
+        { value: "normal", label: "Нормальное", synonyms: ["б/у", "бу", "обычное", "потёртости"] },
+        { value: "damaged", label: "Есть повреждения", synonyms: ["треснул", "разбит", "скол", "трещина", "поцарапан"] },
+        { value: "dead", label: "Не включается", synonyms: ["не работает", "дохлый", "кирпич"] }] },
       { kind: "chips", key: "intent", label: "Что хотите сделать", required: true, options: [
-        { value: "exchange", label: "Обменять на другое" }, { value: "sell", label: "Продать" }] },
+        { value: "exchange", label: "Обменять на другое", synonyms: ["обменять", "обмен", "поменять"] },
+        { value: "sell", label: "Продать", synonyms: ["продажа", "выкуп", "выкупите"] }] },
       { kind: "text", key: "desired_device", label: "Что хотите получить (необязательно)", placeholder: "Напр. iPhone 16 Pro", target: "metadata" },
       { kind: "textarea", key: "message", label: "Комментарий (необязательно)", placeholder: "Комплектация, состояние…" },
     ],
@@ -57,11 +71,18 @@ export const SCENARIOS: Record<ScenarioKey, ScenarioConfig> = {
     subtitle: "Оставьте вводные, пришлём предложение",
     cta: "Получить предложение",
     managerRole: "b2b",
+    intro: "Подберём поставку под вашу компанию: смартфоны, ноутбуки, техника для "
+      + "сотрудников. Документы для юрлиц, оплата по счёту — детали обсудит менеджер.",
+    closingHook: "Проверьте данные ниже и отправьте заявку — B2B-менеджер пришлёт "
+      + "предложение под ваш объём.",
     fields: [
       { kind: "chips", key: "equipment", label: "Что требуется", required: true, options: [
-        { value: "smartphones", label: "Смартфоны" }, { value: "laptops", label: "Ноутбуки" },
-        { value: "tablets", label: "Планшеты" }, { value: "staff_devices", label: "Техника для сотрудников" },
-        { value: "complex", label: "Комплексная поставка" }, { value: "other", label: "Другое" }] },
+        { value: "smartphones", label: "Смартфоны", synonyms: ["телефоны"] },
+        { value: "laptops", label: "Ноутбуки", synonyms: ["ноутбук", "макбуки", "ноуты"] },
+        { value: "tablets", label: "Планшеты", synonyms: ["планшет", "айпады"] },
+        { value: "staff_devices", label: "Техника для сотрудников", synonyms: ["сотрудники", "персонал", "команда"] },
+        { value: "complex", label: "Комплексная поставка", synonyms: ["всё сразу", "полная поставка"] },
+        { value: "other", label: "Другое", synonyms: ["другое", "иное"] }] },
       { kind: "chips", key: "quantity_range", label: "Примерное количество", required: true, options: [
         { value: "1-5", label: "1–5" }, { value: "5-20", label: "5–20" },
         { value: "20-50", label: "20–50" }, { value: "50+", label: "50+" }] },
@@ -76,11 +97,16 @@ export const SCENARIOS: Record<ScenarioKey, ScenarioConfig> = {
     subtitle: "Укажите категорию и объём партии",
     cta: "Запросить оптовую цену",
     managerRole: "wholesale",
+    intro: "Назовите категорию и объём партии — посчитаем оптовую цену.",
+    closingHook: "Проверьте данные ниже и отправьте заявку — оптовый менеджер пришлёт "
+      + "цену под партию.",
     fields: [
       { kind: "chips", key: "category", label: "Категория", required: true, options: [
-        { value: "iphone", label: "iPhone" }, { value: "macbook", label: "MacBook" },
-        { value: "other_tech", label: "Другая техника" }, { value: "accessories", label: "Аксессуары" },
-        { value: "mixed", label: "Смешанная партия" }] },
+        { value: "iphone", label: "iPhone", synonyms: ["айфон", "айфоны"] },
+        { value: "macbook", label: "MacBook", synonyms: ["макбук", "макбуки"] },
+        { value: "other_tech", label: "Другая техника", synonyms: ["прочая техника"] },
+        { value: "accessories", label: "Аксессуары", synonyms: ["чехлы", "кабели"] },
+        { value: "mixed", label: "Смешанная партия", synonyms: ["микс", "разное"] }] },
       { kind: "chips", key: "quantity_range", label: "Партия", required: true, options: [
         { value: "5-10", label: "5–10" }, { value: "10-30", label: "10–30" },
         { value: "30-100", label: "30–100" }, { value: "100+", label: "100+" }] },

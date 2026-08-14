@@ -88,3 +88,22 @@ describe("SCENARIOS config", () => {
     }
   });
 });
+
+describe("SCENARIOS intro/closingHook/synonyms", () => {
+  it("у каждого сценария есть непустые intro и closingHook", () => {
+    for (const key of ["trade_in", "b2b", "wholesale"] as const) {
+      expect(SCENARIOS[key].intro.length).toBeGreaterThan(10);
+      expect(SCENARIOS[key].closingHook.length).toBeGreaterThan(10);
+    }
+  });
+
+  it("chips-поля с несколькими вариантами имеют синонимы хотя бы у части опций", () => {
+    const conditionField = SCENARIOS.trade_in.fields.find((f) => f.key === "condition");
+    expect(conditionField?.kind).toBe("chips");
+    if (conditionField?.kind === "chips") {
+      const damaged = conditionField.options.find((o) => o.value === "damaged");
+      expect(damaged?.synonyms?.length).toBeGreaterThan(0);
+      expect(damaged?.synonyms).toContain("треснул");
+    }
+  });
+});
