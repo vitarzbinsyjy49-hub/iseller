@@ -16,9 +16,11 @@
 """
 import logging
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.session import get_db
 from app.services.telegram_bot import build_reply, send_reply
 
 logger = logging.getLogger("techshop.telegram")
@@ -30,6 +32,7 @@ router = APIRouter(prefix="/telegram", tags=["telegram"])
 async def telegram_webhook(
     request: Request,
     x_telegram_bot_api_secret_token: str = Header(default=""),
+    db: Session = Depends(get_db),
 ) -> dict:
     # Секрет не задан => вебхук выключён. Иначе публичный путь принимал бы
     # апдейты от кого угодно.
@@ -56,7 +59,7 @@ async def telegram_webhook(
         chat_id = (message.get("chat") or {}).get("id")
         if chat_id is None:
             return {"ok": True}
-        send_reply(chat_id, reply, incoming_message_id=message.get("message_id"))
+        send_reply(chat_id, reply, incoming_message_id=message.get("message_id"), db=db)
     except Exception:  # noqa: BLE001 — см. пункт 1 в докстринге модуля
         logger.exception(
             "telegram webhook: не удалось обработать апдейт %s",

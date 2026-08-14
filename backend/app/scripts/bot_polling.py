@@ -291,7 +291,12 @@ def run() -> int:
                     chat_id = (message.get("chat") or {}).get("id")
                     if chat_id is None:
                         continue
-                    send_reply(chat_id, reply, incoming_message_id=message.get("message_id"))
+                    # db=: чистый чат обязан пережить рестарт бота (на каждый
+                    # деплой) — без сессии трекинг живёт только в памяти
+                    # процесса и пропадает вместе с ней. См. telegram_bot.send_reply.
+                    from app.db.session import SessionLocal
+                    with SessionLocal() as db:
+                        send_reply(chat_id, reply, incoming_message_id=message.get("message_id"), db=db)
                     logger.info("ответ отправлен в чат %s", chat_id)
                 except Exception:  # noqa: BLE001 — один плохой апдейт не роняет бота
                     logger.exception("не удалось обработать апдейт %s", update.get("update_id"))

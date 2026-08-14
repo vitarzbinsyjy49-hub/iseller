@@ -19,6 +19,12 @@ class User(Base):
     # витрине показать инициалы вместо <img>, а не то, что аватар не загрузился.
     photo_url: Mapped[str | None] = mapped_column(String(512))
     role: Mapped[str] = mapped_column(String(16), default="customer")  # customer | admin
+    # Id последнего сообщения бота в личном чате с этим пользователем —
+    # send_reply() удаляет его перед отправкой следующего (чистый чат).
+    # ОБЯЗАНО жить в БД, а не в памяти процесса: бот перезапускается на каждый
+    # деплой, и внутрипроцессный словарь после рестарта пуст — старые сообщения
+    # переставали удаляться, и чат начинал копить дубли ровно с того момента.
+    last_bot_message_id: Mapped[int | None] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

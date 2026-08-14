@@ -220,7 +220,7 @@ def test_webhook_is_disabled_when_secret_not_configured(client, monkeypatch):
 def test_webhook_sends_reply(client, monkeypatch):
     sent: list[tuple] = []
 
-    def fake_send(chat_id, reply, incoming_message_id=None):
+    def fake_send(chat_id, reply, incoming_message_id=None, db=None):
         sent.append((chat_id, reply, incoming_message_id))
 
     monkeypatch.setattr(telegram_bot, "send_reply", fake_send)
@@ -237,7 +237,7 @@ def test_webhook_sends_reply(client, monkeypatch):
 
 def test_webhook_answers_200_even_if_sending_fails(client, monkeypatch):
     """Иначе Telegram будет ретраить и пользователь получит дубли ответов."""
-    def boom(chat_id, reply, incoming_message_id=None):
+    def boom(chat_id, reply, incoming_message_id=None, db=None):
         raise RuntimeError("Telegram недоступен")
     monkeypatch.setattr("app.api.telegram.send_reply", boom)
     r = client.post("/api/telegram/webhook", json=private_message("/start"),
@@ -253,7 +253,7 @@ def test_webhook_survives_broken_body(client):
 
 
 def test_webhook_does_not_leak_internals(client, monkeypatch):
-    def boom(chat_id, reply, incoming_message_id=None):
+    def boom(chat_id, reply, incoming_message_id=None, db=None):
         raise RuntimeError("секрет в тексте ошибки")
     monkeypatch.setattr("app.api.telegram.send_reply", boom)
     r = client.post("/api/telegram/webhook", json=private_message("/start"),
@@ -564,6 +564,52 @@ def test_send_reply_ignores_delete_failures(monkeypatch):
     telegram_bot._last_bot_message[555] = 999
 
     telegram_bot.send_reply(555, Reply("раздел"), incoming_message_id=42)  # не должно бросить
+
+
+# --------------------------------------- чистый чат переживает рестарт бота
+
+def test_send_reply_with_db_persists_last_message_id_across_restarts(db, monkeypatch):
+    """Регрессия с прода: бот перезапускается на каждый деплой, внутрипроцессный
+    _last_bot_message после рестарта пуст, и старое сообщение переставало
+    удаляться — чат копил дубли "Открыть каталог" один на каждый деплой.
+
+    С db= трекинг живёт в users.last_bot_message_id, а не в памяти процесса —
+    поэтому явно чистим _last_bot_message между вызовами, симулируя рестарт:
+    поведение обязано остаться прежним (удалить старое, отправить новое)."""
+    from app.models.user import User
+
+    user = User(telegram_id=555, first_name="Тест")
+    db.add(user)
+    db.commit()
+
+    calls = []
+    monkeypatch.setattr(
+        "app.services.telegram_publisher.call",
+        lambda method, payload: calls.append((method, payload)) or {"message_id": len(calls) + 100},
+    )
+
+    telegram_bot.send_reply(555, Reply("раздел 1"), db=db)
+    telegram_bot._last_bot_message.clear()  # "рестарт бота" — память процесса пуста
+    telegram_bot.send_reply(555, Reply("раздел 2"), db=db)
+
+    assert [c[0] for c in calls] == ["sendMessage", "deleteMessage", "sendMessage"]
+    assert calls[1][1] == {"chat_id": 555, "message_id": 101}
+    db.refresh(user)
+    assert user.last_bot_message_id == 103
+
+
+def test_send_reply_without_a_known_user_skips_persistence_quietly(db, monkeypatch):
+    """chat_id без строки в users (написал боту, ни разу не открыв приложение)
+    — трекинг молча не работает, апдейт всё равно должен обработаться."""
+    calls = []
+    monkeypatch.setattr(
+        "app.services.telegram_publisher.call",
+        lambda method, payload: calls.append((method, payload)) or {"message_id": 1},
+    )
+
+    telegram_bot.send_reply(999999, Reply("привет"), db=db)  # не должно бросить
+
+    assert [c[0] for c in calls] == ["sendMessage"]
 
 
 def test_section_reply_escapes_the_title(monkeypatch):

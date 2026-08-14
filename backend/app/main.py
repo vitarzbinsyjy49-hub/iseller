@@ -216,6 +216,9 @@ def _apply_demo_migrations() -> None:
         # price_offer, сценарные). users.telegram_id уже BigInteger, здесь —
         # тот же тип, что и должен был быть с самого начала.
         "ALTER TABLE leads ALTER COLUMN telegram_id TYPE BIGINT",
+        # Чистый чат бота переживает рестарт: id последнего сообщения бота
+        # хранится в БД, а не в памяти процесса (см. models/user.py).
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_bot_message_id BIGINT",
     ]
     for stmt in statements:
         try:

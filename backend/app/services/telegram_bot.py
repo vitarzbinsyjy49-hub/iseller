@@ -325,9 +325,12 @@ def build_reply(update: dict) -> Reply | None:
     return Reply(FALLBACK_TEXT, main_keyboard())
 
 
-#: message_id последнего ответа бота в чате — чтобы следующий ответ удалил
-#: его, а не копился рядом. В памяти процесса и не переживает рестарт: это ok,
-#: максимум одно старое сообщение не удалится до следующего ответа бота.
+#: message_id последнего ответа бота в чате, для звонков БЕЗ db (тесты,
+#: разовые скрипты) — тогда трекинг живёт в памяти процесса и не переживает
+#: рестарт. Продовые вызовы (bot_polling.py, api/telegram.py) всегда передают
+#: db — см. _load_last_bot_message/_save_last_bot_message ниже: бот
+#: перезапускается на каждый деплой, и внутрипроцессный словарь после
+#: рестарта пуст — именно так чат начинал копить дубли ровно с этого момента.
 _last_bot_message: dict[int | str, int] = {}
 
 
@@ -343,7 +346,39 @@ def _delete_message(chat_id: int | str, message_id: int) -> None:
         pass
 
 
-def send_reply(chat_id: int | str, reply: Reply, *, incoming_message_id: int | None = None) -> None:
+def _load_last_bot_message(db, chat_id: int | str) -> int | None:
+    """Прочитать сохранённый id из users.last_bot_message_id.
+
+    chat_id приватного чата с ботом всегда равен telegram_id (build_reply
+    отвечает только на private-сообщения). Строки может не быть — человек
+    написал боту, ни разу не открыв приложение (Mini App создаёт User при
+    логине); тогда трекинг молча не работает, апдейт всё равно обрабатывается.
+    """
+    from app.models.user import User
+
+    try:
+        user = db.query(User).filter(User.telegram_id == int(chat_id)).first()
+    except (TypeError, ValueError):
+        return None
+    return user.last_bot_message_id if user else None
+
+
+def _save_last_bot_message(db, chat_id: int | str, message_id: int | None) -> None:
+    from app.models.user import User
+
+    try:
+        user = db.query(User).filter(User.telegram_id == int(chat_id)).first()
+    except (TypeError, ValueError):
+        return
+    if user is None:
+        return
+    user.last_bot_message_id = message_id
+    db.commit()
+
+
+def send_reply(
+    chat_id: int | str, reply: Reply, *, incoming_message_id: int | None = None, db=None,
+) -> None:
     """Отправить ответ. Ошибки Telegram логируются вызывающим кодом.
 
     `parse_mode=HTML` обязателен: тексты ответов содержат разметку (`<b>` в
@@ -356,10 +391,14 @@ def send_reply(chat_id: int | str, reply: Reply, *, incoming_message_id: int | N
     Telegram отклонить сообщение ЦЕЛИКОМ, и человек не получит ничего.
 
     Чат держится чистым: перед отправкой удаляется предыдущий ответ бота в
-    этом чате (см. `_last_bot_message`) — иначе команды пользователя копят в
-    чате одинаковые сообщения. `incoming_message_id` — id сообщения самого
-    пользователя (`/start`, `/catalog`...), которое вызвало этот ответ; оно
-    удаляется тоже, вызывающий код передаёт его из апдейта Telegram.
+    этом чате — иначе команды пользователя копят в чате одинаковые сообщения.
+    `db` — сессия для персистентного трекинга (users.last_bot_message_id);
+    без неё используется словарь в памяти процесса (см. `_last_bot_message`),
+    это годится только для тестов/разовых вызовов — продовые вызовы обязаны
+    передавать db, иначе трекинг не переживёт следующий деплой.
+    `incoming_message_id` — id сообщения самого пользователя (`/start`,
+    `/catalog`...), которое вызвало этот ответ; оно удаляется тоже, вызывающий
+    код передаёт его из апдейта Telegram.
     Уведомления (`services/notifications.py` — падение цены, неоплаченная
     корзина) и посты канала идут другими функциями, этот путь их не касается —
     их история остаётся навсегда.
@@ -367,7 +406,10 @@ def send_reply(chat_id: int | str, reply: Reply, *, incoming_message_id: int | N
     if not settings.TELEGRAM_BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured")
 
-    previous_message_id = _last_bot_message.pop(chat_id, None)
+    if db is not None:
+        previous_message_id = _load_last_bot_message(db, chat_id)
+    else:
+        previous_message_id = _last_bot_message.pop(chat_id, None)
     if previous_message_id is not None:
         _delete_message(chat_id, previous_message_id)
     if incoming_message_id is not None:
@@ -399,4 +441,7 @@ def send_reply(chat_id: int | str, reply: Reply, *, incoming_message_id: int | N
     if isinstance(result, dict):
         message_id = result.get("message_id")
         if message_id is not None:
-            _last_bot_message[chat_id] = int(message_id)
+            if db is not None:
+                _save_last_bot_message(db, chat_id, int(message_id))
+            else:
+                _last_bot_message[chat_id] = int(message_id)
