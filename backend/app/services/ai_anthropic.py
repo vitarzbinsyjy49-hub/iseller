@@ -220,3 +220,50 @@ async def call_anthropic(*, system: str, message: str, context: str, candidates:
         "model": resp.model,
         "total_ms": int((time.monotonic() - t0) * 1000),
     }
+
+
+async def call_scenario_turn(*, system: str, message: str) -> dict:
+    """Компактный вызов для AI-эскалации сценарного чата (Trade-In/бизнес/опт).
+
+    Без structured outputs (`output_config`): ответ короткий (type/value/reply),
+    JSON гарантирован промптом + repair-парсером `parse_scenario_turn` — заводить
+    вторую JSON-схему ради трёх полей избыточно. Контракт возврата такой же, как
+    у `call_anthropic`/`call_gateway`: {content, model, total_ms}.
+    """
+    if not settings.AI_ANTHROPIC_API_KEY:
+        raise AIGatewayError("Anthropic is not configured (AI_ANTHROPIC_API_KEY)")
+
+    t0 = time.monotonic()
+    try:
+        resp = await _client().messages.create(
+            model=settings.AI_ANTHROPIC_MODEL,
+            max_tokens=300,
+            system=system,
+            messages=[{"role": "user", "content": message}],
+        )
+    except anthropic.RateLimitError as e:
+        logger.warning("Anthropic rate limited (scenario turn)")
+        raise AIGatewayError("Anthropic rate limited") from e
+    except anthropic.APIStatusError as e:
+        logger.warning("Anthropic HTTP %s (scenario turn)", e.status_code)
+        raise AIGatewayError(f"Anthropic returned HTTP {e.status_code}") from e
+    except anthropic.APIConnectionError as e:
+        logger.warning("Anthropic unreachable (scenario turn): %s", type(e).__name__)
+        raise AIGatewayError("Anthropic unreachable") from e
+
+    if resp.stop_reason == "refusal":
+        logger.warning("Anthropic refused the request (scenario turn)")
+        raise AIGatewayError("Anthropic refused the request")
+    if resp.stop_reason == "max_tokens":
+        logger.warning("Anthropic response truncated by max_tokens (scenario turn)")
+        raise AIGatewayError("Anthropic response truncated")
+
+    text = "".join(b.text for b in resp.content if b.type == "text").strip()
+    if not text:
+        raise AIGatewayError("Anthropic returned empty content")
+
+    return {
+        "content": text,
+        "model": resp.model,
+        "total_ms": int((time.monotonic() - t0) * 1000),
+    }

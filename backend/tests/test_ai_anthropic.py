@@ -427,3 +427,57 @@ def test_no_proxy_by_default(monkeypatch):
     monkeypatch.setattr(settings, "AI_GATEWAY_PROXY_URL", "", raising=False)
     assert ai_anthropic._proxy_url() is None
     assert ai_anthropic._proxied_http_client() is None
+
+
+# ---------- call_scenario_turn (сценарный AI-чат) ----------
+
+from app.services.ai_anthropic import call_scenario_turn  # noqa: E402
+
+
+def test_scenario_turn_returns_gateway_shaped_dict(monkeypatch, anthropic_key):
+    _stub(monkeypatch, _Resp('{"type": "field_value", "value": "damaged", "reply": null}'))
+    got = run(call_scenario_turn(system="S", message="m"))
+    assert set(got) == {"content", "model", "total_ms"}
+    assert got["content"] == '{"type": "field_value", "value": "damaged", "reply": null}'
+
+
+def test_scenario_turn_uses_configured_model_no_schema(monkeypatch, anthropic_key):
+    """Компактный вызов без structured outputs — короткий ответ, JSON гарантирован
+    промптом + repair-парсером (parse_scenario_turn)."""
+    monkeypatch.setattr(settings, "AI_ANTHROPIC_MODEL", "claude-haiku-4-5", raising=False)
+    captured = _stub(monkeypatch, _Resp('{"type": "unclear", "value": null, "reply": null}'))
+    run(call_scenario_turn(system="СИСТЕМНЫЙ ПРОМПТ", message="m"))
+    assert captured["model"] == "claude-haiku-4-5"
+    assert captured["system"] == "СИСТЕМНЫЙ ПРОМПТ"
+    assert [m["role"] for m in captured["messages"]] == ["user"]
+    assert "output_config" not in captured
+
+
+def test_scenario_turn_missing_key_is_error(monkeypatch):
+    monkeypatch.setattr(settings, "AI_ANTHROPIC_API_KEY", "", raising=False)
+    ai_anthropic._client.cache_clear()
+    with pytest.raises(AIGatewayError):
+        run(call_scenario_turn(system="S", message="m"))
+
+
+@pytest.mark.parametrize("exc_cls,status", [
+    (anthropic.RateLimitError, 429),
+    (anthropic.AuthenticationError, 401),
+])
+def test_scenario_turn_api_errors_become_gateway_error(monkeypatch, anthropic_key, exc_cls, status):
+    _stub(monkeypatch, _err(exc_cls, status))
+    with pytest.raises(AIGatewayError):
+        run(call_scenario_turn(system="S", message="m"))
+
+
+@pytest.mark.parametrize("stop_reason", ["refusal", "max_tokens"])
+def test_scenario_turn_bad_stop_reason_becomes_gateway_error(monkeypatch, anthropic_key, stop_reason):
+    _stub(monkeypatch, _Resp('{"type": "uncl', stop_reason=stop_reason))
+    with pytest.raises(AIGatewayError):
+        run(call_scenario_turn(system="S", message="m"))
+
+
+def test_scenario_turn_empty_content_becomes_gateway_error(monkeypatch, anthropic_key):
+    _stub(monkeypatch, _Resp("   "))
+    with pytest.raises(AIGatewayError):
+        run(call_scenario_turn(system="S", message="m"))
