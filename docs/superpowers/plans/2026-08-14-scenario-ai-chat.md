@@ -1237,6 +1237,16 @@ describe("matchChip", () => {
     const model = SCENARIOS.trade_in.fields.find((f) => f.key === "model")!;
     expect(matchChip(model, "iPhone 15 Pro")).toBeNull();
   });
+
+  it("короткий синоним не матчится как часть другого слова", () => {
+    // У "normal" есть синоним "бу" (2 буквы) — подстрочный матчинг случайно
+    // совпал бы с любым словом на "бу-" (например «будет»), и свободный текст
+    // про гарантию молча уехал бы в «Состояние = Нормальное» вместо эскалации
+    // к AI. Матчинг обязан требовать границу слова.
+    expect(matchChip(condition, "не знаю, что будет с гарантией")).toBeNull();
+    // а сам синоним отдельным словом — по-прежнему матчится
+    expect(matchChip(condition, "телефон бу, но работает")).toBe("normal");
+  });
 });
 
 describe("looksLikeQuestion", () => {
@@ -1330,16 +1340,33 @@ function normalize(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** Локальный матчинг свободного текста на chips-вариант: точный label или
- *  вхождение синонима. null для не-chips полей и при отсутствии совпадения —
- *  тогда решает needsEscalation, эскалировать ли к AI. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** needle встречается в haystack как отдельное слово/фраза, не как часть
+ *  другого слова. JS `\b` не годится: он основан на ASCII `\w` и не видит
+ *  границ кириллицы (переход кириллица-кириллица не считается границей) —
+ *  поэтому границы проверяются вручную через lookaround по «не буква/не
+ *  цифра» (`\p{L}`/`\p{N}`, флаг `u`). Без этого короткий синоним «бу»
+ *  случайно матчился бы на «будет»: подстрока есть, слово — другое. */
+function containsAsWord(haystack: string, needle: string): boolean {
+  if (!needle) return false;
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(needle)}(?![\\p{L}\\p{N}])`, "u");
+  return re.test(haystack);
+}
+
+/** Локальный матчинг свободного текста на chips-вариант: label или синоним,
+ *  найденный как отдельное слово/фраза (не подстрока внутри другого слова).
+ *  null для не-chips полей и при отсутствии совпадения — тогда решает
+ *  needsEscalation, эскалировать ли к AI. */
 export function matchChip(field: Field, text: string): string | null {
   if (field.kind !== "chips") return null;
   const norm = normalize(text);
   if (!norm) return null;
   for (const opt of field.options) {
     const candidates = [opt.label, ...(opt.synonyms ?? [])].map(normalize);
-    if (candidates.some((c) => norm === c || norm.includes(c))) return opt.value;
+    if (candidates.some((c) => containsAsWord(norm, c))) return opt.value;
   }
   return null;
 }
