@@ -298,6 +298,14 @@ function ScenarioChatScreen({ scenario }: { scenario: ScenarioKey }) {
               Пропустить
             </button>
           )}
+          {currentStep.kind === "field" && !isRequired(currentStep.field) && (
+            <button
+              onClick={() => skipField(currentStep.field as Field)} disabled={pending}
+              className="tap shrink-0 rounded-xl2 bg-mutedbg px-4 text-sm font-semibold text-text disabled:opacity-50"
+            >
+              Пропустить
+            </button>
+          )}
           <button
             onClick={() => {
               if (currentStep.kind === "phone") handlePhoneSubmit(inputValue);
