@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, admin_promo, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, telegram, users
+from app.api import admin, admin_crm, admin_promo, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, scenario_chat, telegram, users
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import analytics_event as _analytics_event  # noqa: F401
@@ -82,6 +82,7 @@ app.include_router(favorites.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 # Sprint 1.5: Integration Layer (AI + каталог + аналитика)
 app.include_router(ai.router, prefix="/api")
+app.include_router(scenario_chat.router, prefix="/api")
 app.include_router(catalog.router, prefix="/api")
 app.include_router(events.router, prefix="/api")
 # Demo MVP: CRM (заявки) + расширенная админка

@@ -107,3 +107,75 @@ def test_empty_message_is_unclear_without_network(monkeypatch):
         scenario="trade_in", field_key="condition", options=OPTIONS, message="   ",
     ))
     assert ans == {"type": "unclear", "value": None, "reply": None}
+
+
+# ---------- HTTP-эндпоинт ----------
+
+from fastapi.testclient import TestClient
+
+from app.api.deps import get_current_user
+from app.db.session import get_db
+from app.main import app
+from app.models.user import User
+
+
+@pytest.fixture()
+def api_ctx(db):
+    u = User(telegram_id=601, first_name="Тест", username="testuser")
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = lambda: db.get(User, u.id)
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_turn_endpoint_happy_path(monkeypatch, api_ctx):
+    async def fake(**kwargs):
+        return {"type": "field_value", "value": "damaged", "reply": None}
+    monkeypatch.setattr("app.api.scenario_chat.answer_scenario_turn", fake)
+    res = api_ctx.post(
+        "/api/scenario-chat/turn",
+        json={
+            "scenario": "trade_in", "field_key": "condition",
+            "options": [{"value": "damaged", "label": "Повреждения"}],
+            "message": "треснул экран",
+        },
+    )
+    assert res.status_code == 200
+    assert res.json() == {"type": "field_value", "value": "damaged", "reply": None}
+
+
+def test_turn_endpoint_requires_auth(db):
+    """Без dependency_overrides реальный get_current_user отклоняет запрос
+    без валидного JWT — так же, как /api/ai/chat."""
+    client = TestClient(app)
+    res = client.post(
+        "/api/scenario-chat/turn",
+        json={"scenario": "trade_in", "field_key": "condition", "options": [], "message": "x"},
+    )
+    assert res.status_code in (401, 403)
+
+
+def test_turn_endpoint_rejects_unknown_scenario(api_ctx):
+    res = api_ctx.post(
+        "/api/scenario-chat/turn",
+        json={"scenario": "hacking", "field_key": "condition", "options": [], "message": "x"},
+    )
+    assert res.status_code == 422
+
+
+def test_turn_endpoint_rate_limited(monkeypatch, api_ctx):
+    monkeypatch.setattr("app.api.scenario_chat.check_rate_limit", lambda *a, **kw: False)
+    res = api_ctx.post(
+        "/api/scenario-chat/turn",
+        json={"scenario": "trade_in", "field_key": "condition", "options": [], "message": "x"},
+    )
+    assert res.status_code == 429
