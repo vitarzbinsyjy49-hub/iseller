@@ -2133,6 +2133,125 @@ git commit -m "feat(главная): Trade-In/бизнес/опт открыва
 
 ---
 
+## Task 16b: `pages/Profile.tsx` — точки входа ведут в AI-чат
+
+> Добавлена после ревью Task 17: `Profile.tsx` (раздел «Связаться с нами») —
+> отдельная копия того же паттерна, что был в `Home.tsx` до Task 16
+> (`scenario`/`requirePhone`/`managerUrlFor`/`openScenario`/`ScenarioRequestSheet`),
+> пропущенная при брейнсторминге и найденная только на реализации: удаление
+> `ScenarioRequestSheet` в Task 17 без этой миграции сломало бы `/profile`.
+> См. исправленный раздел «Точки входа» в
+> `docs/superpowers/specs/2026-08-14-scenario-ai-chat-design.md`.
+
+**Files:**
+- Modify: `frontend/src/pages/Profile.tsx`
+
+**Interfaces:**
+- Consumes: `navigate` (`useNavigate()`, уже в области видимости компонента),
+  `track` (`lib/analytics.ts`), `type ScenarioKey` (`lib/scenario.ts`).
+
+- [ ] **Step 1: Заменить открытие sheet на навигацию**
+
+В `frontend/src/pages/Profile.tsx` заменить:
+
+```typescript
+  // Опт / бизнес / Trade-In открывают ту же встроенную сценарную заявку, что и
+  // быстрые действия на Главной: один и тот же раздел не должен вести себя
+  // по-разному в зависимости от того, откуда в него зашли.
+  const [scenario, setScenario] = useState<ScenarioKey | null>(null);
+  // Контакт обязателен, только если менеджеру некуда ответить в Telegram.
+  const requirePhone = !user?.username;
+
+  const managerUrlFor = (k: ScenarioKey): string =>
+    (k === "trade_in" ? config.manager_tradein_url
+      : k === "b2b" ? config.manager_b2b_url
+      : config.manager_wholesale_url) || config.manager_retail_url;
+
+  function openScenario(k: ScenarioKey) {
+    track("quick_scenario_clicked", { scenario: k, from: "profile" });
+    setScenario(k);
+  }
+```
+
+на:
+
+```typescript
+  // v6: Опт/бизнес/Trade-In ведут в AI-чат заявки (/apply/:scenario) — тот же
+  // раздел, что и с Главной (см. Home.tsx), не встроенный bottom-sheet.
+  function openScenario(k: ScenarioKey) {
+    track("quick_scenario_clicked", { scenario: k, from: "profile" });
+    navigate(`/apply/${k}`);
+  }
+```
+
+- [ ] **Step 2: Убрать рендер `ScenarioRequestSheet`**
+
+Заменить:
+
+```tsx
+      {scenario && (
+        <ScenarioRequestSheet
+          scenario={scenario}
+          managerUrl={managerUrlFor(scenario)}
+          requirePhone={requirePhone}
+          onClose={() => setScenario(null)}
+        />
+      )}
+```
+
+на ничего (блок удаляется целиком — в отличие от `Home.tsx`, у `Profile.tsx` нет
+меню MacBook рядом, заменять блок не на что).
+
+- [ ] **Step 3: Убрать теперь неиспользуемый импорт**
+
+Заменить:
+
+```typescript
+import { ScenarioRequestSheet } from "../components/ScenarioSheet";
+```
+
+на ничего (строка удаляется — `Profile.tsx` не использует из этого файла больше
+ничего; `type ScenarioKey` импортируется отдельно из `../lib/scenario` и остаётся).
+
+- [ ] **Step 4: Проверить, что `user`/`useState` всё ещё используются в файле**
+
+`const user = useAuthStore((s) => s.user);` и `useState` (уже использовался для
+`leadCount`) почти наверняка нужны для другого в этом файле — проверить
+`grep -n "\buser\b" frontend/src/pages/Profile.tsx` и не удалять то, что
+используется. Убедиться отдельно, что `requirePhone`/`managerUrlFor` (только что
+удалённые) нигде больше в файле не встречаются: `grep -n
+"requirePhone\|managerUrlFor\|ScenarioRequestSheet\b" frontend/src/pages/Profile.tsx`
+не должен находить ничего, кроме, возможно, не связанных с сценариями похожих имён
+(если такие найдутся — не удалять их, это другая функциональность).
+
+- [ ] **Step 5: Проверить типы и собрать**
+
+Run: `cd frontend && npx tsc --noEmit && npm run build`
+Expected: без ошибок.
+
+- [ ] **Step 6: Прогнать frontend-тесты**
+
+Run: `cd frontend && npx vitest run`
+Expected: все PASS (без изменений в числе — `Profile.tsx` не имеет отдельного
+тестового файла).
+
+- [ ] **Step 7: Ручная проверка в браузере**
+
+В `/profile`, раздел «Связаться с нами» — клик по «Оптовая закупка» / «Поставка
+для компании» / «Trade-In / предложить технику» должен вести на
+`/apply/wholesale`, `/apply/b2b`, `/apply/trade_in` соответственно, не открывать
+больше bottom-sheet. «Написать менеджеру» (первая строка раздела, использует
+`openManager`, не `openScenario`) — не трогаем, ведёт себя как раньше.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add frontend/src/pages/Profile.tsx
+git commit -m "feat(профиль): Trade-In/бизнес/опт открывают AI-чат вместо формы"
+```
+
+---
+
 ## Task 17: `components/ScenarioSheet.tsx` — удалить `ScenarioRequestSheet`
 
 **Files:**

@@ -86,6 +86,11 @@ AI полностью недоступен — ядро флоу детерми�
 - Точки входа — везде, как решили в брейнсторминге:
   - `Home.tsx`: `openScenario(k)` вместо `setScenario(k)` (который открывал
     `ScenarioRequestSheet`) делает `navigate(\`/apply/${k}\`)`.
+  - `Profile.tsx` (раздел «Связаться с нами») — та же замена: у него своя
+    копия того же паттерна (`scenario`/`requirePhone`/`managerUrlFor`/
+    `openScenario`), пропущенная в первой версии этого документа и найденная
+    только на реализации (`ScenarioRequestSheet` там ещё жив после переключения
+    одного лишь `Home.tsx`). Мигрируется идентично.
   - `AiSearch.tsx`/`ai/types.ts`: новый вариант `AiAction.type: "scenario"` с
     полем `scenario: ManagerRoleScenario` (`trade_in|b2b|wholesale`) —
     добавляется **рядом** с существующим `manager`, не вместо: пользователь,
