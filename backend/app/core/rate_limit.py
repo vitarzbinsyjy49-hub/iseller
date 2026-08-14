@@ -8,9 +8,11 @@
 - Redis недоступен -> мягкая деградация на in-memory, backend не падает;
 - ошибка самого лимитера НИКОГДА не роняет запрос (fail-open): пропускаем.
 
-Скользящее окно 60 секунд. Проверка и учёт — атомарно на процесс (threading.Lock),
-чего достаточно для одного uvicorn-воркера dev/staging. Для нескольких воркеров/реплик
-включите Redis.
+Окно по умолчанию — 60 секунд (минутный лимит AI-чата), но размер окна
+параметризуем (`window_seconds`): дневной потолок `AI_CHAT_DAILY_LIMIT_PER_USER`
+использует тот же механизм с окном в сутки, отдельного лимитера под него нет.
+Проверка и учёт — атомарно на процесс (threading.Lock), чего достаточно для
+одного uvicorn-воркера dev/staging. Для нескольких воркеров/реплик включите Redis.
 """
 import logging
 import threading
@@ -59,9 +61,9 @@ def _limit_per_minute() -> int:
         return 10
 
 
-def _allow_in_memory(key: str, limit: int) -> bool:
+def _allow_in_memory(key: str, limit: int, window_seconds: int) -> bool:
     now = time.monotonic()
-    cutoff = now - _WINDOW_SECONDS
+    cutoff = now - window_seconds
     with _lock:
         bucket = _hits.get(key)
         if bucket is None:
@@ -85,14 +87,14 @@ def _allow_in_memory(key: str, limit: int) -> bool:
         return True
 
 
-def _allow_redis(key: str, limit: int) -> bool:
-    """Фиксированное окно на 60с через INCR+EXPIRE. Ошибка -> сигнал перейти на in-memory."""
+def _allow_redis(key: str, limit: int, window_seconds: int) -> bool:
+    """Фиксированное окно через INCR+EXPIRE. Ошибка -> сигнал перейти на in-memory."""
     global _redis
     try:
-        redis_key = f"rl:{key}:{int(time.time() // _WINDOW_SECONDS)}"
+        redis_key = f"rl:{key}:{int(time.time() // window_seconds)}"
         pipe = _redis.pipeline()
         pipe.incr(redis_key, 1)
-        pipe.expire(redis_key, _WINDOW_SECONDS)
+        pipe.expire(redis_key, window_seconds)
         count, _ = pipe.execute()
         return int(count) <= limit
     except Exception as e:  # noqa: BLE001
@@ -101,11 +103,14 @@ def _allow_redis(key: str, limit: int) -> bool:
         raise
 
 
-def check_rate_limit(key: str, limit: int | None = None) -> bool:
+def check_rate_limit(key: str, limit: int | None = None, window_seconds: int | None = None) -> bool:
     """True — запрос разрешён, False — превышен лимит.
 
-    key   — пространство имён вызывающего + идентификатор клиента ("admin_login:1.2.3.4").
-    limit — запросов в минуту; None = дефолт AI-чата (обратная совместимость).
+    key            — пространство имён вызывающего + идентификатор клиента ("admin_login:1.2.3.4").
+    limit          — запросов за окно; None = дефолт AI-чата (обратная совместимость).
+    window_seconds — размер окна; None = 60с (дефолт минутного лимита AI-чата).
+                     Тот же механизм годится и для дневного потолка — просто
+                     другое окно, отдельного лимитера заводить не нужно.
 
     fail-open: при любой внутренней ошибке возвращает True (не блокируем пользователя
     из-за проблем самого лимитера).
@@ -113,12 +118,13 @@ def check_rate_limit(key: str, limit: int | None = None) -> bool:
     try:
         _init_redis()
         limit = _limit_per_minute() if limit is None else max(1, int(limit))
+        window = _WINDOW_SECONDS if window_seconds is None else max(1, int(window_seconds))
         if _redis is not None:
             try:
-                return _allow_redis(key, limit)
+                return _allow_redis(key, limit, window)
             except Exception:  # noqa: BLE001 — Redis сломался в рантайме
-                return _allow_in_memory(key, limit)
-        return _allow_in_memory(key, limit)
+                return _allow_in_memory(key, limit, window)
+        return _allow_in_memory(key, limit, window)
     except Exception:  # noqa: BLE001
         logger.exception("Rate limit check failed; allowing request (fail-open)")
         return True

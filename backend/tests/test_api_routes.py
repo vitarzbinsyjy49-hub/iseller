@@ -7,10 +7,21 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_admin, get_current_user
+from app.core import rate_limit
 from app.db.session import get_db
 from app.main import app
 from app.models.user import User
 from tests.conftest import make_product
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """In-memory окно лимитера живёт в процессе — чистим между тестами, иначе
+    низкий дневной лимит в одном тесте ловит запросы соседнего (оба используют
+    user_id=1 из client-фикстуры)."""
+    rate_limit._hits.clear()
+    yield
+    rate_limit._hits.clear()
 
 
 @pytest.fixture()
@@ -68,6 +79,36 @@ def test_ai_chat_rejects_bad_history_role(client):
 
 def test_ai_chat_rejects_empty_message(client):
     assert client.post("/api/ai/chat", json={"message": "   "}).status_code == 400
+
+
+def test_ai_daily_limit_falls_back_to_catalog_without_calling_the_llm(client, db, monkeypatch):
+    """Дневной лимит на пользователя (не только минутный): после исчерпания
+    запрос молча уходит в бесплатный ответ из каталога, а не в платную модель —
+    и не 429: пользователь просто получает менее «умный» ответ."""
+    from app.core.config import settings
+
+    make_product(db, title="Ноутбук тестовый", category="ноутбуки", price=90000)
+    monkeypatch.setattr(settings, "AI_PROVIDER", "anthropic", raising=False)
+    monkeypatch.setattr(settings, "AI_CHAT_DAILY_LIMIT_PER_USER", 2, raising=False)
+
+    calls = []
+
+    async def fake_answer(db, message, history, product_id=None):
+        calls.append(message)
+        return {"text": "из модели", "cards": [], "actions": [], "meta": {"source": "ai"}}
+
+    monkeypatch.setattr("app.services.ai_orchestrator.answer_via_local_ai", fake_answer)
+
+    for _ in range(2):
+        r = client.post("/api/ai/chat", json={"message": "ноутбук"})
+        assert r.status_code == 200
+        assert r.json()["meta"]["source"] == "ai"
+    assert len(calls) == 2
+
+    r = client.post("/api/ai/chat", json={"message": "ноутбук"})
+    assert r.status_code == 200
+    assert r.json()["meta"]["source"] == "fallback"
+    assert len(calls) == 2, "модель не должна вызываться сверх дневного лимита"
 
 
 def test_analytics_do_not_store_raw_query(client, db):

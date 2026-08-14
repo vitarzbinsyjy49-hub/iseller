@@ -56,6 +56,14 @@ async def chat(
             status.HTTP_429_TOO_MANY_REQUESTS,
             "Too many AI requests. Please try again later.",
         )
+    # Дневной потолок платных вызовов модели (отдельно от минутного): минутный
+    # лимит не остановит устойчивую долбёжку 24/7 — за день это ~$57 с одного
+    # бесплатного Telegram-аккаунта на Haiku. При исчерпании НЕ 429: запрос
+    # молча уходит в бесплатный ответ по каталогу (ветка else ниже), человек
+    # получает менее «умный» ответ вместо отказа.
+    daily_limit_reached = not check_rate_limit(
+        f"ai_daily:{rl_key}", limit=settings.AI_CHAT_DAILY_LIMIT_PER_USER, window_seconds=86400,
+    )
 
     message = body.message.strip()
     if not message:
@@ -68,7 +76,7 @@ async def chat(
     answer: dict
     ai_error: str | None = None
     mode = (settings.AI_PROVIDER or "fallback").lower()
-    if mode in ("ollama_remote", "anthropic"):
+    if mode in ("ollama_remote", "anthropic") and not daily_limit_reached:
         # v5: локальный AI-консультант (Mac mini + Ollama через AI Gateway).
         # v5.7: он же, но транспорт — Anthropic Messages API (AI_PROVIDER=anthropic).
         # Оркестратор сам деградирует в fallback — сюда ошибки не долетают,
@@ -81,7 +89,7 @@ async def chat(
             logger.exception("Local AI failed and fallback is disabled")
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
                                 "AI-консультант временно недоступен, попробуйте позже.")
-    elif mode == "ai":
+    elif mode == "ai" and not daily_limit_reached:
         try:
             # user_id для AI Engine = внутренний id основного проекта (DataContract §1).
             answer = await ai_chat(str(user.id), message)
@@ -91,7 +99,9 @@ async def chat(
             ai_error = str(e)[:200]
             answer = build_demo_answer(db, message, source="fallback")
     else:
-        # mock / fallback — не трогаем AI Engine, отвечаем по каталогу (быстро, без ключей).
+        # mock / fallback — не трогаем AI Engine, отвечаем по каталогу (быстро,
+        # без ключей). Сюда же попадает исчерпанный дневной лимит: mode остаётся
+        # тем, что настроен (не "mock"), поэтому source — "fallback".
         answer = build_demo_answer(db, message, source="mock" if mode == "mock" else "fallback")
 
     answer.setdefault("meta", {})
@@ -105,5 +115,6 @@ async def chat(
         "analytics_id": answer["meta"].get("analytics_id"),
         "latency_ms": answer["meta"].get("latency_ms"),
         "error": ai_error,
+        "daily_limit_reached": daily_limit_reached,
     })
     return answer
