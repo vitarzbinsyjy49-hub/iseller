@@ -11,7 +11,6 @@ import {
 } from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
 import { useFavoriteIds } from "../lib/favorites";
-import { ScenarioRequestSheet } from "../components/ScenarioSheet";
 import { Icon, type IconName } from "../components/icons";
 import type { ScenarioKey } from "../lib/scenario";
 import { track } from "../lib/analytics";
@@ -23,21 +22,11 @@ export default function Profile() {
   const config = usePublicConfig();
   const [leadCount, setLeadCount] = useState<number | null>(null);
   const favCount = useFavoriteIds().length;  // из памяти, без лишнего запроса
-  // Опт / бизнес / Trade-In открывают ту же встроенную сценарную заявку, что и
-  // быстрые действия на Главной: один и тот же раздел не должен вести себя
-  // по-разному в зависимости от того, откуда в него зашли.
-  const [scenario, setScenario] = useState<ScenarioKey | null>(null);
-  // Контакт обязателен, только если менеджеру некуда ответить в Telegram.
-  const requirePhone = !user?.username;
-
-  const managerUrlFor = (k: ScenarioKey): string =>
-    (k === "trade_in" ? config.manager_tradein_url
-      : k === "b2b" ? config.manager_b2b_url
-      : config.manager_wholesale_url) || config.manager_retail_url;
-
+  // v6: Опт/бизнес/Trade-In ведут в AI-чат заявки (/apply/:scenario) — тот же
+  // раздел, что и с Главной (см. Home.tsx), не встроенный bottom-sheet.
   function openScenario(k: ScenarioKey) {
     track("quick_scenario_clicked", { scenario: k, from: "profile" });
-    setScenario(k);
+    navigate(`/apply/${k}`);
   }
 
   /** Открыть диалог с менеджером; если ссылка не настроена — AI-консультант. */
@@ -183,15 +172,6 @@ export default function Profile() {
       </div>
       </div>{/* /правая колонка */}
       </div>{/* /desktop 2 колонки */}
-
-      {scenario && (
-        <ScenarioRequestSheet
-          scenario={scenario}
-          managerUrl={managerUrlFor(scenario)}
-          requirePhone={requirePhone}
-          onClose={() => setScenario(null)}
-        />
-      )}
     </div>
   );
 }
