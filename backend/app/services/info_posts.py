@@ -191,7 +191,7 @@ BUTTON_KIND_LABELS = {
 
 def resolve_button(
     spec: dict, *, bot_username: str, manager_url: str, channel_url: str,
-    section_links: dict[str, str] | None = None,
+    section_links: dict[str, str] | None = None, app_short_name: str = "",
 ) -> dict | None:
     """Описание кнопки -> кнопка Bot API. None, если ссылку получить не удалось.
 
@@ -208,7 +208,7 @@ def resolve_button(
         return None
 
     if kind in ("catalog", "ai", "requests"):
-        url = deep_link(bot_username, kind)
+        url = deep_link(bot_username, kind, app_short_name)
     elif kind == "manager":
         url = manager_url
     elif kind == "channel":
@@ -216,7 +216,7 @@ def resolve_button(
     elif kind == "section":
         # Ссылка на конкретный опубликованный прайс-пост, если он уже в канале;
         # иначе — вход в раздел через бота, чтобы кнопка не пропала совсем.
-        url = (section_links or {}).get(value) or deep_link(bot_username, value)
+        url = (section_links or {}).get(value) or deep_link(bot_username, value, app_short_name)
     else:
         url = value
 
@@ -227,6 +227,7 @@ def resolve_button(
 def build_keyboard(
     specs: list[dict] | None, *, bot_username: str, manager_url: str,
     channel_url: str = "", section_links: dict[str, str] | None = None,
+    app_short_name: str = "",
 ) -> list[list[dict]]:
     """Собрать клавиатуру из описаний. Поле row задаёт группировку в ряды."""
     if not specs:
@@ -234,7 +235,8 @@ def build_keyboard(
     rows: dict[int, list[dict]] = {}
     for index, spec in enumerate(specs):
         button = resolve_button(spec, bot_username=bot_username, manager_url=manager_url,
-                                channel_url=channel_url, section_links=section_links)
+                                channel_url=channel_url, section_links=section_links,
+                                app_short_name=app_short_name)
         if button is None:
             continue
         rows.setdefault(int(spec.get("row", index)), []).append(button)

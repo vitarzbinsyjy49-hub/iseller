@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, admin_promo, admin_users, ai, auth, cart, catalog, config as config_api, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, telegram, users
+from app.api import admin, admin_crm, admin_promo, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, telegram, users
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import analytics_event as _analytics_event  # noqa: F401
@@ -104,6 +104,8 @@ app.include_router(posts.router, prefix="/api")
 app.include_router(price_posts.router, prefix="/api")
 # v5.5.0: приём апдейтов Telegram-бота (вебхук, защищён secret_token)
 app.include_router(telegram.router, prefix="/api")
+# Резолвер payload -> путь Mini App, для запуска по ?startapp= (без auth)
+app.include_router(deeplink.router, prefix="/api")
 
 # Раздача загруженных изображений товаров (тот же origin, что и API)
 app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")

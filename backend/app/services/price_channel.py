@@ -161,6 +161,7 @@ def apply_info_posts(
             manager_url=settings.MANAGER_RETAIL_URL,
             channel_url=settings.TELEGRAM_CHANNEL_URL,
             section_links=section_links(db),
+            app_short_name=settings.MINI_APP_SHORT_NAME,
         )
         # Сравниваем с тем, что РЕАЛЬНО в канале, а не со статусом: статус
         # мог не обновиться, если текст правили мимо API.
@@ -253,7 +254,8 @@ def build_plan(db: Session, on_date: date | None = None) -> list[PostPlan]:
     on_date = on_date or date.today()
     products = load_catalog(db)
     rendered = render_all(products, on_date, settings.MINI_APP_URL,
-                            settings.MANAGER_RETAIL_URL, settings.BOT_USERNAME)
+                            settings.MANAGER_RETAIL_URL, settings.BOT_USERNAME,
+                            settings.MINI_APP_SHORT_NAME)
     existing = _existing(db)
 
     plans: list[PostPlan] = []
@@ -290,7 +292,8 @@ def save_preview(db: Session, on_date: date | None = None) -> list[ChannelPost]:
     products = load_catalog(db)
     fingerprint = catalog_fingerprint(products)
     rendered = render_all(products, on_date, settings.MINI_APP_URL,
-                            settings.MANAGER_RETAIL_URL, settings.BOT_USERNAME)
+                            settings.MANAGER_RETAIL_URL, settings.BOT_USERNAME,
+                            settings.MINI_APP_SHORT_NAME)
     existing = _existing(db)
     now = datetime.now(timezone.utc)
     order = {section.slug: index for index, section in enumerate(SECTIONS)}
@@ -455,7 +458,8 @@ def sync_navigation(db: Session, *, on_date: date | None = None, dry_run: bool =
     keyboard = navigation_keyboard(
         published, channel_id() or "@isellerhub",
         settings.MINI_APP_URL, settings.MANAGER_RETAIL_URL, settings.BOT_USERNAME,
-        info=tuple((i.slug, f"{i.emoji} {i.title}", i.title) for i in INFO_POSTS))
+        info=tuple((i.slug, f"{i.emoji} {i.title}", i.title) for i in INFO_POSTS),
+        app_short_name=settings.MINI_APP_SHORT_NAME)
     text = navigation_text(on_date)
     row = existing.get(NAVIGATION_SLUG)
 

@@ -399,6 +399,25 @@ def test_unknown_payload_falls_back_to_the_main_menu():
     assert reply.text.startswith("Добро пожаловать")
 
 
+# ------------------------------------------------- resolve_payload_path (startapp)
+
+def test_resolve_payload_path_matches_what_the_bot_itself_opens():
+    """Общий с ботом источник правды: путь, который резолвит эта функция для
+    фронта (startapp/start_param), обязан совпадать с тем web_app-путём,
+    который бот подставляет в кнопку своего ответа на тот же payload —
+    иначе прямой переход в Mini App и переход через чат бота разъедутся."""
+    from app.services.price_posts import SECTIONS_BY_SLUG
+    from app.services.telegram_bot import resolve_payload_path
+
+    assert resolve_payload_path("catalog") == "/catalog"
+    assert resolve_payload_path("ai") == "/ai"
+    assert resolve_payload_path("requests") == "/requests"
+    assert resolve_payload_path("product_42") == "/product/42"
+    assert resolve_payload_path("price_iphone") == SECTIONS_BY_SLUG["price_iphone"].route
+    assert resolve_payload_path("совсем не существует") is None
+    assert resolve_payload_path("product_abc") is None
+
+
 # ------------------------------------------------- deep link на товар (патч 1.1)
 
 @pytest.mark.parametrize("payload,expected", [

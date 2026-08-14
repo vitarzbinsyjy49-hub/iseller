@@ -286,6 +286,15 @@ def test_section_keyboard_layout_and_routes():
     assert rows[1][1]["url"] == MANAGER
 
 
+def test_section_keyboard_uses_startapp_when_configured():
+    section = SECTIONS_BY_SLUG["price_iphone"]
+    post = render_section([product()], section, TODAY, MINI_APP, MANAGER, BOT,
+                           app_short_name="shop")[0]
+    rows = post.keyboard
+    assert rows[0][0]["url"] == f"https://t.me/{BOT}/shop?startapp=price_iphone"
+    assert rows[1][0]["url"] == f"https://t.me/{BOT}/shop?startapp=ai"
+
+
 def test_channel_posts_never_use_web_app_buttons():
     """Telegram отвергает web_app-кнопки в КАНАЛЕ (BUTTON_TYPE_INVALID).
 
@@ -317,6 +326,19 @@ def test_deep_link_points_at_the_section():
     assert deep_link(BOT, "price_iphone") == f"https://t.me/{BOT}?start=price_iphone"
     assert deep_link("@" + BOT, "ai") == f"https://t.me/{BOT}?start=ai"
     assert deep_link("", "ai") is None
+
+
+def test_deep_link_uses_startapp_when_mini_app_short_name_is_configured():
+    """С коротким именем Mini App (выдаёт BotFather /newapp) ссылка открывает
+    Mini App НАПРЯМУЮ, минуя чат с ботом — ?start= всегда открывает ЛС первым
+    и требует второго тапа по кнопке в сообщении бота."""
+    assert deep_link(BOT, "price_iphone", app_short_name="shop") == (
+        f"https://t.me/{BOT}/shop?startapp=price_iphone"
+    )
+    # Пусто = поведение не меняется (BotFather ещё не настроен на проде)
+    assert deep_link(BOT, "price_iphone", app_short_name="") == (
+        f"https://t.me/{BOT}?start=price_iphone"
+    )
 
 
 def test_buttons_disappear_when_urls_are_not_configured():
@@ -351,6 +373,15 @@ def test_navigation_keeps_section_order_and_tail_buttons():
     assert section_labels == [f"{s.emoji} {s.title}" for s in SECTIONS]
     tail = [b["text"] for row in rows[len(SECTIONS):] for b in row]
     assert tail == ["🛍 Весь каталог", "✨ Подобрать с AI", "💬 Менеджер"]
+
+
+def test_navigation_tail_buttons_use_startapp_when_configured():
+    published = {s.slug: i + 1 for i, s in enumerate(SECTIONS)}
+    rows = navigation_keyboard(published, -1003998743702, MINI_APP, MANAGER, BOT,
+                                app_short_name="shop")
+    tail_urls = [b["url"] for row in rows[len(SECTIONS):] for b in row if "url" in b]
+    assert f"https://t.me/{BOT}/shop?startapp=catalog" in tail_urls
+    assert f"https://t.me/{BOT}/shop?startapp=ai" in tail_urls
 
 
 def test_navigation_text_has_date():

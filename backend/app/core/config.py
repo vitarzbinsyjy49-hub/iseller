@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     # (BUTTON_TYPE_INVALID), поэтому посты канала ведут в Mini App через
     # deep link t.me/<bot>?start=<раздел>.
     BOT_USERNAME: str = ""
+    # Короткое имя Mini App, выданное BotFather через /newapp (не сам бот!).
+    # Даёт прямую ссылку t.me/<bot>/<short_name>?startapp=<payload> — открывает
+    # Mini App МИНУЯ чат с ботом (в отличие от ?start=, который всегда сначала
+    # открывает ЛС и требует второго тапа). Пусто = ссылка не настроена, кнопки
+    # канала продолжают работать по-старому через deep_link()/?start=.
+    MINI_APP_SHORT_NAME: str = ""
 
     DATABASE_URL: str
     TELEGRAM_BOT_TOKEN: str = ""

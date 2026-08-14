@@ -323,7 +323,7 @@ def _footer(on_date: date) -> str:
 
 def render_section(
     products: list[dict], section: Section, on_date: date, mini_app_url: str,
-    manager_url: str = "", bot_username: str = "",
+    manager_url: str = "", bot_username: str = "", app_short_name: str = "",
 ) -> list[RenderedPost]:
     """Собрать пост(ы) раздела. Длинный раздел делится по границам подгрупп.
 
@@ -406,36 +406,47 @@ def render_section(
             item_count=sum(1 for line in page if _IS_PRODUCT_LINE.match(line)),
             part=index,
             parts_total=total,
-            keyboard=section_keyboard(section, mini_app_url, manager_url, bot_username),
+            keyboard=section_keyboard(section, mini_app_url, manager_url, bot_username, app_short_name),
         ))
     return posts
 
 
 def render_all(
     products: list[dict], on_date: date, mini_app_url: str, manager_url: str = "",
-    bot_username: str = "",
+    bot_username: str = "", app_short_name: str = "",
 ) -> list[RenderedPost]:
     posts: list[RenderedPost] = []
     for section in SECTIONS:
         posts.extend(render_section(
-            products, section, on_date, mini_app_url, manager_url, bot_username))
+            products, section, on_date, mini_app_url, manager_url, bot_username, app_short_name))
     return posts
 
 
 # ---------------------------------------------------------------- клавиатуры
 
-def deep_link(bot_username: str, payload: str) -> str | None:
-    """Ссылка, открывающая Mini App через бота: t.me/<bot>?start=<payload>.
+def deep_link(bot_username: str, payload: str, app_short_name: str = "") -> str | None:
+    """Ссылка на канальную кнопку, открывающая нужный экран Mini App.
 
-    Почему не web_app-кнопка. Telegram разрешает кнопки типа web_app ТОЛЬКО в
-    личных чатах с ботом; в канале такое сообщение отвергается целиком с
-    BUTTON_TYPE_INVALID — не «кнопка не показалась», а пост не публикуется
-    вовсе. Поэтому в канале кнопки обычные, url: они ведут в чат с ботом с
-    параметром раздела, а бот в ответ открывает нужный экран Mini App.
+    Почему вообще ссылка, а не web_app-кнопка. Telegram разрешает кнопки типа
+    web_app ТОЛЬКО в личных чатах с ботом; в канале такое сообщение отвергается
+    целиком с BUTTON_TYPE_INVALID — не «кнопка не показалась», а пост не
+    публикуется вовсе. Поэтому в канале кнопки обычные, url.
+
+    Два формата такой ссылки:
+    - без `app_short_name` (по умолчанию) — t.me/<bot>?start=<payload>. Всегда
+      СНАЧАЛА открывает личный чат с ботом, бот отвечает сообщением с
+      web_app-кнопкой, и только по ней открывается Mini App — два тапа;
+    - с `app_short_name` (короткое имя Mini App, выдаёт BotFather через
+      /newapp — НЕ то же самое, что имя бота) — t.me/<bot>/<app>?startapp=
+      <payload>. Открывает Mini App НАПРЯМУЮ, чат с ботом не появляется вовсе,
+      один тап. Тот же payload, тот же обработчик на фронте (см. resolve_payload_path).
     """
     bot = (bot_username or "").strip().lstrip("@")
     if not bot:
         return None
+    app = (app_short_name or "").strip()
+    if app:
+        return f"https://t.me/{bot}/{app}?startapp={payload}"
     return f"https://t.me/{bot}?start={payload}"
 
 
@@ -447,8 +458,8 @@ def _web_app_button(text: str, mini_app_url: str, route: str) -> dict | None:
     return {"text": text, "web_app": {"url": f"{base}{route}"}}
 
 
-def _deep_link_button(text: str, bot_username: str, payload: str) -> dict | None:
-    url = deep_link(bot_username, payload)
+def _deep_link_button(text: str, bot_username: str, payload: str, app_short_name: str = "") -> dict | None:
+    url = deep_link(bot_username, payload, app_short_name)
     return {"text": text, "url": url} if url else None
 
 
@@ -463,12 +474,13 @@ def _rows(*rows: list[dict]) -> list[list[dict]]:
 
 def section_keyboard(
     section: Section, mini_app_url: str, manager_url: str = "", bot_username: str = "",
+    app_short_name: str = "",
 ) -> list[list[dict]]:
     """Клавиатура прайс-поста в КАНАЛЕ — только url-кнопки (см. deep_link)."""
     return _rows(
-        [_deep_link_button("🛍 Открыть раздел", bot_username, section.slug)],
+        [_deep_link_button("🛍 Открыть раздел", bot_username, section.slug, app_short_name)],
         [
-            _deep_link_button("✨ Подобрать с AI", bot_username, "ai"),
+            _deep_link_button("✨ Подобрать с AI", bot_username, "ai", app_short_name),
             _url_button("💬 Менеджер", manager_url),
         ],
     )
@@ -521,7 +533,7 @@ def navigation_text(on_date: date) -> str:
 def navigation_keyboard(
     published: dict[str, int], channel_id: int | str, mini_app_url: str,
     manager_url: str = "", bot_username: str = "",
-    info: tuple[tuple[str, str, str], ...] = (),
+    info: tuple[tuple[str, str, str], ...] = (), app_short_name: str = "",
 ) -> list[list[dict]]:
     """Кнопки навигации ведут на КОНКРЕТНЫЕ опубликованные посты.
 
@@ -545,9 +557,9 @@ def navigation_keyboard(
             rows.append([{"text": label, "url": message_link(channel_id, message_id)}])
 
     tail = _rows(
-        [_deep_link_button("🛍 Весь каталог", bot_username, "catalog")],
+        [_deep_link_button("🛍 Весь каталог", bot_username, "catalog", app_short_name)],
         [
-            _deep_link_button("✨ Подобрать с AI", bot_username, "ai"),
+            _deep_link_button("✨ Подобрать с AI", bot_username, "ai", app_short_name),
             _url_button("💬 Менеджер", manager_url),
         ],
     )

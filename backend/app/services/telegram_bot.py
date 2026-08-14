@@ -173,6 +173,30 @@ def parse_product_payload(payload: str) -> int | None:
     return value if value > 0 else None
 
 
+def resolve_payload_path(payload: str) -> str | None:
+    """Путь Mini App для deep-link payload'а, или None если payload незнаком.
+
+    Источник правды один на два потребителя: `reply_for_payload` ниже строит
+    web_app-кнопку в ответе бота (путь ?start= домотал до сюда), а фронт зовёт
+    тот же payload через /api/deeplink/{payload} при запуске по ?startapp= —
+    прямом переходе в Mini App, минуя чат с ботом вовсе. Разъедутся эти два
+    пути — человек с прямой ссылки попадёт не туда, куда с ссылки через бота.
+    """
+    if payload == "catalog":
+        return "/catalog"
+    if payload == "ai":
+        return "/ai"
+    if payload == "requests":
+        return "/requests"
+    product_id = parse_product_payload(payload)
+    if product_id is not None:
+        return f"/product/{product_id}"
+    from app.services.price_posts import SECTIONS_BY_SLUG   # локально: избегаем цикла
+
+    section = SECTIONS_BY_SLUG.get(payload)
+    return section.route if section is not None else None
+
+
 def reply_for_payload(payload: str) -> Reply | None:
     """Ответ на deep link: раздел прайса, каталог, AI-подбор или товар.
 

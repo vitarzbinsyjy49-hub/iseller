@@ -383,6 +383,19 @@ def test_button_spec_resolves_to_urls(db):
     assert keyboard[1][0]["url"] == "https://example.com"
 
 
+def test_button_spec_uses_startapp_when_mini_app_short_name_is_configured():
+    """Тот же переход, что в price_posts.deep_link: с коротким именем Mini
+    App кнопка открывает приложение напрямую, минуя чат с ботом."""
+    from app.services.info_posts import build_keyboard
+
+    keyboard = build_keyboard(
+        [{"text": "Каталог", "kind": "catalog", "row": 0}],
+        bot_username="isellerAIbot", manager_url="", channel_url="",
+        app_short_name="shop",
+    )
+    assert keyboard[0][0]["url"] == "https://t.me/isellerAIbot/shop?startapp=catalog"
+
+
 def test_section_button_points_at_published_post(db):
     """Кнопка «Раздел прайса» ведёт в канал, если пост уже опубликован."""
     from app.services.info_posts import build_keyboard
