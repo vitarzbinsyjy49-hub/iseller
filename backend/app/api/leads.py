@@ -6,12 +6,14 @@ GET  /api/leads/my     — мои заявки (JWT), для экрана «За
 import hashlib
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import client_ip, get_current_user
 from app.core.config import settings
+from app.core.rate_limit import check_rate_limit
+from app.core.uploads import MAX_BYTES, is_allowed, save_image
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
 from app.models.lead import DEFAULT_LEAD_TYPE, DELIVERY_METHODS, LEAD_SOURCES, Lead
@@ -197,3 +199,30 @@ def my_leads(user: User = Depends(get_current_user), db: Session = Depends(get_d
         select(Lead).where(Lead.user_id == user.id).order_by(Lead.id.desc())
     ).scalars().all()
     return {"leads": [l.to_dict() for l in rows]}
+
+
+@router.post("/uploads/marketplace-photo", status_code=status.HTTP_201_CREATED)
+async def upload_marketplace_photo(
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Фото для заявки «Предложить товар» — публичная (не admin) загрузка.
+
+    Те же ограничения размера/типа, что у admin-загрузки (core/uploads.py), но
+    свой дневной лимит на пользователя: без него загрузка фото — самый дешёвый
+    способ забить диск, дешевле даже спам-заявок (см. Task 9)."""
+    rl_key = f"user:{user.id}" if getattr(user, "id", None) else f"ip:{client_ip(request)}"
+    if not check_rate_limit(
+        f"sell_item_upload:{rl_key}",
+        limit=settings.SELL_ITEM_UPLOAD_DAILY_LIMIT_PER_USER,
+        window_seconds=86400,
+    ):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Слишком много фото за сегодня")
+    if not is_allowed(file.content_type):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Только изображения: jpg, png, webp, gif")
+    data = await file.read()
+    if len(data) > MAX_BYTES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Файл больше 8 МБ")
+    return {"url": save_image(file.content_type, data)}

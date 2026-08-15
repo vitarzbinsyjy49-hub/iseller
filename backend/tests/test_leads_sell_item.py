@@ -1,12 +1,25 @@
 """Заявка «Предложить товар» (lead_type=sell_item) — см.
 docs/superpowers/specs/2026-08-15-marketplace-used-items-design.md."""
+import io
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_admin, get_current_user
+from app.core import rate_limit
 from app.db.session import get_db
 from app.main import app
 from app.models.user import User
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """In-memory окно лимитера живёт в процессе — чистим между тестами, иначе
+    низкий дневной лимит в одном тесте ловит запросы соседнего (оба используют
+    user_id=1 из ctx-фикстуры: см. tests/test_api_routes.py)."""
+    rate_limit._hits.clear()
+    yield
+    rate_limit._hits.clear()
 
 
 @pytest.fixture()
@@ -46,3 +59,37 @@ def test_sell_item_lead_saved(ctx):
     assert body["lead_type"] == "sell_item"
     assert body["metadata"]["title"] == "iPhone 13 Pro 128 ГБ"
     assert body["metadata"]["photos"] == ["/api/uploads/a.jpg", "/api/uploads/b.jpg"]
+
+
+def test_upload_marketplace_photo(ctx):
+    client, _db, _u = ctx
+    r = client.post(
+        "/api/leads/uploads/marketplace-photo",
+        files={"file": ("photo.jpg", io.BytesIO(b"\xff\xd8\xff" + b"0" * 100), "image/jpeg")},
+    )
+    assert r.status_code == 201
+    assert r.json()["url"].startswith("/api/uploads/")
+
+
+def test_upload_marketplace_photo_rejects_bad_type(ctx):
+    client, _db, _u = ctx
+    r = client.post(
+        "/api/leads/uploads/marketplace-photo",
+        files={"file": ("file.txt", io.BytesIO(b"not an image"), "text/plain")},
+    )
+    assert r.status_code == 400
+
+
+def test_upload_marketplace_photo_rate_limited(ctx, monkeypatch):
+    client, _db, _u = ctx
+    monkeypatch.setattr("app.core.config.settings.SELL_ITEM_UPLOAD_DAILY_LIMIT_PER_USER", 1)
+    ok = client.post(
+        "/api/leads/uploads/marketplace-photo",
+        files={"file": ("photo.jpg", io.BytesIO(b"\xff\xd8\xff" + b"0" * 100), "image/jpeg")},
+    )
+    assert ok.status_code == 201
+    blocked = client.post(
+        "/api/leads/uploads/marketplace-photo",
+        files={"file": ("photo.jpg", io.BytesIO(b"\xff\xd8\xff" + b"0" * 100), "image/jpeg")},
+    )
+    assert blocked.status_code == 429
