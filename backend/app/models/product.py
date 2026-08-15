@@ -215,6 +215,9 @@ class Product(Base):
             # Витрина показывает остаток только при is_limited (см. поле модели).
             "is_limited": self.is_limited,
             "tags": self.tags or [],
+            # v5.9: бейдж «Б/у» на витрине — то же condition, что и в to_admin()/
+            # to_detail(), просто раньше сюда не попадало.
+            "condition": self.condition or "new",
             "why": [],
             "buttons": self._buttons(),
             **availability_payload(self),
