@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.product import Product
+from app.services.marketplace import exclude_marketplace
 
 # Виртуальная категория: не хранится у товара, а собирается фильтром on_sale.
 SALE_KEY = "__sale__"
@@ -71,7 +72,7 @@ def category_counts(db: Session, brand: str | None = None) -> dict[str, int]:
     «смартфонам» давал brand=Dyson&category=смартфоны, то есть пустой экран.
     Пересечение, которого не существует, не должно быть достижимо в один тап.
     """
-    stmt = (
+    stmt = exclude_marketplace(
         select(Product.category, func.count())
         .where(Product.is_active.is_(True),
                Product.category.is_not(None), Product.category != "")
@@ -90,10 +91,12 @@ def brand_counts(db: Session) -> dict[str, int]:
     """{бренд: сколько активных товаров}. Нужен для плиток по бренду: «Dyson» —
     это бренд (50 товаров в двух категориях), а не категория."""
     rows = db.execute(
-        select(Product.brand, func.count())
-        .where(Product.is_active.is_(True),
-               Product.brand.is_not(None), Product.brand != "")
-        .group_by(Product.brand)
+        exclude_marketplace(
+            select(Product.brand, func.count())
+            .where(Product.is_active.is_(True),
+                   Product.brand.is_not(None), Product.brand != "")
+            .group_by(Product.brand)
+        )
     ).all()
     return {b: n for b, n in rows if n}
 

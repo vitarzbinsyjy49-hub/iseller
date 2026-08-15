@@ -16,9 +16,10 @@ from app.main import app
 from app.models.home import ACTION_TYPES, HomeBanner, HomeCategory
 from app.models.user import User
 from app.services.catalog_nav import (
-    BRAND_ICONS, FALLBACK_ICON, SALE_KEY, category_label, has_products,
-    list_brands, list_categories, resolve_category,
+    BRAND_ICONS, FALLBACK_ICON, SALE_KEY, brand_counts, category_counts,
+    category_label, has_products, list_brands, list_categories, resolve_category,
 )
+from app.services.marketplace import MARKETPLACE_SOURCE
 from tests.conftest import make_product
 
 
@@ -229,6 +230,21 @@ def test_brand_counts_are_real(db):
     make_product(db, brand="Dyson", category="красота")
     make_product(db, brand="Dyson", category="бытовая техника")
     assert list_brands(db)[0]["count"] == 2
+
+
+def test_category_counts_excludes_marketplace(db):
+    make_product(db, category="новая категория тест", source="manual")
+    make_product(db, category="новая категория тест", source=MARKETPLACE_SOURCE)
+    counts = category_counts(db)
+    assert counts["новая категория тест"] == 1
+
+
+def test_brand_counts_excludes_marketplace(db):
+    make_product(db, brand="Тест-бренд-изоляция", source=MARKETPLACE_SOURCE)
+    make_product(db, brand="Проверка-бренд-обычный", source="manual")
+    counts = brand_counts(db)
+    assert "Тест-бренд-изоляция" not in counts
+    assert "Проверка-бренд-обычный" in counts
 
 
 # ---------- правило видимости плитки ----------
