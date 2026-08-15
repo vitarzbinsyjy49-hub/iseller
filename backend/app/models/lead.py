@@ -32,7 +32,11 @@ DELIVERY_METHODS = ("pickup", "delivery", "consult")
 # price_offer — «нашли дешевле»: покупатель прислал ссылку на тот же товар у
 # конкурента, менеджер решает по цене вручную. Ссылка и цена со слов покупателя
 # лежат в metadata; наша цена — в снапшоте product_price самой заявки.
-LEAD_TYPES = ("general", "product", "trade_in", "b2b", "wholesale", "cart", "price_offer")
+# sell_item — «Предложить товар»: пользователь предлагает магазину свою б/у
+# технику с фото и желаемой ценой (metadata.category/title/state/price_wanted/
+# photos), после модерации становится товаром с source="user_submitted" в
+# изолированном разделе «Маркетплейс» (см. services/marketplace.py).
+LEAD_TYPES = ("general", "product", "trade_in", "b2b", "wholesale", "cart", "price_offer", "sell_item")
 DEFAULT_LEAD_TYPE = "general"
 CART_LEAD_TYPE = "cart"
 CART_LEAD_SOURCE = "telegram_mini_app_cart"
