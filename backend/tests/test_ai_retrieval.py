@@ -1,5 +1,11 @@
 """Извлечение фильтров и retrieval кандидатов: только реальные товары из БД."""
-from app.services.ai_retrieval import ExtractedFilters, candidate_payload, extract_filters, retrieve_candidates
+from app.services.ai_retrieval import (
+    ExtractedFilters,
+    alternatives_for,
+    candidate_payload,
+    extract_filters,
+    retrieve_candidates,
+)
 from app.services.catalog_nav import category_vocabulary
 from app.services.marketplace import MARKETPLACE_SOURCE
 from tests.conftest import make_product
@@ -276,3 +282,14 @@ def test_retrieve_candidates_neighbor_fallback_excludes_marketplace(db):
     titles = [p.title for p in candidates]
     assert "iPhone 15 обычный" in titles
     assert "iPhone 15 маркетплейс" not in titles
+
+
+def test_alternatives_for_excludes_marketplace(db):
+    """«Сравни с альтернативами» на карточке товара — 4-й путь кандидатов ИИ:
+    тоже не должен предлагать маркетплейс вместо обычного инвентаря."""
+    reference = make_product(db, title="iPhone 15", category="смартфоны", source="manual")
+    make_product(db, title="iPhone 15 обычный сосед", category="смартфоны", source="manual")
+    make_product(db, title="iPhone 15 маркетплейс сосед", category="смартфоны", source=MARKETPLACE_SOURCE)
+    titles = [p.title for p in alternatives_for(db, reference)]
+    assert "iPhone 15 обычный сосед" in titles
+    assert "iPhone 15 маркетплейс сосед" not in titles

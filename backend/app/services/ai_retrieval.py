@@ -289,7 +289,7 @@ def alternatives_for(db: Session, product: Product, limit: int = 8) -> list[Prod
     price_gap = func.abs(Product.price - product.price)
 
     stmt = (
-        select(Product)
+        exclude_marketplace(select(Product))
         .where(
             Product.is_active.is_(True),
             Product.id != product.id,
