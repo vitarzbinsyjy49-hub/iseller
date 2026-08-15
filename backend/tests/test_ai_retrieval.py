@@ -1,6 +1,7 @@
 """Извлечение фильтров и retrieval кандидатов: только реальные товары из БД."""
-from app.services.ai_retrieval import candidate_payload, extract_filters, retrieve_candidates
+from app.services.ai_retrieval import ExtractedFilters, candidate_payload, extract_filters, retrieve_candidates
 from app.services.catalog_nav import category_vocabulary
+from app.services.marketplace import MARKETPLACE_SOURCE
 from tests.conftest import make_product
 
 
@@ -251,3 +252,27 @@ def test_catalog_search_resolves_the_same_phrase():
     resolved, remainder = extract_phrase_tokens("Мак Мини на подарок")
     assert resolved == ["mac", "mini"]
     assert "мак" not in remainder
+
+
+def test_retrieve_candidates_excludes_marketplace(db):
+    make_product(db, title="iPhone 15 обычный", category="смартфоны", source="manual")
+    make_product(db, title="iPhone 15 маркетплейс", category="смартфоны", source=MARKETPLACE_SOURCE)
+    f = ExtractedFilters(category="смартфоны")
+    candidates = retrieve_candidates(db, "iphone", f)
+    titles = [p.title for p in candidates]
+    assert "iPhone 15 обычный" in titles
+    assert "iPhone 15 маркетплейс" not in titles
+
+
+def test_retrieve_candidates_neighbor_fallback_excludes_marketplace(db):
+    """Ветка «соседей по категории» (снимаем бренд, ищем по категории) — тоже
+    не должна подсовывать маркетплейс, когда обычная выдача пуста."""
+    make_product(db, title="iPhone 15 обычный", category="смартфоны", brand="Apple", source="manual")
+    make_product(db, title="iPhone 15 маркетплейс", category="смартфоны", brand="Apple", source=MARKETPLACE_SOURCE)
+    # Бренд заведомо не совпадает ни с одним товаром — structural/words/tokens
+    # дают пусто, и включается neighbor-fallback по категории без бренда.
+    f = ExtractedFilters(category="смартфоны", brand="Sony")
+    candidates = retrieve_candidates(db, "плойка", f)
+    titles = [p.title for p in candidates]
+    assert "iPhone 15 обычный" in titles
+    assert "iPhone 15 маркетплейс" not in titles
