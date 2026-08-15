@@ -95,3 +95,26 @@ def test_catalog_feed_excludes_marketplace(db):
     assert "Хит обычный" in titles
     assert "Хит с маркетплейса" not in titles
     app.dependency_overrides.clear()
+
+
+def test_marketplace_endpoint_returns_only_user_submitted(db):
+    make_product(db, title="Обычный", source="manual")
+    listed = make_product(db, title="С маркетплейса", source=MARKETPLACE_SOURCE)
+    client = _client(db)
+    r = client.get("/api/catalog/marketplace")
+    assert r.status_code == 200
+    titles = [c["title"] for c in r.json()["cards"]]
+    assert titles == ["С маркетплейса"]
+    app.dependency_overrides.clear()
+
+
+def test_marketplace_endpoint_deterministic_order(db):
+    """Тот же принцип, что test_order_is_fully_deterministic у обычного каталога:
+    id в конце ключа сортировки обязателен."""
+    make_product(db, title="A", source=MARKETPLACE_SOURCE, price=1000)
+    make_product(db, title="B", source=MARKETPLACE_SOURCE, price=1000)
+    client = _client(db)
+    r1 = client.get("/api/catalog/marketplace")
+    r2 = client.get("/api/catalog/marketplace")
+    assert [c["id"] for c in r1.json()["cards"]] == [c["id"] for c in r2.json()["cards"]]
+    app.dependency_overrides.clear()

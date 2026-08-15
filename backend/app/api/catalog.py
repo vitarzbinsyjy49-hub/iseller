@@ -357,6 +357,31 @@ def feed(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/marketplace", dependencies=[Depends(get_current_user)])
+def marketplace(limit: int = Query(default=50, ge=1, le=100), db: Session = Depends(get_db)):
+    """Витрина «Маркетплейс» — товары, предложенные и одобренные пользователями.
+
+    Строго по source, а не по condition (см. services/marketplace.py) —
+    обычный б/у-сток магазина сюда не попадает. Сортировка та же, что у
+    обычного каталога (default_order) — своей позиции плитки у этих товаров
+    нет, они естественно уходят по NO_TILE_RANK, что здесь не имеет значения:
+    список не смешивается с товарами, у которых плитка есть.
+    """
+    from app.services.marketplace import MARKETPLACE_SOURCE
+    stmt = (
+        select(Product)
+        .where(Product.is_active.is_(True), Product.source == MARKETPLACE_SOURCE)
+        .order_by(*default_order(db))
+        .limit(limit)
+    )
+    products = list(db.execute(stmt).scalars().all())
+    products = _photo_last(db, products)
+    cards = [p.to_card() for p in products]
+    apply_group_images(db, products, cards)
+    apply_social_proof(db, products, cards)
+    return {"cards": cards}
+
+
 @router.get("/recommendations")
 def recommendations(
     limit: int = Query(default=12, ge=1, le=24),
