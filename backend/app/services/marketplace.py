@@ -20,4 +20,4 @@ MARKETPLACE_SOURCE = "user_submitted"
 
 def exclude_marketplace(stmt: Select) -> Select:
     """Убрать из выдачи товары, предложенные пользователями через маркетплейс."""
-    return stmt.where(Product.source != MARKETPLACE_SOURCE)
+    return stmt.where(Product.source.is_distinct_from(MARKETPLACE_SOURCE))

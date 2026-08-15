@@ -22,3 +22,11 @@ def test_exclude_marketplace_does_not_touch_used_condition_without_source(db):
     stmt = exclude_marketplace(select(Product))
     ids = {p.id for p in db.execute(stmt).scalars().all()}
     assert own_used_stock.id in ids
+
+
+def test_exclude_marketplace_does_not_exclude_null_source(db):
+    """source=NULL (from raw-SQL или legacy paths) НЕ маркетплейс — only MARKETPLACE_SOURCE excluded."""
+    null_source = make_product(db, title="Без источника", source=None)
+    stmt = exclude_marketplace(select(Product))
+    ids = {p.id for p in db.execute(stmt).scalars().all()}
+    assert null_source.id in ids
