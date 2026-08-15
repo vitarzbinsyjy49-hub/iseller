@@ -25,6 +25,7 @@ from app.services.image_groups import (
     resolve_product_images,
 )
 from app.services.catalog_nav import list_categories
+from app.services.marketplace import exclude_marketplace
 from app.services.ranking import default_order
 from app.services.recommendations import diversify_by_category, recently_viewed, recommend
 from app.services.social_proof import apply_social_proof
@@ -142,7 +143,7 @@ def search_products(db: Session, query: str, price_max: float | None = None, lim
     """Простой поиск по словам. Общая функция для /catalog/search и AI-fallback.
 
     Товары без реального фото уходят в конец выдачи, но не исчезают из поиска."""
-    stmt = select(Product).where(Product.is_active.is_(True))
+    stmt = exclude_marketplace(select(Product).where(Product.is_active.is_(True)))
     words = [_alias(w) for w in query.split() if len(w) >= 2][:5]
     for word in words:
         like = f"%{word}%"
@@ -207,7 +208,7 @@ def list_catalog(
     limit: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    stmt = select(Product).where(Product.is_active.is_(True))
+    stmt = exclude_marketplace(select(Product).where(Product.is_active.is_(True)))
     if category == "__sale__":       # виртуальная категория «Скидки»
         stmt = stmt.where(Product.on_sale.is_(True))
     elif category:
@@ -282,7 +283,9 @@ def list_catalog(
 @router.get("/brands", dependencies=[Depends(get_current_user)])
 def brands(db: Session = Depends(get_db)):
     rows = db.execute(
-        select(Product.brand).where(Product.is_active.is_(True), Product.brand.is_not(None)).distinct()
+        exclude_marketplace(
+            select(Product.brand).where(Product.is_active.is_(True), Product.brand.is_not(None))
+        ).distinct()
     ).scalars().all()
     return {"brands": sorted(rows)}
 
@@ -303,7 +306,7 @@ def feed(db: Session = Depends(get_db)):
     def rows(stmt, n=32):
         return db.execute(stmt.limit(n)).scalars().all()
 
-    base = select(Product).where(Product.is_active.is_(True))
+    base = exclude_marketplace(select(Product).where(Product.is_active.is_(True)))
     order = default_order(db)          # см. services/ranking
     hot_raw = rows(base.where(Product.is_hot.is_(True)).order_by(*order))
     today_raw = rows(base.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
