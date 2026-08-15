@@ -13,6 +13,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.main import app
 from app.models.user_product_event import UserProductEvent
+from app.services.marketplace import MARKETPLACE_SOURCE
 from app.services.recommendations import recently_viewed, recommend, record_event
 from tests.conftest import make_product
 
@@ -126,3 +127,14 @@ def test_recently_viewed_order_and_dedup(db):
     record_event(db, 1, "product_view", product_id=a.id)
     rv = recently_viewed(db, 1, limit=5)
     assert [p.id for p in rv] == [a.id, b.id]         # последний просмотр первым, без дублей
+
+
+# ---------- исключение маркетплейса ----------
+
+def test_recommend_excludes_marketplace(db):
+    regular = make_product(db, title="Обычный для вас", source="manual")
+    marketplace_item = make_product(db, title="С маркетплейса для вас", source=MARKETPLACE_SOURCE)
+    recs, _, _ = recommend(db, user_id=1)
+    rec_ids = {p.id for p in recs}
+    assert regular.id in rec_ids
+    assert marketplace_item.id not in rec_ids

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.product import Product
 from app.models.user_product_event import EVENT_TYPES, UserProductEvent
 from app.services.image_groups import dedupe_by_group, has_real_photo, resolve_product_images
+from app.services.marketplace import exclude_marketplace
 from app.services.ranking import category_priority, product_sort_key
 
 # Веса сигналов (прозрачные, объяснимые). Заявка/избранное — сильные, просмотр —
@@ -235,7 +236,7 @@ def recommend(db: Session, user_id: int, limit: int = 12) -> tuple[list[Product]
     aff = _build_affinity(db, events)
 
     candidates = db.execute(
-        select(Product).where(Product.is_active.is_(True))
+        exclude_marketplace(select(Product).where(Product.is_active.is_(True)))
     ).scalars().all()
     # v5.4.1: «Для вас» рендерится на главной — товары без реального фото туда
     # не попадают вовсе (как и остальные секции /catalog/feed).
