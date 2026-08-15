@@ -64,6 +64,16 @@ async def answer_scenario_turn(*, scenario: str, field_key: str, options: list[d
     except (AIGatewayError, AiAnswerParseError, OSError, ImportError) as e:
         logger.warning("Scenario chat AI degraded to unclear: %s", type(e).__name__)
         return dict(_UNCLEAR)
+    except Exception:
+        # Финальная страховка: контракт этой функции — НИКОГДА не бросать
+        # исключение наружу (эндпоинт полагается на это целиком, своего
+        # try/except у него нет). Специфичный except выше — для информативного
+        # лога, этот — сеть на случай непредвиденных сбоев SDK
+        # (anthropic.APIResponseValidationError и подобные), которые иначе
+        # стали бы необработанным 500 и сломали бы «AI никогда не блокирует
+        # отправку заявки».
+        logger.exception("Scenario chat AI degraded to unclear: unexpected error")
+        return dict(_UNCLEAR)
 
     allowed_values = {o["value"] for o in options}
     if parsed.type == "field_value" and parsed.value not in allowed_values:

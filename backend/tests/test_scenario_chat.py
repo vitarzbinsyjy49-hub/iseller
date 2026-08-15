@@ -75,6 +75,20 @@ def test_gateway_down_degrades_to_unclear_not_raises(monkeypatch):
     assert ans == {"type": "unclear", "value": None, "reply": None}
 
 
+def test_unexpected_exception_degrades_to_unclear_not_raises(monkeypatch):
+    """Второй, более широкий except в answer_scenario_turn — страховка на
+    случай сбоев SDK, не покрытых узким (AIGatewayError, AiAnswerParseError,
+    OSError, ImportError). Без него такая ошибка стала бы необработанным 500
+    у эндпоинта, у которого нет своего try/except."""
+    async def boom(**kwargs):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(scenario_chat, "_call_transport", boom)
+    ans = run(scenario_chat.answer_scenario_turn(
+        scenario="trade_in", field_key="condition", options=OPTIONS, message="сломан",
+    ))
+    assert ans == {"type": "unclear", "value": None, "reply": None}
+
+
 def test_invalid_json_degrades_to_unclear(monkeypatch):
     async def garbage(**kwargs):
         return {"content": "не json", "model": "test", "total_ms": 1}
@@ -107,6 +121,33 @@ def test_empty_message_is_unclear_without_network(monkeypatch):
         scenario="trade_in", field_key="condition", options=OPTIONS, message="   ",
     ))
     assert ans == {"type": "unclear", "value": None, "reply": None}
+
+
+def test_system_prompt_pins_faq_facts():
+    """Спека требует тест, фиксирующий FAQ-факты промпта: если файл потеряется
+    или станет нечитаемым, _system_prompt() бросит OSError, который
+    answer_scenario_turn тихо проглотит (только WARNING-лог) — без этого теста
+    такая регрессия осталась бы незамеченной. А сами якоря защищают факты от
+    текстового разъезда с info_posts.py (класс бага «1 месяц» vs «14 дней»,
+    см. CLAUDE.md)."""
+    text = scenario_chat._system_prompt()
+    assert "1 месяц" in text
+    assert "Горбушка" in text
+    assert "10:00–21:00" in text
+    assert "курьером" in text
+    assert "наличными" in text
+
+
+def test_build_user_message_includes_all_inputs():
+    """Ничего из аргументов не должно молча теряться при сборке user-сообщения
+    промпта: field_key, value каждого варианта из VARIANTS, и текст покупателя."""
+    msg = scenario_chat._build_user_message(
+        "trade_in", "condition", OPTIONS, "экран треснул, но включается",
+    )
+    assert "condition" in msg
+    for opt in OPTIONS:
+        assert opt["value"] in msg
+    assert "экран треснул, но включается" in msg
 
 
 # ---------- HTTP-эндпоинт ----------

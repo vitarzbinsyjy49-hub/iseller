@@ -108,10 +108,17 @@ function ScenarioChatScreen({ scenario }: { scenario: ScenarioKey }) {
     track("scenario_chat_ai_escalated", { scenario, field: field.key });
     const options = field.kind === "chips"
       ? field.options.map((o) => ({ value: o.value, label: o.label })) : [];
+    // Timeout 75с — тот же идиом, что и AiSearch.tsx submit(): без него
+    // зависший запрос держал бы pending вечно, а на время pending скрыты
+    // и чипы, и кнопки «Пропустить» — выйти можно было бы только закрытием
+    // экрана целиком, с потерей всех ответов.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 75000);
     try {
       const res = await api<TurnResponse>("/scenario-chat/turn", {
         method: "POST",
         body: JSON.stringify({ scenario, field_key: field.key, options, message: text.slice(0, 500) }),
+        signal: controller.signal,
       });
       if (res.type === "field_value" && res.value && options.some((o) => o.value === res.value)) {
         resolveField(field, res.value);
@@ -125,6 +132,7 @@ function ScenarioChatScreen({ scenario }: { scenario: ScenarioKey }) {
     } catch {
       pushAssistant("Не расслышал — выберите один из вариантов ниже или уточните ответ.");
     } finally {
+      clearTimeout(timer);
       setPending(false);
     }
   }
@@ -255,25 +263,40 @@ function ScenarioChatScreen({ scenario }: { scenario: ScenarioKey }) {
         </div>
       )}
 
-      {currentStep.kind === "summary" && (
-        <div className="mt-3 space-y-3 px-4">
-          <div className="rounded-xl2 bg-surface p-4 shadow-soft">
-            {leadMetadataRows(buildScenarioLead(scenario, values, phone).metadata).map((row) => (
-              <div key={row.label} className="flex justify-between gap-3 border-b border-border py-1.5 text-sm last:border-0">
-                <span className="text-muted">{row.label}</span>
-                <span className="text-right font-medium">{row.value}</span>
-              </div>
-            ))}
+      {currentStep.kind === "summary" && (() => {
+        const lead = buildScenarioLead(scenario, values, phone);
+        return (
+          <div className="mt-3 space-y-3 px-4">
+            <div className="rounded-xl2 bg-surface p-4 shadow-soft">
+              {leadMetadataRows(lead.metadata).map((row) => (
+                <div key={row.label} className="flex justify-between gap-3 border-b border-border py-1.5 text-sm last:border-0">
+                  <span className="text-muted">{row.label}</span>
+                  <span className="text-right font-medium">{row.value}</span>
+                </div>
+              ))}
+              {lead.message && (
+                <div className="flex justify-between gap-3 border-b border-border py-1.5 text-sm last:border-0">
+                  <span className="text-muted">Комментарий</span>
+                  <span className="text-right font-medium">{lead.message}</span>
+                </div>
+              )}
+              {lead.phone && (
+                <div className="flex justify-between gap-3 border-b border-border py-1.5 text-sm last:border-0">
+                  <span className="text-muted">Телефон</span>
+                  <span className="text-right font-medium">{lead.phone}</span>
+                </div>
+              )}
+            </div>
+            {error && <p className="text-sm text-danger">{error}</p>}
+            <button
+              onClick={submitLead} disabled={sendState === "sending"}
+              className="tap w-full rounded-xl2 bg-accent py-3.5 font-semibold text-white disabled:opacity-50"
+            >
+              {sendState === "sending" ? "Отправляем…" : cfg.cta}
+            </button>
           </div>
-          {error && <p className="text-sm text-danger">{error}</p>}
-          <button
-            onClick={submitLead} disabled={sendState === "sending"}
-            className="tap w-full rounded-xl2 bg-accent py-3.5 font-semibold text-white disabled:opacity-50"
-          >
-            {sendState === "sending" ? "Отправляем…" : cfg.cta}
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Строка ввода видна и на chips-шагах тоже: покупатель может напечатать
           свободный текст ВМЕСТО тапа по чипу (см. lib/scenarioChat.ts —

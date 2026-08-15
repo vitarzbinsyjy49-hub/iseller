@@ -66,13 +66,17 @@ export function looksLikeQuestion(text: string): boolean {
   return QUESTION_RE.test(text);
 }
 
-/** Нужна ли AI-эскалация: вопрос в любом поле, ИЛИ chips-поле без локального
- *  совпадения. Свободный текст без признаков вопроса принимается как есть —
- *  там и раньше не было валидации, кроме «не пусто» (ScenarioSheet). */
+/** Нужна ли AI-эскалация: ТОЛЬКО для chips-полей — вопрос или отсутствие
+ *  локального совпадения. Свободный текст (text/textarea) принимается как
+ *  есть всегда, даже если похож на вопрос: там не было и не должно быть
+ *  валидации, кроме «не пусто» (ScenarioSheet). Раньше вопрос эскалировался
+ *  в любом поле — из-за этого текст, напечатанный в "Комментарий", мог уйти
+ *  на AI-ответ по FAQ, а сам текст покупателя терялся: он никуда не
+ *  сохранялся. */
 export function needsEscalation(field: Field, text: string): boolean {
+  if (field.kind !== "chips") return false;
   if (looksLikeQuestion(text)) return true;
-  if (field.kind === "chips") return matchChip(field, text) === null;
-  return false;
+  return matchChip(field, text) === null;
 }
 
 export function isRequired(field: Field): boolean {

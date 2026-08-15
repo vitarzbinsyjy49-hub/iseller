@@ -75,8 +75,16 @@ describe("needsEscalation", () => {
     expect(needsEscalation(model, "iPhone 15 Pro")).toBe(false);
   });
 
-  it("похоже на вопрос в любом поле -> true", () => {
-    expect(needsEscalation(model, "а это точно нужно?")).toBe(true);
+  it("похоже на вопрос в свободном тексте -> false (принимаем как есть, не эскалируем)", () => {
+    // Продуктовое решение: question-detection применяется только к
+    // chips-полям. На text/textarea напечатанный текст никогда не
+    // эскалируется — иначе он терялся бы (AI отвечает по FAQ, а исходный
+    // текст покупателя никуда не сохраняется).
+    expect(needsEscalation(model, "а это точно нужно?")).toBe(false);
+  });
+
+  it("похоже на вопрос в chips-поле -> true (эскалация не изменилась)", () => {
+    expect(needsEscalation(condition, "а это точно нужно?")).toBe(true);
   });
 });
 
