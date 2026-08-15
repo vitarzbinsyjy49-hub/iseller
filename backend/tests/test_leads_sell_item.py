@@ -9,6 +9,7 @@ from app.api.deps import get_current_admin, get_current_user
 from app.core import rate_limit
 from app.db.session import get_db
 from app.main import app
+from app.models.notification import Notification
 from app.models.user import User
 
 
@@ -78,6 +79,34 @@ def test_upload_marketplace_photo_rejects_bad_type(ctx):
         files={"file": ("file.txt", io.BytesIO(b"not an image"), "text/plain")},
     )
     assert r.status_code == 400
+
+
+def test_sell_item_notifies_admin(ctx, monkeypatch):
+    client, db, _u = ctx
+    monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    payload = {
+        "source": "home", "lead_type": "sell_item", "phone": "+79990000002",
+        "metadata": {"category": "смартфоны", "title": "iPhone 12", "price_wanted": 30000,
+                      "photos": ["/api/uploads/a.jpg"]},
+    }
+    r = client.post("/api/leads", json=payload)
+    assert r.status_code == 201
+    notif = db.query(Notification).filter_by(kind="sell_item").first()
+    assert notif is not None
+    assert "iPhone 12" in notif.text
+
+
+def test_sell_item_rate_limited(ctx, monkeypatch):
+    client, _db, _u = ctx
+    monkeypatch.setattr("app.core.config.settings.SELL_ITEM_DAILY_LIMIT_PER_USER", 1)
+    payload = {
+        "source": "home", "lead_type": "sell_item", "phone": "+79990000003",
+        "metadata": {"category": "смартфоны", "title": "iPhone X", "price_wanted": 10000},
+    }
+    ok = client.post("/api/leads", json=payload)
+    assert ok.status_code == 201
+    blocked = client.post("/api/leads", json=payload)
+    assert blocked.status_code == 429
 
 
 def test_upload_marketplace_photo_rate_limited(ctx, monkeypatch):

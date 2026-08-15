@@ -113,8 +113,45 @@ def _notify_owner(db: Session, lead: Lead, meta: dict) -> None:
     )
 
 
+def _notify_sell_item(db: Session, lead: Lead, meta: dict) -> None:
+    """Алерт модератору о новой заявке «Предложить товар» — та же схема, что
+    _notify_owner для price_offer: без сети, той же транзакцией."""
+    if not settings.ADMIN_TELEGRAM_ID:
+        return
+    from app.services.notification_templates import sell_item_message
+    from app.services.notifications import enqueue
+
+    try:
+        chat_id = int(settings.ADMIN_TELEGRAM_ID)
+    except (TypeError, ValueError):
+        logger.warning("ADMIN_TELEGRAM_ID не число — уведомление о sell_item пропущено")
+        return
+
+    enqueue(
+        db, chat_id=chat_id, kind="sell_item",
+        message=sell_item_message(
+            title=str(meta.get("title") or "товар"),
+            price_wanted=meta.get("price_wanted"),
+            phone=lead.phone, username=lead.username,
+        ),
+        dedupe_key=f"sell_item:{lead.id}",
+    )
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
-def create_lead(body: LeadIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_lead(
+    body: LeadIn, request: Request,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    lead_type = body.lead_type or DEFAULT_LEAD_TYPE
+    if lead_type == "sell_item":
+        rl_key = f"user:{user.id}" if getattr(user, "id", None) else f"ip:{client_ip(request)}"
+        if not check_rate_limit(
+            f"sell_item:{rl_key}",
+            limit=settings.SELL_ITEM_DAILY_LIMIT_PER_USER,
+            window_seconds=86400,
+        ):
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Слишком много заявок за сегодня")
     # Название и цену товара берём из БД (не доверяем клиенту), если передан product_id.
     product_title = body.product_title
     product_price = None
@@ -126,7 +163,6 @@ def create_lead(body: LeadIn, user: User = Depends(get_current_user), db: Sessio
             product_price = product.price
             product_category = product.category
 
-    lead_type = body.lead_type or DEFAULT_LEAD_TYPE
     meta = dict(body.metadata or {})
     idempotency_key = None
     if lead_type == PRICE_OFFER_TYPE:
@@ -167,6 +203,9 @@ def create_lead(body: LeadIn, user: User = Depends(get_current_user), db: Sessio
         # получит ссылку на заявку, которой в базе не окажется.
         db.flush()
         _notify_owner(db, lead, meta)
+    elif lead_type == "sell_item":
+        db.flush()
+        _notify_sell_item(db, lead, meta)
     db.commit()
     db.refresh(lead)
 

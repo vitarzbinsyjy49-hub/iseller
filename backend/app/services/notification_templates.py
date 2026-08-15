@@ -201,6 +201,22 @@ def price_offer_message(
     return Message("\n".join(lines))
 
 
+# ================ «Предложить товар» — модератору ================
+def sell_item_message(*, title: str, price_wanted, phone: str | None, username: str | None) -> Message:
+    """Новая заявка «Предложить товар» — алерт модератору в «Заявки»."""
+    who = f"@{username}" if username else "покупатель"
+    lines = [
+        "🏷️ <b>Новая заявка: предложили товар</b>",
+        "",
+        f"<b>{_esc(title)}</b>",
+        f"Желаемая цена: {format_money(price_wanted) or '—'}",
+        f"От: {who}" + (f", {_esc(phone)}" if phone else ""),
+        "",
+        "Смотрите фото и детали в «Заявках» админки.",
+    ]
+    return Message(text="\n".join(lines))
+
+
 # ========================= Брошенная корзина =========================
 def cart_reminder_message(
     *, items_count: int, estimated_total: float | None, currency: str = "RUB",
