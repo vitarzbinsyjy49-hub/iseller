@@ -76,17 +76,22 @@ def test_catalog_search_excludes_marketplace(db):
 
 
 def test_catalog_brands_excludes_marketplace(db):
+    make_product(db, brand="Обычный-бренд-регрессия", source="manual")
     make_product(db, brand="Никогда-не-бренд", source=MARKETPLACE_SOURCE)
     client = _client(db)
     r = client.get("/api/catalog/brands")
-    assert "Никогда-не-бренд" not in r.json()["brands"]
+    brands_list = r.json()["brands"]
+    assert "Обычный-бренд-регрессия" in brands_list
+    assert "Никогда-не-бренд" not in brands_list
     app.dependency_overrides.clear()
 
 
 def test_catalog_feed_excludes_marketplace(db):
+    make_product(db, title="Хит обычный", source="manual", is_hot=True)
     make_product(db, title="Хит с маркетплейса", source=MARKETPLACE_SOURCE, is_hot=True)
     client = _client(db)
     r = client.get("/api/catalog/feed")
     titles = [c["title"] for c in r.json()["hot"]]
+    assert "Хит обычный" in titles
     assert "Хит с маркетплейса" not in titles
     app.dependency_overrides.clear()
