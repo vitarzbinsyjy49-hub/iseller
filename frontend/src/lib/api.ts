@@ -59,6 +59,30 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return res.json();
 }
 
+/** Загрузка файла (multipart), тот же 401-retry, что у api(). Content-Type
+ *  НЕ ставим явно — fetch сам выставит boundary; наш JSON-заголовок в
+ *  rawRequest() его бы сломал, поэтому здесь свой минимальный fetch. */
+export async function apiUploadFile<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("file", file);
+  const doFetch = () => {
+    const { accessToken } = useAuthStore.getState();
+    const headers: Record<string, string> = {};
+    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+    return fetch(`${BASE}${path}`, { method: "POST", headers, body: form });
+  };
+  let res = await doFetch();
+  if (res.status === 401) {
+    const refreshed = await tryRefresh();
+    if (refreshed) res = await doFetch();
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(errorText(body, res.status), res.status);
+  }
+  return res.json();
+}
+
 /** Идущий сейчас обмен токена. Refresh одноразовый (backend отзывает его jti),
  *  поэтому параллельные 401 обязаны ждать ОДИН общий запрос: иначе второй
  *  предъявит уже отозванный токен, получит 401 и разлогинит пользователя. */
