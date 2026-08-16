@@ -630,6 +630,22 @@ function LeadDetail({
               </div>
             )}
 
+            {/* ---- Фото заявки «Предложить товар» ---- */}
+            {lead.lead_type === "sell_item" &&
+              Array.isArray((lead.metadata as Record<string, unknown> | undefined)?.photos) &&
+              ((lead.metadata as Record<string, unknown>).photos as string[]).length > 0 && (
+              <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {((lead.metadata as Record<string, unknown>).photos as string[]).map((url, i) => (
+                  <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={url} alt={`Фото ${i + 1}`}
+                      style={{ width: 88, height: 88, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.border}` }}
+                    />
+                  </a>
+                ))}
+              </div>
+            )}
+
             {/* ---- Действия менеджера ---- */}
             <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 10, marginTop: 18, alignItems: "center" }}>
               <span style={{ fontSize: 13, color: C.sub }}>Статус</span>
