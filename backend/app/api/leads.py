@@ -295,6 +295,17 @@ async def upload_marketplace_photo(
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Слишком много фото за сегодня")
     if not is_allowed(file.content_type):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Только изображения: jpg, png, webp, gif")
+    # Отказ по заголовку — ДО чтения тела: Starlette сбрасывает крупную загрузку
+    # во временный файл на диске, то есть без этой проверки гигабайт успевает
+    # лечь на диск и только потом получить 400. Ручка публичная, а лимит частоты
+    # считает запросы, а не байты.
+    #
+    # Заголовку не доверяем как ЕДИНСТВЕННОЙ проверке: его может не быть
+    # (chunked) или он может врать. Поэтому это ранний отсев, а проверка по
+    # факту прочитанного ниже остаётся на месте.
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_BYTES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Файл больше 8 МБ")
     data = await file.read()
     if len(data) > MAX_BYTES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Файл больше 8 МБ")

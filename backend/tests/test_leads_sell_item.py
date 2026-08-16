@@ -4,10 +4,11 @@ import io
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.datastructures import UploadFile
 
 from app.api.deps import get_current_admin, get_current_user
 from app.core import rate_limit
-from app.core.uploads import MAX_PRODUCT_IMAGES
+from app.core.uploads import MAX_BYTES, MAX_PRODUCT_IMAGES
 from app.db.session import get_db
 from app.main import app
 from app.models.notification import Notification
@@ -108,6 +109,36 @@ def test_upload_marketplace_photo(ctx):
     )
     assert r.status_code == 201
     assert r.json()["url"].startswith("/api/uploads/")
+
+
+def test_upload_marketplace_photo_rejects_oversized(ctx):
+    """Ручка публичная, а лимит частоты считает ЗАПРОСЫ, а не байты. Отказ
+    обязан быть и по размеру, причём до чтения файла целиком."""
+    client, _db, _u = ctx
+    big = b"\xff\xd8\xff" + b"0" * MAX_BYTES
+    r = client.post(
+        "/api/leads/uploads/marketplace-photo",
+        files={"file": ("huge.jpg", io.BytesIO(big), "image/jpeg")},
+    )
+    assert r.status_code == 400
+    assert "8" in r.json()["detail"]
+
+
+def test_upload_marketplace_photo_rejects_oversized_before_reading(ctx, monkeypatch):
+    """Отказ обязан случиться по Content-Length, до чтения тела: иначе крупная
+    загрузка сперва целиком ляжет во временный файл Starlette."""
+    client, _db, _u = ctx
+
+    async def boom(*a, **kw):
+        raise AssertionError("тело прочитано до отказа по размеру")
+
+    monkeypatch.setattr(UploadFile, "read", boom)
+    big = b"\xff\xd8\xff" + b"0" * MAX_BYTES
+    r = client.post(
+        "/api/leads/uploads/marketplace-photo",
+        files={"file": ("huge.jpg", io.BytesIO(big), "image/jpeg")},
+    )
+    assert r.status_code == 400
 
 
 def test_upload_marketplace_photo_rejects_bad_type(ctx):
