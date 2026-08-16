@@ -45,6 +45,11 @@ export type ProductCard = {
   is_limited?: boolean;
   /** Редкая позиция: закреплена наверху выдачи и помечена золотом на карточке. */
   is_legendary?: boolean;
+  /** Состояние товара. Витрина показывает серый бейдж «Б/у» при "used"
+   *  (components/ProductCard.tsx). Отдаёт backend в to_card() для КАЖДОЙ
+   *  карточки, не только на странице товара — здесь, а не только в
+   *  ProductDetail. */
+  condition?: "new" | "used" | "refurbished";
   /** Режим доступности считает backend (services/availability.py) — фронт его
    *  только показывает. Второй раз выводить правила из in_stock/is_limited
    *  нельзя: кнопка «в корзину» и проверка на checkout обязаны совпадать. */
@@ -71,7 +76,6 @@ export type ProductDetail = ProductCard & {
   specs: Record<string, string>;
   specifications?: Specification[];   // нормализованный упорядоченный список (backend)
   warranty_months: number;
-  condition?: "new" | "used" | "refurbished";
   color?: string | null;
   memory?: string | null;
   storage?: string | null;

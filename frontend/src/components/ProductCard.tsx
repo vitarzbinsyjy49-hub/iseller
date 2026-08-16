@@ -333,7 +333,7 @@ export function productName(card: Pick<TCard, "title" | "title_clean" | "brand">
 }
 
 export function Badge({ color, children }: {
-  color: "red" | "blue" | "green" | "orange" | "gold"; children: ReactNode;
+  color: "red" | "blue" | "green" | "orange" | "gold" | "gray"; children: ReactNode;
 }) {
   const map = {
     red: "bg-danger text-white",
@@ -343,6 +343,9 @@ export function Badge({ color, children }: {
     // Золото читается только на тёмном: жёлтый текст на жёлтом фоне не набирает
     // контраст. Отсюда тёмно-коричневая подложка, а не золотая заливка.
     gold: "bg-[#2b1c00] text-[#ffce6a]",
+    // «Б/у» — нейтральная информация о товаре, не промо-сигнал вроде «Хит»/
+    // скидки/легендарного: подложка нарочно спокойная, не соревнуется с ними.
+    gray: "bg-mutedbg text-muted",
   };
   // inline-flex + gap: у бейджа может быть иконка перед подписью («Хит»), и она
   // обязана стоять на общей вертикальной оси с текстом, а не «висеть» рядом.
@@ -491,6 +494,7 @@ function ProductCard({ card, compact, onOpen }: Props) {
           {card.is_legendary && <Badge color="gold">Легендарный</Badge>}
           {card.is_hot && <Badge color="orange"><Icon name="flame" className="h-3 w-3" strokeWidth={2.2} />Хит</Badge>}
           {disc && <Badge color="red">−{disc}%</Badge>}
+          {card.condition === "used" && <Badge color="gray">Б/у</Badge>}
         </div>
         {/* Бейджа «Сегодня» здесь нет намеренно. Он отмечал исключение, пока
             забрать в день обращения можно было единичные позиции. Сейчас флаг
