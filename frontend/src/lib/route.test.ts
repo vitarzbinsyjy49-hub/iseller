@@ -80,4 +80,12 @@ describe("actionRoute", () => {
   it("неизвестный тип не роняет навигацию", () => {
     expect(actionRoute("нечто", "x")).toBe("/catalog");
   });
+
+  it("sell_item ведёт на визард подачи заявки", () => {
+    expect(actionRoute("sell_item")).toBe("/sell");
+  });
+
+  it("marketplace ведёт на витрину", () => {
+    expect(actionRoute("marketplace")).toBe("/marketplace");
+  });
 });

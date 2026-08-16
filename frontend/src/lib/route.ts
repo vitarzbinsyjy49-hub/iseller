@@ -41,6 +41,11 @@ export function actionRoute(type: string, value?: string | null): string {
     case "product": return safeInternalRoute(`/product/${encodeURIComponent(v)}`);
     case "collection": return `/catalog?collection=${encodeURIComponent(v)}`;
     case "ai": return v ? `/ai?q=${encodeURIComponent(v)}` : "/ai";
+    // sell_item — подать заявку «Предложить товар»; marketplace — витрина
+    // уже одобренных пользовательских товаров (два разных места, см.
+    // docs/superpowers/specs/2026-08-15-marketplace-used-items-design.md).
+    case "sell_item": return "/sell";
+    case "marketplace": return "/marketplace";
     default: return "/catalog";
   }
 }
