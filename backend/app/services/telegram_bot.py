@@ -188,6 +188,10 @@ def resolve_payload_path(payload: str) -> str | None:
         return "/ai"
     if payload == "requests":
         return "/requests"
+    if payload == "sell":
+        return "/sell"
+    if payload == "marketplace":
+        return "/marketplace"
     product_id = parse_product_payload(payload)
     if product_id is not None:
         return f"/product/{product_id}"
@@ -213,6 +217,23 @@ def reply_for_payload(payload: str) -> Reply | None:
     # падал в общее меню вместо фокусированного экрана заявок.
     if payload == "requests":
         return build_reply({"message": {"chat": {"type": "private"}, "text": "/orders"}})
+
+    if payload == "sell":
+        button = _web_app_button("📦 Предложить товар", "/sell")
+        if button is None:
+            return Reply(WELCOME, main_keyboard())
+        return Reply(
+            "Расскажите о своей технике — в несколько шагов.",
+            _keyboard(_row(button)),
+        )
+    if payload == "marketplace":
+        button = _web_app_button("🛍 Смотреть маркетплейс", "/marketplace")
+        if button is None:
+            return Reply(WELCOME, main_keyboard())
+        return Reply(
+            "Витрина техники, которую разместили другие пользователи.",
+            _keyboard(_row(button)),
+        )
 
     # Товар, которым поделились. НАЗВАНИЕ ТОВАРА ЗДЕСЬ НЕ ЧИТАЕТСЯ ИЗ БАЗЫ
     # намеренно: build_reply и reply_for_payload не ходят в БД и не ходят в

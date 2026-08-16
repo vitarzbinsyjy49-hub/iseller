@@ -399,6 +399,18 @@ def test_unknown_payload_falls_back_to_the_main_menu():
     assert reply.text.startswith("Добро пожаловать")
 
 
+def test_sell_payload_opens_the_wizard_focused():
+    reply = build_reply(private_message("/start sell"))
+    assert len(reply.keyboard) == 1 and len(reply.keyboard[0]) == 1
+    assert reply.keyboard[0][0]["web_app"]["url"].endswith("/sell")
+
+
+def test_marketplace_payload_opens_the_marketplace_focused():
+    reply = build_reply(private_message("/start marketplace"))
+    assert len(reply.keyboard) == 1 and len(reply.keyboard[0]) == 1
+    assert reply.keyboard[0][0]["web_app"]["url"].endswith("/marketplace")
+
+
 # ------------------------------------------------- resolve_payload_path (startapp)
 
 def test_resolve_payload_path_matches_what_the_bot_itself_opens():
@@ -412,6 +424,8 @@ def test_resolve_payload_path_matches_what_the_bot_itself_opens():
     assert resolve_payload_path("catalog") == "/catalog"
     assert resolve_payload_path("ai") == "/ai"
     assert resolve_payload_path("requests") == "/requests"
+    assert resolve_payload_path("sell") == "/sell"
+    assert resolve_payload_path("marketplace") == "/marketplace"
     assert resolve_payload_path("product_42") == "/product/42"
     assert resolve_payload_path("price_iphone") == SECTIONS_BY_SLUG["price_iphone"].route
     assert resolve_payload_path("совсем не существует") is None
