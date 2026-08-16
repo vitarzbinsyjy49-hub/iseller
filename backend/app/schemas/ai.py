@@ -155,6 +155,8 @@ ALLOWED_EVENTS = {
     "beta_roadmap_opened",
     # Ссылка «О сервисе» в самом низу главной (юридический дисклеймер).
     "about_service_opened",
+    # Маркетплейс б/у товаров: визард «Предложить товар» (/sell) отправил заявку.
+    "sell_item_submitted",
 }
 
 
