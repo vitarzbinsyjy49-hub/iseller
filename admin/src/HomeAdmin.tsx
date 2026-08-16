@@ -392,6 +392,7 @@ type HomeCat = {
 const ACTION_LABELS: Record<string, string> = {
   category: "Категория", brand: "Бренд", search: "Поиск", product: "Товар (id)",
   collection: "Подборка (hot/today/sale)", ai: "AI-запрос", external: "Внешняя ссылка",
+  sell_item: "Предложить товар (подать заявку)", marketplace: "Маркетплейс (витрина)",
 };
 
 export function HomeContent({ token }: { token: string }) {
