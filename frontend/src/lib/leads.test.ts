@@ -7,6 +7,7 @@ describe("leadTypeLabel", () => {
     expect(leadTypeLabel("trade_in")).toBe("Trade-In");
     expect(leadTypeLabel("b2b")).toBe("Для бизнеса");
     expect(leadTypeLabel("wholesale")).toBe("Опт");
+    expect(leadTypeLabel("sell_item")).toBe("Предложение товара");
     expect(leadTypeLabel(null)).toBe("Обычная");
     expect(leadTypeLabel("weird")).toBe("Обычная");
   });
@@ -23,6 +24,11 @@ describe("leadTitle", () => {
   });
   it("бизнес без деталей", () => {
     expect(leadTitle({ lead_type: "b2b", metadata: {} })).toBe("Поставка для бизнеса");
+  });
+  it("Предложение товара — с названием и без", () => {
+    expect(leadTitle({ lead_type: "sell_item", metadata: { title: "iPhone 13 Pro" } }))
+      .toBe("Предложение товара · iPhone 13 Pro");
+    expect(leadTitle({ lead_type: "sell_item", metadata: {} })).toBe("Предложение товара");
   });
   it("обычная — product_title или Консультация", () => {
     expect(leadTitle({ lead_type: "general", product_title: "iPhone 16" })).toBe("iPhone 16");
@@ -56,6 +62,22 @@ describe("leadMetadataRows", () => {
     expect(byLabel["Скидка по промокоду"]).toBe(formatPrice(500));
     expect(byLabel["Сумма без скидки"]).toBe(formatPrice(12000));
     expect("promo_code" in byLabel).toBe(false);
+  });
+  it("заявка «Предложить товар» — подписи, цена деньгами, фото скрыты", () => {
+    const rows = leadMetadataRows({
+      origin: "sell_item", category: "смартфоны", title: "iPhone 13 Pro 128 ГБ",
+      state: "Хорошее, есть следы", price_wanted: 45000,
+      photos: ["/api/uploads/a.jpg", "/api/uploads/b.jpg"],
+    });
+    const byLabel = Object.fromEntries(rows.map((r) => [r.label, r.value]));
+    expect(byLabel["Название"]).toBe("iPhone 13 Pro 128 ГБ");
+    expect(byLabel["Состояние"]).toBe("Хорошее, есть следы");
+    expect(byLabel["Желаемая цена"]).toBe(formatPrice(45000));
+    expect(byLabel["Категория"]).toBe("смартфоны");
+    // сырых ключей и простыни из URL на экране быть не должно
+    expect("photos" in byLabel).toBe(false);
+    expect("price_wanted" in byLabel).toBe(false);
+    expect(rows.some((r) => r.value.includes("/api/uploads/"))).toBe(false);
   });
   it("пустой/невалидный metadata -> []", () => {
     expect(leadMetadataRows(null)).toEqual([]);

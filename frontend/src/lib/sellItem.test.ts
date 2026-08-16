@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildSellItemLead, validateSellItem, type SellItemValues } from "./sellItem";
+import {
+  buildSellItemLead, sellableCategories, validateSellItem, type SellItemValues,
+} from "./sellItem";
 
 const FULL: SellItemValues = {
   category: "смартфоны", title: "iPhone 13 Pro 128 ГБ",
@@ -36,5 +38,20 @@ describe("validateSellItem", () => {
     expect(validateSellItem({ ...FULL, price: "0" }, ["/api/uploads/a.jpg"], "+79990000000")).toBe("Укажите цену больше нуля");
     expect(validateSellItem({ ...FULL, title: "" }, ["/api/uploads/a.jpg"], "+79990000000")).toBe("Укажите, что за товар");
     expect(validateSellItem(FULL, ["/api/uploads/a.jpg"], "+79990000000")).toBeNull();
+  });
+});
+
+describe("sellableCategories", () => {
+  it("убирает виртуальные «Скидки» — продать разрез витрины нельзя", () => {
+    const keys = sellableCategories([
+      { key: "смартфоны", label: "Смартфоны" },
+      { key: "__sale__", label: "Скидки" },
+      { key: "ноутбуки", label: "Ноутбуки" },
+    ]).map((c) => c.key);
+    expect(keys).toEqual(["смартфоны", "ноутбуки"]);
+  });
+  it("пустой/отсутствующий список -> []", () => {
+    expect(sellableCategories(undefined)).toEqual([]);
+    expect(sellableCategories(null)).toEqual([]);
   });
 });

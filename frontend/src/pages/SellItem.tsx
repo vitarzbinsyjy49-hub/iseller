@@ -11,7 +11,7 @@ import { api, apiUploadFile, ApiError } from "../lib/api";
 import { track } from "../lib/analytics";
 import { toast } from "../lib/toast";
 import {
-  buildSellItemLead, validateSellItem, type SellItemValues,
+  buildSellItemLead, sellableCategories, validateSellItem, type SellItemValues,
 } from "../lib/sellItem";
 import { ProductImage } from "../components/ProductCard";
 import { formatPrice } from "../lib/format";
@@ -38,7 +38,7 @@ export default function SellItem() {
   function loadCategories() {
     setCategoriesError(false);
     api<{ categories: Category[] }>("/catalog/categories")
-      .then((d) => setCategories(d.categories))
+      .then((d) => setCategories(sellableCategories(d.categories)))
       .catch(() => setCategoriesError(true));
   }
 

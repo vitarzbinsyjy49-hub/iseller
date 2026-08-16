@@ -28,6 +28,20 @@ export type SellItemLeadBody = {
   };
 };
 
+/** Виртуальная категория «Скидки» из GET /catalog/categories
+ *  (backend/app/services/catalog_nav.py::SALE_KEY). Это разрез витрины, а не
+ *  раздел каталога. */
+export const SALE_CATEGORY_KEY = "__sale__";
+
+/** Категории, которые можно предложить к продаже.
+ *
+ *  «Скидки» из выдачи убираем: продать скидку нельзя, а выбранный ключ уходит
+ *  в metadata.category и дальше — в Product.category при публикации, то есть
+ *  товар оказался бы в категории `__sale__`, которой не существует. */
+export function sellableCategories<T extends { key: string }>(categories: T[] | null | undefined): T[] {
+  return (categories ?? []).filter((c) => c.key !== SALE_CATEGORY_KEY);
+}
+
 /** Собрать тело POST /leads. Комментарий — единственное free-text поле,
  *  уходит в message (как textarea у обычных сценариев), остальное — metadata. */
 export function buildSellItemLead(

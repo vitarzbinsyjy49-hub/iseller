@@ -21,6 +21,7 @@ export const LEAD_TYPE_LABEL: Record<string, string> = {
   wholesale: "Опт",
   cart: "Корзина",
   price_offer: "Нашли дешевле",
+  sell_item: "Предложение товара",
 };
 
 export function leadTypeLabel(t?: string | null): string {
@@ -56,6 +57,11 @@ const KEY_LABELS: Record<string, string> = {
   city: "Город",
   category: "Категория",
   budget: "Бюджет",
+  // «Предложить товар» (маркетплейс б/у). Те же ключи и подписи, что в
+  // admin/src/ui.ts: покупатель и модератор смотрят на одну заявку.
+  title: "Название",
+  state: "Состояние",
+  price_wanted: "Желаемая цена",
   competitor_url: "Ссылка у конкурента",
   competitor_shop: "Площадка",
   competitor_price: "Цена там",
@@ -69,9 +75,11 @@ const KEY_LABELS: Record<string, string> = {
 
 // promo_discount/subtotal — суммы в рублях, а не произвольный текст: без
 // этого в заявке было бы голое число "500" вместо "500 ₽".
-const MONEY_KEYS = new Set(["promo_discount", "subtotal"]);
+const MONEY_KEYS = new Set(["promo_discount", "subtotal", "price_wanted"]);
 
-const HIDDEN_KEYS = new Set(["origin"]);
+// photos — список URL загруженных фото. Строкой это простыня из адресов вместо
+// информации, поэтому в текстовых строках его не показываем (как в админке).
+const HIDDEN_KEYS = new Set(["origin", "photos"]);
 
 /** Строки metadata для показа: [{label, value}], локализованные, без origin и
  *  пустых. Порядок ключей KEY_LABELS сначала, затем неизвестные (нейтрально). */
@@ -115,6 +123,12 @@ export function leadTitle(lead: LeadLike): string {
     case "wholesale": {
       const what = labeled("category");
       return what ? `Оптовая заявка · ${what}` : "Оптовая заявка";
+    }
+    case "sell_item": {
+      // В списке «Заявки» человек ищет свою вещь глазами по её названию —
+      // без этой ветки заявка подписывалась «Консультация».
+      const what = val("title");
+      return what ? `Предложение товара · ${what}` : "Предложение товара";
     }
     case "price_offer": {
       // Площадка в заголовке — то, по чему менеджер сортирует такие заявки
