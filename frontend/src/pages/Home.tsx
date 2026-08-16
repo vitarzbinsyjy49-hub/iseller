@@ -976,10 +976,14 @@ function ScenarioIcon({ name }: { name: string }) {
  *  Товарные → каталог; «Подобрать MacBook» → AI с prefill (без авто-отправки);
  *  Trade-In/бизнес/опт → встроенная сценарная заявка (bottom sheet).
  *
- *  Сетка 2×2, а не одна строка: четыре пункта не помещаются в ряд без обрезания
- *  подписей. Короткая вторая строка объясняет результат нажатия — это превью
- *  действия, а не загадочная иконка. Высота всё ещё достаточно мала, чтобы
- *  товарные секции оставались близко к первому экрану. */
+ *  Один ряд из 4, а не сетка 2×2: после добавления «Продать» 2×2 удваивала
+ *  высоту блока на каждой загрузке главной — цена за это была слишком
+ *  высокой ради подписи-пояснения под каждой плиткой. Вернулись к высоте
+ *  исходного ряда из 3, пожертвовав второй строкой текста: подписи «Trade-In»
+ *  и «Продать» разные сами по себе, риск разовой путаницы дешевле полноэкранной
+ *  просадки. Лента (горизонтальный скролл) здесь не вариант — см. комментарий
+ *  ниже, в проекте уже отказывались от неё по этой же причине для чипов
+ *  категорий. */
 function QuickScenarios({
   onCatalog, onScenario, onMacbook, onSellItem,
 }: {
@@ -988,21 +992,13 @@ function QuickScenarios({
   onMacbook: () => void;
   onSellItem: () => void;
 }) {
-  // Группировка 2×2 не произвольная: Trade-In и Продать — «у меня есть
-  // техника», Бизнесу и Опт — «нужна техника для бизнеса» (см. спеку). Detail
-  // «Фото и своя цена» намеренно не повторяет «Оценим технику» у Trade-In —
-  // Trade-In сегодня это лид без фото/цены (звонит менеджер, каталог не
-  // пополняется), sell_item — цена и фото от пользователя, после модерации
-  // становится настоящей карточкой. Разница должна читаться из подписи, а не
-  // угадываться после клика.
-  const items: { key: string; label: string; detail: string; onClick: () => void }[] = [
-    { key: "tradein", label: "Trade-In", detail: "Оценим технику", onClick: () => onScenario("trade_in") },
-    { key: "sell_item", label: "Продать", detail: "Фото и своя цена", onClick: onSellItem },
-    // «Счёт юрлицу» вместо «С НДС и документами»: в треть экрана вторая
-    // формулировка ложится второй строкой и одна раздувает высоту всего ряда
-    // на 17px. Короткая при этом говорит ровно то же самое конкретнее.
-    { key: "b2b", label: "Бизнесу", detail: "Счёт юрлицу", onClick: () => onScenario("b2b") },
-    { key: "wholesale", label: "Опт", detail: "Цена на партию", onClick: () => onScenario("wholesale") },
+  // Порядок не произвольный: Trade-In и Продать соседствуют — «у меня есть
+  // техника», Бизнесу и Опт — «нужна техника для бизнеса» (см. спеку).
+  const items: { key: string; label: string; onClick: () => void }[] = [
+    { key: "tradein", label: "Trade-In", onClick: () => onScenario("trade_in") },
+    { key: "sell_item", label: "Продать", onClick: onSellItem },
+    { key: "b2b", label: "Бизнесу", onClick: () => onScenario("b2b") },
+    { key: "wholesale", label: "Опт", onClick: () => onScenario("wholesale") },
     // Плитки «Аксессуары» здесь больше нет: она вела в категорию «аксессуары»,
     // которой в каталоге не существует (кабелей/чехлов/зарядок нет вовсе).
     // Реальные категории показывает блок категорий — он строится из данных.
@@ -1027,22 +1023,19 @@ function QuickScenarios({
     // тоном отделяет пункт от фона, а поднимать его над страницей незачем —
     // рядом стоят настоящие карточки товаров, и спорить с ними по весу
     // служебные ссылки не должны.
-    <div className="stagger mt-4 grid grid-cols-2 gap-2 lg:hidden">
+    <div className="stagger mt-4 grid grid-cols-4 gap-2 lg:hidden">
       {items.map((s) => (
         <button
           key={s.key}
           onClick={s.onClick}
-          className="card-appear tap flex min-w-0 flex-col items-start gap-1.5 rounded-xl2 bg-mutedbg px-2.5 py-2.5 text-left"
+          // min-h-11 (44px) держит тач-таргет на минимуме, даже когда сама
+          // плитка визуально компактнее — иконка+подпись сами по себе ниже.
+          className="card-appear tap flex min-h-11 min-w-0 flex-col items-center gap-1 rounded-xl2 bg-mutedbg px-1 py-2 text-center"
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface text-accent">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface text-accent">
             <ScenarioIcon name={s.key} />
           </span>
-          <span className="min-w-0">
-            <span className="block truncate text-[13px] font-bold leading-4 text-text">{s.label}</span>
-            {/* Две строки разрешены: «С НДС и документами» в треть экрана в одну
-                не влезает, а обрезанное «С НДС и…» не объясняет ничего. */}
-            <span className="mt-0.5 line-clamp-2 block text-[11px] font-medium leading-[1.3] text-muted">{s.detail}</span>
-          </span>
+          <span className="line-clamp-1 block max-w-full text-[11px] font-bold leading-[1.2] text-text">{s.label}</span>
         </button>
       ))}
     </div>
