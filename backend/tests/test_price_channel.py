@@ -17,6 +17,7 @@ from app.main import app
 from app.models.post import ChannelPost
 from app.models.product import Product
 from app.services import price_channel
+from app.services.marketplace import MARKETPLACE_SOURCE
 from app.services.price_posts import NAVIGATION_SLUG
 from app.services.telegram_publisher import TelegramPublishError
 
@@ -393,3 +394,25 @@ def test_navigation_skips_continuation_parts(db, telegram):
     links = [b["url"] for row in telegram.sent[-1]["keyboard"] for b in row]
     assert any(link.endswith("/1") for link in links)
     assert not any(link.endswith("/2") for link in links)
+
+
+def test_load_catalog_excludes_marketplace(db, catalog):
+    """Прайс-пост уходит в ПУБЛИЧНЫЙ канал магазина. Чужой б/у товар в нём
+    выглядит как собственный ассортимент — утечка не просто мимо изоляции, а
+    вообще за пределы Mini App."""
+    db.add(Product(title="iPhone 13 с рук", brand="Apple", category="смартфоны",
+                   subcategory="iPhone", price=45000, is_active=True, sku="MP-1",
+                   source=MARKETPLACE_SOURCE))
+    db.commit()
+    titles = [p["title"] for p in price_channel.load_catalog(db)]
+    assert "Apple iPhone 17 256 Blue" in titles
+    assert "iPhone 13 с рук" not in titles
+
+
+def test_marketplace_item_never_reaches_channel_post(db, catalog, telegram):
+    db.add(Product(title="iPhone 13 с рук", brand="Apple", category="смартфоны",
+                   subcategory="iPhone", price=45000, is_active=True, sku="MP-2",
+                   source=MARKETPLACE_SOURCE))
+    db.commit()
+    price_channel.apply_plan(db, on_date=TODAY)
+    assert all("с рук" not in msg["text"] for msg in telegram.sent)

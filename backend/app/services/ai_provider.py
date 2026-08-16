@@ -93,7 +93,13 @@ def build_demo_answer(db: Session, message: str, max_cards: int = 6, source: str
     if not products and category:
         from sqlalchemy import select  # локальный импорт, чтобы не тянуть в топ модуля
         from app.models.product import Product
-        stmt = select(Product).where(Product.is_active.is_(True), Product.category == category)
+        from app.services.marketplace import exclude_marketplace
+        # Маркетплейс исключаем ровно как в catalog/ai_retrieval/recommendations:
+        # это НЕ редкий путь, а основной ответ при AI_PROVIDER=fallback (значение
+        # по умолчанию), и без фильтра консультант советует чужой б/у товар как
+        # обычный ассортимент.
+        stmt = exclude_marketplace(
+            select(Product).where(Product.is_active.is_(True), Product.category == category))
         if price_max:
             stmt = stmt.where(Product.price <= price_max)
         stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc()).limit(max_cards)

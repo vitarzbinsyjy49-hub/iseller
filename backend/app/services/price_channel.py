@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.post import ChannelPost
 from app.models.product import Product
+from app.services.marketplace import MARKETPLACE_SOURCE
 from app.services.price_posts import (
     NAVIGATION_SLUG,
     SECTIONS,
@@ -75,8 +76,15 @@ def load_catalog(db: Session) -> list[dict]:
 
     Пост обязан совпадать с тем, что покупатель видит в Mini App: если цену
     поправили в админке, прайс должен уметь обновиться без нового XLSX.
+
+    Товары маркетплейса сюда не входят: прайс уходит в ПУБЛИЧНЫЙ канал магазина
+    как собственный ассортимент, и чужая б/у вещь в нём — утечка за пределы
+    Mini App, а не просто мимо изоляции витрины.
     """
-    rows = db.query(Product).filter(Product.is_active.is_(True)).all()
+    rows = (db.query(Product)
+            .filter(Product.is_active.is_(True),
+                    Product.source.is_distinct_from(MARKETPLACE_SOURCE))
+            .all())
     return [{
         "sku": p.sku, "title": p.title, "brand": p.brand,
         "category": p.category, "subcategory": p.subcategory,

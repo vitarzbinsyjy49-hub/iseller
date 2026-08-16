@@ -118,3 +118,23 @@ def test_marketplace_endpoint_deterministic_order(db):
     r2 = client.get("/api/catalog/marketplace")
     assert [c["id"] for c in r1.json()["cards"]] == [c["id"] for c in r2.json()["cards"]]
     app.dependency_overrides.clear()
+
+
+def test_ai_fallback_category_branch_excludes_marketplace(db):
+    """Ветка «топ категории» в build_demo_answer — ПЕРВИЧНЫЙ путь ответа при
+    AI_PROVIDER=fallback (значение по умолчанию), сюда же уходит короткое
+    замыкание AI_SKIP_LLM_FOR_BROWSE и деградация оркестратора. Без исключения
+    маркетплейса ИИ-консультант рекомендует чужой б/у товар как ассортимент."""
+    from app.services.ai_provider import build_demo_answer
+
+    make_product(db, title="Xiaomi 13", category="смартфоны", source="manual", price=30000)
+    make_product(db, title="Redmi с рук", category="смартфоны",
+                 source=MARKETPLACE_SOURCE, price=10000)
+    # «телефон» есть в разговорном словаре (-> «смартфоны»), но не встречается
+    # ни в одном названии — поэтому пословный поиск пуст и включается именно
+    # ветка по категории.
+    answer = build_demo_answer(db, "нужен телефон")
+    assert answer["meta"]["category"] == "смартфоны"
+    titles = [c["title"] for c in answer["cards"]]
+    assert "Xiaomi 13" in titles
+    assert "Redmi с рук" not in titles
