@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import client_ip, get_current_user
 from app.core.config import settings
 from app.core.rate_limit import check_rate_limit
-from app.core.uploads import MAX_BYTES, is_allowed, save_image
+from app.core.uploads import MAX_BYTES, MAX_PRODUCT_IMAGES, URL_PREFIX, is_allowed, save_image
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
 from app.models.lead import DEFAULT_LEAD_TYPE, DELIVERY_METHODS, LEAD_SOURCES, Lead
@@ -124,6 +124,27 @@ def _safe_price(raw) -> float | None:
         return None
 
 
+def _own_photos(raw) -> list[str]:
+    """Оставить в `metadata.photos` только файлы, загруженные к нам.
+
+    metadata приходит от клиента, а эти ссылки потом (1) показываются модератору
+    как <a href> в админке, где в localStorage лежат его токены, и (2) уезжают
+    в `images` товара при публикации на витрину. `javascript:`, `data:` и чужой
+    хост в таком месте — это XSS на origin админки и подмена картинки в
+    каталоге, поэтому разрез строгий: наш собственный префикс загрузок и ничего
+    больше.
+
+    Мусор молча выбрасываем, а не отклоняем заявку целиком: тот же принцип, что
+    у `_safe_price` — заявка обязана создаться (см. `_competitor_price`, где
+    модель осознанно другая).
+    """
+    if not isinstance(raw, list):
+        return []
+    prefix = URL_PREFIX + "/"
+    clean = [u for u in raw if isinstance(u, str) and u.startswith(prefix)]
+    return clean[:MAX_PRODUCT_IMAGES]
+
+
 def _notify_sell_item(db: Session, lead: Lead, meta: dict) -> None:
     """Алерт модератору о новой заявке «Предложить товар» — та же схема, что
     _notify_owner для price_offer: без сети, той же транзакцией."""
@@ -175,6 +196,8 @@ def create_lead(
             product_category = product.category
 
     meta = dict(body.metadata or {})
+    if lead_type == "sell_item" and "photos" in meta:
+        meta["photos"] = _own_photos(meta.get("photos"))
     idempotency_key = None
     if lead_type == PRICE_OFFER_TYPE:
         meta, digest = _prepare_price_offer(meta)

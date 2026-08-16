@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_admin, get_current_user
 from app.core import rate_limit
+from app.core.uploads import MAX_PRODUCT_IMAGES
 from app.db.session import get_db
 from app.main import app
 from app.models.notification import Notification
@@ -60,6 +61,43 @@ def test_sell_item_lead_saved(ctx):
     assert body["lead_type"] == "sell_item"
     assert body["metadata"]["title"] == "iPhone 13 Pro 128 ГБ"
     assert body["metadata"]["photos"] == ["/api/uploads/a.jpg", "/api/uploads/b.jpg"]
+
+
+def test_sell_item_photos_keep_only_own_uploads(ctx):
+    """metadata приходит от клиента, а фото из неё показываются модератору
+    ссылкой (<a href>) и уезжают в images товара при публикации. Значит
+    javascript:/data:/чужой хост — это XSS на origin админки (там токены) и
+    подмена картинки на витрине. Оставляем только свои /api/uploads/…,
+    остальное молча выбрасываем: заявку это ронять не должно."""
+    client, _db, _u = ctx
+    payload = {
+        "source": "home", "lead_type": "sell_item", "phone": "+79990000010",
+        "metadata": {
+            "category": "смартфоны", "title": "iPhone 13", "price_wanted": 40000,
+            "photos": [
+                "/api/uploads/good.jpg",
+                "javascript:alert(1)",
+                "https://evil.example/x.jpg",
+                "/api/uploadsevil.jpg",       # префикс без разделителя — не наш файл
+                123,
+            ],
+        },
+    }
+    r = client.post("/api/leads", json=payload)
+    assert r.status_code == 201
+    assert r.json()["metadata"]["photos"] == ["/api/uploads/good.jpg"]
+
+
+def test_sell_item_photos_capped_at_limit(ctx):
+    client, _db, _u = ctx
+    payload = {
+        "source": "home", "lead_type": "sell_item", "phone": "+79990000011",
+        "metadata": {"category": "смартфоны", "title": "iPhone 13",
+                     "photos": [f"/api/uploads/{i}.jpg" for i in range(MAX_PRODUCT_IMAGES + 5)]},
+    }
+    r = client.post("/api/leads", json=payload)
+    assert r.status_code == 201
+    assert len(r.json()["metadata"]["photos"]) == MAX_PRODUCT_IMAGES
 
 
 def test_upload_marketplace_photo(ctx):
