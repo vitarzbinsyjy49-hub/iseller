@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   C, card, input, btn, btnGhost, chip, apiGet, apiPatch, apiPost, fmtPrice, fmtDateTime, storefrontUrl,
   STATUSES, STATUS_RU, SOURCE_RU, LEAD_TYPES, LEAD_TYPE_RU, FULFILLMENT_RU, AVAILABILITY_RU,
-  leadMetaRows, storeTokens, clearTokens, loadStoredAccessToken, onTokenRefreshed,
+  leadMetaRows, leadPhotos, storeTokens, clearTokens, loadStoredAccessToken, onTokenRefreshed,
 } from "./ui";
 import { Products } from "./Products";
 import { Analytics, AiLogs } from "./Analytics";
@@ -634,11 +634,9 @@ function LeadDetail({
             )}
 
             {/* ---- Фото заявки «Предложить товар» ---- */}
-            {lead.lead_type === "sell_item" &&
-              Array.isArray((lead.metadata as Record<string, unknown> | undefined)?.photos) &&
-              ((lead.metadata as Record<string, unknown>).photos as string[]).length > 0 && (
+            {lead.lead_type === "sell_item" && leadPhotos(lead.metadata).length > 0 && (
               <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {((lead.metadata as Record<string, unknown>).photos as string[]).map((url, i) => (
+                {leadPhotos(lead.metadata).map((url, i) => (
                   <a key={url} href={url} target="_blank" rel="noopener noreferrer">
                     <img
                       src={url} alt={`Фото ${i + 1}`}
@@ -666,7 +664,7 @@ function LeadDetail({
                     setPublishError("Некорректная цена в заявке — исправьте вручную перед публикацией");
                     return;
                   }
-                  const photos = Array.isArray(meta.photos) ? (meta.photos as string[]) : [];
+                  const photos = leadPhotos(lead.metadata);
                   const description = [meta.state, lead.message].filter(Boolean).join(" — ");
                   setPublishing(true);
                   try {
@@ -678,6 +676,15 @@ function LeadDetail({
                       description,
                       images: photos,
                       source: "user_submitted",
+                      // Вещь из заявки ровно одна. Без этих двух полей товар
+                      // создаётся с дефолтами (in_stock=true, stock=0,
+                      // is_limited=false), а для «безлимитного» товара корзина
+                      // разрешает MAX_ITEM_QUANTITY штук — покупатель мог бы
+                      // заказать 20 копий единственного б/у устройства.
+                      // stock=1 + is_limited=true дают режим limited и потолок 1
+                      // (backend/app/services/availability.py::max_quantity).
+                      stock: 1,
+                      is_limited: true,
                     });
                     // Товар уже создан — что бы ни случилось дальше (в т.ч. если
                     // patch() ниже не сможет перевести лид в completed), кнопка

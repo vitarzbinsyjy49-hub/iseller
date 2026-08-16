@@ -179,7 +179,11 @@ export const SOURCE_RU: Record<string, string> = {
 
 // v5.4.0: сценарные типы заявок; cart — общая заявка по корзине
 // price_offer — «нашли дешевле»: ссылка на тот же товар у конкурента.
-export const LEAD_TYPES = ["general", "product", "trade_in", "b2b", "wholesale", "cart", "price_offer"];
+// sell_item здесь обязателен: весь рабочий цикл модератора по маркетплейсу —
+// «найти заявки этого типа и опубликовать», а без него фильтр «Тип» не даёт
+// отделить их от остального потока заявок.
+export const LEAD_TYPES = ["general", "product", "trade_in", "b2b", "wholesale", "cart",
+                           "price_offer", "sell_item"];
 export const LEAD_TYPE_RU: Record<string, string> = {
   general: "Обычная", product: "Товар", trade_in: "Trade-In", b2b: "Для бизнеса",
   wholesale: "Опт", cart: "Корзина", price_offer: "Нашли дешевле",
@@ -254,6 +258,24 @@ const META_KEY_RU: Record<string, string> = {
 // этого в заявке было бы голое число "500" вместо "500 ₽".
 const META_MONEY_KEYS = new Set(["promo_discount", "subtotal", "price_wanted"]);
 const META_HIDDEN = new Set(["origin", "photos"]);
+
+/** Префикс собственных загрузок (backend/app/core/uploads.py::URL_PREFIX). */
+const UPLOADS_PREFIX = "/api/uploads/";
+
+/** Фото заявки «Предложить товар» — только свои загрузки.
+ *
+ *  Основной разрез делает бэкенд при создании заявки (api/leads.py::_own_photos):
+ *  чужая ссылка не должна дожить до этого места. Здесь — вторая линия, потому
+ *  что цена ошибки высокая: этот же массив рисуется как <a href> на origin
+ *  админки (в sessionStorage лежат токены) и уходит в images товара при
+ *  публикации на витрину. Заявки, созданные до серверного фильтра, тоже
+ *  попадают сюда. */
+export function leadPhotos(metadata?: Record<string, unknown> | null): string[] {
+  const raw = (metadata as Record<string, unknown> | undefined)?.photos;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((u): u is string => typeof u === "string" && u.startsWith(UPLOADS_PREFIX))
+    .slice(0, MAX_PRODUCT_IMAGES);
+}
 
 /** Локализованные строки metadata заявки (без origin/пустых). Неизвестные ключи
  *  показываем нейтрально — как есть. Никакого сырого JSON в UI. */
