@@ -12,7 +12,7 @@
  *  unit-тестами и здесь не меняется); этот файл — только UI, навигация по
  *  шагам и вызовы api()/apiUploadFile().
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, apiUploadFile, ApiError } from "../lib/api";
 import { track } from "../lib/analytics";
@@ -65,6 +65,7 @@ export default function SellItem() {
   const [done, setDone] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
+  const autoAdvanceTimer = useRef<number | undefined>(undefined);
 
   const step = SELL_ITEM_STEPS[stepIndex];
   const stepNumber = stepIndex + 1;
@@ -78,6 +79,9 @@ export default function SellItem() {
   }
 
   useEffect(loadCategories, []);
+  useEffect(() => () => {
+    if (autoAdvanceTimer.current) window.clearTimeout(autoAdvanceTimer.current);
+  }, []);
 
   function set<K extends keyof SellItemValues>(key: K, v: SellItemValues[K]) {
     setValues((prev) => ({ ...prev, [key]: v }));
@@ -89,6 +93,10 @@ export default function SellItem() {
    *  системную/CSS-анимацию. Выход короче входа (180 vs 220мс) — уход не
    *  должен ощущаться медленнее, чем появление нового шага. */
   function goToStep(nextIndex: number) {
+    // Отменяем отложенный автопереход (см. selectAndAdvance) — любая другая
+    // навигация (вручную «Далее», «Назад») делает его неактуальным; без
+    // отмены таймер мог сработать позже и перескочить ещё один шаг.
+    if (autoAdvanceTimer.current) { window.clearTimeout(autoAdvanceTimer.current); autoAdvanceTimer.current = undefined; }
     const el = panelRef.current;
     if (!el) { setStepIndex(nextIndex); return; }
     animateOpacity(el, 1, 0, transitionDuration(180), () => {
@@ -103,6 +111,23 @@ export default function SellItem() {
   }
   function goBack() {
     if (stepIndex > 0) goToStep(stepIndex - 1);
+  }
+  /** Отправка формы шага (Enter физической клавиатуры или «Далее»/«Готово»
+   *  на мобильной виртуальной — оба фактически шлют submit, а не keydown). */
+  function onStepSubmit(e: FormEvent) {
+    e.preventDefault();
+    goNext();
+  }
+  /** Чипы (категория/состояние) — выбор сам по себе однозначен, ждать ещё и
+   *  тап по «Далее» незачем. Небольшая задержка перед переходом — чтобы
+   *  человек успел увидеть подсветку выбора, а не воспринял смену экрана как
+   *  случайный скачок. Таймер, а не сразу: goToStep ссылается на актуальный
+   *  stepIndex из этого рендера, поэтому отменять предыдущий обязательно —
+   *  без этого двойной тап по разным чипам мог продвинуть на два шага сразу. */
+  function selectAndAdvance<K extends keyof SellItemValues>(key: K, value: string) {
+    set(key, value);
+    if (autoAdvanceTimer.current) window.clearTimeout(autoAdvanceTimer.current);
+    autoAdvanceTimer.current = window.setTimeout(() => goToStep(stepIndex + 1), 220);
   }
 
   async function onFilesSelected(files: FileList | null) {
@@ -219,7 +244,7 @@ export default function SellItem() {
             <div className="mt-4 flex flex-wrap gap-2">
               {categories.map((c) => (
                 <button key={c.key} type="button"
-                  onClick={() => set("category", c.key)}
+                  onClick={() => selectAndAdvance("category", c.key)}
                   className={`tap rounded-full px-4 py-2.5 text-sm font-medium ${
                     values.category === c.key ? "bg-accent text-white" : "bg-mutedbg text-text"
                   }`}>
@@ -231,12 +256,12 @@ export default function SellItem() {
         )}
 
         {step === "title" && (
-          <>
+          <form onSubmit={onStepSubmit}>
             <StepHeading title="Что за товар?" subtitle="Модель, объём памяти — как в объявлении" />
             <input autoFocus className="mt-4 w-full rounded-field border border-black/10 px-3 py-3 text-base"
-              placeholder="Например, iPhone 13 Pro 128 ГБ"
+              placeholder="Например, iPhone 13 Pro 128 ГБ" enterKeyHint="next"
               value={values.title} onChange={(e) => set("title", e.target.value)} />
-          </>
+          </form>
         )}
 
         {step === "state" && (
@@ -244,7 +269,7 @@ export default function SellItem() {
             <StepHeading title="В каком состоянии?" />
             <div className="mt-4 flex flex-col gap-2">
               {STATE_OPTIONS.map((s) => (
-                <button key={s} type="button" onClick={() => set("state", s)}
+                <button key={s} type="button" onClick={() => selectAndAdvance("state", s)}
                   className={`tap flex items-center justify-between rounded-field border px-4 py-3.5 text-left text-sm font-medium ${
                     values.state === s
                       ? "border-accent bg-accent/5 text-text"
@@ -265,15 +290,15 @@ export default function SellItem() {
         )}
 
         {step === "price" && (
-          <>
+          <form onSubmit={onStepSubmit}>
             <StepHeading title="Сколько хотите получить?" subtitle="Окончательную цену магазин подтвердит при осмотре" />
             <div className="mt-4 flex items-baseline gap-2 border-b-2 border-black/10 pb-2 focus-within:border-accent">
               <input autoFocus className="w-full bg-transparent text-3xl font-bold tabular-nums outline-none"
-                type="number" inputMode="numeric" placeholder="0"
+                type="number" inputMode="numeric" placeholder="0" enterKeyHint="next"
                 value={values.price} onChange={(e) => set("price", e.target.value)} />
               <span className="shrink-0 text-xl font-semibold text-muted">₽</span>
             </div>
-          </>
+          </form>
         )}
 
         {step === "photos" && (
@@ -301,12 +326,12 @@ export default function SellItem() {
         )}
 
         {step === "phone" && (
-          <>
+          <form onSubmit={onStepSubmit}>
             <StepHeading title="Как с вами связаться?" subtitle="Позвоним, если заявку одобрят" />
             <input autoFocus className="mt-4 w-full rounded-field border border-black/10 px-3 py-3 text-base"
-              type="tel" placeholder="+7 900 000-00-00"
+              type="tel" placeholder="+7 900 000-00-00" enterKeyHint="next"
               value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </>
+          </form>
         )}
 
         {step === "comment" && (
