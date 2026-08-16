@@ -10,6 +10,8 @@ action_type определяет, куда ведёт клик на витрин
 - collection -> /catalog?collection=<action_value>  (hot|today|sale)
 - ai         -> /ai?q=<action_value>
 - external   -> открыть ссылку action_value
+- sell_item  -> /sell        (визард «Предложить товар»)
+- marketplace-> /marketplace (витрина пользовательских товаров)
 """
 from sqlalchemy import Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,7 +21,13 @@ from app.db.session import Base
 # brand (v5.8): плитка по бренду. Нужна, потому что «Dyson» — это бренд, а не
 # категория: его товары лежат в «красота» и «бытовая техника», и плитка с
 # action_type=category вела в пустоту.
-ACTION_TYPES = ("category", "brand", "search", "product", "collection", "ai", "external")
+# sell_item/marketplace (маркетплейс б/у): единственный вход в обе точки.
+# «/marketplace» намеренно исключён из обычного просмотра (категории, поиск,
+# главная), поэтому попасть туда можно ТОЛЬКО по плитке/баннеру, которые
+# заводит модератор. Без этих значений в списке сохранение отбивалось 400 —
+# то есть вход был физически несоздаваем.
+ACTION_TYPES = ("category", "brand", "search", "product", "collection", "ai", "external",
+                "sell_item", "marketplace")
 
 
 class HomeBanner(Base):

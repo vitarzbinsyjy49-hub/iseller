@@ -276,6 +276,34 @@ def test_brand_is_a_supported_action_type():
     assert "brand" in ACTION_TYPES
 
 
+def test_marketplace_action_types_are_supported():
+    """Витрина маркетплейса и заявка «Предложить товар» доступны ТОЛЬКО через
+    плитку/баннер главной: /marketplace намеренно исключён из обычного
+    просмотра. Нет этих типов в ACTION_TYPES — вход создать нечем."""
+    assert "sell_item" in ACTION_TYPES
+    assert "marketplace" in ACTION_TYPES
+
+
+@pytest.mark.parametrize("action_type", ["sell_item", "marketplace"])
+def test_admin_can_save_marketplace_tile(client, action_type):
+    """Модератор выбирает тип в админке и сохраняет — без 400."""
+    r = client.post("/api/admin/home/categories",
+                    json={"title": "Продать", "action_type": action_type, "action_value": ""})
+    assert r.status_code == 201, r.text
+    assert r.json()["action_type"] == action_type
+
+    b = client.post("/api/admin/home/banners",
+                    json={"title": "Продайте нам технику", "action_type": action_type})
+    assert b.status_code == 201, b.text
+    assert b.json()["action_type"] == action_type
+
+    # ...и плитка доходит до витрины: счётчика за ней нет, а непосчитаемое
+    # правило видимости не скрывает (иначе вход снова оказался бы недоступен).
+    home = client.get("/api/home").json()
+    assert any(c["action_type"] == action_type for c in home["categories"])
+    assert any(x["action_type"] == action_type for x in home["banners"])
+
+
 # ---------- /home: мёртвые плитки не выходят наружу ----------
 
 def test_home_hides_tile_without_products(client, db):
