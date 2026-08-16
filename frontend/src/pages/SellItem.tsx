@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, apiUploadFile } from "../lib/api";
+import { api, apiUploadFile, ApiError } from "../lib/api";
 import { track } from "../lib/analytics";
 import { toast } from "../lib/toast";
 import {
@@ -24,6 +24,7 @@ type Category = { key: string; label: string };
 export default function SellItem() {
   const navigate = useNavigate();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesError, setCategoriesError] = useState(false);
   const [values, setValues] = useState<SellItemValues>({
     category: "", title: "", state: "", price: "", comment: "",
   });
@@ -34,11 +35,14 @@ export default function SellItem() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
-  useEffect(() => {
+  function loadCategories() {
+    setCategoriesError(false);
     api<{ categories: Category[] }>("/catalog/categories")
       .then((d) => setCategories(d.categories))
-      .catch(() => {});
-  }, []);
+      .catch(() => setCategoriesError(true));
+  }
+
+  useEffect(loadCategories, []);
 
   function set<K extends keyof SellItemValues>(key: K, v: SellItemValues[K]) {
     setValues((prev) => ({ ...prev, [key]: v }));
@@ -47,6 +51,9 @@ export default function SellItem() {
   async function onFilesSelected(files: FileList | null) {
     if (!files || files.length === 0) return;
     const remaining = MAX_PHOTOS - photos.length;
+    if (files.length > remaining) {
+      toast(`Можно добавить ещё не больше ${remaining} фото`, "error");
+    }
     const toUpload = Array.from(files).slice(0, remaining);
     setUploading(true);
     try {
@@ -54,8 +61,8 @@ export default function SellItem() {
         const { url } = await apiUploadFile<{ url: string }>("/leads/uploads/marketplace-photo", file);
         setPhotos((prev) => [...prev, url]);
       }
-    } catch {
-      toast("Не удалось загрузить фото", "error");
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Не удалось загрузить фото", "error");
     } finally {
       setUploading(false);
     }
@@ -74,8 +81,8 @@ export default function SellItem() {
       await api("/leads", { method: "POST", body: JSON.stringify(buildSellItemLead(values, photos, phone)) });
       track("sell_item_submitted", { category: values.category });
       setDone(true);
-    } catch {
-      toast("Не удалось отправить заявку, попробуйте ещё раз", "error");
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Не удалось отправить заявку, попробуйте ещё раз", "error");
     } finally {
       setSubmitting(false);
     }
@@ -105,17 +112,26 @@ export default function SellItem() {
       </p>
 
       <label className="mt-5 block text-sm font-semibold">Категория</label>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {categories.map((c) => (
-          <button key={c.key} type="button"
-            onClick={() => set("category", c.key)}
-            className={`tap rounded-full px-3 py-1.5 text-sm font-medium ${
-              values.category === c.key ? "bg-accent text-white" : "bg-mutedbg text-text"
-            }`}>
-            {c.label}
+      {categoriesError && categories.length === 0 ? (
+        <div className="mt-2 flex items-center gap-2 text-sm text-muted">
+          <span>Не удалось загрузить категории</span>
+          <button type="button" onClick={loadCategories} className="tap font-semibold text-accent">
+            Повторить
           </button>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {categories.map((c) => (
+            <button key={c.key} type="button"
+              onClick={() => set("category", c.key)}
+              className={`tap rounded-full px-3 py-1.5 text-sm font-medium ${
+                values.category === c.key ? "bg-accent text-white" : "bg-mutedbg text-text"
+              }`}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <label className="mt-5 block text-sm font-semibold">Что за товар</label>
       <input className="mt-2 w-full rounded-field border border-black/10 px-3 py-2.5 text-sm"
@@ -154,7 +170,7 @@ export default function SellItem() {
           <label className="tap flex aspect-square cursor-pointer items-center justify-center rounded-field border-2 border-dashed border-black/15 text-sm text-muted">
             {uploading ? "…" : "+"}
             <input type="file" accept="image/*" multiple className="hidden" disabled={uploading}
-              onChange={(e) => onFilesSelected(e.target.files)} />
+              onChange={(e) => { onFilesSelected(e.target.files); e.target.value = ""; }} />
           </label>
         )}
       </div>
@@ -188,7 +204,7 @@ export default function SellItem() {
 
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
-      <button type="button" disabled={submitting} onClick={submit}
+      <button type="button" disabled={submitting || uploading} onClick={submit}
         className="tap mt-6 w-full rounded-field bg-accent py-3 text-sm font-semibold text-white disabled:opacity-60">
         {submitting ? "Отправляем…" : "Отправить на модерацию"}
       </button>
