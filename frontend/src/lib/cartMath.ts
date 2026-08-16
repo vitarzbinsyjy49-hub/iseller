@@ -176,6 +176,9 @@ function round2(v: number): number {
  *  - `/product/…` — своя CTA внизу; она же играет роль панели («В корзину»);
  *  - `/ai` — строка ввода вопроса. Пока в корзине что-то лежало, панель
  *    накрывала поле, и написать консультанту было нельзя вовсе.
+ *  - `/sell` — свой cta-dock визарда («Далее» / «Отправить на модерацию»).
+ *    Обе панели фиксированы на одной высоте над навигацией — корзина
+ *    вставала поверх кнопки визарда и закрывала её целиком.
  *
  *  Вход в корзину с этих экранов не теряется: на карточке это её CTA, на `/ai`
  *  и `/cart` — кнопка корзины в шапке.
@@ -185,6 +188,7 @@ export function shouldShowCartBar(pathname: string, itemsCount: number): boolean
   if (pathname === "/cart" || pathname.startsWith("/cart/")) return false;
   if (pathname.startsWith("/product/")) return false;
   if (pathname === "/ai" || pathname.startsWith("/ai?") || pathname.startsWith("/ai/")) return false;
+  if (pathname === "/sell" || pathname.startsWith("/sell?") || pathname.startsWith("/sell/")) return false;
   return true;
 }
 

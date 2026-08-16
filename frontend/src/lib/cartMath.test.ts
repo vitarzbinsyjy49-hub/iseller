@@ -196,6 +196,10 @@ describe("shouldShowCartBar", () => {
     expect(shouldShowCartBar("/ai", 3)).toBe(false);
     expect(shouldShowCartBar("/ai?q=iphone", 3)).toBe(false);
   });
+
+  it("на визарде «Предложить товар» панель закрывала бы кнопку «Далее»", () => {
+    expect(shouldShowCartBar("/sell", 3)).toBe(false);
+  });
 });
 
 describe("validateCheckout", () => {
