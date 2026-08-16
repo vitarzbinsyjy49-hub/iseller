@@ -18,6 +18,7 @@ const ProductDetails = lazy(routeLoaders.product);
 const AiSearch = lazy(routeLoaders.ai);
 const ScenarioChat = lazy(routeLoaders.scenarioChat);
 const SellItem = lazy(routeLoaders.sellItem);
+const Marketplace = lazy(routeLoaders.marketplace);
 const Requests = lazy(routeLoaders.requests);
 const Profile = lazy(routeLoaders.profile);
 const Favorites = lazy(routeLoaders.favorites);
@@ -98,6 +99,7 @@ export default function App() {
           <Route path="/ai" element={<DeferredPage><AiSearch /></DeferredPage>} />
           <Route path="/apply/:scenario" element={<DeferredPage><ScenarioChat /></DeferredPage>} />
           <Route path="/sell" element={<DeferredPage><SellItem /></DeferredPage>} />
+          <Route path="/marketplace" element={<DeferredPage><Marketplace /></DeferredPage>} />
           <Route path="/requests" element={<DeferredPage><Requests /></DeferredPage>} />
           <Route path="/cart" element={<DeferredPage><Cart /></DeferredPage>} />
           <Route path="/favorites" element={<DeferredPage><Favorites /></DeferredPage>} />
