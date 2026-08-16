@@ -1,25 +1,54 @@
-/** Экран визарда «Предложить товар» (/sell) — v: маркетплейс б/у товаров.
+/** Экран визарда «Предложить товар» (/sell) — маркетплейс б/у товаров.
  *
- *  Линейная форма (не диалог, как ScenarioChat): категория → название →
- *  состояние → цена → фото → телефон → комментарий → превью → отправка.
- *  Логика сборки/валидации — в lib/sellItem.ts (Task 18, уже покрыта
- *  unit-тестами); здесь только UI и вызовы api()/apiUploadFile().
+ *  Пошаговый флоу (не диалог, как ScenarioChat, и не одна длинная форма):
+ *  один шаг — один вопрос, категория → название → состояние → цена → фото →
+ *  телефон → комментарий → превью → отправка. Переход между шагами —
+ *  затухание через animateOpacity (lib/motion.ts), а не CSS-transition: на
+ *  части устройств системное «уменьшить движение» глушит CSS-анимацию молча,
+ *  и смена шага выглядела бы щелчком — тот же урок, что уже разобран в самом
+ *  motion.ts на баннере главной.
+ *
+ *  Логика сборки/валидации — в lib/sellItem.ts (Task 18, покрыта
+ *  unit-тестами и здесь не меняется); этот файл — только UI, навигация по
+ *  шагам и вызовы api()/apiUploadFile().
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, apiUploadFile, ApiError } from "../lib/api";
 import { track } from "../lib/analytics";
 import { toast } from "../lib/toast";
 import {
-  buildSellItemLead, sellableCategories, validateSellItem, type SellItemValues,
+  buildSellItemLead, SELL_ITEM_STEPS, sellableCategories, validateSellItem,
+  type SellItemStep, type SellItemValues,
 } from "../lib/sellItem";
 import { ProductImage } from "../components/ProductCard";
 import { formatPrice } from "../lib/format";
+import { animateOpacity, transitionDuration } from "../lib/motion";
+import { Icon } from "../components/icons";
 
 const STATE_OPTIONS = ["Отличное", "Хорошее, есть следы", "Есть дефекты"];
 const MAX_PHOTOS = 10;
 
 type Category = { key: string; label: string };
+
+/** Можно ли уйти с шага дальше — только явно обязательные по validateSellItem
+ *  поля блокируют «Далее»; необязательные (состояние, комментарий) пропускаются
+ *  свободно, чтобы не выдумывать требование, которого нет в контракте заявки. */
+function canAdvance(
+  step: SellItemStep, values: SellItemValues, photos: string[], phone: string, uploading: boolean,
+): boolean {
+  switch (step) {
+    case "category": return values.category.trim().length > 0;
+    case "title": return values.title.trim().length > 0;
+    case "price": {
+      const price = Number(values.price);
+      return values.price.trim().length > 0 && Number.isFinite(price) && price > 0;
+    }
+    case "photos": return !uploading && photos.length > 0;
+    case "phone": return phone.trim().length > 0;
+    default: return true; // state, comment — необязательны
+  }
+}
 
 export default function SellItem() {
   const navigate = useNavigate();
@@ -34,6 +63,12 @@ export default function SellItem() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const step = SELL_ITEM_STEPS[stepIndex];
+  const stepNumber = stepIndex + 1;
+  const totalSteps = SELL_ITEM_STEPS.length;
 
   function loadCategories() {
     setCategoriesError(false);
@@ -46,6 +81,28 @@ export default function SellItem() {
 
   function set<K extends keyof SellItemValues>(key: K, v: SellItemValues[K]) {
     setValues((prev) => ({ ...prev, [key]: v }));
+  }
+
+  /** Уйти на соседний шаг с коротким затуханием панели — тот же мотор
+   *  (rAF + easeOutQuint), что у прокрутки и прозрачности баннера, поэтому
+   *  ведёт себя одинаково на всех устройствах, включая те, что глушат
+   *  системную/CSS-анимацию. Выход короче входа (180 vs 220мс) — уход не
+   *  должен ощущаться медленнее, чем появление нового шага. */
+  function goToStep(nextIndex: number) {
+    const el = panelRef.current;
+    if (!el) { setStepIndex(nextIndex); return; }
+    animateOpacity(el, 1, 0, transitionDuration(180), () => {
+      setStepIndex(nextIndex);
+      requestAnimationFrame(() => animateOpacity(el, 0, 1, transitionDuration(220)));
+    });
+  }
+
+  function goNext() {
+    if (!canAdvance(step, values, photos, phone, uploading)) return;
+    if (stepIndex < SELL_ITEM_STEPS.length - 1) goToStep(stepIndex + 1);
+  }
+  function goBack() {
+    if (stepIndex > 0) goToStep(stepIndex - 1);
   }
 
   async function onFilesSelected(files: FileList | null) {
@@ -104,110 +161,204 @@ export default function SellItem() {
     );
   }
 
+  const advanceReady = canAdvance(step, values, photos, phone, uploading);
+
   return (
-    <div className="mx-auto max-w-md p-4 pb-28">
-      <h1 className="text-xl font-bold">Предложить товар</h1>
-      <p className="mt-1 text-sm text-muted">
-        Расскажите о товаре, добавьте фото — окончательную цену магазин подтвердит при осмотре.
-      </p>
-
-      <label className="mt-5 block text-sm font-semibold">Категория</label>
-      {categoriesError && categories.length === 0 ? (
-        <div className="mt-2 flex items-center gap-2 text-sm text-muted">
-          <span>Не удалось загрузить категории</span>
-          <button type="button" onClick={loadCategories} className="tap font-semibold text-accent">
-            Повторить
+    <div className="mx-auto flex min-h-screen max-w-md flex-col p-4 pb-8">
+      {/* Шапка: назад + заголовок + прогресс — общая для всех шагов, не
+          перерисовывается затуханием (только панель шага ниже). */}
+      <div className="flex items-center gap-3">
+        {stepIndex > 0 ? (
+          // Зона нажатия 44×44 (тот же минимум, что у FavButton на карточке
+          // товара) при визуально более компактной иконке — отступ вокруг
+          // неё, а не сама кнопка, отвечает за размер.
+          <button type="button" onClick={goBack} aria-label="Назад"
+            className="tap -ml-2.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text">
+            <Icon name="chevron-down" className="h-5 w-5 rotate-90" />
           </button>
-        </div>
-      ) : (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {categories.map((c) => (
-            <button key={c.key} type="button"
-              onClick={() => set("category", c.key)}
-              className={`tap rounded-full px-3 py-1.5 text-sm font-medium ${
-                values.category === c.key ? "bg-accent text-white" : "bg-mutedbg text-text"
-              }`}>
-              {c.label}
-            </button>
-          ))}
-        </div>
-      )}
+        ) : (
+          <span className="h-11 w-11 shrink-0" aria-hidden />
+        )}
+        <h1 className="text-lg font-bold">Предложить товар</h1>
+      </div>
 
-      <label className="mt-5 block text-sm font-semibold">Что за товар</label>
-      <input className="mt-2 w-full rounded-field border border-black/10 px-3 py-2.5 text-sm"
-        placeholder="Например, iPhone 13 Pro 128 ГБ"
-        value={values.title} onChange={(e) => set("title", e.target.value)} />
-
-      <label className="mt-5 block text-sm font-semibold">Состояние</label>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {STATE_OPTIONS.map((s) => (
-          <button key={s} type="button" onClick={() => set("state", s)}
-            className={`tap rounded-full px-3 py-1.5 text-sm font-medium ${
-              values.state === s ? "bg-accent text-white" : "bg-mutedbg text-text"
-            }`}>
-            {s}
-          </button>
+      {/* Прогресс — сегменты, а не «Шаг N из 8» текстом: видно и пройденный
+          путь, и то, сколько осталось, за один взгляд. */}
+      <div
+        role="progressbar" aria-valuemin={1} aria-valuemax={totalSteps} aria-valuenow={stepNumber}
+        aria-label={`Шаг ${stepNumber} из ${totalSteps}`}
+        className="mt-3 flex gap-1"
+      >
+        {SELL_ITEM_STEPS.map((s, i) => (
+          <span key={s} aria-hidden
+            className={`h-1 flex-1 rounded-full transition-colors duration-200 ${
+              i <= stepIndex ? "bg-accent" : "bg-mutedbg"
+            }`}
+          />
         ))}
       </div>
 
-      <label className="mt-5 block text-sm font-semibold">Желаемая цена</label>
-      <input className="mt-2 w-full rounded-field border border-black/10 px-3 py-2.5 text-sm"
-        type="number" inputMode="numeric" placeholder="Например, 45000"
-        value={values.price} onChange={(e) => set("price", e.target.value)} />
+      <div ref={panelRef} className="mt-6 flex-1">
+        {step === "category" && (
+          <StepHeading title="Какая это категория?" />
+        )}
+        {step === "category" && (
+          categoriesError && categories.length === 0 ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted">
+              <span>Не удалось загрузить категории</span>
+              <button type="button" onClick={loadCategories} className="tap font-semibold text-accent">
+                Повторить
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {categories.map((c) => (
+                <button key={c.key} type="button"
+                  onClick={() => set("category", c.key)}
+                  className={`tap rounded-full px-4 py-2.5 text-sm font-medium ${
+                    values.category === c.key ? "bg-accent text-white" : "bg-mutedbg text-text"
+                  }`}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )
+        )}
 
-      <label className="mt-5 block text-sm font-semibold">Фото ({photos.length}/{MAX_PHOTOS})</label>
-      <div className="mt-2 grid grid-cols-3 gap-2">
-        {photos.map((url) => (
-          <div key={url} className="relative aspect-square overflow-hidden rounded-field">
-            <ProductImage src={url} title="Фото товара" />
-            <button type="button" onClick={() => removePhoto(url)}
-              className="tap absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white">
-              ✕
-            </button>
-          </div>
-        ))}
-        {photos.length < MAX_PHOTOS && (
-          <label className="tap flex aspect-square cursor-pointer items-center justify-center rounded-field border-2 border-dashed border-black/15 text-sm text-muted">
-            {uploading ? "…" : "+"}
-            <input type="file" accept="image/*" multiple className="hidden" disabled={uploading}
-              onChange={(e) => { onFilesSelected(e.target.files); e.target.value = ""; }} />
-          </label>
+        {step === "title" && (
+          <>
+            <StepHeading title="Что за товар?" subtitle="Модель, объём памяти — как в объявлении" />
+            <input autoFocus className="mt-4 w-full rounded-field border border-black/10 px-3 py-3 text-base"
+              placeholder="Например, iPhone 13 Pro 128 ГБ"
+              value={values.title} onChange={(e) => set("title", e.target.value)} />
+          </>
+        )}
+
+        {step === "state" && (
+          <>
+            <StepHeading title="В каком состоянии?" />
+            <div className="mt-4 flex flex-col gap-2">
+              {STATE_OPTIONS.map((s) => (
+                <button key={s} type="button" onClick={() => set("state", s)}
+                  className={`tap flex items-center justify-between rounded-field border px-4 py-3.5 text-left text-sm font-medium ${
+                    values.state === s
+                      ? "border-accent bg-accent/5 text-text"
+                      : "border-black/10 bg-surface text-text"
+                  }`}>
+                  {s}
+                  <span
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                      values.state === s ? "border-accent bg-accent" : "border-black/15"
+                    }`}
+                  >
+                    {values.state === s && <Icon name="check" className="h-3 w-3 text-white" />}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {step === "price" && (
+          <>
+            <StepHeading title="Сколько хотите получить?" subtitle="Окончательную цену магазин подтвердит при осмотре" />
+            <div className="mt-4 flex items-baseline gap-2 border-b-2 border-black/10 pb-2 focus-within:border-accent">
+              <input autoFocus className="w-full bg-transparent text-3xl font-bold tabular-nums outline-none"
+                type="number" inputMode="numeric" placeholder="0"
+                value={values.price} onChange={(e) => set("price", e.target.value)} />
+              <span className="shrink-0 text-xl font-semibold text-muted">₽</span>
+            </div>
+          </>
+        )}
+
+        {step === "photos" && (
+          <>
+            <StepHeading title="Добавьте фото" subtitle="До 10 фото — так вашу вещь быстрее одобрят" />
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {photos.map((url) => (
+                <div key={url} className="relative aspect-square overflow-hidden rounded-field">
+                  <ProductImage src={url} title="Фото товара" />
+                  <button type="button" onClick={() => removePhoto(url)}
+                    className="tap absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white">
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {photos.length < MAX_PHOTOS && (
+                <label className="tap flex aspect-square cursor-pointer items-center justify-center rounded-field border-2 border-dashed border-black/15 text-sm text-muted">
+                  {uploading ? "…" : "+"}
+                  <input type="file" accept="image/*" multiple className="hidden" disabled={uploading}
+                    onChange={(e) => { onFilesSelected(e.target.files); e.target.value = ""; }} />
+                </label>
+              )}
+            </div>
+          </>
+        )}
+
+        {step === "phone" && (
+          <>
+            <StepHeading title="Как с вами связаться?" subtitle="Позвоним, если заявку одобрят" />
+            <input autoFocus className="mt-4 w-full rounded-field border border-black/10 px-3 py-3 text-base"
+              type="tel" placeholder="+7 900 000-00-00"
+              value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </>
+        )}
+
+        {step === "comment" && (
+          <>
+            <StepHeading title="Комментарий" subtitle="Необязательно — например, есть ли документы, коробка" />
+            <textarea autoFocus className="mt-4 w-full rounded-field border border-black/10 px-3 py-3 text-base"
+              rows={4} value={values.comment} onChange={(e) => set("comment", e.target.value)} />
+          </>
+        )}
+
+        {step === "preview" && (
+          <>
+            <StepHeading title="Проверьте карточку" subtitle="Так товар увидит модератор" />
+            <div className="mt-4 rounded-xl2 bg-surface p-3 shadow-card">
+              <div className="flex gap-3">
+                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-field">
+                  <ProductImage src={photos[0]} title={values.title} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{values.title}</p>
+                  <p className="text-sm font-bold">{formatPrice(Number(values.price) || 0)}</p>
+                  <span className="mt-1 inline-block rounded-full bg-mutedbg px-2 py-0.5 text-[11px] font-semibold text-muted">
+                    На модерации
+                  </span>
+                </div>
+              </div>
+            </div>
+            {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+          </>
         )}
       </div>
 
-      <label className="mt-5 block text-sm font-semibold">Телефон</label>
-      <input className="mt-2 w-full rounded-field border border-black/10 px-3 py-2.5 text-sm"
-        type="tel" placeholder="+7 900 000-00-00"
-        value={phone} onChange={(e) => setPhone(e.target.value)} />
-
-      <label className="mt-5 block text-sm font-semibold">Комментарий (необязательно)</label>
-      <textarea className="mt-2 w-full rounded-field border border-black/10 px-3 py-2.5 text-sm"
-        rows={3} value={values.comment} onChange={(e) => set("comment", e.target.value)} />
-
-      {values.title && values.price && (
-        <div className="mt-6 rounded-xl2 bg-surface p-3 shadow-card">
-          <p className="text-xs font-semibold uppercase text-muted">Превью карточки</p>
-          <div className="mt-2 flex gap-3">
-            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-field">
-              <ProductImage src={photos[0]} title={values.title} />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{values.title}</p>
-              <p className="text-sm font-bold">{formatPrice(Number(values.price) || 0)}</p>
-              <span className="mt-1 inline-block rounded-full bg-mutedbg px-2 py-0.5 text-[11px] font-semibold text-muted">
-                На модерации
-              </span>
-            </div>
-          </div>
-        </div>
+      {/* Кнопка действия — общая нижняя зона, вне затухающей панели: сама
+          кнопка не мигает при смене шага, меняется только её обработчик/текст. */}
+      {step === "preview" ? (
+        <button type="button" disabled={submitting} onClick={submit}
+          className="tap mt-6 w-full rounded-field bg-accent py-3.5 text-sm font-semibold text-white disabled:opacity-60">
+          {submitting ? "Отправляем…" : "Отправить на модерацию"}
+        </button>
+      ) : (
+        <button type="button" disabled={!advanceReady} onClick={goNext}
+          className="tap mt-6 w-full rounded-field bg-accent py-3.5 text-sm font-semibold text-white disabled:opacity-40">
+          {uploading && step === "photos" ? "Загружаем…" : "Далее"}
+        </button>
       )}
+    </div>
+  );
+}
 
-      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
-
-      <button type="button" disabled={submitting || uploading} onClick={submit}
-        className="tap mt-6 w-full rounded-field bg-accent py-3 text-sm font-semibold text-white disabled:opacity-60">
-        {submitting ? "Отправляем…" : "Отправить на модерацию"}
-      </button>
+/** Заголовок шага: крупный вопрос + необязательная короткая подсказка под ним.
+ *  Один вопрос на экран — заголовок несёт то, что раньше было мелкой подписью
+ *  над полем, и должен читаться сразу, без прищура. */
+function StepHeading({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div>
+      <h2 className="text-[22px] font-bold leading-tight">{title}</h2>
+      {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
     </div>
   );
 }
