@@ -96,6 +96,26 @@ def test_sell_item_notifies_admin(ctx, monkeypatch):
     assert "iPhone 12" in notif.text
 
 
+def test_sell_item_notifies_admin_with_non_numeric_price(ctx, monkeypatch):
+    """price_wanted нечисловая строка не должна ронять создание заявки —
+    уведомление модератору лишь nice-to-have, а не условие успеха запроса
+    (в отличие от _competitor_price для price_offer, которая осознанно
+    отклоняет заявку 422 при мусоре в цене — здесь модель другая)."""
+    client, db, _u = ctx
+    monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    payload = {
+        "source": "home", "lead_type": "sell_item", "phone": "+79990000004",
+        "metadata": {"category": "смартфоны", "title": "iPhone 11",
+                      "price_wanted": "по договорённости",
+                      "photos": ["/api/uploads/a.jpg"]},
+    }
+    r = client.post("/api/leads", json=payload)
+    assert r.status_code == 201
+    notif = db.query(Notification).filter_by(kind="sell_item").first()
+    assert notif is not None
+    assert "iPhone 11" in notif.text
+
+
 def test_sell_item_rate_limited(ctx, monkeypatch):
     client, _db, _u = ctx
     monkeypatch.setattr("app.core.config.settings.SELL_ITEM_DAILY_LIMIT_PER_USER", 1)

@@ -113,6 +113,17 @@ def _notify_owner(db: Session, lead: Lead, meta: dict) -> None:
     )
 
 
+def _safe_price(raw) -> float | None:
+    """`price_wanted` со слов покупателя — только для текста уведомления, не
+    для заявки. В отличие от `_competitor_price` (price_offer), здесь мусор
+    НЕ должен ронять запрос: заявка обязана создаться в любом случае, а
+    нечисловая цена в уведомлении — просто «—» (см. format_money(None))."""
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _notify_sell_item(db: Session, lead: Lead, meta: dict) -> None:
     """Алерт модератору о новой заявке «Предложить товар» — та же схема, что
     _notify_owner для price_offer: без сети, той же транзакцией."""
@@ -131,7 +142,7 @@ def _notify_sell_item(db: Session, lead: Lead, meta: dict) -> None:
         db, chat_id=chat_id, kind="sell_item",
         message=sell_item_message(
             title=str(meta.get("title") or "товар"),
-            price_wanted=meta.get("price_wanted"),
+            price_wanted=_safe_price(meta.get("price_wanted")),
             phone=lead.phone, username=lead.username,
         ),
         dedupe_key=f"sell_item:{lead.id}",
