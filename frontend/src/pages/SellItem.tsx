@@ -164,7 +164,12 @@ export default function SellItem() {
   const advanceReady = canAdvance(step, values, photos, phone, uploading);
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col p-4 pb-8">
+    // pb-cta вместо pb-8: кнопка действия ниже стала фиксированной (cta-dock,
+    // тот же приём, что у «Добавить в корзину» на карточке товара), и без
+    // этого резерва последнее поле шага (особенно сетка фото) уезжало под
+    // непрозрачную панель — раньше кнопка была в потоке и просто отъезжала
+    // за пределы экрана на длинных шагах, до неё приходилось докручивать.
+    <div className="mx-auto flex min-h-screen max-w-md flex-col p-4 pb-cta lg:pb-8">
       {/* Шапка: назад + заголовок + прогресс — общая для всех шагов, не
           перерисовывается затуханием (только панель шага ниже). */}
       <div className="flex items-center gap-3">
@@ -334,19 +339,29 @@ export default function SellItem() {
         )}
       </div>
 
-      {/* Кнопка действия — общая нижняя зона, вне затухающей панели: сама
-          кнопка не мигает при смене шага, меняется только её обработчик/текст. */}
-      {step === "preview" ? (
-        <button type="button" disabled={submitting} onClick={submit}
-          className="tap mt-6 w-full rounded-field bg-accent py-3.5 text-sm font-semibold text-white disabled:opacity-60">
-          {submitting ? "Отправляем…" : "Отправить на модерацию"}
-        </button>
-      ) : (
-        <button type="button" disabled={!advanceReady} onClick={goNext}
-          className="tap mt-6 w-full rounded-field bg-accent py-3.5 text-sm font-semibold text-white disabled:opacity-40">
-          {uploading && step === "photos" ? "Загружаем…" : "Далее"}
-        </button>
-      )}
+      {/* Кнопка действия — вне затухающей панели шага (сама не мигает при
+          переходе, меняется только текст/обработчик) и вне обычного потока:
+          cta-dock (index.css) — тот же приём, что у «Добавить в корзину» на
+          карточке товара и у поля ввода в AI-чате. Прижата к низу НАД
+          BottomNav (--bottom-nav-height в самом классе), непрозрачный фон —
+          контент уходит строго под неё, а не просвечивает. На desktop — уже
+          не fixed, а sticky-элемент в потоке (там нет BottomNav, которую
+          нужно перекрывать). */}
+      <div className="fixed inset-x-0 cta-dock z-30 border-t border-border bg-bg px-4 pt-2.5 lg:sticky lg:inset-x-auto lg:bottom-0 lg:mt-6 lg:rounded-xl2 lg:border lg:border-border lg:bg-surface lg:px-4 lg:py-3.5">
+        <div className="mx-auto max-w-md">
+          {step === "preview" ? (
+            <button type="button" disabled={submitting} onClick={submit}
+              className="tap w-full rounded-field bg-accent py-3.5 text-sm font-semibold text-white disabled:opacity-60">
+              {submitting ? "Отправляем…" : "Отправить на модерацию"}
+            </button>
+          ) : (
+            <button type="button" disabled={!advanceReady} onClick={goNext}
+              className="tap w-full rounded-field bg-accent py-3.5 text-sm font-semibold text-white disabled:opacity-40">
+              {uploading && step === "photos" ? "Загружаем…" : "Далее"}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
