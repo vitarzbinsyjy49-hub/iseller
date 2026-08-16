@@ -308,6 +308,7 @@ const TYPE_PILL: Record<string, { bg: string; fg: string }> = {
   trade_in: { bg: "#eafaf0", fg: "#0e9f6e" },
   b2b: { bg: "#eef0ff", fg: "#5b5bd6" },
   wholesale: { bg: "#fff3d6", fg: "#b57e00" },
+  sell_item: { bg: "#fdf2e9", fg: "#c2570c" },
 };
 
 function TypePill({ type }: { type: string }) {

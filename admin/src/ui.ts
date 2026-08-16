@@ -183,6 +183,7 @@ export const LEAD_TYPES = ["general", "product", "trade_in", "b2b", "wholesale",
 export const LEAD_TYPE_RU: Record<string, string> = {
   general: "Обычная", product: "Товар", trade_in: "Trade-In", b2b: "Для бизнеса",
   wholesale: "Опт", cart: "Корзина", price_offer: "Нашли дешевле",
+  sell_item: "Предложение товара",
 };
 
 export const FULFILLMENT_RU: Record<string, string> = {
@@ -239,6 +240,7 @@ const META_KEY_RU: Record<string, string> = {
   intent: "Цель", desired_device: "Хочет получить", equipment: "Оборудование",
   quantity_range: "Количество", company: "Компания", city: "Город",
   category: "Категория", budget: "Бюджет",
+  title: "Название", state: "Состояние", price_wanted: "Желаемая цена",
   // «Нашли дешевле». Порядок ключей здесь — это порядок строк на экране:
   // сначала площадка и цена (по ним решают), потом сам адрес и комментарий.
   competitor_shop: "Площадка", competitor_price: "Цена там",
@@ -250,8 +252,8 @@ const META_KEY_RU: Record<string, string> = {
 };
 // promo_discount/subtotal — суммы в рублях, а не произвольный текст: без
 // этого в заявке было бы голое число "500" вместо "500 ₽".
-const META_MONEY_KEYS = new Set(["promo_discount", "subtotal"]);
-const META_HIDDEN = new Set(["origin"]);
+const META_MONEY_KEYS = new Set(["promo_discount", "subtotal", "price_wanted"]);
+const META_HIDDEN = new Set(["origin", "photos"]);
 
 /** Локализованные строки metadata заявки (без origin/пустых). Неизвестные ключи
  *  показываем нейтрально — как есть. Никакого сырого JSON в UI. */
