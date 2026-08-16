@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  C, card, input, btn, btnGhost, chip, apiGet, apiPatch, fmtPrice, fmtDateTime, storefrontUrl,
+  C, card, input, btn, btnGhost, chip, apiGet, apiPatch, apiPost, fmtPrice, fmtDateTime, storefrontUrl,
   STATUSES, STATUS_RU, SOURCE_RU, LEAD_TYPES, LEAD_TYPE_RU, FULFILLMENT_RU, AVAILABILITY_RU,
   leadMetaRows, storeTokens, clearTokens, loadStoredAccessToken, onTokenRefreshed,
 } from "./ui";
@@ -453,6 +453,8 @@ function LeadDetail({
   const [note, setNote] = useState("");
   const [assignee, setAssignee] = useState("");
   const [copied, setCopied] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const reload = () => {
     apiGet<Lead>(`/admin/leads/${leadId}`, token)
@@ -647,6 +649,36 @@ function LeadDetail({
             )}
 
             {/* ---- Действия менеджера ---- */}
+            {lead.lead_type === "sell_item" && lead.status !== "cancelled" && lead.status !== "completed" && (
+              <button
+                style={btn}
+                disabled={publishing}
+                onClick={async () => {
+                  const meta = (lead.metadata as Record<string, unknown>) || {};
+                  const photos = Array.isArray(meta.photos) ? (meta.photos as string[]) : [];
+                  setPublishing(true);
+                  try {
+                    await apiPost("/admin/products", token, {
+                      title: String(meta.title || lead.product_title || "Товар из заявки"),
+                      price: Number(meta.price_wanted) || 0,
+                      category: String(meta.category || ""),
+                      condition: "used",
+                      description: lead.message || "",
+                      images: photos,
+                      source: "user_submitted",
+                    });
+                    await patch({ status: "completed" });
+                  } catch (e) {
+                    setPublishError(e instanceof Error ? e.message : "Не удалось опубликовать товар");
+                  } finally {
+                    setPublishing(false);
+                  }
+                }}
+              >
+                {publishing ? "Публикуем…" : "Опубликовать в каталог"}
+              </button>
+            )}
+            {publishError && <p style={{ color: C.red, fontSize: 13 }}>{publishError}</p>}
             <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 10, marginTop: 18, alignItems: "center" }}>
               <span style={{ fontSize: 13, color: C.sub }}>Статус</span>
               <select value={lead.status} onChange={(e) => patch({ status: e.target.value })}
