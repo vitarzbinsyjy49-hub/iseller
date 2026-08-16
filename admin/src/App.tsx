@@ -455,6 +455,7 @@ function LeadDetail({
   const [copied, setCopied] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [published, setPublished] = useState(false);
 
   const reload = () => {
     apiGet<Lead>(`/admin/leads/${leadId}`, token)
@@ -649,29 +650,46 @@ function LeadDetail({
             )}
 
             {/* ---- Действия менеджера ---- */}
-            {lead.lead_type === "sell_item" && lead.status !== "cancelled" && lead.status !== "completed" && (
+            {lead.lead_type === "sell_item" && lead.status !== "cancelled" && lead.status !== "completed" && !published && (
               <button
                 style={btn}
                 disabled={publishing}
                 onClick={async () => {
+                  setPublishError(null);
                   const meta = (lead.metadata as Record<string, unknown>) || {};
+                  const price = Number(meta.price_wanted);
+                  if (!Number.isFinite(price) || price <= 0) {
+                    // price_wanted у "Предложить товар" бывает нечисловым текстом
+                    // ("по договорённости", см. Task 11) — публиковать в этом
+                    // случае значило бы выложить живой товар за 0 ₽ без
+                    // предупреждения модератору.
+                    setPublishError("Некорректная цена в заявке — исправьте вручную перед публикацией");
+                    return;
+                  }
                   const photos = Array.isArray(meta.photos) ? (meta.photos as string[]) : [];
+                  const description = [meta.state, lead.message].filter(Boolean).join(" — ");
                   setPublishing(true);
                   try {
                     await apiPost("/admin/products", token, {
                       title: String(meta.title || lead.product_title || "Товар из заявки"),
-                      price: Number(meta.price_wanted) || 0,
+                      price,
                       category: String(meta.category || ""),
                       condition: "used",
-                      description: lead.message || "",
+                      description,
                       images: photos,
                       source: "user_submitted",
                     });
+                    // Товар уже создан — что бы ни случилось дальше (в т.ч. если
+                    // patch() ниже не сможет перевести лид в completed), кнопка
+                    // не должна дать создать ВТОРОЙ товар из той же заявки.
+                    setPublished(true);
                     await patch({ status: "completed" });
                   } catch (e) {
-                    setPublishError(e instanceof Error ? e.message : "Не удалось опубликовать товар");
-                  } finally {
+                    // Сюда попадает только сбой самого apiPost (patch() свои
+                    // ошибки гасит сам через error/setError) — значит товар не
+                    // создан, повтор безопасен.
                     setPublishing(false);
+                    setPublishError(e instanceof Error ? e.message : "Не удалось опубликовать товар");
                   }
                 }}
               >
