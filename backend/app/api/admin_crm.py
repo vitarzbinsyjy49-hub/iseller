@@ -361,7 +361,10 @@ _PRODUCT_EDITABLE = (
     "is_legendary",  # v5.8: закрепить наверху выдачи и пометить золотом
     "availability_mode",  # Cart: пусто = вывести из in_stock/is_limited
     "warranty_months", "condition", "color", "memory", "storage", "screen_size", "cpu", "ram",
-    "description", "specs", "tags", "image", "images", "url",
+    "description", "specs", "tags", "image", "images", "url", "source",
+    # source редактируемо намеренно: admin-кнопка «Опубликовать в каталог»
+    # (см. заявку sell_item) проставляет "user_submitted" при создании — без
+    # этого поля в белом списке значение молча терялось бы.
     "poster_url",   # v5.8: афиша события для страницы легендарного товара
     "rating", "popularity", "margin_pct",
     "model_family", "image_group_detached",   # v5.2.6: канонические группы фото

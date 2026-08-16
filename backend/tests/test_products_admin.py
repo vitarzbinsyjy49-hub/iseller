@@ -286,3 +286,30 @@ def test_is_limited_patchable_and_exposed_in_card(client, db):
     assert p.is_limited is True
     assert p.to_card()["is_limited"] is True
     assert p.to_admin()["is_limited"] is True
+
+
+# ==================== создание: source (Task 14 — «Опубликовать в каталог») ====================
+
+def test_admin_create_product_accepts_source(client, db):
+    """_PRODUCT_EDITABLE должен принимать source — иначе оно молча теряется
+    при создании товара из заявки «Предложить товар» (Task 14 плана)."""
+    r = client.post("/api/admin/products", json={
+        "title": "iPhone 13 из заявки", "price": 45000,
+        "category": "смартфоны", "condition": "used",
+        "images": ["/api/uploads/a.jpg"], "source": "user_submitted",
+    })
+    assert r.status_code == 201
+    created = db.query(Product).filter_by(title="iPhone 13 из заявки").one()
+    assert created.source == "user_submitted"
+    assert created.images == ["/api/uploads/a.jpg"]
+
+
+def test_admin_create_product_without_source_defaults_to_manual(client, db):
+    """Регрессия: существующие сценарии создания без source в теле не меняют
+    поведение — дефолт модели "manual" остаётся."""
+    r = client.post("/api/admin/products", json={
+        "title": "Товар без source", "price": 1000,
+    })
+    assert r.status_code == 201
+    created = db.query(Product).filter_by(title="Товар без source").one()
+    assert created.source == "manual"
