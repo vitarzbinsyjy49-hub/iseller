@@ -307,7 +307,7 @@ export default function SellItem() {
             <div className="mt-4 grid grid-cols-3 gap-2">
               {photos.map((url) => (
                 <div key={url} className="relative aspect-square overflow-hidden rounded-field">
-                  <ProductImage src={url} title="Фото товара" />
+                  <ProductImage src={url} title="Фото товара" className="h-full w-full" />
                   <button type="button" onClick={() => removePhoto(url)}
                     className="tap absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white">
                     ✕
@@ -348,7 +348,7 @@ export default function SellItem() {
             <div className="mt-4 rounded-xl2 bg-surface p-3 shadow-card">
               <div className="flex gap-3">
                 <div className="h-20 w-20 shrink-0 overflow-hidden rounded-field">
-                  <ProductImage src={photos[0]} title={values.title} />
+                  <ProductImage src={photos[0]} title={values.title} className="h-full w-full" />
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{values.title}</p>
