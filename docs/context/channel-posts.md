@@ -31,6 +31,32 @@ Telegram на середине, уже полученные `message_id` уце�
 
 `web_app`-кнопки Telegram разрешает **только в личном чате с ботом**. В канале
 сообщение с такой кнопкой отвергается ЦЕЛИКОМ (`BUTTON_TYPE_INVALID`) — то есть
-пост просто не публикуется. В канале только `url`-кнопки: ведут на
+пост просто не публикуется. В канале только `url`-кнопки: ведят на
 `t.me/<bot>?start=<payload>`, бот ловит payload и открывает нужный экран Mini App
 уже настоящей web_app-кнопкой.
+
+## Rich-контент (Bot API 10.1 sendRichMessage)
+
+Опционально: у `ChannelPost` есть `rich_html`. Когда заполнено — ПОЛНОСТЬЮ
+заменяет `body` при публикации, через `send_rich_message`/`edit_rich_message`
+(`telegram_publisher.py`) вместо `send_message`/`send_photo`/`edit_message`/
+`edit_caption`. `editMessageText` — одна и та же ручка Bot API для обычного и
+rich-текста (принимает `rich_message` вместо `text`), поэтому модель «опубликовать
+один раз, дальше редактировать на том же message_id» работает без изменений.
+
+- `rich_html` идёт в `rich_message.html` — тот же "Rich HTML style", что и
+  `parse_mode=HTML`, плюс `<table>`, `<h1>`–`<h6>`, `<hr/>`,
+  `<details><summary>…</summary>…</details>`, `<footer>`, `<blockquote>`,
+  `<aside><cite>`, `<img>`/`<video>`/`<audio>` (только http/https-URL).
+- У rich-сообщений нет режима "фото с подписью" (`sendPhoto`) — картинка идёт
+  тегом `<img>` прямо внутри `rich_html`; `image_url` для rich-поста не
+  используется совсем.
+- Лимит — `MAX_RICH_MESSAGE_LENGTH = 32768` символов (документированный лимит
+  Telegram), отдельно от `MAX_MESSAGE_LENGTH`/`MAX_CAPTION_LENGTH` обычных
+  постов.
+- Кнопки — те же `build_keyboard()`/`resolve_button()`, ничего не меняется:
+  `reply_markup` у `sendRichMessage`/`editMessageText` принимает тот же
+  `{"inline_keyboard": [...]}`.
+- Автоматических тестов, бьющих в настоящий Bot API, в проекте нет (все тесты
+  мокают `call()`) — перед публикацией непроверенной rich-разметки в
+  `@isellerhub` стоит один раз вручную отправить её в тестовый чат.
