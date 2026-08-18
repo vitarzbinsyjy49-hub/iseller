@@ -163,6 +163,33 @@ def _notify_sell_item(db: Session, lead: Lead, meta: dict) -> None:
     )
 
 
+def _notify_new_lead(db: Session, lead: Lead) -> None:
+    """Алерт менеджеру о новой заявке — для типов без своего специфичного
+    уведомления (price_offer/sell_item оповещают выше, до этой ветки)."""
+    from app.services.notification_templates import new_lead_message
+    from app.services.notifications import admin_chat_id, enqueue
+
+    chat_id = admin_chat_id()
+    if chat_id is None:
+        return
+
+    enqueue(
+        db, chat_id=chat_id, kind="new_lead",
+        message=new_lead_message(
+            public_number=lead.public_number,
+            items_count=lead.items_count or 0,
+            estimated_total=float(lead.estimated_total) if lead.estimated_total is not None else None,
+            currency=lead.currency or "RUB",
+            product_title=lead.product_title,
+            lead_type=lead.lead_type,
+            username=lead.username,
+            phone=lead.phone,
+            message=lead.message,
+        ),
+        dedupe_key=f"lead:{lead.id}:created",
+    )
+
+
 def _notify_cancelled_by_user(db: Session, lead: Lead) -> None:
     """Алерт менеджеру: покупатель сам отменил заявку — симметрично тому, как
     менеджер, меняя статус, уведомляет покупателя (_notify_status_change в
@@ -254,12 +281,17 @@ def create_lead(
     if lead_type == PRICE_OFFER_TYPE:
         # flush, а не commit: id нужен для ключа дедупликации, но уведомление
         # обязано уехать ТОЙ ЖЕ транзакцией, что и заявка. Иначе владелец
-        # получит ссылку на заявку, которой в базе не окажется.
+        # получит ссылку на заявку, которой в базе не окажется. Та же причина
+        # flush (не commit) верна и для двух веток ниже — id лида нужен всем
+        # dedupe_key.
         db.flush()
         _notify_owner(db, lead, meta)
     elif lead_type == "sell_item":
         db.flush()
         _notify_sell_item(db, lead, meta)
+    else:
+        db.flush()
+        _notify_new_lead(db, lead)
     db.commit()
     db.refresh(lead)
 
