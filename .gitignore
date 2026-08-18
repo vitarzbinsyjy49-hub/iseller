@@ -26,3 +26,4 @@ deploy/caddy_config/
 Thumbs.db
 
 .worktrees/
+.superpowers/
