@@ -82,7 +82,10 @@ export default function Requests() {
 
   const visible = useMemo(() => {
     if (!leads) return null;
-    if (!filter) return leads;
+    // «Все» — не буквально все: отменённые не удаляются и не пропадают из
+    // данных, просто не маячат в основном списке рядом с активными. Смотреть
+    // их — во вкладке «Завершённые» (там они и так уже были, вместе с completed).
+    if (!filter) return leads.filter((l) => l.status !== "cancelled");
     if (filter === "done") return leads.filter((l) => l.status === "completed" || l.status === "cancelled");
     if (filter === "in_progress") return leads.filter((l) => l.status === "in_progress" || l.status === "reserved");
     return leads.filter((l) => l.status === filter);
