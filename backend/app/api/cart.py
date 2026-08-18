@@ -146,6 +146,7 @@ def checkout(body: CheckoutIn, user: User = Depends(get_current_user), db: Sessi
         raise _http(e)
 
     if created:
+        _notify_new_cart_lead(db, lead)
         # Аналитика и сигналы рекомендаций — после успешной транзакции и никогда
         # не роняют ответ: заявка уже создана, терять её из-за аналитики нельзя.
         # Payload — только безопасные метаданные (без телефона/имени/комментария).
@@ -179,3 +180,40 @@ def _track(db: Session, user_id: int, event: str, payload: dict) -> None:
     except Exception:  # noqa: BLE001
         db.rollback()
         logger.exception("analytics %s failed", event)
+
+
+def _notify_new_cart_lead(db: Session, lead) -> None:
+    """Алерт менеджеру о заявке из корзины.
+
+    Своя транзакция, а не общая с созданием лида: cart_service.checkout()
+    уже закоммитил лида ДО возврата (см. services/cart.py) — enqueue() здесь
+    не может ехать той же транзакцией, тем же приёмом, что и _track() выше:
+    никогда не роняем оформление заказа из-за сбоя постановки уведомления.
+    """
+    try:
+        from app.services.notification_templates import new_lead_message
+        from app.services.notifications import admin_chat_id, enqueue
+
+        chat_id = admin_chat_id()
+        if chat_id is None:
+            return
+        row = enqueue(
+            db, chat_id=chat_id, kind="new_lead",
+            message=new_lead_message(
+                public_number=lead.public_number,
+                items_count=lead.items_count or 0,
+                estimated_total=float(lead.estimated_total) if lead.estimated_total is not None else None,
+                currency=lead.currency or "RUB",
+                product_title=lead.product_title,
+                lead_type=lead.lead_type,
+                username=lead.username,
+                phone=lead.phone,
+                message=lead.message,
+            ),
+            dedupe_key=f"lead:{lead.id}:created",
+        )
+        if row is not None:
+            db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        logger.exception("notify new cart lead failed")

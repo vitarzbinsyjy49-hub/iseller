@@ -13,6 +13,7 @@ from app.main import app
 from app.models.cart import MAX_CART_ITEMS, Cart, CartItem
 from app.models.lead import Lead
 from app.models.lead_item import LeadItem
+from app.models.notification import Notification
 from app.models.user import User
 from app.services.availability import MAX_ITEM_QUANTITY
 from tests.conftest import make_product
@@ -300,6 +301,39 @@ def test_checkout_creates_one_lead_with_all_items(ctx):
     # Корзина закрыта, пользователь начинает с чистой
     assert body["cart"]["items"] == []
     assert db.query(Cart).filter(Cart.status == "converted").count() == 1
+
+
+def test_checkout_notifies_manager(ctx, monkeypatch):
+    client, db, *_ = ctx
+    monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    p = make_product(db, title="MacBook Air", price=129990)
+    client.post("/api/cart/items", json={"product_id": p.id})
+
+    r = client.post("/api/cart/checkout", json=checkout_body())
+    assert r.status_code == 201
+
+    notif = db.query(Notification).filter_by(kind="new_lead").first()
+    assert notif is not None
+    assert "MacBook Air" in notif.text or "1 товар" in notif.text
+
+
+def test_repeat_checkout_with_same_idempotency_key_does_not_double_notify(ctx, monkeypatch):
+    client, db, *_ = ctx
+    monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    p = make_product(db, price=5000)
+    client.post("/api/cart/items", json={"product_id": p.id})
+
+    body = checkout_body(idempotency_key="abc123")
+    first = client.post("/api/cart/checkout", json=body)
+    assert first.json()["created"] is True
+
+    # Вторая корзина того же пользователя, тот же ключ идемпотентности:
+    # cart_service.checkout вернёт СУЩЕСТВУЮЩУЮ заявку, created=False.
+    client.post("/api/cart/items", json={"product_id": p.id})
+    second = client.post("/api/cart/checkout", json=body)
+    assert second.json()["created"] is False
+
+    assert db.query(Notification).filter_by(kind="new_lead").count() == 1
 
 
 def test_cart_lead_metadata_has_no_untranslated_keys(ctx):
