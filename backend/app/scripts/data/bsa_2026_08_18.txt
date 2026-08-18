@@ -1,0 +1,88 @@
+# Выгрузка BSA от 18.08.2026 (правка постов канала, действует с 19.08.2026),
+# как прислана. НЕ редактировать вручную: это исходник, по которому парсер
+# строит каталог. Правки — в парсер.
+
+## iPhone 17 Pro
+17 Pro 256 Silver-102.500🇭🇰🇰🇷(1sim+e sim)
+17 Pro 256 Silver-99.500🇯🇵е sim
+17 Pro 256 Orange-101.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro 256 Orange-97.000🇯🇵е sim
+17 Pro 256 Blue-102.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro 256 Blue-99.300🇯🇵е sim
+17 Pro 256 Blue-96.000🇺🇸е sim актив
+17 Pro 512 Silver-122.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 512 Silver-116.000🇯🇵e sim
+17 Pro 512 Orange-121.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro 512 Orange-115.500🇯🇵e sim
+17 Pro 512 Blue-122.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 512 Blue-115.500🇯🇵e sim
+17 Pro 1TB Silver-141.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 1TB Silver-131.500🇯🇵eSIM
+17 Pro 1TB Orange-134.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro 1TB Orange-125.800🇺🇸🇯🇵eSim
+17 Pro 1TB Blue-139.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro 1TB Blue-128.500🇯🇵eSim
+
+## iPhone 17 Pro Max
+17 Pro Max 256 Silver-113.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 256 Silver-105.000🇺🇸🇯🇵e Sim
+17 Pro Max 256 Orange-111.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 256 Orange-99.000🇭🇰 (Новый, замена дисплея АСЦ)
+17 Pro Max 256 Orange-103.000🇺🇸🇯🇵е sim
+17 Pro Max 256 Orange-101.000🇺🇸е sim актив
+17 Pro Max 256 Blue-111.500🇭🇰🇰🇷(1sim+e sim)
+17 Pro Max 256 Blue-104.200🇺🇸🇯🇵е sim
+17 Pro Max 256 Blue-101.000🇺🇸е sim актив
+17 Pro Max 512 Silver-134.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 512 Silver-122.500🇯🇵e sim
+17 Pro Max 512 Orange-133.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 512 Orange-120.500🇯🇵🇺🇸e sim
+17 Pro Max 512 Blue-131.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 512 Blue-121.500🇺🇸🇯🇵e sim
+17 Pro Max 1TB Silver-149.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 1TB Silver-140.500🇯🇵e sim
+17 Pro Max 1TB Orange-151.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 1TB Orange-135.500🇯🇵e sim
+17 Pro Max 1TB Blue-148.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 1TB Blue-135.500🇯🇵e sim
+17 Pro Max 2TB Silver-175.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 2TB Silver-163.000🇯🇵е sim
+17 Pro Max 2TB Orange-171.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 2TB Orange-152.000🇺🇸🇯🇵е sim
+17 Pro Max 2TB Orange-145.000🇺🇸е sim актив
+17 Pro Max 2TB Blue-175.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 2TB Blue-153.000🇯🇵e sim
+
+## iPhone 17e
+17e 256 Black -57.500🇮🇳(1Sim + eSim )
+17e 256 White -57.000🇮🇳(1Sim + eSim )
+17e 256 White -53.500🇺🇸🇯🇵eSim
+17e 256 Pink -57.000🇮🇳(1Sim + eSim )
+17e 256 Pink-54.000🇺🇸🇯🇵eSim
+17E 512 Black -67.000🇯🇵eSim
+17e 512 White -73.500🇮🇳(1 Sim + eSim )
+17E 512 White -67.000🇯🇵eSim
+17e 512 Pink -73.700🇮🇳(1 Sim + eSim )
+17E 512 Pink -67.000🇺🇸eSim
+
+## iPhone 17
+17 256 Black-75.500🇮🇳(1 sim+e sim )
+17 256 Blue-74.400🇮🇳(1 sim+e sim )
+17 256 Blue-70.000🇮🇳(1 sim+e sim ) актив
+17 256 Blue-69.000🇺🇸eSim актив
+17 256 White-75.200🇮🇳 (1 sim+e sim)
+17 256 White-70.000🇮🇳 (1 sim+e sim) актив
+17 256 Sage-74.500🇮🇳(1 sim+e sim)
+17 256 Lavender-76.000🇮🇳(1 sim+e sim )
+17 256 Lavender-69.500🇺🇸eSim актив
+17 512 White-93.500🇮🇳(1 sim+e sim )
+17 512 Sage-95.000🇮🇳(1 sim+e sim )
+17 512 Sage-86.000🇮🇳(1 sim+e sim ) актив
+17 512 Sage-86.000🇯🇵eSim
+17 512 Blue-93.000🇮🇳(1 sim+e sim )
+17 512 Blue-86.000🇮🇳(1 sim+e sim ) актив
+17 512 Lavender-95.000🇮🇳(1 sim+e sim )
+17 512 Lavender-89.000🇺🇸е sim
+17 512 Black-91.000🇮🇳(1 sim+e sim )
+17 512 Black-86.000🇮🇳(1 sim+e sim ) актив
+17 512 Black -87.500🇺🇸eSim
