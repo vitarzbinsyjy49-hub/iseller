@@ -21,6 +21,7 @@ type Post = {
   /** Есть ли заготовка в коде — от этого зависит кнопка «вернуть заготовку». */
   has_draft: boolean;
   last_synced_at: string | null; last_error: string | null; length: number;
+  length_limit: number;
 };
 
 type RichPreview = { length: number; limit: number; over_limit: boolean; has_placeholders: boolean };
@@ -162,7 +163,7 @@ export function ChannelPosts({ token }: { token: string }) {
                 }}>{STATUS_LABEL[post.status] ?? post.status}</span>
                 {post.rich_html && (
                   <span style={{
-                    background: C.accent + "22", color: C.accent,
+                    background: C.sub + "22", color: C.sub,
                     padding: "3px 8px", borderRadius: 999, fontSize: 12, fontWeight: 600,
                   }}>rich</span>
                 )}
@@ -173,7 +174,7 @@ export function ChannelPosts({ token }: { token: string }) {
                 )}
                 <span style={{ marginLeft: "auto", color: C.sub, fontSize: 12, fontFamily: "ui-monospace, monospace" }}>
                   {post.slug}{post.telegram_message_id ? ` · msg ${post.telegram_message_id}` : ""}
-                  {" · "}{post.length}/4096
+                  {" · "}{post.length}/{post.length_limit}
                 </span>
               </div>
 
@@ -231,7 +232,7 @@ export function ChannelPosts({ token }: { token: string }) {
         <PostEditor post={editing} kinds={kinds} busy={busy} token={token} onClose={() => setEditing(null)}
           onSave={(body, richHtml, buttons, title) => run(async () => {
             await apiSend("PATCH", `/admin/price-posts/info/${editing.slug}`, token,
-              { body, rich_html: richHtml || null, buttons, title });
+              { body, rich_html: richHtml, buttons, title });
             setEditing(null);
           })} />
       )}
@@ -239,7 +240,7 @@ export function ChannelPosts({ token }: { token: string }) {
         <PostEditor kinds={kinds} busy={busy} token={token} onClose={() => setCreating(false)}
           onCreate={(slug, title, body, richHtml, buttons) => run(async () => {
             await apiPost("/admin/price-posts/info", token,
-              { slug, title, body, rich_html: richHtml || null, buttons });
+              { slug, title, body, rich_html: richHtml, buttons });
             setCreating(false);
           })} />
       )}
@@ -263,6 +264,7 @@ function PostEditor({
   const [richHtml, setRichHtml] = useState(post?.rich_html ?? "");
   const [preview, setPreview] = useState<RichPreview | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState("");
   const [buttons, setButtons] = useState<ButtonSpec[]>(
     post?.buttons ?? [{ text: "🛍 Открыть каталог", kind: "catalog", row: 0 }]);
 
@@ -297,9 +299,10 @@ function PostEditor({
       <label style={{ ...label, marginTop: 16 }}>
         Rich-контент (HTML, необязательно) — таблицы &lt;table&gt;, заголовки &lt;h1&gt;–&lt;h6&gt;,
         сворачиваемый блок &lt;details&gt;&lt;summary&gt;…&lt;/summary&gt;…&lt;/details&gt;. Если
-        заполнено — ПОЛНОСТЬЮ заменяет обычный текст выше при публикации; картинку добавляйте прямо
-        здесь тегом &lt;img src="…"/&gt; — поле «URL изображения» rich-пост не использует.
-        <textarea value={richHtml} onChange={(e) => { setRichHtml(e.target.value); setPreview(null); }}
+        заполнено — ПОЛНОСТЬЮ заменяет обычный текст выше при публикации; отдельного поля картинки
+        у постов канала нет — вставляйте &lt;img src="…"/&gt; сюда.
+        <textarea value={richHtml}
+          onChange={(e) => { setRichHtml(e.target.value); setPreview(null); setPreviewError(""); }}
           rows={8} style={{ ...input, fontFamily: "ui-monospace, monospace", fontSize: 13, lineHeight: 1.5 }} />
       </label>
       {richHtml && (
@@ -309,8 +312,10 @@ function PostEditor({
             try {
               setPreview(await apiPost<RichPreview>("/admin/price-posts/info/rich-preview", token,
                 { rich_html: richHtml }));
+              setPreviewError("");
             } catch {
               setPreview(null);
+              setPreviewError("Не удалось проверить");
             } finally {
               setPreviewBusy(false);
             }
@@ -321,6 +326,9 @@ function PostEditor({
               {preview.over_limit && " — превышен лимит"}
               {preview.has_placeholders && " — остались незаполненные места"}
             </span>
+          )}
+          {previewError && (
+            <span style={{ color: C.red, fontSize: 12 }}>{previewError}</span>
           )}
         </div>
       )}

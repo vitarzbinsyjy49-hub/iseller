@@ -326,6 +326,23 @@ def test_api_reset_returns_draft_from_code(client, db, telegram):
     assert PLACEHOLDER not in row.body
 
 
+def test_api_reset_clears_rich_html(client, db, telegram):
+    """Заготовки в коде rich-контента не содержат — «вернуть заготовку» должно
+    сбрасывать и rich_html, иначе пост продолжает публиковаться как rich с
+    текстом заготовки внутри, а «вернуть заготовку» выглядит так, будто
+    сработало, хотя в канал уйдёт старый rich_html."""
+    client.post("/api/admin/price-posts/info/generate")
+    client.patch("/api/admin/price-posts/info/info_payment",
+                 json={"rich_html": "<table><tr><td>Старое</td></tr></table>"})
+
+    response = client.post("/api/admin/price-posts/info/info_payment/reset")
+
+    assert response.status_code == 200
+    assert response.json()["rich_html"] is None
+    row = db.query(ChannelPost).filter_by(slug="info_payment").one()
+    assert not row.rich_html
+
+
 def test_api_reset_marks_published_post_outdated(client, db, telegram):
     """Опубликованный пост после сброса расходится с каналом — как при правке."""
     client.post("/api/admin/price-posts/info/generate")
@@ -373,6 +390,32 @@ def test_api_edit_sets_rich_html(client, db, telegram):
                         json={"rich_html": "<table><tr><td>A</td></tr></table>"})
     assert resp.status_code == 200
     assert resp.json()["rich_html"] == "<table><tr><td>A</td></tr></table>"
+
+
+def test_api_edit_clears_rich_html_with_empty_string(client, db, telegram):
+    """Очистка поля rich-контента в админке шлёт "", а не null — и это должно
+    реально стирать rich_html, а не быть безобидным «поле не передали».
+
+    Раньше фронт превращал пустую строку в null, а бэкенд трактовал null так
+    же, как отсутствие поля («не трогать») — очистка молча не срабатывала, и
+    пост продолжал публиковаться как rich навсегда."""
+    client.post("/api/admin/price-posts/info/generate")
+    client.patch("/api/admin/price-posts/info/info_warranty",
+                 json={"rich_html": "<table><tr><td>A</td></tr></table>"})
+
+    resp = client.patch("/api/admin/price-posts/info/info_warranty", json={"rich_html": ""})
+
+    assert resp.status_code == 200
+    assert resp.json()["rich_html"] == ""
+    row = db.query(ChannelPost).filter_by(slug="info_warranty").one()
+    assert row.rich_html == ""
+
+    fill(db, "info_warranty", "Готовый текст без пропусков.")
+    result = price_channel.apply_info_posts(db, slugs=["info_warranty"])
+
+    assert result.created == ["info_warranty"]
+    assert telegram.sent_rich == []
+    assert telegram.sent[-1]["text"] == "Готовый текст без пропусков."
 
 
 def test_api_create_custom_post_with_rich_html(client, db, telegram):

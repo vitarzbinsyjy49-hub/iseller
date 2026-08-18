@@ -73,7 +73,8 @@ def _out(row: ChannelPost) -> dict:
         "last_synced_at": row.last_synced_at.isoformat() if row.last_synced_at else None,
         "published_at": row.published_at.isoformat() if row.published_at else None,
         "last_error": row.last_error,
-        "length": len(row.body or ""),
+        "length": len(row.rich_html or row.body or ""),
+        "length_limit": MAX_RICH_MESSAGE_LENGTH if row.rich_html else 4096,
         "sort_order": row.sort_order,
         "body": row.body if row.kind == INFO_KIND else None,
         "rich_html": row.rich_html if row.kind == INFO_KIND else None,
@@ -213,6 +214,10 @@ def reset_info(slug: str, db: Session = Depends(get_db),
 
     row.title = draft.title
     row.body = draft.default_text
+    # Заготовки в коде rich-контента не содержат — «вернуть заготовку» это
+    # значит, что и rich_html, оставшийся от ручной правки, тоже сбрасывается,
+    # иначе пост продолжит публиковаться как rich с текстом заготовки в теле.
+    row.rich_html = None
     # Опубликованный пост расходится с каналом до повторной отправки — тот же
     # признак, что ставит ручное редактирование.
     if row.telegram_message_id:
