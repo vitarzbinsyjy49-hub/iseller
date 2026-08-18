@@ -153,6 +153,7 @@ def test_other_link_creates_new_lead(ctx):
 def test_enqueues_owner_notification(ctx, monkeypatch):
     from app.core.config import settings
     monkeypatch.setattr(settings, "ADMIN_TELEGRAM_ID", "12345", raising=False)
+    monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "test-token", raising=False)
 
     client, db, product = ctx
     r = _post(client, product.id, competitor_url="https://www.mvideo.ru/p/1",
@@ -180,6 +181,7 @@ def test_no_owner_chat_means_no_notification(ctx, monkeypatch):
 def test_notification_shows_both_prices_and_gap(ctx, monkeypatch):
     from app.core.config import settings
     monkeypatch.setattr(settings, "ADMIN_TELEGRAM_ID", "12345", raising=False)
+    monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "test-token", raising=False)
 
     client, db, product = ctx
     _post(client, product.id, competitor_url="https://ozon.ru/p/1", competitor_price=97500)

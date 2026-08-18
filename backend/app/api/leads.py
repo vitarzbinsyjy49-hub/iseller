@@ -88,8 +88,10 @@ def _notify_owner(db: Session, lead: Lead, meta: dict) -> None:
     в ту же транзакцию, что и заявка.
     """
     from app.services.notification_templates import price_offer_message
-    from app.services.notifications import admin_chat_id, enqueue
+    from app.services.notifications import admin_chat_id, enqueue, notifications_enabled
 
+    if not notifications_enabled():
+        return
     chat_id = admin_chat_id()
     if chat_id is None:
         return
@@ -146,8 +148,10 @@ def _notify_sell_item(db: Session, lead: Lead, meta: dict) -> None:
     """Алерт модератору о новой заявке «Предложить товар» — та же схема, что
     _notify_owner для price_offer: без сети, той же транзакцией."""
     from app.services.notification_templates import sell_item_message
-    from app.services.notifications import admin_chat_id, enqueue
+    from app.services.notifications import admin_chat_id, enqueue, notifications_enabled
 
+    if not notifications_enabled():
+        return
     chat_id = admin_chat_id()
     if chat_id is None:
         return
@@ -167,8 +171,10 @@ def _notify_new_lead(db: Session, lead: Lead) -> None:
     """Алерт менеджеру о новой заявке — для типов без своего специфичного
     уведомления (price_offer/sell_item оповещают выше, до этой ветки)."""
     from app.services.notification_templates import new_lead_message
-    from app.services.notifications import admin_chat_id, enqueue
+    from app.services.notifications import admin_chat_id, enqueue, notifications_enabled
 
+    if not notifications_enabled():
+        return
     chat_id = admin_chat_id()
     if chat_id is None:
         return
@@ -197,8 +203,10 @@ def _notify_cancelled_by_user(db: Session, lead: Lead) -> None:
     только что увидел результат на экране, а _STATUS_TEXTS["cancelled"] в
     lead_status_message продолжает срабатывать только при отмене АДМИНОМ."""
     from app.services.notification_templates import lead_cancelled_by_user_message
-    from app.services.notifications import admin_chat_id, enqueue
+    from app.services.notifications import admin_chat_id, enqueue, notifications_enabled
 
+    if not notifications_enabled():
+        return
     chat_id = admin_chat_id()
     if chat_id is None:
         return

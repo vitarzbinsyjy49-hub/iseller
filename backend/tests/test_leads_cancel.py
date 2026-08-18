@@ -113,6 +113,7 @@ def test_cancel_writes_audit_log_with_user_actor(ctx):
 def test_cancel_notifies_manager(ctx, monkeypatch):
     client, db, _holder, owner, _stranger = ctx
     monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    monkeypatch.setattr("app.core.config.settings.TELEGRAM_BOT_TOKEN", "test-token")
     lead = make_lead(db, owner, status="new", product_title="iPhone 13 Pro")
 
     client.post(f"/api/leads/{lead.id}/cancel")
@@ -120,3 +121,18 @@ def test_cancel_notifies_manager(ctx, monkeypatch):
     notif = db.query(Notification).filter_by(kind="lead_cancelled").first()
     assert notif is not None
     assert "iPhone 13 Pro" in notif.text
+
+
+def test_notifications_disabled_means_no_cancel_notification(ctx, monkeypatch):
+    """admin_chat_id() настроен, но notifications_enabled() выключен (нет
+    токена бота) — _notify_cancelled_by_user обязан промолчать: без токена
+    отправлять всё равно нечем, а очередь копила бы сообщение, которое
+    никогда не уйдёт (см. docs/context/notifications.md)."""
+    client, db, _holder, owner, _stranger = ctx
+    monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    monkeypatch.setattr("app.core.config.settings.TELEGRAM_BOT_TOKEN", "")
+    lead = make_lead(db, owner, status="new", product_title="iPhone 13 Pro")
+
+    client.post(f"/api/leads/{lead.id}/cancel")
+
+    assert db.query(Notification).filter_by(kind="lead_cancelled").count() == 0

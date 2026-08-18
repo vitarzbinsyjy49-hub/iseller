@@ -192,8 +192,10 @@ def _notify_new_cart_lead(db: Session, lead) -> None:
     """
     try:
         from app.services.notification_templates import new_lead_message
-        from app.services.notifications import admin_chat_id, enqueue
+        from app.services.notifications import admin_chat_id, enqueue, notifications_enabled
 
+        if not notifications_enabled():
+            return
         chat_id = admin_chat_id()
         if chat_id is None:
             return

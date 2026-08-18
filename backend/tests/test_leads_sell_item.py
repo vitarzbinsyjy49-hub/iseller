@@ -153,6 +153,7 @@ def test_upload_marketplace_photo_rejects_bad_type(ctx):
 def test_sell_item_notifies_admin(ctx, monkeypatch):
     client, db, _u = ctx
     monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    monkeypatch.setattr("app.core.config.settings.TELEGRAM_BOT_TOKEN", "test-token")
     payload = {
         "source": "home", "lead_type": "sell_item", "phone": "+79990000002",
         "metadata": {"category": "смартфоны", "title": "iPhone 12", "price_wanted": 30000,
@@ -172,6 +173,7 @@ def test_sell_item_notifies_admin_with_non_numeric_price(ctx, monkeypatch):
     отклоняет заявку 422 при мусоре в цене — здесь модель другая)."""
     client, db, _u = ctx
     monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    monkeypatch.setattr("app.core.config.settings.TELEGRAM_BOT_TOKEN", "test-token")
     payload = {
         "source": "home", "lead_type": "sell_item", "phone": "+79990000004",
         "metadata": {"category": "смартфоны", "title": "iPhone 11",

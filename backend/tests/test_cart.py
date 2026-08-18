@@ -306,6 +306,7 @@ def test_checkout_creates_one_lead_with_all_items(ctx):
 def test_checkout_notifies_manager(ctx, monkeypatch):
     client, db, *_ = ctx
     monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    monkeypatch.setattr("app.core.config.settings.TELEGRAM_BOT_TOKEN", "test-token")
     p = make_product(db, title="MacBook Air", price=129990)
     client.post("/api/cart/items", json={"product_id": p.id})
 
@@ -315,11 +316,15 @@ def test_checkout_notifies_manager(ctx, monkeypatch):
     notif = db.query(Notification).filter_by(kind="new_lead").first()
     assert notif is not None
     assert "MacBook Air" in notif.text or "1 товар" in notif.text
+    # lead_type="cart" — заголовок должен быть помечен тегом «Корзина», иначе
+    # заявка из корзины неотличима в превью от обычного вопроса по товару.
+    assert "Корзина" in notif.text
 
 
 def test_repeat_checkout_with_same_idempotency_key_does_not_double_notify(ctx, monkeypatch):
     client, db, *_ = ctx
     monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    monkeypatch.setattr("app.core.config.settings.TELEGRAM_BOT_TOKEN", "test-token")
     p = make_product(db, price=5000)
     client.post("/api/cart/items", json={"product_id": p.id})
 
@@ -334,6 +339,22 @@ def test_repeat_checkout_with_same_idempotency_key_does_not_double_notify(ctx, m
     assert second.json()["created"] is False
 
     assert db.query(Notification).filter_by(kind="new_lead").count() == 1
+
+
+def test_notifications_disabled_means_no_checkout_notification(ctx, monkeypatch):
+    """admin_chat_id() настроен, но notifications_enabled() выключен (нет
+    токена бота) — _notify_new_cart_lead обязан промолчать. Заявка при этом
+    всё равно создаётся (201) — notifications_enabled() гасит только
+    уведомление, не сам checkout."""
+    client, db, *_ = ctx
+    monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    monkeypatch.setattr("app.core.config.settings.TELEGRAM_BOT_TOKEN", "")
+    p = make_product(db, title="MacBook Air", price=129990)
+    client.post("/api/cart/items", json={"product_id": p.id})
+
+    r = client.post("/api/cart/checkout", json=checkout_body())
+    assert r.status_code == 201
+    assert db.query(Notification).filter_by(kind="new_lead").count() == 0
 
 
 def test_cart_lead_metadata_has_no_untranslated_keys(ctx):
