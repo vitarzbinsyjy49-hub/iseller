@@ -84,7 +84,9 @@ export type AppEvent =
   // Ссылка «О сервисе» в самом низу главной (юридический дисклеймер).
   | "about_service_opened"
   // Маркетплейс б/у товаров: визард «Предложить товар» (/sell) отправил заявку.
-  | "sell_item_submitted";
+  | "sell_item_submitted"
+  // «Мои заявки»: пользователь сам отменил свою заявку.
+  | "lead_cancelled";
 
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();

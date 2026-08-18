@@ -157,6 +157,8 @@ ALLOWED_EVENTS = {
     "about_service_opened",
     # Маркетплейс б/у товаров: визард «Предложить товар» (/sell) отправил заявку.
     "sell_item_submitted",
+    # «Мои заявки»: пользователь сам отменил свою заявку.
+    "lead_cancelled",
 }
 
 

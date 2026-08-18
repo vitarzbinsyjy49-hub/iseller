@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { track } from "../lib/analytics";
+import { toast } from "../lib/toast";
 import { formatPrice } from "../lib/format";
 import { ErrorState } from "../components/StateViews";
 import { leadTitle, leadTypeLabel, leadMetadataRows } from "../lib/leads";
@@ -32,6 +33,12 @@ const DELIVERY_LABEL: Record<string, string> = {
   delivery: "Доставка по Москве",
 };
 
+/** Статусы, с которых пользователь ещё может отменить заявку сам —
+ *  зеркало backend-проверки в POST /leads/{id}/cancel (leads.py). */
+function cancellable(status: string): boolean {
+  return status !== "completed" && status !== "cancelled";
+}
+
 const FILTERS = [
   { key: "", label: "Все" },
   { key: "new", label: "Новые" },
@@ -46,12 +53,31 @@ export default function Requests() {
   // подменял её пустым списком, и пользователь видел ложное «пусто».
   const [error, setError] = useState(false);
   const [filter, setFilter] = useState("");
+  // Заявка, для которой сейчас показано инлайн-подтверждение отмены —
+  // максимум одна за раз, второй тап по другой карточке закрывает первую.
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
 
   const load = () => {
     setLeads(null);
     setError(false);
     api<{ leads: Lead[] }>("/leads/my").then((d) => setLeads(d.leads)).catch(() => setError(true));
   };
+
+  async function cancelLead(id: number) {
+    setCancellingId(id);
+    try {
+      await api(`/leads/${id}/cancel`, { method: "POST" });
+      setLeads((prev) => prev && prev.map((l) => (l.id === id ? { ...l, status: "cancelled" } : l)));
+      track("lead_cancelled", { lead_id: id });
+      setConfirmId(null);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Не удалось отменить заявку", "error");
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
   useEffect(() => { load(); }, []);
 
   const visible = useMemo(() => {
@@ -160,6 +186,37 @@ export default function Requests() {
                 <p className="mt-2 rounded-xl bg-mutedbg px-3 py-2 text-xs text-muted">
                   <span className="font-semibold text-text">Менеджер:</span> {l.manager_comment}
                 </p>
+              )}
+              {cancellable(l.status) && (
+                <div className="mt-3 border-t border-border pt-2.5">
+                  {confirmId === l.id ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted">Точно отменить?</span>
+                      <div className="flex gap-2">
+                        <button
+                          className="tap rounded-full px-3 py-1.5 text-xs font-medium text-muted"
+                          onClick={() => setConfirmId(null)}
+                        >
+                          Нет
+                        </button>
+                        <button
+                          className="tap rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                          disabled={cancellingId === l.id}
+                          onClick={() => cancelLead(l.id)}
+                        >
+                          {cancellingId === l.id ? "Отменяем…" : "Да, отменить"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      className="tap text-xs font-medium text-danger"
+                      onClick={() => setConfirmId(l.id)}
+                    >
+                      Отменить заявку
+                    </button>
+                  )}
+                </div>
               )}
               <p className="mt-2 text-[11px] text-muted">
                 №{l.id} · {new Date(l.created_at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
