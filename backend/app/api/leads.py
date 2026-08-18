@@ -86,15 +86,11 @@ def _notify_owner(db: Session, lead: Lead, meta: dict) -> None:
     не имеет права ждать Telegram — тем более падать вместе с ним. Строка уходит
     в ту же транзакцию, что и заявка.
     """
-    if not settings.ADMIN_TELEGRAM_ID:
-        return
     from app.services.notification_templates import price_offer_message
-    from app.services.notifications import enqueue
+    from app.services.notifications import admin_chat_id, enqueue
 
-    try:
-        chat_id = int(settings.ADMIN_TELEGRAM_ID)
-    except (TypeError, ValueError):
-        logger.warning("ADMIN_TELEGRAM_ID не число — уведомление владельцу пропущено")
+    chat_id = admin_chat_id()
+    if chat_id is None:
         return
 
     enqueue(
@@ -148,15 +144,11 @@ def _own_photos(raw) -> list[str]:
 def _notify_sell_item(db: Session, lead: Lead, meta: dict) -> None:
     """Алерт модератору о новой заявке «Предложить товар» — та же схема, что
     _notify_owner для price_offer: без сети, той же транзакцией."""
-    if not settings.ADMIN_TELEGRAM_ID:
-        return
     from app.services.notification_templates import sell_item_message
-    from app.services.notifications import enqueue
+    from app.services.notifications import admin_chat_id, enqueue
 
-    try:
-        chat_id = int(settings.ADMIN_TELEGRAM_ID)
-    except (TypeError, ValueError):
-        logger.warning("ADMIN_TELEGRAM_ID не число — уведомление о sell_item пропущено")
+    chat_id = admin_chat_id()
+    if chat_id is None:
         return
 
     enqueue(

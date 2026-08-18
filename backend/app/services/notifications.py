@@ -197,3 +197,20 @@ def notifications_enabled() -> bool:
     ставить в очередь незачем: очередь копила бы сообщения, которые никогда не
     уйдут, и первый же запуск с токеном вывалил бы на людей всю историю."""
     return bool(settings.NOTIFICATIONS_ENABLED and settings.TELEGRAM_BOT_TOKEN)
+
+
+def admin_chat_id() -> int | None:
+    """chat_id менеджера из настроек, либо None — писать некому.
+
+    Общий для всех мест, что шлют алерт МЕНЕДЖЕРУ (не автору заявки):
+    price_offer/sell_item/новая заявка/отмена пользователем. Раньше это же
+    преобразование (str -> int с try/except) дублировалось в каждом вызывающем
+    месте по отдельности — см. историю app/api/leads.py.
+    """
+    if not settings.ADMIN_TELEGRAM_ID:
+        return None
+    try:
+        return int(settings.ADMIN_TELEGRAM_ID)
+    except (TypeError, ValueError):
+        logger.warning("ADMIN_TELEGRAM_ID не число — уведомление менеджеру пропущено")
+        return None
