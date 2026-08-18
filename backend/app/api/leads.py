@@ -16,6 +16,7 @@ from app.core.rate_limit import check_rate_limit
 from app.core.uploads import MAX_BYTES, MAX_PRODUCT_IMAGES, URL_PREFIX, is_allowed, save_image
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
+from app.models.audit import AuditLog
 from app.models.lead import DEFAULT_LEAD_TYPE, DELIVERY_METHODS, LEAD_SOURCES, Lead
 from app.models.product import Product
 from app.models.user import User
@@ -162,6 +163,33 @@ def _notify_sell_item(db: Session, lead: Lead, meta: dict) -> None:
     )
 
 
+def _notify_cancelled_by_user(db: Session, lead: Lead) -> None:
+    """Алерт менеджеру: покупатель сам отменил заявку — симметрично тому, как
+    менеджер, меняя статус, уведомляет покупателя (_notify_status_change в
+    admin_crm.py). Владельца о его же действии повторно НЕ уведомляем: он
+    только что увидел результат на экране, а _STATUS_TEXTS["cancelled"] в
+    lead_status_message продолжает срабатывать только при отмене АДМИНОМ."""
+    from app.services.notification_templates import lead_cancelled_by_user_message
+    from app.services.notifications import admin_chat_id, enqueue
+
+    chat_id = admin_chat_id()
+    if chat_id is None:
+        return
+
+    enqueue(
+        db, chat_id=chat_id, kind="lead_cancelled",
+        message=lead_cancelled_by_user_message(
+            public_number=lead.public_number,
+            items_count=lead.items_count or 0,
+            estimated_total=float(lead.estimated_total) if lead.estimated_total is not None else None,
+            currency=lead.currency or "RUB",
+            product_title=lead.product_title,
+            username=lead.username,
+        ),
+        dedupe_key=f"lead:{lead.id}:cancelled_by_user",
+    )
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_lead(
     body: LeadIn, request: Request,
@@ -264,6 +292,33 @@ def my_leads(user: User = Depends(get_current_user), db: Session = Depends(get_d
         select(Lead).where(Lead.user_id == user.id).order_by(Lead.id.desc())
     ).scalars().all()
     return {"leads": [l.to_dict() for l in rows]}
+
+
+@router.post("/{lead_id}/cancel")
+def cancel_lead(
+    lead_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """Пользователь отменяет СВОЮ заявку. Разрешено с любого статуса, кроме
+    двух финальных (completed/cancelled) — менеджер мог уже взять заявку в
+    работу, но пока сделка не закрыта, отмена всё равно доступна."""
+    lead = db.get(Lead, lead_id)
+    if lead is None or lead.user_id != user.id:
+        # 404, а не 403: не подтверждаем существование чужой заявки различием кодов.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
+    if lead.status in ("completed", "cancelled"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Заявку в этом статусе отменить нельзя")
+
+    previous = lead.status
+    lead.status = "cancelled"
+    db.add(AuditLog(
+        actor=f"user:{user.id}",
+        action="lead_status_changed",
+        detail=f"lead={lead_id};from={previous};to=cancelled",
+    ))
+    _notify_cancelled_by_user(db, lead)
+    db.commit()
+    db.refresh(lead)
+    return lead.to_dict()
 
 
 @router.post("/uploads/marketplace-photo", status_code=status.HTTP_201_CREATED)
