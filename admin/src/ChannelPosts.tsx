@@ -16,12 +16,14 @@ import { C, card, input, btn, btnGhost, apiGet, apiPost, apiSend } from "./ui";
 type Post = {
   slug: string; title: string; status: string; kind: string;
   telegram_message_id: number | null; channel_id: string | null;
-  body: string | null; buttons: ButtonSpec[] | null;
+  body: string | null; rich_html: string | null; buttons: ButtonSpec[] | null;
   has_placeholders: boolean; editable: boolean;
   /** Есть ли заготовка в коде — от этого зависит кнопка «вернуть заготовку». */
   has_draft: boolean;
   last_synced_at: string | null; last_error: string | null; length: number;
 };
+
+type RichPreview = { length: number; limit: number; over_limit: boolean; has_placeholders: boolean };
 
 type ButtonSpec = { text: string; kind: string; value?: string; row?: number };
 type KindsResp = { kinds: { kind: string; label: string }[]; sections: { slug: string; title: string }[] };
@@ -158,6 +160,12 @@ export function ChannelPosts({ token }: { token: string }) {
                   color: STATUS_COLOR[post.status] ?? C.sub,
                   padding: "3px 8px", borderRadius: 999, fontSize: 12, fontWeight: 600,
                 }}>{STATUS_LABEL[post.status] ?? post.status}</span>
+                {post.rich_html && (
+                  <span style={{
+                    background: C.accent + "22", color: C.accent,
+                    padding: "3px 8px", borderRadius: 999, fontSize: 12, fontWeight: 600,
+                  }}>rich</span>
+                )}
                 {post.has_placeholders && (
                   <span style={{ color: C.red, fontSize: 12, fontWeight: 600 }}>
                     есть незаполненные места — публикация заблокирована
@@ -220,16 +228,18 @@ export function ChannelPosts({ token }: { token: string }) {
       </div>
 
       {editing && kinds && (
-        <PostEditor post={editing} kinds={kinds} busy={busy} onClose={() => setEditing(null)}
-          onSave={(body, buttons, title) => run(async () => {
-            await apiSend("PATCH", `/admin/price-posts/info/${editing.slug}`, token, { body, buttons, title });
+        <PostEditor post={editing} kinds={kinds} busy={busy} token={token} onClose={() => setEditing(null)}
+          onSave={(body, richHtml, buttons, title) => run(async () => {
+            await apiSend("PATCH", `/admin/price-posts/info/${editing.slug}`, token,
+              { body, rich_html: richHtml || null, buttons, title });
             setEditing(null);
           })} />
       )}
       {creating && kinds && (
-        <PostEditor kinds={kinds} busy={busy} onClose={() => setCreating(false)}
-          onCreate={(slug, title, body, buttons) => run(async () => {
-            await apiPost("/admin/price-posts/info", token, { slug, title, body, buttons });
+        <PostEditor kinds={kinds} busy={busy} token={token} onClose={() => setCreating(false)}
+          onCreate={(slug, title, body, richHtml, buttons) => run(async () => {
+            await apiPost("/admin/price-posts/info", token,
+              { slug, title, body, rich_html: richHtml || null, buttons });
             setCreating(false);
           })} />
       )}
@@ -241,15 +251,18 @@ export function ChannelPosts({ token }: { token: string }) {
 /* ---------------------------------------------------------------- редактор */
 
 function PostEditor({
-  post, kinds, busy, onClose, onSave, onCreate,
+  post, kinds, busy, token, onClose, onSave, onCreate,
 }: {
-  post?: Post; kinds: KindsResp; busy: boolean; onClose: () => void;
-  onSave?: (body: string, buttons: ButtonSpec[], title: string) => void;
-  onCreate?: (slug: string, title: string, body: string, buttons: ButtonSpec[]) => void;
+  post?: Post; kinds: KindsResp; busy: boolean; token: string; onClose: () => void;
+  onSave?: (body: string, richHtml: string, buttons: ButtonSpec[], title: string) => void;
+  onCreate?: (slug: string, title: string, body: string, richHtml: string, buttons: ButtonSpec[]) => void;
 }) {
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState(post?.title ?? "");
   const [body, setBody] = useState(post?.body ?? "");
+  const [richHtml, setRichHtml] = useState(post?.rich_html ?? "");
+  const [preview, setPreview] = useState<RichPreview | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
   const [buttons, setButtons] = useState<ButtonSpec[]>(
     post?.buttons ?? [{ text: "🛍 Открыть каталог", kind: "catalog", row: 0 }]);
 
@@ -280,6 +293,37 @@ function PostEditor({
       <div style={{ color: body.length > 4096 ? C.red : C.sub, fontSize: 12, marginTop: -6 }}>
         {body.length}/4096 символов
       </div>
+
+      <label style={{ ...label, marginTop: 16 }}>
+        Rich-контент (HTML, необязательно) — таблицы &lt;table&gt;, заголовки &lt;h1&gt;–&lt;h6&gt;,
+        сворачиваемый блок &lt;details&gt;&lt;summary&gt;…&lt;/summary&gt;…&lt;/details&gt;. Если
+        заполнено — ПОЛНОСТЬЮ заменяет обычный текст выше при публикации; картинку добавляйте прямо
+        здесь тегом &lt;img src="…"/&gt; — поле «URL изображения» rich-пост не использует.
+        <textarea value={richHtml} onChange={(e) => { setRichHtml(e.target.value); setPreview(null); }}
+          rows={8} style={{ ...input, fontFamily: "ui-monospace, monospace", fontSize: 13, lineHeight: 1.5 }} />
+      </label>
+      {richHtml && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: -6, marginBottom: 10 }}>
+          <button style={smallGhost} disabled={previewBusy} onClick={async () => {
+            setPreviewBusy(true);
+            try {
+              setPreview(await apiPost<RichPreview>("/admin/price-posts/info/rich-preview", token,
+                { rich_html: richHtml }));
+            } catch {
+              setPreview(null);
+            } finally {
+              setPreviewBusy(false);
+            }
+          }}>{previewBusy ? "Проверяю…" : "Предпросмотр"}</button>
+          {preview && (
+            <span style={{ color: preview.over_limit || preview.has_placeholders ? C.red : C.sub, fontSize: 12 }}>
+              {preview.length}/{preview.limit} символов
+              {preview.over_limit && " — превышен лимит"}
+              {preview.has_placeholders && " — остались незаполненные места"}
+            </span>
+          )}
+        </div>
+      )}
 
       <div style={{ marginTop: 16, marginBottom: 8, fontWeight: 600, fontSize: 14 }}>Кнопки</div>
       <div style={{ display: "grid", gap: 8 }}>
@@ -320,8 +364,8 @@ function PostEditor({
         <button style={btnGhost} onClick={onClose} disabled={busy}>Отмена</button>
         <button style={btn} disabled={busy || !body.trim() || (!post && !slug.trim())}
           onClick={() => (post
-            ? onSave?.(body, buttons, title)
-            : onCreate?.(slug, title || slug, body, buttons))}>
+            ? onSave?.(body, richHtml, buttons, title)
+            : onCreate?.(slug, title || slug, body, richHtml, buttons))}>
           {busy ? "Сохраняю…" : "Сохранить"}
         </button>
       </div>
