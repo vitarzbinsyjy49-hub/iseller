@@ -20,7 +20,9 @@ from app.models.post import ChannelPost
 from app.services import price_channel
 from app.services.info_posts import INFO_BY_SLUG, INFO_KIND, has_placeholders
 from app.services.price_posts import NAVIGATION_SLUG, SECTIONS
-from app.services.telegram_publisher import TelegramPublishError, TelegramRateLimited
+from app.services.telegram_publisher import (
+    MAX_RICH_MESSAGE_LENGTH, TelegramPublishError, TelegramRateLimited,
+)
 
 router = APIRouter(prefix="/admin/price-posts", tags=["admin:price-posts"],
                    dependencies=[Depends(get_current_admin)])
@@ -30,6 +32,7 @@ class InfoTextRequest(BaseModel):
     """Правка поста: текст и/или кнопки. Не переданное поле не трогаем."""
     title: str | None = None
     body: str | None = None
+    rich_html: str | None = None
     buttons: list[dict] | None = None
     image_url: str | None = None
 
@@ -38,8 +41,13 @@ class CreatePostRequest(BaseModel):
     slug: str
     title: str
     body: str
+    rich_html: str | None = None
     buttons: list[dict] | None = None
     image_url: str | None = None
+
+
+class RichPreviewRequest(BaseModel):
+    rich_html: str = ""
 
 
 class ConfirmRequest(BaseModel):
@@ -68,9 +76,10 @@ def _out(row: ChannelPost) -> dict:
         "length": len(row.body or ""),
         "sort_order": row.sort_order,
         "body": row.body if row.kind == INFO_KIND else None,
+        "rich_html": row.rich_html if row.kind == INFO_KIND else None,
         "buttons": row.button_spec if row.kind == INFO_KIND else None,
         "image_url": row.image_url if row.kind == INFO_KIND else None,
-        "has_placeholders": has_placeholders(row.body) if row.kind == INFO_KIND else False,
+        "has_placeholders": has_placeholders(row.rich_html or row.body) if row.kind == INFO_KIND else False,
         "editable": row.kind == INFO_KIND,
         # Есть ли для поста заготовка в коде — от этого зависит, показывать ли
         # «вернуть заготовку». У постов, созданных в админке, её нет.
@@ -115,6 +124,19 @@ def button_kinds():
     }
 
 
+@router.post("/info/rich-preview")
+def rich_preview(payload: RichPreviewRequest):
+    """Предпросмотр rich-контента: длина и лимит без публикации и без
+    сохранения — тот же parse -> preview -> apply, что и у прайс-тула."""
+    html = payload.rich_html
+    return {
+        "length": len(html),
+        "limit": MAX_RICH_MESSAGE_LENGTH,
+        "over_limit": len(html) > MAX_RICH_MESSAGE_LENGTH,
+        "has_placeholders": has_placeholders(html),
+    }
+
+
 @router.post("/info")
 def create_info(payload: CreatePostRequest, db: Session = Depends(get_db),
                 admin: str = Depends(get_current_admin)):
@@ -130,7 +152,8 @@ def create_info(payload: CreatePostRequest, db: Session = Depends(get_db),
     last = db.query(ChannelPost).filter_by(kind=INFO_KIND).count()
     row = ChannelPost(
         slug=slug, kind=INFO_KIND, status="draft", title=payload.title,
-        body=payload.body, button_spec=payload.buttons or list(DEFAULT_BUTTONS),
+        body=payload.body, rich_html=payload.rich_html,
+        button_spec=payload.buttons or list(DEFAULT_BUTTONS),
         image_url=payload.image_url, sort_order=2000 + last,
     )
     db.add(row)
@@ -151,6 +174,8 @@ def edit_info(slug: str, payload: InfoTextRequest, db: Session = Depends(get_db)
         row.title = payload.title
     if payload.body is not None:
         row.body = payload.body
+    if payload.rich_html is not None:
+        row.rich_html = payload.rich_html
     if payload.buttons is not None:
         row.button_spec = payload.buttons
     if payload.image_url is not None:

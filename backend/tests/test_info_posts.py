@@ -367,6 +367,44 @@ def test_api_edit_marks_published_post_outdated(client, db, telegram):
     assert db.query(ChannelPost).filter_by(slug="info_about").one().status == "outdated"
 
 
+def test_api_edit_sets_rich_html(client, db, telegram):
+    client.post("/api/admin/price-posts/info/generate")
+    resp = client.patch("/api/admin/price-posts/info/info_warranty",
+                        json={"rich_html": "<table><tr><td>A</td></tr></table>"})
+    assert resp.status_code == 200
+    assert resp.json()["rich_html"] == "<table><tr><td>A</td></tr></table>"
+
+
+def test_api_create_custom_post_with_rich_html(client, db, telegram):
+    resp = client.post("/api/admin/price-posts/info", json={
+        "slug": "promo_table", "title": "Промо", "body": "Обычный текст",
+        "rich_html": "<h2>Заголовок</h2>",
+    })
+    assert resp.status_code == 200
+    assert resp.json()["rich_html"] == "<h2>Заголовок</h2>"
+
+
+def test_api_rich_preview_reports_length_and_limit(client, db):
+    from app.services.telegram_publisher import MAX_RICH_MESSAGE_LENGTH
+
+    resp = client.post("/api/admin/price-posts/info/rich-preview",
+                       json={"rich_html": "<p>тест</p>"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["length"] == len("<p>тест</p>")
+    assert body["limit"] == MAX_RICH_MESSAGE_LENGTH
+    assert body["over_limit"] is False
+    assert body["has_placeholders"] is False
+
+
+def test_api_rich_preview_flags_placeholder_and_over_limit(client, db):
+    resp = client.post("/api/admin/price-posts/info/rich-preview",
+                       json={"rich_html": PLACEHOLDER + "x" * 40000})
+    body = resp.json()
+    assert body["has_placeholders"] is True
+    assert body["over_limit"] is True
+
+
 def test_api_publish_requires_confirmation(client, db, telegram):
     client.post("/api/admin/price-posts/info/generate")
     response = client.post("/api/admin/price-posts/info/publish", json={"confirm": False})
