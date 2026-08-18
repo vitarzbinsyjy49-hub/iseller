@@ -98,6 +98,19 @@ def test_repeated_generation_does_not_overwrite_written_text(db):
     assert row.body == "Наши настоящие условия гарантии."
 
 
+def test_rich_html_field_defaults_to_none_and_round_trips(db):
+    row = ChannelPost(slug="info_test_rich_field", kind=INFO_KIND, title="T", body="B")
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    assert row.rich_html is None
+
+    row.rich_html = "<table><tr><td>1</td></tr></table>"
+    db.commit()
+    db.refresh(row)
+    assert row.rich_html == "<table><tr><td>1</td></tr></table>"
+
+
 def test_drafts_are_filled_and_ready():
     """Заготовки описывают РЕАЛЬНЫЕ условия магазина и публикуются как есть.
 

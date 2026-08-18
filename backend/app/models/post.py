@@ -52,6 +52,14 @@ class ChannelPost(Base):
     # менеджера или канал живёт в настройках и может смениться — тогда все
     # посты должны подхватить новую, а не тащить вмороженный старый URL.
     button_spec: Mapped[list | None] = mapped_column(JSON)
+    # Rich-контент поста (Bot API 10.1 sendRichMessage): настоящие таблицы,
+    # заголовки, сворачиваемый <details> — не имитация моноширинным текстом.
+    # NULL у всех существующих постов — публикуются как раньше, через body.
+    # Когда заполнено, ЗАМЕНЯЕТ body целиком при публикации (свой источник
+    # правды, не производная от body). Картинка rich-поста не идёт через
+    # image_url/sendPhoto — она добавляется тегом <img> прямо внутри
+    # rich_html, см. docs/context/channel-posts.md.
+    rich_html: Mapped[str | None] = mapped_column(Text)
     last_error: Mapped[str | None] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

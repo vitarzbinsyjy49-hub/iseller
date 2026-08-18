@@ -177,6 +177,9 @@ def _apply_demo_migrations() -> None:
         "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS last_error TEXT",
         "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS published_body TEXT",
         "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS button_spec JSON",
+        # Rich-контент (Bot API 10.1 sendRichMessage). NULL у всех
+        # существующих постов — ничего не меняется, пока поле не заполнено.
+        "ALTER TABLE channel_posts ADD COLUMN IF NOT EXISTS rich_html TEXT",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSON DEFAULT '[]'::json",
         # v5.5.0: «Осталось N шт» показываем только у явно лимитированных товаров.
         # Дефолт false => у существующих позиций подпись просто исчезает; сами
