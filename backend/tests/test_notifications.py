@@ -20,7 +20,9 @@ from app.services.notification_templates import (
     Message,
     cart_reminder_message,
     format_money,
+    lead_cancelled_by_user_message,
     lead_status_message,
+    new_lead_message,
     plural_items,
 )
 from app.services.notifications import drain, enqueue
@@ -131,6 +133,48 @@ def test_status_message_drops_buttons_when_mini_app_not_configured(monkeypatch):
     msg = lead_status_message(status="contacted", public_number="№1")
     assert msg.keyboard == []
     assert msg.text
+
+
+def test_new_lead_message_uses_cart_composition():
+    msg = new_lead_message(
+        public_number="№12", items_count=3, estimated_total=145000, currency="RUB",
+        username="garik", phone="+79990000000",
+    )
+    assert "№12" in msg.text
+    assert "3 товара" in msg.text
+    assert "145 000 ₽" in msg.text
+    assert "garik" in msg.text
+    assert "+79990000000" in msg.text
+
+
+def test_new_lead_message_uses_product_title_for_single_lead():
+    msg = new_lead_message(public_number="№7", product_title="Dyson HD16", username=None)
+    assert "Dyson HD16" in msg.text
+    assert "покупатель" in msg.text  # без username подписываемся обезличенно
+
+
+def test_new_lead_message_tags_scenario_types():
+    trade_in = new_lead_message(public_number="№1", lead_type="trade_in")
+    general = new_lead_message(public_number="№2", lead_type="general")
+    assert "Trade-In" in trade_in.text
+    assert "Trade-In" not in general.text
+
+
+def test_new_lead_message_includes_trimmed_comment():
+    long_comment = "текст " * 60  # заведомо длиннее 200 символов
+    msg = new_lead_message(public_number="№1", message=long_comment)
+    assert len(msg.text) < len(long_comment) + 200  # обрезан, а не вставлен целиком
+    assert "…" in msg.text
+
+
+def test_lead_cancelled_by_user_message_mentions_who_and_what():
+    msg = lead_cancelled_by_user_message(
+        public_number="№9", product_title="iPhone 13 Pro", username="nastya",
+    )
+    assert "№9" in msg.text
+    assert "iPhone 13 Pro" in msg.text
+    assert "nastya" in msg.text
+    assert "отменил" in msg.text.lower()
 
 
 def test_cart_reminder_button_opens_the_cart(monkeypatch):

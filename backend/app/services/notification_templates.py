@@ -217,6 +217,88 @@ def sell_item_message(*, title: str, price_wanted, phone: str | None, username: 
     return Message(text="\n".join(lines))
 
 
+#: Заголовок получает тег сценария — Trade-In/опт/бизнес читаются иначе, чем
+#: обычный заказ, и менеджеру полезно видеть это раньше, чем состав заявки.
+_LEAD_TYPE_TAG: dict[str, str] = {
+    "trade_in": "Trade-In",
+    "b2b": "Для бизнеса",
+    "wholesale": "Опт",
+}
+
+#: Длиннее — не влезет в превью уведомления, и суть комментария всё равно
+#: видна по первым символам; полный текст менеджер откроет в самой заявке.
+_MESSAGE_PREVIEW_LIMIT = 200
+
+
+def _lead_composition(*, items_count: int, estimated_total, currency: str, product_title) -> str | None:
+    """Строка состава — общая для нового шаблона и для lead_status_message:
+    количество позиций + предварительная сумма для заявки-корзины, либо
+    название товара для одиночной. None — состав неизвестен (заявка без
+    товара и без позиций, например Trade-In без выбранной модели)."""
+    if items_count and items_count > 0:
+        line = plural_items(items_count)
+        if estimated_total is not None:
+            line += f" · {format_money(estimated_total, currency)}"
+        return line
+    if product_title:
+        return _esc(product_title)
+    return None
+
+
+# ==================== Новая заявка — менеджеру ====================
+def new_lead_message(
+    *, public_number: str, items_count: int = 0, estimated_total: float | None = None,
+    currency: str = "RUB", product_title: str | None = None, lead_type: str | None = None,
+    username: str | None = None, phone: str | None = None, message: str | None = None,
+) -> Message:
+    """Алерт менеджеру о новой заявке — для типов, у которых нет своего более
+    специфичного уведомления (price_offer/sell_item оповещают отдельно, до
+    этой ветки в вызывающем коде)."""
+    tag = _LEAD_TYPE_TAG.get(lead_type or "")
+    headline = f"🆕 <b>Новая заявка{': ' + tag if tag else ''}</b>"
+    lines = [headline, "", f"Заявка {public_number}"]
+
+    composition = _lead_composition(
+        items_count=items_count, estimated_total=estimated_total,
+        currency=currency, product_title=product_title,
+    )
+    if composition:
+        lines.append(composition)
+
+    who = f"@{username}" if username else "покупатель"
+    contact = who + (f", {_esc(phone)}" if phone else "")
+    lines += ["", f"От: {contact}"]
+
+    if message:
+        trimmed = message if len(message) <= _MESSAGE_PREVIEW_LIMIT else message[:_MESSAGE_PREVIEW_LIMIT] + "…"
+        lines += ["", _esc(trimmed)]
+
+    lines += ["", "Смотрите в «Заявках» админки."]
+    return Message("\n".join(lines))
+
+
+# ================ Отмена заявки покупателем — менеджеру ================
+def lead_cancelled_by_user_message(
+    *, public_number: str, items_count: int = 0, estimated_total: float | None = None,
+    currency: str = "RUB", product_title: str | None = None, username: str | None = None,
+) -> Message:
+    """Симметрично lead_status_message(status='cancelled'), которое уходит
+    ПОКУПАТЕЛЮ при отмене менеджером: здесь наоборот — покупатель отменил сам,
+    уведомляем менеджера."""
+    lines = ["❌ <b>Покупатель отменил заявку</b>", "", f"Заявка {public_number}"]
+
+    composition = _lead_composition(
+        items_count=items_count, estimated_total=estimated_total,
+        currency=currency, product_title=product_title,
+    )
+    if composition:
+        lines.append(composition)
+
+    who = f"@{username}" if username else "покупатель"
+    lines += ["", f"От: {who}"]
+    return Message("\n".join(lines))
+
+
 # ========================= Брошенная корзина =========================
 def cart_reminder_message(
     *, items_count: int, estimated_total: float | None, currency: str = "RUB",
