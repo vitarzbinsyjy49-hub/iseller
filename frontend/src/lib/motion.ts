@@ -75,7 +75,17 @@ export function scrollPositionAt(from: number, to: number, elapsedMs: number, du
 }
 
 /** Прогнать значение от `from` к `to` за `durationMs`, отдавая каждый кадр в
- *  `apply`. Общий мотор для прокрутки и прозрачности. Возвращает отмену. */
+ *  `apply`. Общий мотор для прокрутки и прозрачности. Возвращает отмену.
+ *
+ *  `start` фиксируется на ПЕРВОМ реальном тике rAF, а не в момент вызова.
+ *  Разница на живом устройстве бывает большой: сразу после сети/ре-рендера
+ *  (например, сразу после submit формы) браузер может не отдавать rAF сотни
+ *  миллисекунд. Если бы `start` брался в момент вызова, `elapsed` на первом
+ *  же дошедшем кадре уже превышал бы `durationMs`, и вся анимация схлопывалась
+ *  бы в одинарный прыжок в конец — ни одного промежуточного кадра, хотя код
+ *  формально отработал без ошибок. Так и выглядела «доросовка» галочки на
+ *  телефоне: результат есть, движения нет. Якорь на первый тик гарантирует
+ *  хотя бы один кадр от `from`, сколько бы браузер его ни откладывал. */
 function animateValue(
   from: number, to: number, durationMs: number,
   apply: (value: number) => void,
@@ -87,10 +97,11 @@ function animateValue(
     return () => {};
   }
 
-  const start = performance.now();
+  let start: number | null = null;
   let frame = 0;
 
   const step = (now: number) => {
+    if (start === null) start = now;
     const elapsed = now - start;
     if (elapsed >= durationMs) {
       apply(to);

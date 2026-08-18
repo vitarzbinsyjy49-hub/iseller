@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   FADE_MS,
+  animateNumber,
   easeOutQuint,
   scrollPositionAt,
   transitionDuration,
@@ -54,6 +55,33 @@ describe("easeOutQuint", () => {
   it("выход за границы времени зажимается, а не улетает", () => {
     expect(easeOutQuint(-1)).toBe(0);
     expect(easeOutQuint(5)).toBe(1);
+  });
+});
+
+describe("animateNumber", () => {
+  it("не прыгает сразу в конец, даже если браузер задержал первый rAF-кадр", () => {
+    // На живом устройстве браузер иногда не отдаёт requestAnimationFrame сотни
+    // миллисекунд (сеть + ре-рендер сразу после submit — типичный момент).
+    // Раньше start фиксировался в момент ВЫЗОВА: первый дошедший кадр уже видел
+    // elapsed > duration и сразу применял `to`, без единого промежуточного
+    // значения — так и выглядела «анимация есть в коде, а на экране её нет».
+    let pending: FrameRequestCallback | null = null;
+    const originalRaf = globalThis.requestAnimationFrame;
+    const originalCancel = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => { pending = cb; return 1; }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame;
+
+    try {
+      const calls: number[] = [];
+      animateNumber(0, 100, 400, (v) => calls.push(v));
+      // Первый тик приходит с огромной задержкой относительно вызова — но start
+      // анкерится на ЭТОТ момент, а не на момент вызова.
+      pending!(999_999);
+      expect(calls[0]).toBe(0);
+    } finally {
+      globalThis.requestAnimationFrame = originalRaf;
+      globalThis.cancelAnimationFrame = originalCancel;
+    }
   });
 });
 

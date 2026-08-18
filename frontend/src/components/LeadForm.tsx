@@ -5,6 +5,7 @@ import { formatPrice } from "../lib/format";
 import { SheetShell } from "./ScenarioSheet";
 import { FormError, TextAreaField, TextField } from "./Field";
 import { Icon, type IconName } from "./icons";
+import { AnimatedCheck } from "./AnimatedCheck";
 
 /** Отдельной константой — по этому id форма уводит фокус на телефон. */
 const PHONE_ID = "lead-phone";
@@ -77,10 +78,8 @@ export default function LeadForm({
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
 
         {state === "done" ? (
-          <div className="pop-in py-6 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green/15 text-green">
-              <Icon name="check" className="h-8 w-8" strokeWidth={2.2} />
-            </div>
+          <div className="py-6 text-center">
+            <AnimatedCheck />
             <p id="lead-form-title" className="mt-4 text-lg font-bold">Заявка отправлена</p>
             <p className="mt-1 text-sm text-muted">Менеджер скоро свяжется с вами. Статус — в разделе «Заявки».</p>
             <button onClick={() => close()} className="tap mt-5 w-full rounded-xl2 bg-accent py-3.5 font-semibold text-white">

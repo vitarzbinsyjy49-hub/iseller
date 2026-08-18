@@ -24,6 +24,7 @@ import { haptic, openExternalLink } from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
 import { useAuthStore } from "../store/auth";
 import { Icon } from "../components/icons";
+import { AnimatedCheck } from "../components/AnimatedCheck";
 
 type ChatMsg = { role: "user" | "assistant"; text: string };
 type TurnResponse = { type: string; value: string | null; reply: string | null };
@@ -185,9 +186,7 @@ function ScenarioChatScreen({ scenario }: { scenario: ScenarioKey }) {
   if (sendState === "done") {
     return (
       <div className="mx-auto max-w-md px-4 py-10 text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green/15 text-green">
-          <Icon name="check" className="h-8 w-8" strokeWidth={2.2} />
-        </div>
+        <AnimatedCheck />
         <p className="mt-4 text-lg font-bold">Заявка отправлена</p>
         <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
           Менеджер изучит информацию и свяжется с вами в Telegram. Статус можно посмотреть в разделе «Заявки».

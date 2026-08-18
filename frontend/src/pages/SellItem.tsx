@@ -25,6 +25,7 @@ import { ProductImage } from "../components/ProductCard";
 import { formatPrice } from "../lib/format";
 import { animateOpacity, transitionDuration } from "../lib/motion";
 import { Icon } from "../components/icons";
+import { AnimatedCheck } from "../components/AnimatedCheck";
 
 const STATE_OPTIONS = ["Отличное", "Хорошее, есть следы", "Есть дефекты"];
 const MAX_PHOTOS = 10;
@@ -173,6 +174,7 @@ export default function SellItem() {
   if (done) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
+        <AnimatedCheck />
         <p className="text-lg font-bold">Заявка отправлена</p>
         <p className="text-sm text-muted">
           Заявку рассмотрит модератор. Если всё ок, свяжемся по телефону, чтобы забрать товар —

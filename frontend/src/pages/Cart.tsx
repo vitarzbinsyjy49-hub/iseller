@@ -22,6 +22,7 @@ import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard, { ProductImage } from "../components/ProductCard";
 import { QuantityStepper } from "../components/QuantityStepper";
 import { ErrorState } from "../components/StateViews";
+import { AnimatedCheck } from "../components/AnimatedCheck";
 import { CartGlyph } from "../components/CartBar";
 import PromoField, { type AppliedPromo } from "../components/PromoField";
 import { cappedDiscount, forgetCode, totalWithDiscount } from "../lib/promo";
@@ -501,9 +502,7 @@ function SuccessView({ result, managerUrl }: { result: Success; managerUrl?: str
 
   return (
     <div className="mx-auto max-w-md pt-8 text-center lg:max-w-lg">
-      <div className="pop-in mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green/15 text-green">
-        <Icon name="check" className="h-8 w-8" strokeWidth={2.2} />
-      </div>
+      <AnimatedCheck />
       <p className="mt-4 text-xl font-bold">Заявка {result.number} отправлена</p>
       <p className="mx-auto mt-2 max-w-[300px] text-sm text-muted">
         Менеджер подтвердит наличие, комплектацию и итоговую стоимость.
