@@ -179,3 +179,59 @@ def test_logs_do_not_contain_message_text_or_chat(monkeypatch, caplog):
     assert "СЕКРЕТНЫЙ ТЕКСТ ПОСТА" not in logged
     assert "test-token" not in logged
     assert "chat not found" in logged      # причина сбоя видна
+
+
+# ---------------------------------------------------------------- rich-сообщения (Bot API 10.1)
+
+def test_send_rich_message_with_keyboard(monkeypatch):
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    keyboard = [[{"text": "🛍 Открыть раздел", "url": "https://t.me/bot?start=catalog"}]]
+    message_id = tp.send_rich_message(html="<table><tr><td>A</td></tr></table>", keyboard=keyboard)
+
+    assert message_id == 42
+    payload = post.sent[0]
+    assert payload["rich_message"] == {"html": "<table><tr><td>A</td></tr></table>"}
+    assert payload["reply_markup"] == {"inline_keyboard": keyboard}
+    assert "text" not in payload
+    assert "parse_mode" not in payload
+
+
+def test_send_rich_message_without_keyboard_omits_markup(monkeypatch):
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+    tp.send_rich_message(html="<p>текст</p>")
+    assert "reply_markup" not in post.sent[0]
+
+
+def test_send_rich_message_rejects_oversized_html(monkeypatch):
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+    with pytest.raises(tp.TelegramContentTooLong):
+        tp.send_rich_message(html="x" * (tp.MAX_RICH_MESSAGE_LENGTH + 1))
+    assert post.sent == []      # проверка длины — до сети, лимит не должен жечься зря
+
+
+def test_edit_rich_message_updates_existing_id(monkeypatch):
+    post = fake_post([FakeResponse({"ok": True, "result": {"message_id": 7}})])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    assert tp.edit_rich_message(message_id=7, html="<h2>Обновлено</h2>") is True
+    payload = post.sent[0]
+    assert payload["message_id"] == 7
+    assert payload["rich_message"] == {"html": "<h2>Обновлено</h2>"}
+
+
+def test_edit_rich_message_returns_false_when_nothing_changed(monkeypatch):
+    post = fake_post([FakeResponse(
+        {"ok": False, "description": "Bad Request: message is not modified"}, 400)])
+    monkeypatch.setattr(tp.httpx, "post", post)
+    assert tp.edit_rich_message(message_id=7, html="<p>то же самое</p>") is False
+
+
+def test_edit_rich_message_rejects_oversized_html(monkeypatch):
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+    with pytest.raises(tp.TelegramContentTooLong):
+        tp.edit_rich_message(message_id=7, html="x" * (tp.MAX_RICH_MESSAGE_LENGTH + 1))

@@ -46,6 +46,10 @@ class TelegramContentTooLong(TelegramPublishError):
 MAX_CAPTION_LENGTH = 1024
 #: Обычное текстовое сообщение без фото.
 MAX_MESSAGE_LENGTH = 4096
+#: Лимит символов rich-сообщения (Bot API 10.1) — сильно больше обычных 4096,
+#: считает по документации ("Rich Message Limits"), включая alt-текст эмодзи
+#: и исходник формул.
+MAX_RICH_MESSAGE_LENGTH = 32768
 
 
 def _sleep(seconds: float) -> None:  # вынесено ради подмены в тестах
@@ -219,6 +223,63 @@ def edit_reply_markup(
     }
     try:
         call("editMessageReplyMarkup", payload)
+        return True
+    except TelegramRateLimited:
+        raise
+    except TelegramPublishError as exc:
+        if "not modified" in str(exc).lower():
+            return False
+        raise
+
+
+def send_rich_message(
+    *, html: str, keyboard: list[list[dict]] | None = None,
+    channel_id: str | int | None = None, disable_notification: bool = False,
+) -> int:
+    """Опубликовать rich-сообщение (Bot API 10.1 sendRichMessage): настоящие
+    таблицы, заголовки, сворачиваемые <details> — не имитация моноширинным
+    текстом. html идёт в rich_message.html — тот же "Rich HTML style", что
+    Telegram поддерживает для parse_mode=HTML, плюс table/details/heading/hr.
+    """
+    if len(html) > MAX_RICH_MESSAGE_LENGTH:
+        raise TelegramContentTooLong(
+            f"Rich-сообщение ограничено {MAX_RICH_MESSAGE_LENGTH} символами "
+            f"(сейчас {len(html)})."
+        )
+    payload: dict = {
+        "chat_id": _channel(channel_id),
+        "rich_message": {"html": html},
+        "disable_notification": disable_notification,
+    }
+    if keyboard:
+        payload["reply_markup"] = {"inline_keyboard": keyboard}
+    return int(call("sendRichMessage", payload)["message_id"])
+
+
+def edit_rich_message(
+    *, message_id: int, html: str, keyboard: list[list[dict]] | None = None,
+    channel_id: str | int | None = None,
+) -> bool:
+    """Переписать rich-содержимое ранее опубликованного сообщения.
+
+    editMessageText — единая ручка Bot API и для обычного текста, и для rich
+    ("edit text, rich and game messages" в документации): поле rich_message
+    заменяет text тем же вызовом, отдельного editRichMessageText не существует.
+    """
+    if len(html) > MAX_RICH_MESSAGE_LENGTH:
+        raise TelegramContentTooLong(
+            f"Rich-сообщение ограничено {MAX_RICH_MESSAGE_LENGTH} символами "
+            f"(сейчас {len(html)})."
+        )
+    payload: dict = {
+        "chat_id": _channel(channel_id),
+        "message_id": message_id,
+        "rich_message": {"html": html},
+    }
+    if keyboard:
+        payload["reply_markup"] = {"inline_keyboard": keyboard}
+    try:
+        call("editMessageText", payload)
         return True
     except TelegramRateLimited:
         raise
