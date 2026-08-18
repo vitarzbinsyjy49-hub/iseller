@@ -49,9 +49,11 @@ from app.services.telegram_publisher import (
     edit_caption,
     edit_message,
     edit_reply_markup,
+    edit_rich_message,
     public_image_url,
     send_message,
     send_photo,
+    send_rich_message,
 )
 
 logger = logging.getLogger("techshop.price")
@@ -156,10 +158,13 @@ def apply_info_posts(
         rows = [r for r in rows if r.slug in set(slugs)]
 
     for row in sorted(rows, key=lambda r: r.sort_order):
+        # Rich-контент (models/post.py::rich_html) заменяет body целиком, когда
+        # заполнен — отдельный источник правды, а не производная от body.
+        content = row.rich_html or row.body
         # Незаполненная заготовка в канал не уходит: «[уточнить] — впишите
         # ваши условия» читается как забытый черновик и бьёт по доверию
         # сильнее, чем отсутствие поста.
-        if has_placeholders(row.body):
+        if has_placeholders(content):
             result.failed.append((row.slug, "в тексте остались незаполненные места"))
             continue
 
@@ -173,7 +178,7 @@ def apply_info_posts(
         )
         # Сравниваем с тем, что РЕАЛЬНО в канале, а не со статусом: статус
         # мог не обновиться, если текст правили мимо API.
-        if (row.telegram_message_id and row.published_body == row.body
+        if (row.telegram_message_id and row.published_body == content
                 and row.reply_markup == keyboard):
             result.unchanged.append(row.slug)
             continue
@@ -182,33 +187,45 @@ def apply_info_posts(
             continue
 
         try:
-            if row.telegram_message_id:
+            if row.rich_html:
+                # У rich-сообщений нет режима "фото с подписью" — картинка,
+                # если нужна, уже внутри content тегом <img>.
+                if row.telegram_message_id:
+                    edit_rich_message(message_id=row.telegram_message_id, html=content,
+                                      keyboard=keyboard, channel_id=channel_id())
+                    result.updated.append(row.slug)
+                else:
+                    row.telegram_message_id = send_rich_message(
+                        html=content, keyboard=keyboard, channel_id=channel_id())
+                    row.published_at = now
+                    result.created.append(row.slug)
+            elif row.telegram_message_id:
                 # Смена САМОЙ картинки на уже опубликованном посте — не этот
                 # путь (нужен editMessageMedia, отдельная операция); подпись
                 # и клавиатура редактируются на месте независимо от того,
                 # есть фото или нет.
                 if row.image_url:
-                    edit_caption(message_id=row.telegram_message_id, caption=row.body,
+                    edit_caption(message_id=row.telegram_message_id, caption=content,
                                 keyboard=keyboard, channel_id=channel_id())
                 else:
-                    edit_message(message_id=row.telegram_message_id, text=row.body,
+                    edit_message(message_id=row.telegram_message_id, text=content,
                                  keyboard=keyboard, channel_id=channel_id())
                 result.updated.append(row.slug)
             elif row.image_url:
                 row.telegram_message_id = send_photo(
-                    photo=public_image_url(row.image_url), caption=row.body, keyboard=keyboard,
+                    photo=public_image_url(row.image_url), caption=content, keyboard=keyboard,
                     channel_id=channel_id())
                 row.published_at = now
                 result.created.append(row.slug)
             else:
                 row.telegram_message_id = send_message(
-                    text=row.body, keyboard=keyboard, channel_id=channel_id())
+                    text=content, keyboard=keyboard, channel_id=channel_id())
                 row.published_at = now
                 result.created.append(row.slug)
             row.status = "published"
             row.channel_id = str(channel_id())
             row.reply_markup = keyboard
-            row.published_body = row.body
+            row.published_body = content
             row.last_synced_at = now
             row.last_error = None
             db.commit()

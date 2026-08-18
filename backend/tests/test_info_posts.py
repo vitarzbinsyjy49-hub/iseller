@@ -36,6 +36,7 @@ def channel_settings(monkeypatch):
 class FakeTelegram:
     def __init__(self):
         self.sent, self.edited, self.sent_photos, self.edited_captions = [], [], [], []
+        self.sent_rich, self.edited_rich = [], []
         self.next_id = 200
 
     def send_message(self, *, text, keyboard=None, channel_id=None, **kw):
@@ -60,6 +61,15 @@ class FakeTelegram:
         self.edited_captions.append({"message_id": message_id, "caption": caption, "keyboard": keyboard})
         return True
 
+    def send_rich_message(self, *, html, keyboard=None, channel_id=None, **kw):
+        self.next_id += 1
+        self.sent_rich.append({"html": html, "keyboard": keyboard, "message_id": self.next_id})
+        return self.next_id
+
+    def edit_rich_message(self, *, message_id, html, keyboard=None, channel_id=None):
+        self.edited_rich.append({"message_id": message_id, "html": html, "keyboard": keyboard})
+        return True
+
 
 @pytest.fixture()
 def telegram(monkeypatch):
@@ -69,6 +79,8 @@ def telegram(monkeypatch):
     monkeypatch.setattr(price_channel, "edit_reply_markup", fake.edit_reply_markup)
     monkeypatch.setattr(price_channel, "send_photo", fake.send_photo)
     monkeypatch.setattr(price_channel, "edit_caption", fake.edit_caption)
+    monkeypatch.setattr(price_channel, "send_rich_message", fake.send_rich_message)
+    monkeypatch.setattr(price_channel, "edit_rich_message", fake.edit_rich_message)
     return fake
 
 
@@ -540,3 +552,76 @@ def test_published_photo_post_edit_uses_edit_caption(db, telegram):
     assert telegram.edited == []                        # не editMessageText
     assert telegram.edited_captions[-1]["caption"] == "Версия 2."
     assert telegram.edited_captions[-1]["keyboard"]
+
+
+# ---------------------------------------------------------------- rich-контент
+
+def test_rich_post_is_published_via_send_rich_message(db, telegram):
+    price_channel.ensure_info_drafts(db)
+    row = fill(db, "info_warranty")
+    row.rich_html = "<table><tr><td>Срок</td><td>1 месяц</td></tr></table>"
+    db.commit()
+
+    result = price_channel.apply_info_posts(db, slugs=["info_warranty"])
+
+    assert result.created == ["info_warranty"]
+    assert telegram.sent_rich[0]["html"] == row.rich_html
+    assert telegram.sent_photos == [] and telegram.sent == []
+    row = db.query(ChannelPost).filter_by(slug="info_warranty").one()
+    assert row.published_body == row.rich_html
+
+
+def test_rich_post_republish_edits_via_edit_rich_message(db, telegram):
+    price_channel.ensure_info_drafts(db)
+    row = fill(db, "info_warranty")
+    row.rich_html = "<h3>Версия 1</h3>"
+    db.commit()
+    price_channel.apply_info_posts(db, slugs=["info_warranty"])
+
+    row = db.query(ChannelPost).filter_by(slug="info_warranty").one()
+    row.rich_html = "<h3>Версия 2</h3>"
+    db.commit()
+    result = price_channel.apply_info_posts(db, slugs=["info_warranty"])
+
+    assert result.updated == ["info_warranty"]
+    assert telegram.edited_rich[0]["html"] == "<h3>Версия 2</h3>"
+
+
+def test_rich_post_ignores_image_url_and_uses_rich_html_only(db, telegram):
+    """Картинка rich-поста — <img> внутри rich_html, а не отдельный sendPhoto:
+    у rich-сообщений нет режима "фото с подписью"."""
+    price_channel.ensure_info_drafts(db)
+    row = fill(db, "info_warranty")
+    row.image_url = "https://example.com/photo.jpg"
+    row.rich_html = '<img src="https://example.com/photo.jpg"/><p>Текст</p>'
+    db.commit()
+
+    price_channel.apply_info_posts(db, slugs=["info_warranty"])
+
+    assert telegram.sent_photos == []
+    assert telegram.sent_rich[0]["html"] == row.rich_html
+
+
+def test_rich_post_with_placeholder_is_not_published(db, telegram):
+    price_channel.ensure_info_drafts(db)
+    row = fill(db, "info_warranty")
+    row.rich_html = f"<p>{PLACEHOLDER} впишите условия</p>"
+    db.commit()
+
+    result = price_channel.apply_info_posts(db, slugs=["info_warranty"])
+
+    assert result.failed == [("info_warranty", "в тексте остались незаполненные места")]
+    assert telegram.sent_rich == []
+
+
+def test_rich_post_unchanged_is_not_resent(db, telegram):
+    price_channel.ensure_info_drafts(db)
+    row = fill(db, "info_warranty")
+    row.rich_html = "<p>Стабильный текст</p>"
+    db.commit()
+    price_channel.apply_info_posts(db, slugs=["info_warranty"])
+
+    result = price_channel.apply_info_posts(db, slugs=["info_warranty"])
+
+    assert result.unchanged == ["info_warranty"]
+    assert len(telegram.sent_rich) == 1     # второго вызова не было
