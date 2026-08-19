@@ -4,10 +4,13 @@ import { api } from "./lib/api";
 import { getStartParam, getTelegram, isInsideTelegram, initTelegramUi } from "./lib/telegram";
 import { hydrateFavorites } from "./lib/favorites";
 import { hydrateCart } from "./lib/cart";
+import { shouldShowOnboarding } from "./lib/onboarding";
+import { useOnboardingReplayStore } from "./store/onboardingReplay";
 import { useAuthStore, User } from "./store/auth";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Toaster from "./components/Toaster";
 import Layout from "./components/Layout";
+import { OnboardingStories } from "./components/onboarding/OnboardingStories";
 import Home from "./pages/Home";
 import { routeLoaders } from "./lib/routePreload";
 
@@ -28,7 +31,9 @@ const Loyalty = lazy(routeLoaders.loyalty);
 const Info = lazy(routeLoaders.info);
 
 export default function App() {
-  const { setTokens, setUser } = useAuthStore();
+  const { setTokens, setUser, user } = useAuthStore();
+  const replayOnboarding = useOnboardingReplayStore((s) => s.active);
+  const stopOnboardingReplay = useOnboardingReplayStore((s) => s.stop);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorText, setErrorText] = useState("");
   const navigate = useNavigate();
@@ -111,6 +116,9 @@ export default function App() {
         </Route>
       </Routes>
       <Toaster />
+      {(shouldShowOnboarding(user) || replayOnboarding) && (
+        <OnboardingStories onFinished={replayOnboarding ? stopOnboardingReplay : undefined} />
+      )}
     </ErrorBoundary>
   );
 }

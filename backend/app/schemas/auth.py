@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -28,6 +30,7 @@ class UserOut(BaseModel):
     last_name: str | None
     photo_url: str | None
     role: str
+    onboarding_seen_at: datetime | None
 
     class Config:
         from_attributes = True

@@ -15,6 +15,7 @@ import { Icon, type IconName } from "../components/icons";
 import type { ScenarioKey } from "../lib/scenario";
 import { track } from "../lib/analytics";
 import { fetchLoyalty, formatRate, type LoyaltyAccount } from "../lib/loyalty";
+import { useOnboardingReplayStore } from "../store/onboardingReplay";
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user);
@@ -151,8 +152,10 @@ export default function Profile() {
           onClick={() => navigate("/history")} />
         <MenuRow icon="pin" title="Точка выдачи" subtitle="Горбушка, Москва — ежедневно 10:00–21:00"
           onClick={() => navigate("/info#contacts")} />
-        <MenuRow icon="info" title="О магазине" subtitle="Доставка, оплата, гарантия и контакты" last
+        <MenuRow icon="info" title="О магазине" subtitle="Доставка, оплата, гарантия и контакты"
           onClick={() => navigate("/info")} />
+        <MenuRow icon="sparkles" title="Показать вступление" subtitle="Тот же экран, что при первом входе" last
+          onClick={() => useOnboardingReplayStore.getState().start()} />
       </div>
       </div>{/* /левая колонка */}
 

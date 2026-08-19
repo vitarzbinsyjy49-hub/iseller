@@ -10,6 +10,9 @@ export type User = {
    *  профиль без фото присылает null, тогда витрина показывает инициалы. */
   photo_url: string | null;
   role: string;
+  /** Сторис-онбординг при первом входе. null — ещё не видел (и для новых, и
+   *  для уже существующих пользователей одинаково). */
+  onboarding_seen_at: string | null;
 };
 
 type AuthState = {

@@ -25,6 +25,10 @@ class User(Base):
     # деплой, и внутрипроцессный словарь после рестарта пуст — старые сообщения
     # переставали удаляться, и чат начинал копить дубли ровно с того момента.
     last_bot_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    # Сторис-онбординг при первом входе. NULL = ещё не видел — покрывает и
+    # новых, и уже существующих пользователей одним состоянием, без
+    # отдельного флага.
+    onboarding_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

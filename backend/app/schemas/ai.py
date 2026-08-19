@@ -159,6 +159,11 @@ ALLOWED_EVENTS = {
     "sell_item_submitted",
     # «Мои заявки»: пользователь сам отменил свою заявку.
     "lead_cancelled",
+    # Сторис-онбординг при первом входе. Payload — только slide_index/slide_id.
+    "onboarding_shown",
+    "onboarding_slide_viewed",
+    "onboarding_skipped",
+    "onboarding_completed",
 }
 
 

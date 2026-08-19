@@ -86,7 +86,13 @@ export type AppEvent =
   // Маркетплейс б/у товаров: визард «Предложить товар» (/sell) отправил заявку.
   | "sell_item_submitted"
   // «Мои заявки»: пользователь сам отменил свою заявку.
-  | "lead_cancelled";
+  | "lead_cancelled"
+  // Сторис-онбординг при первом входе. Payload — только slide_index/slide_id,
+  // никакого пользовательского текста.
+  | "onboarding_shown"
+  | "onboarding_slide_viewed"
+  | "onboarding_skipped"
+  | "onboarding_completed";
 
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();
