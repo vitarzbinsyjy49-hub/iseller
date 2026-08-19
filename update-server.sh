@@ -71,6 +71,10 @@ tar czf - \
   --exclude=caddy_data \
   --exclude=caddy_config \
   --exclude=update-server.sh \
+  --exclude=.claude \
+  --exclude=.worktrees \
+  --exclude=artifacts \
+  --exclude=release-evidence \
   . | ssh "$SERVER" "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
 
 echo ">> 3/4 пересобираю и перезапускаю стек"
