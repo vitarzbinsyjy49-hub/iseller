@@ -1,0 +1,154 @@
+<!-- @dsCard group="Онбординг" -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Онбординг — Лояльность</title>
+<link rel="stylesheet" href="tokens.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  .screen.loyalty {
+    background: rgb(var(--app-bg));
+    padding: 64px 24px 0;
+    align-items: center;
+    text-align: center;
+  }
+
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: rgb(var(--app-accent)); opacity: 0; animation: rise .5s var(--ease-standard) .1s forwards; }
+  .h1 {
+    margin-top: 8px; font-size: 29px; font-weight: 800; line-height: 1.15; color: rgb(var(--app-text)); letter-spacing: -0.03em; text-wrap: balance;
+    opacity: 0; animation: rise .5s var(--ease-standard) .2s forwards;
+  }
+
+  .meter {
+    margin-top: 40px;
+    width: 100%;
+    max-width: 300px;
+  }
+  .meter-row { display: flex; justify-content: space-between; font-size: 13px; color: rgb(var(--app-sub)); margin-bottom: 8px; }
+  .meter-track {
+    position: relative;
+    height: 10px;
+    border-radius: 999px;
+    background: rgb(var(--app-muted-bg));
+    overflow: hidden;
+  }
+  .meter-fill {
+    position: absolute; inset: 0 auto 0 0;
+    width: 12%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgb(var(--app-accent)), rgb(var(--app-green)));
+    animation: fillMeter 2.2s var(--ease-emphasized) .6s forwards;
+  }
+
+  .big-number {
+    margin-top: 28px;
+    font-size: 60px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: rgb(var(--app-text));
+    font-variant-numeric: tabular-nums;
+  }
+  .big-number .unit { font-size: 28px; font-weight: 700; color: rgb(var(--app-accent)); }
+  .cap { margin-top: 6px; font-size: 14px; color: rgb(var(--app-sub)); opacity: 0; animation: rise .5s var(--ease-standard) 2.9s forwards; }
+
+  .levels {
+    margin-top: 36px;
+    display: flex;
+    gap: 8px;
+  }
+  .level {
+    flex: 1;
+    padding: 10px 6px;
+    border-radius: 12px;
+    background: rgb(var(--app-muted-bg));
+    font-size: 11px;
+    font-weight: 600;
+    color: rgb(var(--app-sub));
+    opacity: 0;
+    transform: translateY(10px);
+    animation: rise .45s var(--ease-standard) forwards;
+    transition: background var(--motion-standard) var(--ease-standard), color var(--motion-standard) var(--ease-standard);
+  }
+  .level b { display: block; font-size: 13px; margin-top: 2px; }
+  .level:nth-child(1) { animation-delay: 3.0s; }
+  .level:nth-child(2) { animation-delay: 3.1s; }
+  .level:nth-child(3) { animation-delay: 3.2s; }
+  .level:nth-child(4) { animation-delay: 3.3s; }
+  .level.active {
+    background: rgb(var(--app-accent));
+    color: #fff;
+    animation: rise .45s var(--ease-standard) forwards, glowLevel 1.6s var(--ease-standard) 3.3s 1;
+  }
+
+  .note {
+    margin-top: 28px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: rgb(var(--app-sub));
+    max-width: 280px;
+    opacity: 0;
+    animation: rise .5s var(--ease-standard) 3.5s forwards;
+  }
+  .note b { color: rgb(var(--app-text)); }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fillMeter { from { width: 12%; } to { width: 96%; } }
+  @keyframes glowLevel {
+    0%   { box-shadow: 0 0 0 0 rgb(var(--app-accent) / .5); }
+    60%  { box-shadow: 0 0 0 10px rgb(var(--app-accent) / 0); }
+    100% { box-shadow: 0 0 0 0 rgb(var(--app-accent) / 0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .eyebrow, .h1, .cap, .level, .note { animation-duration: .01ms !important; animation-delay: 0s !important; }
+    .meter-fill { animation: none; width: 96%; }
+    .level.active { animation: rise .01ms forwards; }
+  }
+</style>
+<script>
+  // Считаем ставку кэшбека синхронно с ростом meter-fill (0.25% → 2%, 2.2s).
+  window.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('rate');
+    const start = performance.now() + 600;
+    const dur = 2200;
+    function tick(now) {
+      const t = Math.min(1, Math.max(0, (now - start) / dur));
+      const eased = 1 - Math.pow(1 - t, 3);
+      const val = 0.25 + eased * (2 - 0.25);
+      el.textContent = val.toFixed(2).replace('.', ',');
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+</script>
+</head>
+<body class="stage">
+<script>if (location.search.includes('raw')) document.body.classList.add('raw');</script>
+  <div class="frame">
+    <div class="screen loyalty">
+      <div class="eyebrow">АйСеллер · Лояльность</div>
+      <div class="h1">Кэшбек баллами<br/>с каждой покупки</div>
+
+      <div class="meter">
+        <div class="meter-row"><span>0,25%</span><span>2%</span></div>
+        <div class="meter-track"><div class="meter-fill"></div></div>
+      </div>
+
+      <div class="big-number"><span id="rate">0,25</span><span class="unit">%</span></div>
+      <div class="cap">ставка растёт с оборотом покупок</div>
+
+      <div class="levels">
+        <div class="level">Старт<b>0,25%</b></div>
+        <div class="level">Клиент<b>0,5%</b></div>
+        <div class="level">Постоянный<b>1%</b></div>
+        <div class="level active">Топ<b>2%</b></div>
+      </div>
+
+      <div class="note">Баллы копятся автоматически — <b>без промокодов</b> и лишних шагов</div>
+    </div>
+  </div>
+</body>
+</html>

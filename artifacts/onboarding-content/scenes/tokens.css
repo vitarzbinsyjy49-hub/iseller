@@ -1,0 +1,80 @@
+/* Токены — калька с frontend/src/index.css (TechShop Mini App v2).
+   Держим один источник правды визуально: сцены не должны разъезжаться
+   с реальным приложением по цвету/шрифту/motion. */
+:root {
+  --app-bg: 246 247 249;
+  --app-surface: 255 255 255;
+  --app-muted-bg: 241 243 245;
+  --app-border: 232 234 238;
+  --app-text: 17 24 39;
+  --app-sub: 107 114 128;
+  --app-accent: 42 171 238;
+  --app-accent-dark: 34 158 217;
+  --app-green: 53 199 89;
+  --app-orange: 255 159 10;
+  --app-danger: 217 44 60;
+
+  --app-header-color: #14304d;
+  --app-hero-bg: linear-gradient(163deg, #14304d 0%, #1b4870 58%, #205488 100%);
+  --app-hero-chip: rgba(255, 255, 255, 0.13);
+  --app-hero-chip-ink: #e9f1fb;
+
+  --motion-instant: 90ms;
+  --motion-fast: 150ms;
+  --motion-standard: 190ms;
+  --motion-sheet: 260ms;
+  --ease-standard: cubic-bezier(.2, .8, .25, 1);
+  --ease-emphasized: cubic-bezier(.22, 1, .36, 1);
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* Студийный фон вокруг телефонного кадра — виден только при просмотре/записи
+   вне Telegram; в самом мини-аппе экран будет full-bleed. */
+body.stage {
+  background: radial-gradient(120% 120% at 50% 0%, #1c2431 0%, #0b0e14 60%, #05060a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.frame {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  border-radius: 44px;
+  overflow: hidden;
+  background: rgb(var(--app-bg));
+  box-shadow: 0 40px 120px rgba(0, 0, 0, .55), 0 0 0 10px #111318, 0 0 0 11px #2a2d35;
+}
+
+/* Экспорт для прод-видео: без тёмной студии и рамки телефона —
+   ровно то, что займёт весь экран в самом мини-аппе (?raw=1). */
+body.raw.stage {
+  background: transparent;
+  display: block;
+  min-height: 0;
+}
+body.raw .frame {
+  width: 100vw;
+  height: 100vh;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}

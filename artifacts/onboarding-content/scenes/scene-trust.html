@@ -1,0 +1,152 @@
+<!-- @dsCard group="Онбординг" -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Онбординг — Доверие</title>
+<link rel="stylesheet" href="tokens.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  .screen.trust {
+    background: var(--app-hero-bg);
+    color: #fff;
+    justify-content: space-between;
+    padding: 64px 32px 48px;
+    text-align: center;
+  }
+
+  .brand {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--app-hero-chip-ink);
+    opacity: 0;
+    animation: rise .5s var(--ease-standard) .1s forwards;
+  }
+
+  .badge-ring {
+    position: relative;
+    width: 168px;
+    height: 168px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .badge-ring::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.16) 0%, rgba(255,255,255,0) 68%);
+    animation: pulseGlow 2.6s var(--ease-standard) infinite;
+  }
+  .badge-ring svg { position: relative; z-index: 1; }
+
+  .check-path {
+    stroke-dasharray: 74;
+    stroke-dashoffset: 74;
+    animation: draw .55s var(--ease-emphasized) .9s forwards;
+  }
+  .ring-path {
+    stroke-dasharray: 428;
+    stroke-dashoffset: 428;
+    animation: draw 1s var(--ease-emphasized) .35s forwards;
+  }
+
+  .headline {
+    margin-top: 28px;
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1.16;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+    opacity: 0;
+    animation: rise .6s var(--ease-standard) 1.35s forwards;
+  }
+  .headline em {
+    font-style: normal;
+    color: #8fd4ff;
+  }
+
+  .sub {
+    margin-top: 12px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--app-hero-chip-ink);
+    opacity: 0;
+    animation: rise .6s var(--ease-standard) 1.55s forwards;
+  }
+
+  .facts {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .fact {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--app-hero-chip);
+    border-radius: 14px;
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--app-hero-chip-ink);
+    opacity: 0;
+    transform: translateY(10px);
+    animation: rise .5s var(--ease-standard) forwards;
+  }
+  .fact:nth-child(1) { animation-delay: 1.85s; }
+  .fact:nth-child(2) { animation-delay: 1.98s; }
+  .fact:nth-child(3) { animation-delay: 2.11s; }
+  .fact b { color: #fff; font-weight: 600; }
+  .fact .dot { width: 5px; height: 5px; border-radius: 50%; background: #8fd4ff; flex: none; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes draw {
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes pulseGlow {
+    0%, 100% { transform: scale(.94); opacity: .7; }
+    50%      { transform: scale(1.08); opacity: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .brand, .headline, .sub, .fact { animation-duration: .01ms !important; animation-delay: 0s !important; }
+    .check-path, .ring-path { animation: none; stroke-dashoffset: 0; }
+    .badge-ring::before { animation: none; }
+  }
+</style>
+</head>
+<body class="stage">
+<script>if (location.search.includes('raw')) document.body.classList.add('raw');</script>
+  <div class="frame">
+    <div class="screen trust">
+      <div class="brand">АйСеллер</div>
+
+      <div>
+        <div class="badge-ring">
+          <svg width="168" height="168" viewBox="0 0 168 168" fill="none">
+            <circle class="ring-path" cx="84" cy="84" r="68" stroke="#8fd4ff" stroke-width="3" stroke-linecap="round" transform="rotate(-90 84 84)"/>
+            <path class="check-path" d="M60 86 L76 102 L110 64" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="headline">Проверяем технику<br/><em>вместе — до оплаты</em></div>
+        <div class="sub">Гарантия 1 месяц на всё, что мы продаём</div>
+      </div>
+
+      <div class="facts">
+        <div class="fact"><span class="dot"></span>Самовывоз — Горбушка, Москва · 10:00–21:00</div>
+        <div class="fact"><span class="dot"></span>Доставка курьером по Москве, СДЭК по России</div>
+        <div class="fact"><span class="dot"></span><b>392</b>&nbsp;товара в наличии · 11 категорий</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

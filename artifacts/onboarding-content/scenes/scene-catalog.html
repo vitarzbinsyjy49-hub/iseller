@@ -1,0 +1,199 @@
+<!-- @dsCard group="Онбординг" -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Онбординг — Каталог</title>
+<link rel="stylesheet" href="tokens.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  .screen.catalog {
+    background: rgb(var(--app-bg));
+    padding: 64px 0 0;
+  }
+
+  .head {
+    padding: 0 24px;
+    opacity: 0;
+    animation: rise .5s var(--ease-standard) .1s forwards;
+  }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: rgb(var(--app-accent)); }
+  .h1 { margin-top: 8px; font-size: 29px; font-weight: 800; line-height: 1.15; color: rgb(var(--app-text)); letter-spacing: -0.03em; text-wrap: balance; }
+  .h1 b { color: rgb(var(--app-accent)); font-weight: 800; }
+
+  .track-wrap { margin-top: 28px; overflow: hidden; }
+  .track {
+    display: flex;
+    gap: 14px;
+    padding: 4px 24px 4px;
+    width: max-content;
+    animation: scrollTrack 9s linear infinite;
+    animation-delay: 1.6s;
+  }
+  /* пауза перед стартом карусели: даём карточкам появиться на месте */
+  .track { animation-play-state: paused; }
+  .track-wrap:hover .track,
+  .track.run { animation-play-state: running; }
+
+  .card {
+    flex: none;
+    width: 168px;
+    background: rgb(var(--app-surface));
+    border: 1px solid rgb(var(--app-border));
+    border-radius: 18px;
+    padding: 14px;
+    opacity: 0;
+    transform: translateY(14px);
+    animation: rise .5s var(--ease-standard) forwards;
+  }
+  .card:nth-child(1) { animation-delay: .3s; }
+  .card:nth-child(2) { animation-delay: .42s; }
+  .card:nth-child(3) { animation-delay: .54s; }
+  .card:nth-child(4) { animation-delay: .66s; }
+  .card:nth-child(5) { animation-delay: .78s; }
+
+  .card .ph {
+    width: 100%;
+    height: 120px;
+    border-radius: 12px;
+    background: rgb(var(--app-muted-bg));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .card .ph img { width: 100%; height: 100%; object-fit: contain; }
+  .card .name { margin-top: 10px; font-size: 13px; font-weight: 500; color: rgb(var(--app-text)); line-height: 1.35; }
+  .card .price { margin-top: 4px; font-size: 15px; font-weight: 700; color: rgb(var(--app-text)); }
+  .card .price.sale { color: rgb(var(--app-green)); }
+  .card .was { font-size: 12px; color: rgb(var(--app-sub)); text-decoration: line-through; margin-right: 6px; }
+
+  .strip {
+    margin: 28px 24px 0;
+    background: rgb(var(--app-text));
+    border-radius: 16px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    opacity: 0;
+    animation: rise .5s var(--ease-standard) 1s forwards;
+  }
+  .strip .t { color: #fff; font-size: 13px; line-height: 1.4; }
+  .strip .t b { display: block; font-size: 15px; }
+  .strip .arrow {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: rgb(var(--app-accent));
+    display: flex; align-items: center; justify-content: center;
+    flex: none;
+  }
+
+  .chips { display: flex; gap: 8px; padding: 20px 24px 0; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; font-weight: 500; color: rgb(var(--app-sub));
+    background: rgb(var(--app-muted-bg)); border-radius: 999px; padding: 7px 12px;
+    opacity: 0; animation: rise .4s var(--ease-standard) forwards;
+  }
+  .chip:nth-child(1) { animation-delay: 1.15s; }
+  .chip:nth-child(2) { animation-delay: 1.24s; }
+  .chip:nth-child(3) { animation-delay: 1.33s; }
+  .chip:nth-child(4) { animation-delay: 1.42s; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes scrollTrack { from { transform: translateX(0); } to { transform: translateX(calc(-168px * 5 - 14px * 5)); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .head, .card, .strip, .chip { animation-duration: .01ms !important; animation-delay: 0s !important; }
+    .track { animation: none; }
+  }
+</style>
+<script>
+  window.addEventListener('load', () => {
+    setTimeout(() => document.querySelector('.track').classList.add('run'), 1600);
+  });
+</script>
+</head>
+<body class="stage">
+<script>if (location.search.includes('raw')) document.body.classList.add('raw');</script>
+  <div class="frame">
+    <div class="screen catalog">
+      <div class="head">
+        <div class="eyebrow">АйСеллер</div>
+        <div class="h1">Apple, Dyson, <b>PlayStation</b> —<br/>по актуальным ценам</div>
+      </div>
+
+      <div class="track-wrap">
+        <div class="track">
+          <div class="card">
+            <div class="ph"><img src="../images/iphone17pro_blue.webp" alt="" /></div>
+            <div class="name">iPhone 17 Pro 256&nbsp;ГБ Blue</div>
+            <div class="price">99 300 ₽</div>
+          </div>
+          <div class="card">
+            <div class="ph"><img src="../images/macmini.webp" alt="" /></div>
+            <div class="name">Mac Mini M4 (16/256)</div>
+            <div class="price">62 500 ₽</div>
+          </div>
+          <div class="card">
+            <div class="ph"><img src="../images/gta6_ps5pro_poster.webp" alt="" /></div>
+            <div class="name">GTA VI + PS5 Pro 2&nbsp;ТБ</div>
+            <div class="price">114 999 ₽</div>
+          </div>
+          <div class="card">
+            <div class="ph"><img src="../images/studio_display.jpg" alt="" /></div>
+            <div class="name">Studio Display 2026</div>
+            <div class="price">178 000 ₽</div>
+          </div>
+          <div class="card">
+            <div class="ph"><img src="../images/iphone17pro_silver.webp" alt="" /></div>
+            <div class="name">iPhone 17 Pro 256&nbsp;ГБ Silver</div>
+            <div class="price">99 300 ₽</div>
+          </div>
+          <!-- дубль первой пятёрки — бесшовная лента -->
+          <div class="card" aria-hidden="true">
+            <div class="ph"><img src="../images/iphone17pro_blue.webp" alt="" /></div>
+            <div class="name">iPhone 17 Pro 256&nbsp;ГБ Blue</div>
+            <div class="price">99 300 ₽</div>
+          </div>
+          <div class="card" aria-hidden="true">
+            <div class="ph"><img src="../images/macmini.webp" alt="" /></div>
+            <div class="name">Mac Mini M4 (16/256)</div>
+            <div class="price">62 500 ₽</div>
+          </div>
+          <div class="card" aria-hidden="true">
+            <div class="ph"><img src="../images/gta6_ps5pro_poster.webp" alt="" /></div>
+            <div class="name">GTA VI + PS5 Pro 2&nbsp;ТБ</div>
+            <div class="price">114 999 ₽</div>
+          </div>
+          <div class="card" aria-hidden="true">
+            <div class="ph"><img src="../images/studio_display.jpg" alt="" /></div>
+            <div class="name">Studio Display 2026</div>
+            <div class="price">178 000 ₽</div>
+          </div>
+          <div class="card" aria-hidden="true">
+            <div class="ph"><img src="../images/iphone17pro_silver.webp" alt="" /></div>
+            <div class="name">iPhone 17 Pro 256&nbsp;ГБ Silver</div>
+            <div class="price">99 300 ₽</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="strip">
+        <div class="t">Снижение цены —<br/><b>AirPods 4: 10 500 ₽ → 9 900 ₽</b></div>
+        <div class="arrow">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+
+      <div class="chips">
+        <div class="chip">Смартфоны · 148</div>
+        <div class="chip">Mac · 57</div>
+        <div class="chip">Консоли · 25</div>
+        <div class="chip">Dyson · 34</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

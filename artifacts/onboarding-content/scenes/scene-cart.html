@@ -1,0 +1,169 @@
+<!-- @dsCard group="Онбординг" -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Онбординг — Заявка отправлена</title>
+<link rel="stylesheet" href="tokens.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  .screen.cart-scene { background: rgb(var(--app-bg)); }
+
+  .layer { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+  /* ===== Слой 1: корзина ===== */
+  .cart-layer {
+    padding: 64px 24px 32px;
+    animation: cartOut .4s var(--ease-standard) 2.55s forwards;
+  }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: rgb(var(--app-accent)); opacity: 0; animation: rise .5s var(--ease-standard) .1s forwards; }
+  .h1 { margin-top: 8px; font-size: 27px; font-weight: 800; letter-spacing: -0.03em; color: rgb(var(--app-text)); opacity: 0; animation: rise .5s var(--ease-standard) .18s forwards; }
+
+  .items { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; }
+  .item {
+    display: flex; align-items: center; gap: 12px;
+    background: rgb(var(--app-surface)); border: 1px solid rgb(var(--app-border));
+    border-radius: 16px; padding: 12px;
+    opacity: 0; transform: translateY(12px);
+    animation: rise .5s var(--ease-standard) forwards;
+  }
+  .item:nth-child(1) { animation-delay: .35s; }
+  .item:nth-child(2) { animation-delay: .48s; }
+  .item .ph {
+    width: 52px; height: 52px; border-radius: 10px; background: rgb(var(--app-muted-bg)); flex: none;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .item .ph img { width: 100%; height: 100%; object-fit: contain; }
+  .item .info { flex: 1; min-width: 0; }
+  .item .name { font-size: 13px; font-weight: 500; color: rgb(var(--app-text)); }
+  .item .price { margin-top: 2px; font-size: 14px; font-weight: 700; color: rgb(var(--app-text)); }
+
+  .total-row {
+    margin-top: 20px; display: flex; justify-content: space-between; align-items: baseline;
+    padding: 0 2px;
+    opacity: 0; animation: rise .5s var(--ease-standard) .68s forwards;
+  }
+  .total-row .label { font-size: 14px; color: rgb(var(--app-sub)); }
+  .total-row .value { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: rgb(var(--app-text)); }
+
+  .cta {
+    margin-top: auto;
+    background: rgb(var(--app-accent));
+    color: #fff; text-align: center;
+    border-radius: 16px; padding: 16px;
+    font-size: 15px; font-weight: 600;
+    opacity: 0; transform: translateY(12px) scale(1);
+    animation: rise .5s var(--ease-standard) .85s forwards, ctaPress .28s var(--ease-emphasized) 2.05s;
+    transform-origin: center;
+  }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes ctaPress {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(.965); }
+    100% { transform: scale(1); }
+  }
+  @keyframes cartOut {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(-14px); }
+  }
+
+  /* ===== Слой 2: успех ===== */
+  .success-layer {
+    align-items: center; justify-content: center; text-align: center; padding: 0 32px;
+    opacity: 0;
+    animation: successIn .5s var(--ease-standard) 2.75s forwards;
+  }
+  @keyframes successIn { to { opacity: 1; } }
+
+  .check-circle {
+    position: relative; width: 96px; height: 96px;
+  }
+  .check-circle .ring {
+    stroke-dasharray: 264; stroke-dashoffset: 264;
+    animation: drawRing .5s var(--ease-emphasized) 2.95s forwards;
+  }
+  .check-circle .tick {
+    stroke-dasharray: 50; stroke-dashoffset: 50;
+    animation: drawRing .35s var(--ease-emphasized) 3.35s forwards;
+  }
+  .check-circle-bg {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: rgb(var(--app-green) / .12);
+    transform: scale(0);
+    animation: popBg .5s var(--ease-emphasized) 2.95s forwards;
+  }
+  @keyframes drawRing { to { stroke-dashoffset: 0; } }
+  @keyframes popBg { to { transform: scale(1); } }
+
+  .success-title {
+    margin-top: 22px; font-size: 27px; font-weight: 800; letter-spacing: -0.03em; color: rgb(var(--app-text));
+    opacity: 0; animation: rise .45s var(--ease-standard) 3.5s forwards;
+  }
+  .success-sub {
+    margin-top: 8px; font-size: 14px; line-height: 1.5; color: rgb(var(--app-sub));
+    opacity: 0; animation: rise .45s var(--ease-standard) 3.65s forwards;
+  }
+  .success-sub b { color: rgb(var(--app-text)); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .01ms !important; animation-delay: 0s !important; }
+    .check-circle .ring, .check-circle .tick { stroke-dashoffset: 0; }
+    .check-circle-bg { transform: scale(1); }
+    .cart-layer { animation: none; opacity: 0; }
+    .success-layer { animation: none; opacity: 1; }
+  }
+</style>
+</head>
+<body class="stage">
+<script>if (location.search.includes('raw')) document.body.classList.add('raw');</script>
+  <div class="frame">
+    <div class="screen cart-scene">
+
+      <div class="layer cart-layer">
+        <div class="eyebrow">АйСеллер</div>
+        <div class="h1">Ваша заявка</div>
+
+        <div class="items">
+          <div class="item">
+            <div class="ph"><img src="../images/iphone17pro_blue.webp" alt="" /></div>
+            <div class="info">
+              <div class="name">Apple iPhone 17 Pro 256&nbsp;ГБ Blue (KR-HK)</div>
+              <div class="price">99 300 ₽</div>
+            </div>
+          </div>
+          <div class="item">
+            <div class="ph" style="background:rgb(var(--app-accent) / .1); font-size:20px;">🎧</div>
+            <div class="info">
+              <div class="name">Apple AirPods 4 (2024) с шумоподавлением</div>
+              <div class="price">13 900 ₽</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="total-row">
+          <span class="label">Итого</span>
+          <span class="value">113 200 ₽</span>
+        </div>
+
+        <div class="cta">Отправить заявку</div>
+      </div>
+
+      <div class="layer success-layer">
+        <div class="check-circle">
+          <div class="check-circle-bg"></div>
+          <svg width="96" height="96" viewBox="0 0 96 96" fill="none" style="position:relative;">
+            <circle class="ring" cx="48" cy="48" r="42" stroke="rgb(53 199 89)" stroke-width="4" stroke-linecap="round" transform="rotate(-90 48 48)"/>
+            <path class="tick" d="M32 49 L44 61 L66 37" stroke="rgb(53 199 89)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="success-title">Заявка отправлена</div>
+        <div class="success-sub">Менеджер свяжется с вами в Telegram —<br/><b>кэшбек уже начислен</b> баллами</div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
