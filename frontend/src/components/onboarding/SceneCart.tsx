@@ -30,7 +30,10 @@ export function SceneCart() {
 
   return (
     <div className="relative h-full bg-bg">
-      <div ref={cartRef} className="absolute inset-0 flex flex-col px-6 pt-16 pb-8">
+      <div
+        ref={cartRef} className="absolute inset-0 flex flex-col px-6 pb-8"
+        style={{ paddingTop: "calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 64px)" }}
+      >
         <div className="onboarding-appear text-[12px] font-semibold uppercase tracking-[0.06em] text-accent">
           АйСеллер
         </div>

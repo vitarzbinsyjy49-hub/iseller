@@ -51,7 +51,10 @@ export function SceneTrust() {
   }, []);
 
   return (
-    <div className="app-hero flex h-full flex-col items-center justify-center px-8 text-center text-white">
+    <div
+      className="app-hero flex h-full flex-col items-center justify-center px-8 text-center text-white"
+      style={{ paddingTop: "calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 24px)" }}
+    >
       <div className="onboarding-appear text-[13px] font-semibold uppercase tracking-[0.06em] text-white/80">
         АйСеллер
       </div>

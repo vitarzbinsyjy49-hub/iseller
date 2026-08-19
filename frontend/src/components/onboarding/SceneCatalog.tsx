@@ -19,7 +19,10 @@ export function SceneCatalog() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col bg-bg px-6 pt-16">
+    <div
+      className="flex h-full flex-col bg-bg px-6"
+      style={{ paddingTop: "calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 64px)" }}
+    >
       <div className="onboarding-appear text-[12px] font-semibold uppercase tracking-[0.06em] text-accent">
         АйСеллер
       </div>

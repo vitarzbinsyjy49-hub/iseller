@@ -34,7 +34,10 @@ export function SceneLoyalty() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col items-center bg-bg px-6 pt-16 text-center">
+    <div
+      className="flex h-full flex-col items-center bg-bg px-6 text-center"
+      style={{ paddingTop: "calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 64px)" }}
+    >
       <div className="onboarding-appear text-[12px] font-semibold uppercase tracking-[0.06em] text-accent">
         АйСеллер · Лояльность
       </div>
