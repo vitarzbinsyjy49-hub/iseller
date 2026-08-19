@@ -3,7 +3,7 @@
  *  отдельная CSS-анимация ширины и свой independent requestAnimationFrame
  *  скрипт, и они могли разойтись по времени. */
 import { useEffect, useRef, useState } from "react";
-import { animateNumber, transitionDuration } from "../../lib/motion";
+import { animateNumber, prefersReducedMotion } from "../../lib/motion";
 
 const START_RATE = 0.25;
 const TOP_RATE = 2;
@@ -24,7 +24,12 @@ export function SceneLoyalty() {
   useEffect(() => {
     const fill = fillRef.current;
     if (!fill) return;
-    const ms = transitionDuration(2200);
+    // transitionDuration() здесь не годится: 160мс — темп замены СДВИГА на
+    // затухание (направление всё равно не считать), а тут анимируется ЧИСЛО —
+    // сама суть слайда в том, что ставка растёт на глазах. Схлопнуть до 160мс
+    // значит показать сразу «2%» без смысла шкалы. Короче обычного (уважаем
+    // «меньше движения»), но не мгновенно.
+    const ms = prefersReducedMotion() ? 900 : 2200;
     const cancel = animateNumber(0, 1, ms, (t) => {
       const eased = 1 - (1 - t) ** 3;
       fill.style.width = `${START_WIDTH + eased * (TOP_WIDTH - START_WIDTH)}%`;

@@ -4,7 +4,7 @@
  *  нового пользователя — последнее место, где стоит рисковать этим снова. */
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
-import { animateNumber, transitionDuration } from "../../lib/motion";
+import { animateNumber, prefersReducedMotion } from "../../lib/motion";
 import { Icon } from "../icons";
 
 // Кольцо r=42 (окружность 264) и штрих галочки — те же числа, что уже
@@ -38,8 +38,12 @@ export function SceneTrust() {
     const ring = ringRef.current;
     const tick = tickRef.current;
     if (!ring || !tick) return;
-    const ringMs = transitionDuration(500);
-    const tickMs = transitionDuration(350);
+    // Как и в SceneLoyalty: это не сдвиг-замена-на-затухание (транзитDuration
+    // тут не подходит), а сама дорисовка галочки-подтверждения — событие,
+    // которое должно быть видно, а не мигнуть за 160мс.
+    const reduced = prefersReducedMotion();
+    const ringMs = reduced ? 260 : 500;
+    const tickMs = reduced ? 180 : 350;
     const cancelRing = animateNumber(RING_CIRCUMFERENCE, 0, ringMs,
       (v) => { ring.style.strokeDashoffset = String(v); },
       () => {
