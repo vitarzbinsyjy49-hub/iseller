@@ -7,6 +7,7 @@
 лимит на середине, оставляя канал в полуобновлённом виде.
 """
 import logging
+import re
 import time
 from html import escape
 
@@ -241,6 +242,7 @@ def send_rich_message(
     текстом. html идёт в rich_message.html — тот же "Rich HTML style", что
     Telegram поддерживает для parse_mode=HTML, плюс table/details/heading/hr.
     """
+    html = _absolutize_rich_media(html)
     if len(html) > MAX_RICH_MESSAGE_LENGTH:
         raise TelegramContentTooLong(
             f"Rich-сообщение ограничено {MAX_RICH_MESSAGE_LENGTH} символами "
@@ -266,6 +268,7 @@ def edit_rich_message(
     ("edit text, rich and game messages" в документации): поле rich_message
     заменяет text тем же вызовом, отдельного editRichMessageText не существует.
     """
+    html = _absolutize_rich_media(html)
     if len(html) > MAX_RICH_MESSAGE_LENGTH:
         raise TelegramContentTooLong(
             f"Rich-сообщение ограничено {MAX_RICH_MESSAGE_LENGTH} символами "
@@ -308,6 +311,36 @@ def public_image_url(image_url: str | None) -> str | None:
         public_base = settings.MINI_APP_URL.rstrip("/")
         return f"{public_base}{image_url}" if public_base else None
     return image_url
+
+
+#: rich_html пишет админ вручную — src в <img>/<video>/<audio> легко получится
+#: относительным (/api/uploads/...), как и у обычных постов.
+_RICH_MEDIA_SRC_RE = re.compile(r'(<(?:img|video|audio)\b[^>]*\bsrc=")([^"]*)(")', re.IGNORECASE)
+
+
+def _absolutize_rich_media(html: str) -> str:
+    """Абсолютизировать src у медиа-тегов rich-контента.
+
+    Telegram сам скачивает медиа по URL из rich_message.html; относительный
+    путь он не резолвит ни к чему и отвечает
+    RICH_MESSAGE_PHOTO_NO_MEDIA_FOUND — картинка беззвучно пропадает из
+    поста. Здесь та же нормализация, что `public_image_url` уже делает для
+    обычных постов, но применённая к произвольному HTML.
+    """
+
+    def repl(match: re.Match) -> str:
+        prefix, src, suffix = match.groups()
+        if not src.startswith("/"):
+            return match.group(0)
+        absolute = public_image_url(src)
+        if not absolute:
+            raise TelegramPublishError(
+                f"Rich-контент ссылается на относительный путь {src!r}, а "
+                "MINI_APP_URL не настроен — Telegram не сможет скачать медиа."
+            )
+        return f"{prefix}{absolute}{suffix}"
+
+    return _RICH_MEDIA_SRC_RE.sub(repl, html)
 
 
 def publish_post(*, title: str, body: str, image_url: str | None) -> int:

@@ -47,7 +47,16 @@ rich-текста (принимает `rich_message` вместо `text`), по�
 - `rich_html` идёт в `rich_message.html` — тот же "Rich HTML style", что и
   `parse_mode=HTML`, плюс `<table>`, `<h1>`–`<h6>`, `<hr/>`,
   `<details><summary>…</summary>…</details>`, `<footer>`, `<blockquote>`,
-  `<aside><cite>`, `<img>`/`<video>`/`<audio>` (только http/https-URL).
+  `<aside><cite>`, `<img>`/`<video>`/`<audio>` (только http/https-URL —
+  Telegram сам скачивает медиа по этому URL, относительный путь резолвить
+  ему не к чему).
+- Относительный `src` (`/api/uploads/...`) `send_rich_message`/
+  `edit_rich_message` абсолютизируют сами через `public_image_url()`
+  (`_absolutize_rich_media` в `telegram_publisher.py`) — иначе Telegram
+  отвечает `RICH_MESSAGE_PHOTO_NO_MEDIA_FOUND` и картинка беззвучно
+  пропадает из поста. Без настроенного `MINI_APP_URL` относительный путь
+  абсолютизировать не из чего — публикация падает с понятной ошибкой вместо
+  того, чтобы уйти в канал без картинки.
 - У rich-сообщений нет режима "фото с подписью" (`sendPhoto`) — картинка идёт
   тегом `<img>` прямо внутри `rich_html`; `image_url` для rich-поста не
   используется совсем.

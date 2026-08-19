@@ -235,3 +235,72 @@ def test_edit_rich_message_rejects_oversized_html(monkeypatch):
     monkeypatch.setattr(tp.httpx, "post", post)
     with pytest.raises(tp.TelegramContentTooLong):
         tp.edit_rich_message(message_id=7, html="x" * (tp.MAX_RICH_MESSAGE_LENGTH + 1))
+
+
+# ---------------------------------------------------- относительные медиа-src в rich-контенте
+#
+# Telegram сам скачивает медиа rich-сообщения по URL из rich_message.html;
+# относительный путь (как хранятся наши загрузки, /api/uploads/...) он
+# резолвить не может и отвечает RICH_MESSAGE_PHOTO_NO_MEDIA_FOUND — картинка
+# беззвучно пропадает из уже опубликованного поста.
+
+def test_send_rich_message_absolutizes_relative_image_src(monkeypatch):
+    monkeypatch.setattr(settings, "MINI_APP_URL", "https://shop.example.com", raising=False)
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    tp.send_rich_message(html='<p>Гид</p><img src="/api/uploads/guide.png"/>')
+
+    payload = post.sent[0]
+    assert payload["rich_message"] == {
+        "html": '<p>Гид</p><img src="https://shop.example.com/api/uploads/guide.png"/>'
+    }
+
+
+def test_send_rich_message_absolutizes_relative_video_and_audio_src(monkeypatch):
+    monkeypatch.setattr(settings, "MINI_APP_URL", "https://shop.example.com", raising=False)
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    tp.send_rich_message(
+        html='<video src="/api/uploads/a.mp4"></video><audio src="/api/uploads/b.mp3"></audio>'
+    )
+
+    payload = post.sent[0]
+    assert payload["rich_message"]["html"] == (
+        '<video src="https://shop.example.com/api/uploads/a.mp4"></video>'
+        '<audio src="https://shop.example.com/api/uploads/b.mp3"></audio>'
+    )
+
+
+def test_send_rich_message_leaves_absolute_and_tg_src_untouched(monkeypatch):
+    monkeypatch.setattr(settings, "MINI_APP_URL", "https://shop.example.com", raising=False)
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    html = '<img src="https://cdn.example.com/x.jpg"/><img src="tg://photo?id=abc"/>'
+    tp.send_rich_message(html=html)
+
+    assert post.sent[0]["rich_message"] == {"html": html}
+
+
+def test_send_rich_message_without_mini_app_url_fails_before_sending(monkeypatch):
+    monkeypatch.setattr(settings, "MINI_APP_URL", "", raising=False)
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    with pytest.raises(tp.TelegramPublishError):
+        tp.send_rich_message(html='<img src="/api/uploads/guide.png"/>')
+    assert post.sent == []      # относительный путь ловим до сети, не после
+
+
+def test_edit_rich_message_absolutizes_relative_image_src(monkeypatch):
+    monkeypatch.setattr(settings, "MINI_APP_URL", "https://shop.example.com", raising=False)
+    post = fake_post([FakeResponse({"ok": True, "result": {"message_id": 7}})])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    tp.edit_rich_message(message_id=7, html='<img src="/api/uploads/guide.png"/>')
+
+    assert post.sent[0]["rich_message"] == {
+        "html": '<img src="https://shop.example.com/api/uploads/guide.png"/>'
+    }
