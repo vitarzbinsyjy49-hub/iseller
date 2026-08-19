@@ -6,6 +6,7 @@
 уважения к этому заголовку массовое обновление десятка постов упирается в
 лимит на середине, оставляя канал в полуобновлённом виде.
 """
+import json
 import logging
 import re
 import time
@@ -13,6 +14,7 @@ from html import escape
 
 import httpx
 
+from app.core import uploads
 from app.core.config import settings
 from app.services.telegram_bot import telegram_http_kwargs
 
@@ -57,11 +59,35 @@ def _sleep(seconds: float) -> None:  # вынесено ради подмены 
     time.sleep(seconds)
 
 
-def call(method: str, payload: dict) -> dict:
+def _multipart_data(payload: dict) -> dict:
+    """Bot API в multipart/form-data не сериализует поля сам, в отличие от
+    json= — вложенные объекты/массивы (reply_markup, rich_message.media)
+    нужно превратить в JSON-строку самим, а bool — в "true"/"false" (иначе
+    httpx отдаст питоньи "True"/"False", которые Telegram не поймёт)."""
+    out = {}
+    for key, value in payload.items():
+        if isinstance(value, bool):
+            out[key] = "true" if value else "false"
+        elif isinstance(value, (dict, list)):
+            out[key] = json.dumps(value, ensure_ascii=False)
+        elif value is not None:
+            out[key] = value
+    return out
+
+
+def call(method: str, payload: dict, *, files: dict | None = None) -> dict:
     """Вызов Bot API с повтором при 429 и сетевых сбоях.
 
     Возвращает поле result. Ошибки Telegram (кроме 429) не повторяем: «chat not
     found» или «message is not modified» от повтора не исправятся.
+
+    files — multipart-вложения (имя поля -> (filename, bytes, content_type)):
+    Telegram отказывается сам скачивать медиа с нашего боевого домена
+    (*.sslip.io отвечает 200 с верным Content-Type, но Bot API всё равно
+    говорит "wrong type of the web page content" — подтверждено вживую), файл
+    приходится грузить байтами в теле запроса. Байты, а не открытый файл: при
+    ретрае httpx.post вызывается заново тем же kwargs, и файловый объект на
+    втором проходе был бы уже дочитан до конца.
     """
     if not settings.TELEGRAM_BOT_TOKEN:
         raise TelegramPublishError("Telegram publishing is not configured")
@@ -70,7 +96,13 @@ def call(method: str, payload: dict) -> dict:
     last_error = "Telegram is unavailable"
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            response = httpx.post(url, json=payload, timeout=25, **telegram_http_kwargs())
+            if files:
+                response = httpx.post(
+                    url, data=_multipart_data(payload), files=files, timeout=25,
+                    **telegram_http_kwargs(),
+                )
+            else:
+                response = httpx.post(url, json=payload, timeout=25, **telegram_http_kwargs())
             data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
             last_error = "Telegram is unavailable"
@@ -124,6 +156,30 @@ def send_message(
     return int(call("sendMessage", payload)["message_id"])
 
 
+#: Расширение файла -> MIME-тип для multipart-загрузки в Telegram. Те же
+#: ключи, что app.core.uploads._EXT, но нам нужно направление extension -> type.
+_CONTENT_TYPES = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".webp": "image/webp", ".gif": "image/gif",
+    ".mp4": "video/mp4", ".mp3": "audio/mpeg", ".ogg": "audio/ogg",
+}
+
+
+def _content_type_for(path) -> str:
+    return _CONTENT_TYPES.get(path.suffix.lower(), "application/octet-stream")
+
+
+def _dispatch_photo(payload: dict, photo: str) -> dict:
+    """sendPhoto: наши загрузки уходят multipart-байтами файла, внешние URL —
+    полем-ссылкой как раньше (Telegram сам их скачивает — сторонний CDN не
+    страдает от бага нашего домена)."""
+    local_path = uploads.local_path_for_url(photo)
+    if local_path is not None:
+        files = {"photo": (local_path.name, local_path.read_bytes(), _content_type_for(local_path))}
+        return call("sendPhoto", payload, files=files)
+    return call("sendPhoto", {**payload, "photo": photo})
+
+
 def send_photo(
     *, photo: str, caption: str, keyboard: list[list[dict]] | None = None,
     channel_id: str | int | None = None, disable_notification: bool = False,
@@ -141,14 +197,13 @@ def send_photo(
         )
     payload: dict = {
         "chat_id": _channel(channel_id),
-        "photo": photo,
         "caption": caption,
         "parse_mode": "HTML",
         "disable_notification": disable_notification,
     }
     if keyboard:
         payload["reply_markup"] = {"inline_keyboard": keyboard}
-    return int(call("sendPhoto", payload)["message_id"])
+    return int(_dispatch_photo(payload, photo)["message_id"])
 
 
 def edit_message(
@@ -233,6 +288,20 @@ def edit_reply_markup(
         raise
 
 
+def _build_rich_message(html: str) -> tuple[dict, dict]:
+    """Готовит поле rich_message и multipart-вложения (если есть) под него."""
+    html, media, files = _prepare_rich_media(html)
+    if len(html) > MAX_RICH_MESSAGE_LENGTH:
+        raise TelegramContentTooLong(
+            f"Rich-сообщение ограничено {MAX_RICH_MESSAGE_LENGTH} символами "
+            f"(сейчас {len(html)})."
+        )
+    rich_message: dict = {"html": html}
+    if media:
+        rich_message["media"] = media
+    return rich_message, files
+
+
 def send_rich_message(
     *, html: str, keyboard: list[list[dict]] | None = None,
     channel_id: str | int | None = None, disable_notification: bool = False,
@@ -242,20 +311,16 @@ def send_rich_message(
     текстом. html идёт в rich_message.html — тот же "Rich HTML style", что
     Telegram поддерживает для parse_mode=HTML, плюс table/details/heading/hr.
     """
-    html = _absolutize_rich_media(html)
-    if len(html) > MAX_RICH_MESSAGE_LENGTH:
-        raise TelegramContentTooLong(
-            f"Rich-сообщение ограничено {MAX_RICH_MESSAGE_LENGTH} символами "
-            f"(сейчас {len(html)})."
-        )
+    rich_message, files = _build_rich_message(html)
     payload: dict = {
         "chat_id": _channel(channel_id),
-        "rich_message": {"html": html},
+        "rich_message": rich_message,
         "disable_notification": disable_notification,
     }
     if keyboard:
         payload["reply_markup"] = {"inline_keyboard": keyboard}
-    return int(call("sendRichMessage", payload)["message_id"])
+    result = call("sendRichMessage", payload, files=files or None)
+    return int(result["message_id"])
 
 
 def edit_rich_message(
@@ -268,21 +333,16 @@ def edit_rich_message(
     ("edit text, rich and game messages" в документации): поле rich_message
     заменяет text тем же вызовом, отдельного editRichMessageText не существует.
     """
-    html = _absolutize_rich_media(html)
-    if len(html) > MAX_RICH_MESSAGE_LENGTH:
-        raise TelegramContentTooLong(
-            f"Rich-сообщение ограничено {MAX_RICH_MESSAGE_LENGTH} символами "
-            f"(сейчас {len(html)})."
-        )
+    rich_message, files = _build_rich_message(html)
     payload: dict = {
         "chat_id": _channel(channel_id),
         "message_id": message_id,
-        "rich_message": {"html": html},
+        "rich_message": rich_message,
     }
     if keyboard:
         payload["reply_markup"] = {"inline_keyboard": keyboard}
     try:
-        call("editMessageText", payload)
+        call("editMessageText", payload, files=files or None)
         return True
     except TelegramRateLimited:
         raise
@@ -314,22 +374,49 @@ def public_image_url(image_url: str | None) -> str | None:
 
 
 #: rich_html пишет админ вручную — src в <img>/<video>/<audio> легко получится
-#: относительным (/api/uploads/...), как и у обычных постов.
-_RICH_MEDIA_SRC_RE = re.compile(r'(<(?:img|video|audio)\b[^>]*\bsrc=")([^"]*)(")', re.IGNORECASE)
+#: относительным (/api/uploads/...), как и у обычных постов. Группа 2 — имя
+#: тега, нужно отдельно от всего префикса, чтобы выбрать тип медиа.
+_RICH_MEDIA_SRC_RE = re.compile(r'(<(img|video|audio)\b[^>]*\bsrc=")([^"]*)(")', re.IGNORECASE)
+
+#: тег -> тип медиа в терминах InputMediaPhoto/Video/Audio (Bot API).
+_RICH_MEDIA_TYPE_BY_TAG = {"img": "photo", "video": "video", "audio": "audio"}
 
 
-def _absolutize_rich_media(html: str) -> str:
-    """Абсолютизировать src у медиа-тегов rich-контента.
+def _prepare_rich_media(html: str) -> tuple[str, list[dict], dict]:
+    """Готовит медиа rich-контента к отправке.
 
-    Telegram сам скачивает медиа по URL из rich_message.html; относительный
-    путь он не резолвит ни к чему и отвечает
-    RICH_MESSAGE_PHOTO_NO_MEDIA_FOUND — картинка беззвучно пропадает из
-    поста. Здесь та же нормализация, что `public_image_url` уже делает для
-    обычных постов, но применённая к произвольному HTML.
+    Telegram сам скачивает медиа по URL из rich_message.html — и принципиально
+    отказывается делать это с нашего боевого домена (*.sslip.io): 200 OK с
+    верным Content-Type, но "wrong type of the web page content", подтверждено
+    вживую 19.08.2026. Поэтому свои загрузки (те, что реально есть на диске)
+    уходят как multipart-вложения и адресуются через InputRichMessage.media +
+    tg://photo|video|audio?id=... (Bot API 10.2, добавлено 14.07.2026) —
+    единственный способ вставить в rich-контент медиа не по HTTP(S)-URL.
+    Внешние ссылки (чужой CDN) не трогаем — тот случай Telegram и раньше
+    скачивал сам без проблем.
     """
+    media: list[dict] = []
+    files: dict[str, tuple[str, bytes, str]] = {}
+    counter = 0
 
     def repl(match: re.Match) -> str:
-        prefix, src, suffix = match.groups()
+        nonlocal counter
+        prefix, tag, src, suffix = match.group(1), match.group(2), match.group(3), match.group(4)
+        local_path = uploads.local_path_for_url(src)
+        if local_path is not None:
+            counter += 1
+            media_id = f"m{counter}"
+            attach_name = f"{media_id}_{local_path.name}"
+            media_type = _RICH_MEDIA_TYPE_BY_TAG[tag.lower()]
+            media.append({
+                "id": media_id,
+                "media": {"type": media_type, "media": f"attach://{attach_name}"},
+            })
+            files[attach_name] = (
+                local_path.name, local_path.read_bytes(), _content_type_for(local_path),
+            )
+            return f"{prefix}tg://{media_type}?id={media_id}{suffix}"
+
         if not src.startswith("/"):
             return match.group(0)
         absolute = public_image_url(src)
@@ -340,7 +427,8 @@ def _absolutize_rich_media(html: str) -> str:
             )
         return f"{prefix}{absolute}{suffix}"
 
-    return _RICH_MEDIA_SRC_RE.sub(repl, html)
+    new_html = _RICH_MEDIA_SRC_RE.sub(repl, html)
+    return new_html, media, files
 
 
 def publish_post(*, title: str, body: str, image_url: str | None) -> int:
@@ -361,12 +449,11 @@ def publish_post(*, title: str, body: str, image_url: str | None) -> int:
                 f"Текст с фото ограничен {MAX_CAPTION_LENGTH} символами "
                 f"(сейчас {len(text)}). Сократите текст или уберите изображение."
             )
-        result = call("sendPhoto", {
+        result = _dispatch_photo({
             "chat_id": settings.TELEGRAM_CHANNEL_ID,
-            "photo": image_url,
             "caption": text,
             "parse_mode": "HTML",
-        })
+        }, image_url)
     else:
         if len(text) > MAX_MESSAGE_LENGTH:
             raise TelegramContentTooLong(

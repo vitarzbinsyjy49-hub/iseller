@@ -4,9 +4,12 @@
 главным образом устойчивость: 429 с retry_after, сетевые сбои, отличие
 «нечего менять» от настоящей ошибки, и отсутствие секретов в логах.
 """
+import json
+
 import httpx
 import pytest
 
+from app.core import uploads
 from app.core.config import settings
 from app.services import telegram_publisher as tp
 
@@ -31,11 +34,20 @@ class FakeResponse:
 
 
 def fake_post(responses: list):
-    """Отдаёт заготовленные ответы по очереди, записывая отправленные payload."""
+    """Отдаёт заготовленные ответы по очереди, записывая отправленные payload.
+
+    Обычные вызовы (json=) записываются как есть — большинство тестов читает
+    payload прямо из sent[i]. Multipart-вызовы (files=) json не передают,
+    поэтому для них в sent[i] попадает {"data": ..., "files": ...} —
+    отличить легко: обычный payload это dict с "chat_id", а этот — с "data".
+    """
     sent: list[dict] = []
 
     def _post(url, **kwargs):
-        sent.append(kwargs.get("json"))
+        if kwargs.get("json") is not None:
+            sent.append(kwargs.get("json"))
+        else:
+            sent.append({"data": kwargs.get("data"), "files": kwargs.get("files")})
         item = responses[min(len(sent) - 1, len(responses) - 1)]
         if isinstance(item, Exception):
             raise item
@@ -304,3 +316,105 @@ def test_edit_rich_message_absolutizes_relative_image_src(monkeypatch):
     assert post.sent[0]["rich_message"] == {
         "html": '<img src="https://shop.example.com/api/uploads/guide.png"/>'
     }
+
+
+# ---------------------------------------------------- multipart-загрузка своих файлов
+#
+# Живой A/B-тест на @isellerhub 19.08.2026: send_photo(photo=<URL на sslip.io>)
+# отвечает "Bad Request: wrong type of the web page content" — Telegram
+# принципиально отказывается сам скачивать медиа с этого домена. Тот же файл,
+# отправленный multipart-загрузкой (файл в теле запроса, не ссылка) — 200 OK.
+# Поэтому свои загрузки (/api/uploads/...) всегда уходят как файл, а не URL;
+# внешние ссылки (чужой CDN) Telegram скачивает сам, как и раньше.
+
+def test_send_photo_uploads_local_file_as_multipart(monkeypatch, tmp_path):
+    monkeypatch.setattr(uploads, "UPLOAD_DIR", tmp_path)
+    (tmp_path / "pic.png").write_bytes(b"\x89PNG-fake-bytes")
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    message_id = tp.send_photo(
+        photo="https://shop.example.com/api/uploads/pic.png", caption="подпись",
+    )
+
+    assert message_id == 42
+    sent = post.sent[0]
+    filename, data, content_type = sent["files"]["photo"]
+    assert data == b"\x89PNG-fake-bytes"
+    assert content_type == "image/png"
+    assert sent["data"]["caption"] == "подпись"
+    assert "photo" not in sent["data"]      # файл ушёл как файл, не строкой-URL
+
+
+def test_send_photo_local_upload_sends_keyboard_as_json_string(monkeypatch, tmp_path):
+    """multipart/form-data не сериализует dict сам — reply_markup должен уйти
+    JSON-строкой, как этого требует Bot API, а не питоньим dict."""
+    monkeypatch.setattr(uploads, "UPLOAD_DIR", tmp_path)
+    (tmp_path / "pic.png").write_bytes(b"x")
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    keyboard = [[{"text": "Открыть", "url": "https://t.me/bot?start=x"}]]
+    tp.send_photo(photo="/api/uploads/pic.png", caption="c", keyboard=keyboard)
+
+    raw = post.sent[0]["data"]["reply_markup"]
+    assert isinstance(raw, str)
+    assert json.loads(raw) == {"inline_keyboard": keyboard}
+
+
+def test_send_photo_sends_url_directly_for_external_photo(monkeypatch, tmp_path):
+    """Внешний CDN не наш файл — Telegram и раньше умел его скачивать сам."""
+    monkeypatch.setattr(uploads, "UPLOAD_DIR", tmp_path)      # локальных файлов нет
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    tp.send_photo(photo="https://cdn.example.com/pic.jpg", caption="c")
+
+    payload = post.sent[0]
+    assert payload["photo"] == "https://cdn.example.com/pic.jpg"
+    assert "files" not in payload
+
+
+def test_send_rich_message_uploads_local_image_via_multipart(monkeypatch, tmp_path):
+    monkeypatch.setattr(uploads, "UPLOAD_DIR", tmp_path)
+    (tmp_path / "guide.png").write_bytes(b"fake-png-bytes")
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    tp.send_rich_message(html='<p>Гид</p><img src="/api/uploads/guide.png"/>')
+
+    sent = post.sent[0]
+    rich_message = json.loads(sent["data"]["rich_message"])
+    assert "/api/uploads/guide.png" not in rich_message["html"]
+    assert "tg://photo?id=" in rich_message["html"]
+    [media_item] = rich_message["media"]
+    assert media_item["media"]["type"] == "photo"
+    attach_name = media_item["media"]["media"].removeprefix("attach://")
+    assert sent["files"][attach_name][1] == b"fake-png-bytes"
+
+
+def test_send_rich_message_local_media_does_not_require_mini_app_url(monkeypatch, tmp_path):
+    """Multipart грузит байты напрямую — в отличие от старого URL-пути, ему
+    не нужен MINI_APP_URL, чтобы построить абсолютную ссылку."""
+    monkeypatch.setattr(settings, "MINI_APP_URL", "", raising=False)
+    monkeypatch.setattr(uploads, "UPLOAD_DIR", tmp_path)
+    (tmp_path / "guide.png").write_bytes(b"data")
+    post = fake_post([OK])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    tp.send_rich_message(html='<img src="/api/uploads/guide.png"/>')      # не должно упасть
+
+    assert "files" in post.sent[0]
+
+
+def test_edit_rich_message_uploads_local_image_via_multipart(monkeypatch, tmp_path):
+    monkeypatch.setattr(uploads, "UPLOAD_DIR", tmp_path)
+    (tmp_path / "guide.png").write_bytes(b"bytes")
+    post = fake_post([FakeResponse({"ok": True, "result": {"message_id": 7}})])
+    monkeypatch.setattr(tp.httpx, "post", post)
+
+    assert tp.edit_rich_message(message_id=7, html='<img src="/api/uploads/guide.png"/>') is True
+
+    sent = post.sent[0]
+    assert sent["data"]["message_id"] == 7
+    assert "files" in sent

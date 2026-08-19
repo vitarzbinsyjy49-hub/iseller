@@ -7,6 +7,7 @@
 import os
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", "/code/uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -62,6 +63,23 @@ def save_image(content_type: str, data: bytes) -> str:
     name = f"{uuid.uuid4().hex}{ext}"
     (UPLOAD_DIR / name).write_bytes(data)
     return f"{URL_PREFIX}/{name}"
+
+
+def local_path_for_url(url: str | None) -> Path | None:
+    """Резолвит URL нашей загрузки (относительный или уже абсолютизированный
+    под публичный домен) в файл на диске. None — для внешних URL (чужой CDN)
+    и для случая, когда файл уже удалён: вызывающий код в обоих случаях
+    отправляет исходный URL как есть, как раньше."""
+    if not url:
+        return None
+    path = urlparse(url).path if "://" in url else url
+    if not path.startswith(URL_PREFIX + "/"):
+        return None
+    name = path.rsplit("/", 1)[-1]
+    if not name:
+        return None
+    candidate = UPLOAD_DIR / name
+    return candidate if candidate.is_file() else None
 
 
 def delete_image(url: str) -> None:

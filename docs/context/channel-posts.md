@@ -35,7 +35,39 @@ Telegram на середине, уже полученные `message_id` уце�
 `t.me/<bot>?start=<payload>`, бот ловит payload и открывает нужный экран Mini App
 уже настоящей web_app-кнопкой.
 
-## Rich-контент (Bot API 10.1 sendRichMessage)
+## Медиа в канал — только multipart, никогда URL-ссылкой
+
+**Подтверждено вживую A/B-тестом на `@isellerhub` 19.08.2026.** Telegram
+принципиально отказывается сам скачивать медиа с нашего боевого домена
+(`*.sslip.io` — бесплатный wildcard-DNS): `send_photo(photo=<URL>)` отвечает
+`Bad Request: wrong type of the web page content`, хотя ответ сервера на этот
+URL идеальный (200, верный `Content-Type`, без редиректа). Тот же файл,
+отправленный multipart-загрузкой (байты в теле запроса) — `200 OK` мгновенно.
+Похоже, `*.sslip.io` не в белом списке доменов, с которых Telegram готов сам
+фетчить медиа для ботов — дело не в контенте и не в коде отдачи файла.
+
+Значит: **любая своя загрузка (`/api/uploads/...`) уходит в Telegram
+multipart-байтами, никогда строкой-URL** — и для обычных постов (`sendPhoto`),
+и для rich-контента. Внешние URL (чужой CDN, не наш домен) Telegram по-прежнему
+скачивает сам без проблем — тот путь не трогаем.
+
+- `uploads.local_path_for_url()` (`app/core/uploads.py`) резолвит
+  относительный или уже абсолютизированный URL нашей загрузки в файл на диске;
+  `None` — для внешних URL и для случая, когда файла уже нет (тогда, как и
+  раньше, уходит просто URL — единственный доступный fallback).
+- `send_photo`/`publish_post` — через общий `_dispatch_photo()`
+  (`telegram_publisher.py`): своя загрузка идёт в поле `files={"photo": ...}`
+  httpx-запроса, `chat_id`/`caption`/`reply_markup` — обычными полями формы.
+- `call()` при `files=` шлёт `data=`+`files=` (multipart) вместо `json=`.
+  Вложенные объекты (`reply_markup`, `rich_message`) в multipart сами себя не
+  сериализуют — `_multipart_data()` превращает их в JSON-строку, а `bool` — в
+  `"true"/"false"` (иначе httpx отдаст питоньи `"True"/"False"`, которые
+  Telegram не поймёт).
+- Файл читается в байты (`read_bytes()`), не передаётся открытым
+  файл-объектом: `call()` при 429/сетевом сбое повторяет `httpx.post` с теми
+  же kwargs, а открытый файл на втором проходе был бы уже дочитан до конца.
+
+## Rich-контент (Bot API 10.1 sendRichMessage, media — Bot API 10.2)
 
 Опционально: у `ChannelPost` есть `rich_html`. Когда заполнено — ПОЛНОСТЬЮ
 заменяет `body` при публикации, через `send_rich_message`/`edit_rich_message`
@@ -47,16 +79,24 @@ rich-текста (принимает `rich_message` вместо `text`), по�
 - `rich_html` идёт в `rich_message.html` — тот же "Rich HTML style", что и
   `parse_mode=HTML`, плюс `<table>`, `<h1>`–`<h6>`, `<hr/>`,
   `<details><summary>…</summary>…</details>`, `<footer>`, `<blockquote>`,
-  `<aside><cite>`, `<img>`/`<video>`/`<audio>` (только http/https-URL —
-  Telegram сам скачивает медиа по этому URL, относительный путь резолвить
-  ему не к чему).
-- Относительный `src` (`/api/uploads/...`) `send_rich_message`/
-  `edit_rich_message` абсолютизируют сами через `public_image_url()`
-  (`_absolutize_rich_media` в `telegram_publisher.py`) — иначе Telegram
-  отвечает `RICH_MESSAGE_PHOTO_NO_MEDIA_FOUND` и картинка беззвучно
-  пропадает из поста. Без настроенного `MINI_APP_URL` относительный путь
-  абсолютизировать не из чего — публикация падает с понятной ошибкой вместо
-  того, чтобы уйти в канал без картинки.
+  `<aside><cite>`, `<img>`/`<video>`/`<audio>`.
+- **Своя загрузка в `<img>`/`<video>`/`<audio> src`** (см. раздел выше про
+  multipart) — `_prepare_rich_media()` вырезает её из `src` и переносит в
+  `InputRichMessage.media` (Bot API 10.2, добавлено 14.07.2026): `src`
+  заменяется на `tg://photo?id=…`/`tg://video?id=…`/`tg://audio?id=…`, а сам
+  файл летит multipart-вложением под именем `attach://<id>_<имя-файла>` —
+  единственный задокументированный способ вставить в rich-контент медиа не
+  по HTTP(S)-URL. Раньше (до фикса) относительный `src` просто абсолютизировался
+  через `public_image_url()`, и Telegram пытался скачать его сам — с боевого
+  домена это больше не работает никогда, см. раздел выше.
+- **Внешний URL** (чужой CDN, не наш `/api/uploads/...`) в `src` не трогаем —
+  Telegram скачивает его сам, как и раньше; `Media blocks support only HTTP
+  and HTTPS URLs` (документация) — это ограничение относится именно к прямому
+  URL в `src`, а не к пути через `tg://…?id=` + `media`.
+- Если своей загрузки на диске уже нет (файл удалён, но `src` остался), а
+  `MINI_APP_URL` не настроен — публикация падает с понятной ошибкой вместо
+  того, чтобы уйти в канал без картинки (тот же контракт, что был у
+  `_absolutize_rich_media` раньше).
 - У rich-сообщений нет режима "фото с подписью" (`sendPhoto`) — картинка идёт
   тегом `<img>` прямо внутри `rich_html`; `image_url` для rich-поста не
   используется совсем.
@@ -67,5 +107,5 @@ rich-текста (принимает `rich_message` вместо `text`), по�
   `reply_markup` у `sendRichMessage`/`editMessageText` принимает тот же
   `{"inline_keyboard": [...]}`.
 - Автоматических тестов, бьющих в настоящий Bot API, в проекте нет (все тесты
-  мокают `call()`) — перед публикацией непроверенной rich-разметки в
+  мокают `httpx.post`) — перед публикацией непроверенной rich-разметки в
   `@isellerhub` стоит один раз вручную отправить её в тестовый чат.

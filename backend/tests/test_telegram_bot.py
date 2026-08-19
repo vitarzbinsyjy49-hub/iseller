@@ -346,6 +346,35 @@ def test_publish_post_rejects_oversized_text_message(monkeypatch):
         publisher.publish_post(title="T", body="x" * 4200, image_url=None)
 
 
+def test_publish_post_uploads_own_image_as_multipart(monkeypatch, tmp_path):
+    """Своя загрузка (не внешний URL) должна уйти файлом в теле запроса, а не
+    ссылкой — Telegram не умеет сам скачивать медиа с нашего боевого домена."""
+    import app.services.telegram_publisher as publisher
+    from app.core import uploads
+
+    monkeypatch.setattr(settings, "TELEGRAM_CHANNEL_ID", "@channel", raising=False)
+    monkeypatch.setattr(uploads, "UPLOAD_DIR", tmp_path)
+    (tmp_path / "pic.png").write_bytes(b"bytes")
+
+    seen: dict = {}
+
+    class FakeResponse:
+        is_success = True
+        def json(self):
+            return {"ok": True, "result": {"message_id": 1}}
+
+    def fake_post(url, **kwargs):
+        seen.update(kwargs)
+        return FakeResponse()
+
+    monkeypatch.setattr(publisher.httpx, "post", fake_post)
+    publisher.publish_post(title="T", body="b", image_url="/api/uploads/pic.png")
+
+    assert "files" in seen and "photo" in seen["files"]
+    assert seen["files"]["photo"][1] == b"bytes"
+    assert "json" not in seen or seen.get("json") is None
+
+
 # ------------------------------------------------- deep link из канала
 
 def test_start_payload_is_parsed():
