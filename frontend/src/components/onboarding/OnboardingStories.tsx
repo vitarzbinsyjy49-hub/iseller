@@ -107,7 +107,7 @@ export function OnboardingStories({ onFinished }: { onFinished?: () => void } = 
 
       <div
         className="pointer-events-none absolute inset-x-3 z-10 flex gap-1.5"
-        style={{ top: "max(12px, env(safe-area-inset-top, 0px))" }}
+        style={{ top: "calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 12px)" }}
       >
         {ONBOARDING_SLIDES.map((s, i) => (
           <div key={s.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/30">
@@ -123,7 +123,7 @@ export function OnboardingStories({ onFinished }: { onFinished?: () => void } = 
         type="button"
         onPointerDown={(e) => { e.stopPropagation(); finish("skipped"); }}
         className="absolute right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/30 text-white"
-        style={{ top: "max(8px, env(safe-area-inset-top, 0px))" }}
+        style={{ top: "calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 8px)" }}
         aria-label="Пропустить"
       >
         <Icon name="close" className="h-4 w-4" />

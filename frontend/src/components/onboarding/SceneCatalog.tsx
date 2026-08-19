@@ -20,10 +20,10 @@ export function SceneCatalog() {
 
   return (
     <div className="flex h-full flex-col bg-bg px-6 pt-16">
-      <div className="card-appear text-[12px] font-semibold uppercase tracking-[0.06em] text-accent">
+      <div className="onboarding-appear text-[12px] font-semibold uppercase tracking-[0.06em] text-accent">
         АйСеллер
       </div>
-      <h1 className="card-appear mt-2 text-[27px] font-extrabold leading-[1.15] tracking-[-0.03em] text-text" style={{ animationDelay: "80ms" }}>
+      <h1 className="onboarding-appear mt-2 text-[27px] font-extrabold leading-[1.15] tracking-[-0.03em] text-text" style={{ animationDelay: "80ms" }}>
         Apple, Dyson, <span className="text-accent">PlayStation</span> —
         <br />
         по актуальным ценам
@@ -34,7 +34,7 @@ export function SceneCatalog() {
           <div key={i} className="skeleton h-56 w-40 shrink-0 rounded-xl2" />
         ))}
         {cards?.map((card) => (
-          <div key={card.id} className="card-appear pointer-events-none">
+          <div key={card.id} className="onboarding-appear pointer-events-none">
             <ProductCard card={card} compact />
           </div>
         ))}

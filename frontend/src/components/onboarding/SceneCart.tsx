@@ -31,22 +31,22 @@ export function SceneCart() {
   return (
     <div className="relative h-full bg-bg">
       <div ref={cartRef} className="absolute inset-0 flex flex-col px-6 pt-16 pb-8">
-        <div className="card-appear text-[12px] font-semibold uppercase tracking-[0.06em] text-accent">
+        <div className="onboarding-appear text-[12px] font-semibold uppercase tracking-[0.06em] text-accent">
           АйСеллер
         </div>
-        <h1 className="card-appear mt-2 text-[27px] font-extrabold tracking-[-0.03em] text-text" style={{ animationDelay: "80ms" }}>
+        <h1 className="onboarding-appear mt-2 text-[27px] font-extrabold tracking-[-0.03em] text-text" style={{ animationDelay: "80ms" }}>
           Ваша заявка
         </h1>
 
         <div className="stagger mt-6 flex flex-col gap-3">
-          <div className="card-appear flex items-center gap-3 rounded-xl2 border border-border bg-surface p-3">
+          <div className="onboarding-appear flex items-center gap-3 rounded-xl2 border border-border bg-surface p-3">
             <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-field bg-mutedbg text-[22px]">📱</div>
             <div className="min-w-0">
               <div className="text-[13px] font-medium text-text">Apple iPhone 17 Pro 256 ГБ Blue (KR-HK)</div>
               <div className="mt-0.5 text-[14px] font-bold text-text">99 300 ₽</div>
             </div>
           </div>
-          <div className="card-appear flex items-center gap-3 rounded-xl2 border border-border bg-surface p-3">
+          <div className="onboarding-appear flex items-center gap-3 rounded-xl2 border border-border bg-surface p-3">
             <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-field bg-accent/10 text-[20px]">🎧</div>
             <div className="min-w-0">
               <div className="text-[13px] font-medium text-text">Apple AirPods 4 (2024) с шумоподавлением</div>
@@ -55,12 +55,12 @@ export function SceneCart() {
           </div>
         </div>
 
-        <div className="card-appear mt-5 flex items-baseline justify-between px-0.5" style={{ animationDelay: "0.68s" }}>
+        <div className="onboarding-appear mt-5 flex items-baseline justify-between px-0.5" style={{ animationDelay: "0.68s" }}>
           <span className="text-[14px] text-muted">Итого</span>
           <span className="text-[22px] font-extrabold tracking-[-0.02em] text-text">113 200 ₽</span>
         </div>
 
-        <div className="card-appear mt-auto rounded-card bg-accent py-4 text-center text-[15px] font-semibold text-white" style={{ animationDelay: "0.85s" }}>
+        <div className="onboarding-appear mt-auto rounded-card bg-accent py-4 text-center text-[15px] font-semibold text-white" style={{ animationDelay: "0.85s" }}>
           Отправить заявку
         </div>
       </div>
