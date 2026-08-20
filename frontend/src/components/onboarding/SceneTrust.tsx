@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { animateNumber, prefersReducedMotion } from "../../lib/motion";
 import { Icon } from "../icons";
+import { Appear, staggerDelayMs } from "./Appear";
 
 // Кольцо r=42 (окружность 264) и штрих галочки — те же числа, что уже
 // проверены в exported-превью (artifacts/onboarding-content/scenes/scene-cart.html).
@@ -59,11 +60,11 @@ export function SceneTrust() {
       className="app-hero flex h-full flex-col items-center justify-center px-8 text-center text-white"
       style={{ paddingTop: "calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 24px)" }}
     >
-      <div className="onboarding-appear text-[13px] font-semibold uppercase tracking-[0.06em] text-white/80">
+      <Appear className="text-[13px] font-semibold uppercase tracking-[0.06em] text-white/80">
         АйСеллер
-      </div>
+      </Appear>
 
-      <div className="onboarding-appear relative mt-8 flex h-24 w-24 items-center justify-center" style={{ animationDelay: "80ms" }}>
+      <Appear delayMs={80} className="relative mt-8 flex h-24 w-24 items-center justify-center">
         <svg viewBox="0 0 96 96" className="h-24 w-24">
           <circle
             ref={ringRef} cx="48" cy="48" r="42" fill="none" stroke="#8fd4ff" strokeWidth="3"
@@ -75,32 +76,34 @@ export function SceneTrust() {
             strokeLinecap="round" strokeLinejoin="round" strokeDasharray={TICK_LENGTH} strokeDashoffset={TICK_LENGTH}
           />
         </svg>
-      </div>
+      </Appear>
 
-      <h1 className="onboarding-appear mt-7 text-[28px] font-extrabold leading-[1.15] tracking-[-0.03em]" style={{ animationDelay: "160ms" }}>
-        Проверяем технику
-        <br />
-        <span className="text-[#8fd4ff]">вместе — до оплаты</span>
-      </h1>
-      <p className="onboarding-appear mt-3 text-[15px] text-white/85" style={{ animationDelay: "220ms" }}>
-        Гарантия 1 месяц на всё, что мы продаём
-      </p>
+      <Appear delayMs={160} className="mt-7 text-[28px] font-extrabold leading-[1.15] tracking-[-0.03em]">
+        <h1>
+          Проверяем технику
+          <br />
+          <span className="text-[#8fd4ff]">вместе — до оплаты</span>
+        </h1>
+      </Appear>
+      <Appear delayMs={220} className="mt-3 text-[15px] text-white/85">
+        <p>Гарантия 1 месяц на всё, что мы продаём</p>
+      </Appear>
 
-      <div className="stagger mt-8 flex w-full flex-col gap-2.5">
-        <div className="onboarding-appear flex items-center gap-2.5 rounded-card bg-white/[0.13] px-4 py-3 text-left text-[13px] text-white/90">
+      <div className="mt-8 flex w-full flex-col gap-2.5">
+        <Appear delayMs={staggerDelayMs(0)} className="flex items-center gap-2.5 rounded-card bg-white/[0.13] px-4 py-3 text-left text-[13px] text-white/90">
           <Icon name="pin" className="h-4 w-4 shrink-0 text-[#8fd4ff]" />
           Самовывоз — Горбушка, Москва · 10:00–21:00
-        </div>
-        <div className="onboarding-appear flex items-center gap-2.5 rounded-card bg-white/[0.13] px-4 py-3 text-left text-[13px] text-white/90">
+        </Appear>
+        <Appear delayMs={staggerDelayMs(1)} className="flex items-center gap-2.5 rounded-card bg-white/[0.13] px-4 py-3 text-left text-[13px] text-white/90">
           <Icon name="truck" className="h-4 w-4 shrink-0 text-[#8fd4ff]" />
           Доставка курьером по Москве, СДЭК по России
-        </div>
-        <div className="onboarding-appear flex items-center gap-2.5 rounded-card bg-white/[0.13] px-4 py-3 text-left text-[13px] text-white/90">
+        </Appear>
+        <Appear delayMs={staggerDelayMs(2)} className="flex items-center gap-2.5 rounded-card bg-white/[0.13] px-4 py-3 text-left text-[13px] text-white/90">
           <Icon name="shield" className="h-4 w-4 shrink-0 text-[#8fd4ff]" />
           {stats
             ? <span><b className="font-semibold text-white">{stats.products}</b> товаров в наличии · {stats.categories} категорий</span>
             : <span className="skeleton inline-block h-3.5 w-40 rounded" />}
-        </div>
+        </Appear>
       </div>
     </div>
   );

@@ -129,6 +129,33 @@ export function animateNumber(
   return animateValue(from, to, durationMs, apply, done);
 }
 
+/** Длительность проявления слайда онбординга. Раньше жила в CSS
+ *  (`.onboarding-appear { animation: fadeUp 550ms ... }`) — теперь считается
+ *  тут же, где и остальное движение, которое должен увидеть человек. */
+export const ONBOARDING_APPEAR_MS = 550;
+const ONBOARDING_APPEAR_OFFSET_PX = 6;
+
+/** Проявление элемента онбординга при монтировании: лёгкий сдвиг вверх и
+ *  затухание — то же, что раньше рисовала CSS-анимация `fadeUp`, но покадрово.
+ *
+ *  Почему не CSS: `.onboarding-appear` уже учитывала «уменьшить движение»
+ *  через `@media (prefers-reduced-motion)`, переопределяя кейфреймы на чистое
+ *  затухание с той же длительностью — тем же паттерном, что раньше показал
+ *  себя недостаточным для баннера витрины (fix(анимации) 95fa083): часть
+ *  устройств гасит ВСЮ декларативную CSS-анимацию до нуля времени, что бы ни
+ *  было внутри медиа-запроса. Онбординг тогда не тронули — отсюда и баг.
+ *
+ *  При «уменьшить движение» сдвиг убираем (offset=0), длительность не режем:
+ *  это уже чистое проявление, укорачивать нечего (в отличие от FADE_MS —
+ *  та замена СДВИГА на затухание, а не сам факт появления). */
+export function animateAppear(el: HTMLElement, reducedMotion = prefersReducedMotion()): () => void {
+  const offset = reducedMotion ? 0 : ONBOARDING_APPEAR_OFFSET_PX;
+  return animateNumber(0, 1, ONBOARDING_APPEAR_MS, (t) => {
+    el.style.opacity = String(t);
+    el.style.transform = offset ? `translate3d(0, ${offset * (1 - t)}px, 0)` : "";
+  }, () => { el.style.transform = ""; });
+}
+
 /** Плавно изменить прозрачность элемента — своими руками, без CSS-перехода.
  *
  *  CSS-переход здесь не годится: на устройствах с выключенной системной

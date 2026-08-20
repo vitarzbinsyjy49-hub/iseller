@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   FADE_MS,
+  ONBOARDING_APPEAR_MS,
+  animateAppear,
   animateNumber,
   easeOutQuint,
   scrollPositionAt,
@@ -82,6 +84,68 @@ describe("animateNumber", () => {
       globalThis.requestAnimationFrame = originalRaf;
       globalThis.cancelAnimationFrame = originalCancel;
     }
+  });
+});
+
+describe("animateAppear", () => {
+  // requestAnimationFrame стоит на месте: rAF в jsdom не тикает сам, поэтому
+  // проверяем это через синхронный контроль кадров, как animateNumber выше.
+  function withControlledRaf<T>(run: (tick: (now: number) => void) => T): T {
+    let pending: FrameRequestCallback | null = null;
+    const originalRaf = globalThis.requestAnimationFrame;
+    const originalCancel = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => { pending = cb; return 1; }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame;
+    try {
+      return run((now) => pending!(now));
+    } finally {
+      globalThis.requestAnimationFrame = originalRaf;
+      globalThis.cancelAnimationFrame = originalCancel;
+    }
+  }
+
+  // Файл рассчитан на node-окружение (без jsdom), как остальные тесты этого
+  // модуля — animateAppear трогает только el.style, поэтому хватает заглушки.
+  function fakeElement(): HTMLElement {
+    return { style: { opacity: "", transform: "" } } as unknown as HTMLElement;
+  }
+
+  it("обычный режим — двигает и opacity, и transform", () => {
+    withControlledRaf((tick) => {
+      const el = fakeElement();
+      animateAppear(el, false);
+      tick(0);
+      // Первый кадр — ещё исходное состояние: сдвиг виден, элемент прозрачен.
+      expect(el.style.opacity).toBe("0");
+      expect(el.style.transform).toContain("6px");
+      tick(ONBOARDING_APPEAR_MS);
+      expect(el.style.opacity).toBe("1");
+      expect(el.style.transform).toBe("");
+    });
+  });
+
+  it("«уменьшить движение» — только затухание, без сдвига, и НЕ мгновенно", () => {
+    withControlledRaf((tick) => {
+      const el = fakeElement();
+      animateAppear(el, true);
+      tick(0);
+      expect(el.style.opacity).toBe("0");
+      expect(el.style.transform).toBe("");
+      // Длительность не схлопнута в ноль: на середине пути — промежуточное
+      // значение, а не сразу конечное (ровно тот баг, из-за которого фикс).
+      tick(ONBOARDING_APPEAR_MS / 2);
+      const mid = Number(el.style.opacity);
+      expect(mid).toBeGreaterThan(0);
+      expect(mid).toBeLessThan(1);
+    });
+  });
+
+  it("возвращает функцию отмены", () => {
+    withControlledRaf(() => {
+      const el = fakeElement();
+      const cancel = animateAppear(el, false);
+      expect(() => cancel()).not.toThrow();
+    });
   });
 });
 

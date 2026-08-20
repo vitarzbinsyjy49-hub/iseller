@@ -4,6 +4,7 @@
  *  скрипт, и они могли разойтись по времени. */
 import { useEffect, useRef, useState } from "react";
 import { animateNumber, prefersReducedMotion } from "../../lib/motion";
+import { Appear } from "./Appear";
 
 const START_RATE = 0.25;
 const TOP_RATE = 2;
@@ -43,16 +44,18 @@ export function SceneLoyalty() {
       className="flex h-full flex-col items-center bg-bg px-6 text-center"
       style={{ paddingTop: "calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 64px)" }}
     >
-      <div className="onboarding-appear text-[12px] font-semibold uppercase tracking-[0.06em] text-accent">
+      <Appear className="text-[12px] font-semibold uppercase tracking-[0.06em] text-accent">
         АйСеллер · Лояльность
-      </div>
-      <h1 className="onboarding-appear mt-2 text-[27px] font-extrabold leading-[1.15] tracking-[-0.03em] text-text" style={{ animationDelay: "80ms" }}>
-        Кэшбек баллами
-        <br />
-        с каждой покупки
-      </h1>
+      </Appear>
+      <Appear delayMs={80} className="mt-2 text-[27px] font-extrabold leading-[1.15] tracking-[-0.03em] text-text">
+        <h1>
+          Кэшбек баллами
+          <br />
+          с каждой покупки
+        </h1>
+      </Appear>
 
-      <div className="onboarding-appear mt-10 w-full max-w-[300px]" style={{ animationDelay: "160ms" }}>
+      <Appear delayMs={160} className="mt-10 w-full max-w-[300px]">
         <div className="mb-2 flex justify-between text-[13px] text-muted">
           <span>0,25%</span>
           <span>2%</span>
@@ -60,33 +63,33 @@ export function SceneLoyalty() {
         <div className="h-2.5 overflow-hidden rounded-full bg-mutedbg">
           <div ref={fillRef} className="h-full rounded-full bg-gradient-to-r from-accent to-green" style={{ width: `${START_WIDTH}%` }} />
         </div>
-      </div>
+      </Appear>
 
       <div className="mt-7 text-[60px] font-extrabold leading-none tracking-[-0.03em] text-text tabular-nums">
         {rateText}<span className="text-[28px] font-bold text-accent">%</span>
       </div>
-      <div className="onboarding-appear mt-1.5 text-[14px] text-muted" style={{ animationDelay: "2.9s" }}>
+      <Appear delayMs={2900} className="mt-1.5 text-[14px] text-muted">
         ставка растёт с оборотом покупок
-      </div>
+      </Appear>
 
-      <div className="stagger mt-9 flex w-full gap-2">
+      <div className="mt-9 flex w-full gap-2">
         {LEVELS.map((l, i) => (
-          <div
+          <Appear
             key={l.label}
-            className={`onboarding-appear flex-1 rounded-card px-1.5 py-2.5 text-[11px] font-semibold ${
+            delayMs={3000 + i * 100}
+            className={`flex-1 rounded-card px-1.5 py-2.5 text-[11px] font-semibold ${
               i === LEVELS.length - 1 ? "bg-accent text-white" : "bg-mutedbg text-muted"
             }`}
-            style={{ animationDelay: `${3.0 + i * 0.1}s` }}
           >
             {l.label}
             <div className="mt-0.5 text-[13px]">{l.rate}</div>
-          </div>
+          </Appear>
         ))}
       </div>
 
-      <p className="onboarding-appear mt-7 max-w-[280px] text-[13px] leading-relaxed text-muted" style={{ animationDelay: "3.5s" }}>
-        Баллы копятся автоматически — <b className="text-text">без промокодов</b> и лишних шагов
-      </p>
+      <Appear delayMs={3500} className="mt-7 max-w-[280px] text-[13px] leading-relaxed text-muted">
+        <p>Баллы копятся автоматически — <b className="text-text">без промокодов</b> и лишних шагов</p>
+      </Appear>
     </div>
   );
 }
