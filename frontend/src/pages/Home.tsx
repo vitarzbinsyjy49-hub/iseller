@@ -24,6 +24,8 @@ import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
 import { BrandWordmark } from "../components/BrandMark";
+import { FxRateChip } from "../components/FxRateChip";
+import FxRateSheet from "../components/FxRateSheet";
 
 const BetaRoadmapSheet = lazy(() => import("../components/BetaRoadmapSheet"));
 const AboutServiceSheet = lazy(() => import("../components/AboutServiceSheet"));
@@ -230,6 +232,7 @@ export default function Home() {
   const [consult, setConsult] = useState(false);
   const [beta, setBeta] = useState(false);
   const [about, setAbout] = useState(false);
+  const [fxSheetOpen, setFxSheetOpen] = useState(false);
   const [search, setSearch] = useState("");
   // Панель умного поиска: открыта по фокусу (полезное пустое состояние) или
   // при вводе (live-результаты). Содержимое — SearchPanel; debounce и отмена
@@ -445,21 +448,29 @@ export default function Home() {
           )}
         </div>
 
-        {/* Ось навигации: категории или бренды. Тумблера нет, пока бренды не
-            пришли — переключатель в пустую вкладку хуже отсутствующего. */}
-        {hasBrandAxis && (
-          <div className="mt-3 flex items-center">
-            <SegmentedToggle
-              value={axis}
-              onChange={switchAxis}
-              options={[
-                { value: "category", label: "Категории" },
-                { value: "brand", label: "Бренды" },
-              ] as const}
-              ariaLabel="Навигация по каталогу"
-              variant="on-dark"
-            />
+        {/* Ось навигации (категории/бренды) слева, курс USD справа. Строка
+            рисуется, если есть ХОТЯ БЫ ОДНО из двух — тумблера нет, пока
+            бренды не пришли, чип нет, пока в fx_rate_history нет строк. */}
+        {(hasBrandAxis || config.usd_rate) && (
+          <div className="mt-3 flex items-center justify-between">
+            {hasBrandAxis ? (
+              <SegmentedToggle
+                value={axis}
+                onChange={switchAxis}
+                options={[
+                  { value: "category", label: "Категории" },
+                  { value: "brand", label: "Бренды" },
+                ] as const}
+                ariaLabel="Навигация по каталогу"
+                variant="on-dark"
+              />
+            ) : <div />}
+            <FxRateChip usdRate={config.usd_rate} onClick={() => setFxSheetOpen(true)} />
           </div>
+        )}
+
+        {fxSheetOpen && config.usd_rate && (
+          <FxRateSheet usdRate={config.usd_rate} onClose={() => setFxSheetOpen(false)} />
         )}
 
         {/* Быстрые категории — светлые чипы на тёмном hero (сразу видно глубину
