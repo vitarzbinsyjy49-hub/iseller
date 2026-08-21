@@ -6,7 +6,6 @@ import DesktopHeader from "./DesktopHeader";
 import { usePageSwipe } from "../lib/usePageSwipe";
 import { setBackButton } from "../lib/telegram";
 import { useCart } from "../lib/cart";
-import { animateOpacity } from "../lib/motion";
 import { shouldShowCartBar } from "../lib/cartMath";
 
 /** Позиции корневого scroll-контейнера живут вне route-компонентов: возврат из
@@ -34,41 +33,26 @@ function rememberRouteScroll(routeId: string, scrollTop: number) {
  *  общий контейнер контента, живущий между переходами (BottomNav и шапка — вне
  *  его, их собственные жесты навигацию не трогают).
  *
- *  Анимация въезда — ОДНА на все переходы, и направление жеста её больше не
- *  выбирает. До отказа от remount свайп «назад» въезжал сдвигом с той стороны,
- *  откуда тянули; повторить это здесь можно было бы только transform'ом на
- *  <main>, а он ломает position: fixed у потомков. Внутри страниц такие
- *  потомки есть — .cta-dock карточки товара и строка ввода AI: на время
- *  перехода они отвязались бы от экрана и прыгнули. Прыгающая кнопка «Оставить
- *  заявку» дороже направленности анимации, поэтому остаётся общий fade. */
+ *  v5.6.0: анимация перехода живёт не здесь, а в lib/useRouteTransition — она
+ *  направленная (вглубь влево, назад вправо) и показывает два слоя сразу.
+ *  Layout об этом знать не нужно: модуль работает с <main> снаружи, а сам
+ *  <main> по-прежнему не пересоздаётся между маршрутами — на этом держится
+ *  восстановление позиции прокрутки ниже.
+ *
+ *  Раньше направленного сдвига здесь не было потому, что transform на <main>
+ *  ломает position: fixed у потомков (.cta-dock карточки товара, строка ввода
+ *  AI, кнопка заявки) — на время перехода панели отвязались бы от экрана. Это
+ *  ограничение снято не переписыванием страниц, а тем, что модуль перехода на
+ *  время анимации прибивает эти панели по замеренным координатам; подробности
+ *  — в его docstring. */
 export default function Layout() {
   const location = useLocation();
   const { isTabRoute, goBack, swipeHandlers } = usePageSwipe();
   const cart = useCart();
   const mainRef = useRef<HTMLElement>(null);
-  const previousPathname = useRef(location.pathname);
   const restoringScroll = useRef(false);
   const restoreVersion = useRef(0);
   const routeId = `${location.pathname}${location.search}`;
-
-  // Нативная compositor-анимация без remount и без transform: fixed CTA внутри
-  // страниц остаются привязаны к viewport даже во время перехода.
-  useLayoutEffect(() => {
-    if (previousPathname.current === location.pathname) return;
-    previousPathname.current = location.pathname;
-    const main = mainRef.current;
-    if (!main) return;
-    // Проверки на «уменьшить движение» здесь нет намеренно: этот переход и так
-    // всего лишь проявление, без единого пикселя движения — то самое, чем
-    // движение положено заменять. Раньше он при этой настройке отключался
-    // целиком, и смена страницы происходила вообще без обратной связи.
-    //
-    // Считаем кадры сами, а не через main.animate: Web Animations API — такая
-    // же декларативная анимация, как CSS-переход, и на устройствах с
-    // выключенной системной анимацией она не проигрывается (см. lib/motion).
-    const cancel = animateOpacity(main, 0.72, 1, 180, () => { main.style.opacity = ""; });
-    return () => { cancel(); main.style.opacity = ""; };
-  }, [location.pathname]);
 
   // Восстановление делаем до кадра. Если данные страницы ещё грузятся, несколько
   // коротких повторов дождутся её высоты; любое действие пользователя отменяет их.

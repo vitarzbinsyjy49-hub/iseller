@@ -1,6 +1,6 @@
 import { lazy, Suspense, type ReactNode, useEffect, useState } from "react";
 import { enterRefCallback } from "./lib/useEnter";
-import { Route, Routes, useNavigate } from "react-router-dom";
+import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api } from "./lib/api";
 import { getStartParam, getTelegram, isInsideTelegram, initTelegramUi } from "./lib/telegram";
 import { hydrateFavorites } from "./lib/favorites";
@@ -14,6 +14,7 @@ import Layout from "./components/Layout";
 import { OnboardingStories } from "./components/onboarding/OnboardingStories";
 import Home from "./pages/Home";
 import { routeLoaders } from "./lib/routePreload";
+import { useRouteTransition } from "./lib/useRouteTransition";
 
 // Главная остаётся в стартовом chunk: это первый экран почти каждого запуска.
 // Остальные страницы загружаются по намерению пользователя/при навигации.
@@ -38,6 +39,11 @@ export default function App() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorText, setErrorText] = useState("");
   const navigate = useNavigate();
+  // Показываем не сам адрес, а «уже показанный» маршрут: он отстаёт от роутера
+  // ровно на один рендер, и в этот зазор снимается кадр уходящего экрана.
+  // Без такой задержки старого DOM к моменту эффекта уже нет, и переход
+  // остаётся тем самым щелчком (lib/useRouteTransition).
+  const displayedLocation = useRouteTransition(useLocation());
 
   // Вся инициализация Telegram UI (ready/expand/fullscreen/цвета/viewport
   // listeners) — в одном месте, с корректным снятием подписок.
@@ -97,7 +103,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <Routes>
+      <Routes location={displayedLocation}>
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
           <Route path="/catalog" element={<DeferredPage><Catalog /></DeferredPage>} />
