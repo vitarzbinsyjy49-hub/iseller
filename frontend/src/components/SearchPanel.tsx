@@ -22,21 +22,30 @@ const SCENARIO_CHIPS: { label: string; route: string }[] = [
   // так же, как ссылка на категорию. Настоящие категории приходят в prop chips.
 ];
 
-/** Прокручиваемая оболочка панели с высотой по ВИДИМОЙ области.
+/** Прокручиваемая оболочка панели: высота по реально доступному месту.
  *
  *  Раньше высоту задавал `max-h-[min(60vh,480px)]` — и только состоянию с
- *  пустым запросом; список результатов не ограничивался вовсе. Обе беды видны
- *  при открытой клавиатуре: vh про неё не знает, панель уходит нижним краем
- *  под клавиатуру, и последняя строка («Спросить AI») становится недостижимой
- *  — прокрутка внутри панели не помогает, потому что не панель прокручена, а
- *  её низ физически закрыт.
+ *  пустым запросом; список результатов не ограничивался вовсе. Панель уходила
+ *  нижним краем под клавиатуру и под нижнюю навигацию, а прокрутка внутри не
+ *  помогала: закрыт был не низ списка, а низ экрана.
  *
- *  Считаем от visualViewport: он, в отличие от --app-height, сжимается вместе
- *  с клавиатурой (--app-height нарочно берётся из СТАБИЛЬНОЙ высоты, чтобы не
- *  дёргались шторки, — см. lib/telegram).
+ *  Границу считаем по двум опорам сразу, и обе намеренно разного рода:
+ *
+ *  - visualViewport — про клавиатуру. Он, в отличие от --app-height,
+ *    сжимается вместе с ней (--app-height берётся из СТАБИЛЬНОЙ высоты, чтобы
+ *    не дёргались шторки, — см. lib/telegram). Но полагаться на него одного
+ *    нельзя: часть устройств кладёт клавиатуру ПОВЕРХ вебвью, ничего не сжимая.
+ *  - нижний отступ скролл-контейнера — про навигацию. Это тот же резерв, из
+ *    которого живёт вся раскладка (.pb-nav), он статичен и не зависит от того,
+ *    показана навигация прямо сейчас или скрыта под html.kb-open.
  *
  *  Пересчёт вешаем и на resize, и на scroll видимой области: на iOS открытие
- *  клавиатуры сдвигает visualViewport, не меняя размера окна. */
+ *  клавиатуры сдвигает visualViewport, не меняя размера окна.
+ *
+ *  Даже с этим расчёт остаётся оценкой — устройства по-разному сообщают о
+ *  клавиатуре, а часть не сообщает вовсе. Поэтому главное действие панели
+ *  («Спросить AI») стоит в её НАЧАЛЕ: место в начале списка не зависит ни от
+ *  какого замера. */
 function PanelScroll({ deps, className = "", children, ...rest }: {
   deps: unknown[];
   className?: string;
@@ -50,22 +59,25 @@ function PanelScroll({ deps, className = "", children, ...rest }: {
     const apply = () => {
       const vv = window.visualViewport;
       const offset = vv?.offsetTop ?? 0;
-      // Нижняя граница — не только клавиатура. Поверх панели стоит оболочка
-      // приложения: нижняя навигация (z-40) и панель корзины (z-30), обе позже
-      // панели в документе, то есть рисуются НАД ней. Ограничения одной лишь
-      // видимой высоты не хватало: панель влезала в экран, но её низ вместе с
-      // кнопкой «Спросить AI» оказывался под таб-баром.
+      // Нижнюю границу берём НЕ из замера самой навигации. Сначала здесь стоял
+      // её getBoundingClientRect().top — и это оказалось опорой на случайный
+      // момент времени: навигация то скрыта (html.kb-open), то нет, и стоило
+      // замеру прийтись на скрытую, как панель решала, что снизу свободно до
+      // самого края экрана. На устройстве это давало панель, которая уходит под
+      // таб-бар и при этом даже не прокручивается — ей было некуда переполняться.
       //
-      // Берём фактический верх этих панелей, а не их высоту из констант: при
-      // открытой клавиатуре навигация может быть скрыта (html.kb-open), и тогда
-      // отнимать у панели её высоту не за что.
-      let limit = vv?.height ?? window.innerHeight;
-      for (const chrome of document.querySelectorAll<HTMLElement>(".js-bottom-nav")) {
-        const r = chrome.getBoundingClientRect();
-        if (r.height === 0) continue;  // скрыта — места не занимает
-        const chromeTop = r.top - offset;
-        if (chromeTop > 0) limit = Math.min(limit, chromeTop);
-      }
+      // Опора теперь — тот же резерв под навигацию, которым уже пользуется всё
+      // приложение: нижний отступ скролл-контейнера (.pb-nav). Он вычислен из
+      // высоты навбара и safe-area, не зависит от того, показана навигация прямо
+      // сейчас или нет, и не может «мигнуть» между двумя замерами.
+      const scroller = el.closest("main");
+      const navClearance = scroller
+        ? parseFloat(getComputedStyle(scroller).paddingBottom) || 0
+        : 0;
+      const limit = Math.min(
+        vv?.height ?? window.innerHeight,
+        window.innerHeight - navClearance,
+      );
       const top = el.getBoundingClientRect().top - offset;
       el.style.maxHeight = `${dropdownMaxHeightPx(top, limit)}px`;
     };
@@ -197,8 +209,30 @@ export default function SearchPanel({
   // ===== Пустой запрос: полезное состояние вместо пустого дропдауна =====
   return (
     <PanelScroll deps={[typing, history.length, chips.length, recentlyViewed?.length ?? -1]} className="p-3">
+      {/* «Спросить AI» стоит ПЕРВЫМ, а не последним.
+          Внизу панели эта кнопка оказывалась недостижимой: снизу её закрывает
+          то клавиатура, то нижняя навигация, и добраться прокруткой нельзя —
+          закрыт не низ списка, а низ экрана. Никакой расчёт высоты этого до
+          конца не гарантирует: устройства по-разному сообщают о клавиатуре, а
+          часть не сообщает вовсе. Место в начале списка не зависит ни от чего.
+
+          Это ещё и честнее по смыслу: человек открыл поиск, ничего не набрав, —
+          и первое, что ему предлагают, это описать задачу словами вместо
+          угадывания названия модели. История и подсказки остаются ниже, они
+          нужны тому, кто уже знает, что ищет. */}
+      <button
+        onClick={askAi}
+        className="tap flex w-full items-center gap-3 rounded-field bg-accent/10 px-3.5 py-3 text-left"
+      >
+        <Icon name="sparkles" className="h-5 w-5 shrink-0 text-accent" />
+        <span className="min-w-0">
+          <span className="block text-[13px] font-semibold text-accent">Спросить AI</span>
+          <span className="block text-[12px] text-muted">Опишите задачу — подберём из реального наличия</span>
+        </span>
+      </button>
+
       {history.length > 0 && (
-        <section aria-label="Недавние запросы">
+        <section aria-label="Недавние запросы" className="mt-3.5">
           <div className="flex items-baseline justify-between px-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted">Вы искали</p>
             <button
@@ -222,7 +256,7 @@ export default function SearchPanel({
         </section>
       )}
 
-      <section aria-label="Популярные запросы" className={history.length > 0 ? "mt-3.5" : ""}>
+      <section aria-label="Популярные запросы" className="mt-3.5">
         <p className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">Часто ищут</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {SCENARIO_CHIPS.map((s) => (
@@ -277,16 +311,6 @@ export default function SearchPanel({
         </section>
       )}
 
-      <button
-        onClick={askAi}
-        className="tap mt-3.5 flex w-full items-center gap-3 rounded-field bg-accent/10 px-3.5 py-3 text-left"
-      >
-        <Icon name="sparkles" className="h-5 w-5 shrink-0 text-accent" />
-        <span className="min-w-0">
-          <span className="block text-[13px] font-semibold text-accent">Спросить AI</span>
-          <span className="block text-[12px] text-muted">Опишите задачу — подберём из реального наличия</span>
-        </span>
-      </button>
     </PanelScroll>
   );
 }
