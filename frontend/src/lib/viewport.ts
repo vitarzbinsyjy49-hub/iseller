@@ -94,6 +94,12 @@ export function formatCssVars(
   return out;
 }
 
+/** Максимальная высота шторки (доля от высоты приложения) — 88% в один
+ *  столбец, 90% от sm и шире (та же граница, что у Tailwind `sm:`, 640px). */
+export function sheetMaxHeightPx(appHeightPx: number, wide: boolean): number {
+  return appHeightPx * (wide ? 0.9 : 0.88);
+}
+
 /** Клавиатура «открыта», если текущая высота заметно меньше стабильной.
  *  Порог 150px отсекает адресные строки/мелкие изменения. */
 export function isKeyboardOpen(

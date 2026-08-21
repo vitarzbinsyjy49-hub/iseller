@@ -13,6 +13,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { createPortal } from "react-dom";
 import { haptic } from "../lib/telegram";
 import { animateSheetIn, animateSheetOut } from "../lib/motion";
+import { sheetMaxHeightPx } from "../lib/viewport";
 import type { ChoiceItem } from "../lib/scenario";
 import { Icon } from "./icons";
 
@@ -43,9 +44,20 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
   // Выезд при монтировании. useLayoutEffect, не useEffect: animateSheetIn
   // ставит первый кадр синхронно и ждёт, что DOM ещё не нарисован — иначе один
   // кадр мелькнёт в конечном положении до того, как встанет исходное.
+  //
+  // Высоту панели фиксируем ЗДЕСЬ, инлайн-стилем, а не живым CSS var в
+  // className — принципиально важен порядок: этот эффект синхронный и
+  // отрабатывает ДО эффекта блокировки скролла ниже. На части WebView
+  // переключение body { overflow: hidden } кадром позже само провоцирует
+  // пересчёт --app-height (сворачивается адресная строка/чужой chrome) — и
+  // если бы высота панели была завязана на живую переменную, она бы дёрнулась
+  // ровно в этот момент. Читаем один раз, до этого пересчёта, и всё.
   useLayoutEffect(() => {
     const panel = panelRef.current, backdrop = backdropRef.current;
     if (!panel || !backdrop) return;
+    const rawAppHeight = getComputedStyle(document.documentElement).getPropertyValue("--app-height");
+    const appHeightPx = parseFloat(rawAppHeight) || window.innerHeight;
+    panel.style.maxHeight = `${sheetMaxHeightPx(appHeightPx, window.innerWidth >= 640)}px`;
     cancelAnimRef.current = animateSheetIn(panel, backdrop);
     return () => cancelAnimRef.current();
   }, []);

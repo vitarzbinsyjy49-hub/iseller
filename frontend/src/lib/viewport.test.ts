@@ -6,6 +6,7 @@ import {
   imagePaddingClass,
   isKeyboardOpen,
   pickViewportHeight,
+  sheetMaxHeightPx,
 } from "./viewport";
 
 describe("pickViewportHeight", () => {
@@ -105,6 +106,13 @@ describe("formatCssVars", () => {
 
   it("NaN/Infinity → null", () => {
     expect(formatCssVars({ "--a": NaN, "--b": Infinity })).toEqual({ "--a": null, "--b": null });
+  });
+});
+
+describe("sheetMaxHeightPx", () => {
+  it("88% в один столбец, 90% от sm и шире", () => {
+    expect(sheetMaxHeightPx(800, false)).toBe(704);
+    expect(sheetMaxHeightPx(800, true)).toBe(720);
   });
 });
 
