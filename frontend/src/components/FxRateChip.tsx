@@ -1,10 +1,11 @@
-/** Курс USD на главной — пилюля в стиле SegmentedToggle, справа от тумблера
- *  «Категории/Бренды» (Home.tsx). Тап открывает FxRateSheet.
+/** Курс USD на главной — элемент справа от тумблера «Категории/Бренды»
+ *  (Home.tsx). Тап открывает FxRateSheet.
  *
  *  Форматирование — в lib/fxFormat.ts (тестируется отдельно, без DOM); здесь
  *  только JSX. null от formatFxChip означает «строк в fx_rate_history ещё
  *  нет» — рисуем ничего, а не 0/битый вид (см. спеку). */
 import { formatFxChip } from "../lib/fxFormat";
+import { Icon } from "./icons";
 
 export function FxRateChip({
   usdRate,
@@ -20,10 +21,15 @@ export function FxRateChip({
     <button
       type="button"
       onClick={onClick}
-      // v5.7.0: верх главной стал светлым, и чип вместе с ним. Подложки нет
-      // вовсе — курс это справка, а не действие: он не обязан выглядеть кнопкой
-      // рядом с поиском и категориями.
-      className="tap flex h-11 shrink-0 items-center gap-1 rounded-full px-1 text-[12.5px] font-bold text-muted outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-accent"
+      // Оформление — как у элементов ряда категорий рядом: та же волосяная
+      // рамка и тот же радиус.
+      //
+      // Сначала подложку сняли совсем, рассудив, что курс — справка. Рассуждение
+      // неверное: по нему ОТКРЫВАЕТСЯ шторка, то есть это действие, и выглядеть
+      // оно обязано действием. Шеврон здесь не украшение — он единственное, что
+      // говорит, что именно произойдёт по нажатию: развернётся ещё один слой, а
+      // не откроется новый экран.
+      className="tap flex h-11 shrink-0 items-center gap-1 rounded-field border border-border bg-surface px-3 text-[12.5px] font-bold text-text outline-none transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-accent"
     >
       <span>${formatted.value}</span>
       {formatted.delta !== null && (
@@ -34,6 +40,7 @@ export function FxRateChip({
           {formatted.rising ? "▲" : "▼"}{formatted.delta}
         </span>
       )}
+      <Icon name="chevron-down" className="h-3.5 w-3.5 shrink-0 text-muted" strokeWidth={2.2} />
     </button>
   );
 }

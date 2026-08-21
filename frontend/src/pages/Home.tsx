@@ -336,7 +336,12 @@ export default function Home() {
           было три крупных блока подряд (шапка, сетка сценариев, категории), и
           первая карточка появлялась ниже сгиба. Теперь между шапкой и товарами —
           одна строка поиска, одна строка чипов и одна строка сценариев. */}
-      <header className="-mx-4 -mt-3 px-4 pb-4 pt-2 lg:hidden">
+      {/* pb-2, а не pb-4: у ряда категорий высота 44px — цель касания вокруг
+          13-пиксельного текста, то есть по 14px невидимого поля сверху и снизу.
+          Складываясь с отступом шапки и отступом сетки, это давало 46px пустоты
+          между категориями и плитками (замерено). Цель касания должна ПОМЕЩАТЬСЯ
+          в отступ, а не добавляться к нему. */}
+      <header className="-mx-4 -mt-3 px-4 pb-2 pt-2 lg:hidden">
         <div className="flex items-center justify-between gap-3">
           {/* Логотип крупнее кнопок справа намеренно: это единственная точка
               бренда на экране. Белой плашки под ним больше нет — слово набрано
@@ -492,26 +497,33 @@ export default function Home() {
           </Suspense>
         )}
 
-        {/* Категории — текстовый ряд, а не пилюли. Причина не в моде: в каталоге
-            выбранная категория уже обозначена подчёркнутым словом, и пилюля
-            здесь заставляла бы приложение говорить о категориях двумя разными
-            языками на соседних экранах.
-            Подложки нет, но высота строки 44px остаётся — это минимальная цель
-            касания, и она не обязана быть видимой.
+        {/* Категории — элементы с волосяной рамкой, радиус общей шкалы (12px).
+            Не пилюли и не голый текст, и оба отказа по делу.
+            Пилюля (радиус 999) — форма «по умолчанию для всего», от которой мы
+            уходим. Голый текст был перебором в другую сторону: у надписи нет ни
+            границы, ни фона, ни подчёркивания — ни одного признака, по которому
+            глаз отличает «нажми» от «прочитай». Убрав подложку, я убрал вместе с
+            ней и сигнал.
+            Рамка — тот же язык, которым в каталоге говорят «Популярные ▾» и
+            «Фильтры · N»: об управляющих элементах приложение обязано говорить
+            одинаково на всех экранах.
+            Подчёркивание сюда не годится: в каталоге оно значит «эта категория
+            ВЫБРАНА», а здесь выбранной нет — все ссылки равноправны. Один знак с
+            двумя смыслами хуже двух разных знаков.
             Данные: админские плитки → каталог → кэш; максимум 6. */}
-        <div className={`no-scrollbar -mx-4 flex items-center gap-5 overflow-x-auto px-4 ${hasBrandAxis ? "mt-1" : "mt-2"}`}>
+        <div className={`no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 ${hasBrandAxis ? "mt-2" : "mt-3"}`}>
           {heroChips.map((c) => (
             <button
               key={c.key}
               onClick={() => navigate(safeInternalRoute(c.route))}
-              className="tap flex h-11 shrink-0 items-center whitespace-nowrap text-footnote font-medium text-text outline-none transition-colors hover:text-accent focus-visible:text-accent"
+              className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-field border border-border bg-surface px-3.5 text-footnote font-medium text-text outline-none transition-colors hover:border-accent hover:text-accent focus-visible:ring-2 focus-visible:ring-accent"
             >
               {c.label}
             </button>
           ))}
           <button
             onClick={() => navigate("/catalog")}
-            className="tap flex h-11 shrink-0 items-center whitespace-nowrap text-footnote font-medium text-accent outline-none"
+            className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-field border border-border bg-surface px-3.5 text-footnote font-medium text-accent outline-none transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-accent"
           >
             {axis === "brand" ? "Все бренды →" : "Все категории →"}
           </button>
