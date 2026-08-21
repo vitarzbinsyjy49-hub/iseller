@@ -295,7 +295,8 @@ def test_tick_calls_fx_rate_sync(monkeypatch):
     monkeypatch.setattr("app.db.session.SessionLocal", lambda: FakeSession())
     monkeypatch.setattr("app.services.cart_reminders.scan", lambda db: {})
     monkeypatch.setattr("app.services.favorite_watch.scan", lambda db: {})
-    monkeypatch.setattr("app.services.notifications.drain", lambda db: None)
+    monkeypatch.setattr("app.services.notifications.drain",
+                        lambda db, limit: {"sent": 0, "failed": 0, "retry": 0})
 
     called = {}
 
@@ -308,6 +309,40 @@ def test_tick_calls_fx_rate_sync(monkeypatch):
     bp._tick({})
 
     assert called.get("db") == "db"
+
+
+def test_fx_rate_sync_does_not_retry_within_five_minutes(monkeypatch):
+    """Провал курса ЦБ РФ не должен бить блокирующим httpx.get на каждом тике.
+
+    fx_rate.sync сам не идёт в сеть, если запись за сегодня уже есть — но в
+    день, когда ЦБ недоступен, каждая попытка реально делает httpx.get(timeout=10)
+    прямо перед getUpdates. Без гейта это до 10с простоя опроса апдейтов на
+    каждый тик (≤30с) весь день. Порог — 5 минут МЕЖДУ ПОПЫТКАМИ (не только
+    успехами): отметка должна двигаться и при неудаче."""
+    monkeypatch.setattr(bp, "_schema_ready", lambda state: True)
+
+    class FakeSession:
+        def __enter__(self):
+            return "db"
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr("app.db.session.SessionLocal", lambda: FakeSession())
+    monkeypatch.setattr("app.services.cart_reminders.scan", lambda db: {})
+    monkeypatch.setattr("app.services.favorite_watch.scan", lambda db: {})
+    monkeypatch.setattr("app.services.notifications.drain",
+                        lambda db, limit: {"sent": 0, "failed": 0, "retry": 0})
+
+    attempts = []
+    monkeypatch.setattr("app.services.fx_rate.sync", lambda db: attempts.append(1) or False)
+
+    state: dict = {}
+    bp._tick(state)
+    bp._tick(state)
+    bp._tick(state)
+
+    assert len(attempts) == 1, "повторная попытка раньше 5-минутного интервала"
 
 
 def test_first_scan_runs_regardless_of_system_uptime(monkeypatch):

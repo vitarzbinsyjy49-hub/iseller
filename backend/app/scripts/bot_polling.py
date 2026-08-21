@@ -206,8 +206,17 @@ def _tick(state: dict) -> None:
                 state["last_favorite_scan"] = now
                 logger.info("скан избранного: %s", stats)
 
-            if fx_rate.sync(db):
-                logger.info("курс ЦБ РФ обновлён")
+            # Отметку попытки двигаем при КАЖДОЙ попытке, а не только при
+            # успехе: fx_rate.sync сам не бьёт по сети, если запись за сегодня
+            # уже есть, но при недоступности ЦБ РФ (сеть легла, сервис не
+            # отвечает) каждый провал без этого гейта повторял бы блокирующий
+            # httpx.get(timeout=10) на каждом тике (≤30с) весь день — это до
+            # 10с простоя опроса апдейтов на каждый тик. Порог — 5 минут между
+            # ПОПЫТКАМИ, тот же _due, что и у прогрева гейтвея.
+            if _due(state.get("last_fx_try"), now, 300):
+                state["last_fx_try"] = now
+                if fx_rate.sync(db):
+                    logger.info("курс ЦБ РФ обновлён")
 
             stats = drain(db, limit=OUTBOX_BATCH)
             if stats["sent"] or stats["failed"]:

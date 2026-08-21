@@ -25,10 +25,12 @@ import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
 import { BrandWordmark } from "../components/BrandMark";
 import { FxRateChip } from "../components/FxRateChip";
-import FxRateSheet from "../components/FxRateSheet";
 
 const BetaRoadmapSheet = lazy(() => import("../components/BetaRoadmapSheet"));
 const AboutServiceSheet = lazy(() => import("../components/AboutServiceSheet"));
+// Как соседние шторки выше: открывается только тапом по чипу, в основной
+// чанк первого экрана попадать не должна (мобильные сети, Mini App).
+const FxRateSheet = lazy(() => import("../components/FxRateSheet"));
 import { autoplayReady, nextSlideIndex, snapTargetLeft } from "../lib/carousel";
 import { animateScrollTo } from "../lib/motion";
 
@@ -470,7 +472,9 @@ export default function Home() {
         )}
 
         {fxSheetOpen && config.usd_rate && (
-          <FxRateSheet usdRate={config.usd_rate} onClose={() => setFxSheetOpen(false)} />
+          <Suspense fallback={null}>
+            <FxRateSheet usdRate={config.usd_rate} onClose={() => setFxSheetOpen(false)} />
+          </Suspense>
         )}
 
         {/* Быстрые категории — светлые чипы на тёмном hero (сразу видно глубину

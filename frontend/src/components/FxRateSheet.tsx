@@ -47,6 +47,12 @@ export default function FxRateSheet({
   }, []);
 
   const rising = usdRate.delta >= 0;
+  const deltaFormatted = FORMAT.format(Math.abs(usdRate.delta));
+  // Проверяем именно ОТФОРМАТИРОВАННУЮ строку, а не числовой порог 0.05 из
+  // fxFormat.ts (тот подобран под ОДИН знак после запятой в чипе) — здесь
+  // FORMAT даёт ДВА знака, и порог 0.05 спрятал бы настоящие «0,02»-«0,04».
+  // Гарантированный случай остаётся тем же: делта ровно 0 в день запуска.
+  const deltaRoundsToZero = deltaFormatted === "0,00";
   const points = history ? toSparklinePoints(history.map((h) => h.value), 300, 70) : "";
 
   return (
@@ -60,9 +66,11 @@ export default function FxRateSheet({
               <h2 id="fx-rate-title" className="text-[30px] font-extrabold tracking-[-0.02em] text-text">
                 {FORMAT.format(usdRate.value)}&nbsp;₽
               </h2>
-              <p className={`mt-0.5 text-[13px] font-bold ${rising ? "text-green" : "text-danger"}`}>
-                {rising ? "▲" : "▼"} {FORMAT.format(Math.abs(usdRate.delta))} за сутки
-              </p>
+              {!deltaRoundsToZero && (
+                <p className={`mt-0.5 text-[13px] font-bold ${rising ? "text-green" : "text-danger"}`}>
+                  {rising ? "▲" : "▼"} {deltaFormatted} за сутки
+                </p>
+              )}
             </div>
             <button
               onClick={() => close()}
@@ -107,7 +115,7 @@ export default function FxRateSheet({
                     />
                   </svg>
                 )}
-                {history !== null && history.length > 0 && history.length < HISTORY_DAYS && (
+                {history !== null && history.length >= 2 && history.length < HISTORY_DAYS && (
                   <p className="mt-2 text-[12px] text-muted">
                     Копим историю с запуска — график будет за полный месяц позже.
                   </p>

@@ -25,4 +25,17 @@ describe("formatFxChip", () => {
   it("нулевая дельта — rising: true (не «падает»)", () => {
     expect(formatFxChip({ value: 91.23, delta: 0 })?.rising).toBe(true);
   });
+
+  it("дельта, округляющаяся до 0,0 — delta: null (стрелке нечего показывать)", () => {
+    // Гарантированный случай: день запуска (одна строка истории — дельта
+    // ровно 0) и понедельник после выходных (ЦБ не публикует курс по
+    // субботам/воскресеньям).
+    const result = formatFxChip({ value: 91.23, delta: 0.04 });
+    expect(result?.delta).toBeNull();
+    expect(result?.value).toBe("91,2");
+  });
+
+  it("дельта чуть выше порога округления — delta не null", () => {
+    expect(formatFxChip({ value: 91.23, delta: 0.05 })?.delta).toBe("0,1");
+  });
 });
