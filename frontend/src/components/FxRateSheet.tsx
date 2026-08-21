@@ -102,7 +102,7 @@ export default function FxRateSheet({
               <h4 className="text-[13px] font-bold uppercase tracking-[0.04em] text-muted">
                 Курс за {HISTORY_DAYS} дней
               </h4>
-              <div className="mt-2 rounded-xl2 border border-border p-3.5">
+              <div className="mt-2 min-h-[70px] rounded-xl2 border border-border p-3.5">
                 {history === null ? (
                   <div className="skeleton h-[70px] w-full rounded-lg" />
                 ) : history.length < 2 ? (
