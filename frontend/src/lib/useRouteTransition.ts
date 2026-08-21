@@ -66,22 +66,43 @@ const FALLBACK_FADE_MS = 180;
  *  начнётся следующая, иначе на экране останется чужой клон. */
 let running: { cancel: () => void } | null = null;
 
-/** Панели внутри страницы, которые в мобильной вёрстке лежат на position:fixed.
- *  На desktop те же элементы — обычный sticky в потоке, их трогать не нужно;
- *  отличаем по вычисленному стилю, а не по ширине окна. */
-const DOCK_SELECTOR = ".cta-dock";
+/** Что внутри страницы приколочено к экрану и потому пострадает от transform.
+ *
+ *  Отбор идёт по ФАКТУ (вычисленный position), а не по списку известных
+ *  классов. Сначала здесь стоял `.cta-dock` — и мимо прошли полноэкранный слой
+ *  легендарного товара и его собственная нижняя панель: у них того класса нет,
+ *  он там снят намеренно. Список классов пришлось бы дополнять каждый раз,
+ *  когда на какой-нибудь странице появится ещё одна прилипшая панель, а
+ *  забытое дополнение проявилось бы кривым переходом на одном экране из
+ *  пятнадцати.
+ *
+ *  Селектор при этом остаётся классовым и дешёвым: `.fixed` — утилита Tailwind,
+ *  которой такие элементы и объявляются, `.cta-dock` — на случай панели,
+ *  получающей position только из CSS. Перебирать всех потомков <main> с
+ *  getComputedStyle нельзя: на витрине это тысячи узлов, и переход начинался бы
+ *  с потерянного кадра.
+ */
+const PINNABLE_SELECTOR = ".cta-dock, .fixed";
+
+/** Выше этого z-index лежит оболочка приложения (BottomNav 40, CartBar 30). */
+const SHELL_Z = 40;
 
 function isFixed(el: Element): boolean {
   return getComputedStyle(el).position === "fixed";
 }
 
-/** Прибить панель к координатам, в которых она сейчас нарисована.
- *  `originTop`/`originLeft` — точка отсчёта будущего absolute-родителя. */
+/** Прибить элемент к координатам, в которых он сейчас нарисован.
+ *  `originTop`/`originLeft` — точка отсчёта будущего absolute-родителя.
+ *
+ *  Размеры фиксируем оба. Только ширины хватало панели, которая тянется снизу,
+ *  но полноэкранный слой объявлен через inset:0 — у него высоту задаёт `bottom`,
+ *  и, сняв его, мы схлопнули бы слой в полоску. */
 function pinTo(el: HTMLElement, rect: DOMRect, originLeft: number, originTop: number) {
   el.style.position = "absolute";
   el.style.left = `${rect.left - originLeft}px`;
   el.style.top = `${rect.top - originTop}px`;
   el.style.width = `${rect.width}px`;
+  el.style.height = `${rect.height}px`;
   el.style.right = "auto";
   el.style.bottom = "auto";
 }
@@ -118,8 +139,8 @@ function captureGhost(main: HTMLElement): HTMLElement | null {
   // Панели в клоне остались бы fixed — то есть привязанными к экрану, а не к
   // снимку: они не уехали бы вместе с ним и продублировали бы панель нового
   // экрана. Замеры берём с ЖИВЫХ панелей (у клона ещё нет раскладки).
-  const live = main.querySelectorAll<HTMLElement>(DOCK_SELECTOR);
-  const copies = ghost.querySelectorAll<HTMLElement>(DOCK_SELECTOR);
+  const live = main.querySelectorAll<HTMLElement>(PINNABLE_SELECTOR);
+  const copies = ghost.querySelectorAll<HTMLElement>(PINNABLE_SELECTOR);
   live.forEach((el, i) => {
     const copy = copies[i];
     if (!copy || !isFixed(el)) return;
@@ -133,15 +154,18 @@ function captureGhost(main: HTMLElement): HTMLElement | null {
 /** Прибить панели ВХОДЯЩЕГО экрана, чтобы они ехали вместе с ним.
  *  Возвращает функцию отката — она обязана вызваться в любом исходе. */
 function pinLiveDocks(main: HTMLElement): () => void {
-  const docks = Array.from(main.querySelectorAll<HTMLElement>(DOCK_SELECTOR)).filter(isFixed);
+  const docks = Array.from(main.querySelectorAll<HTMLElement>(PINNABLE_SELECTOR)).filter(isFixed);
   if (docks.length === 0) return () => {};
 
   const rect = main.getBoundingClientRect();
   const previousStyles = docks.map((el) => el.getAttribute("style"));
   const previousPosition = main.style.position;
+  const previousZ = main.style.zIndex;
+  let maxZ = 0;
 
   docks.forEach((el) => {
     const r = el.getBoundingClientRect();
+    maxZ = Math.max(maxZ, Number(getComputedStyle(el).zIndex) || 0);
     // Абсолютный потомок скролл-контейнера отсчитывается от его СОДЕРЖИМОГО, а
     // не от видимой части, поэтому к экранной координате добавляем прокрутку.
     pinTo(el, r, rect.left, rect.top - main.scrollTop);
@@ -150,6 +174,14 @@ function pinLiveDocks(main: HTMLElement): () => void {
   // position:relative на нём ничего не смещает.
   main.style.position = "relative";
 
+  // transform делает <main> отдельным контекстом наложения, и z-index его
+  // потомков перестаёт что-либо значить снаружи: слой, который в покое лежал
+  // ПОВЕРХ нижней навигации (полноэкранный экран легендарного товара, z-50),
+  // на время перехода уехал бы под неё. Поднимаем сам <main> до высоты этого
+  // слоя — но только если такой слой есть, иначе обычная страница на время
+  // перехода наползала бы на навигацию, которой положено стоять на месте.
+  if (maxZ >= SHELL_Z) main.style.zIndex = String(maxZ);
+
   return () => {
     docks.forEach((el, i) => {
       const prev = previousStyles[i];
@@ -157,6 +189,7 @@ function pinLiveDocks(main: HTMLElement): () => void {
       else el.setAttribute("style", prev);
     });
     main.style.position = previousPosition;
+    main.style.zIndex = previousZ;
   };
 }
 
