@@ -336,7 +336,7 @@ export default function Home() {
           было три крупных блока подряд (шапка, сетка сценариев, категории), и
           первая карточка появлялась ниже сгиба. Теперь между шапкой и товарами —
           одна строка поиска, одна строка чипов и одна строка сценариев. */}
-      <header className="app-hero -mx-4 -mt-3 rounded-b-hero px-4 pb-5 pt-2 text-white shadow-float lg:hidden">
+      <header className="-mx-4 -mt-3 px-4 pb-4 pt-2 lg:hidden">
         <div className="flex items-center justify-between gap-3">
           {/* Логотип крупнее кнопок справа намеренно: это единственная точка
               бренда на экране. Белой плашки под ним больше нет — слово набрано
@@ -353,12 +353,12 @@ export default function Home() {
                 aria-label="Бета-версия: что уже работает и что будет дальше"
                 // -my-2.5 + py-2.5: сама плашка остаётся 23px в высоту, а зона
                 // нажатия дотягивается до 44px и при этом не растит строку.
-                className="tap -my-3 flex shrink-0 items-center rounded-full px-2.5 py-3 text-[10px] font-bold uppercase tracking-[0.08em] text-white/80 outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/70"
+                className="tap -my-3 flex shrink-0 items-center rounded-full px-2.5 py-3 text-[10px] font-bold uppercase tracking-[0.08em] text-muted outline-none transition-colors hover:bg-mutedbg focus-visible:ring-2 focus-visible:ring-accent"
               >
-                <span className="rounded-full px-2 py-1 ring-1 ring-inset ring-white/30">Beta</span>
+                <span className="rounded-full px-2 py-1 ring-1 ring-inset ring-border">Beta</span>
               </button>
             </div>
-            <p className="mt-1.5 truncate text-[11px] font-medium leading-4 text-white/70">Техника, которую легко найти</p>
+
           </div>
           <HeroActions
             cartCount={cart.items_count}
@@ -371,8 +371,14 @@ export default function Home() {
         {/* Крупный поиск — главный элемент верха (relative: под ним панель подсказок).
             onBlur на обёртке: закрываем панель, только если фокус ушёл наружу
             (кнопки панели держат фокус через preventDefault на mousedown). */}
+        {/* Фраза бренда переехала сюда из-под логотипа и вместе с местом сменила
+            вес: 11px серым она была подписью к картинке, а на первом экране
+            магазина главный вопрос — «что здесь можно найти». Текст тот же, но
+            теперь он отвечает на него, а не украшает шапку. */}
+        <p className="mt-3 text-h2 font-bold tracking-tight">Техника, которую легко найти</p>
+
         <div
-          className="relative mt-3 flex gap-2"
+          className="relative mt-2.5 flex gap-2"
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSearchOpen(false);
           }}
@@ -380,7 +386,10 @@ export default function Home() {
           {/* Одно поле во всю ширину, кнопка AI — внутри у правого края и
               заметно меньше поля. Раньше рядом стоял тумблер «Каталог / AI»:
               он отъедал ширину у подсказки и, главное, ничего не открывал. */}
-          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-card bg-white py-1.5 pl-4 pr-1.5 text-text shadow-[0_4px_14px_-6px_rgba(9,23,41,0.28)]">
+          {/* Волосяная рамка вместо тени: поле лежит на странице, а не парит
+              над ней. Тень нужна была, чтобы белое читалось на синем; синего
+              больше нет, и тень осталась бы украшением. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-card border border-border bg-surface py-1.5 pl-4 pr-1.5 text-text">
             <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
             </svg>
@@ -425,7 +434,11 @@ export default function Home() {
             <button
               onClick={goAi}
               aria-label={search.trim() ? `Спросить AI: ${search.trim()}` : "Открыть AI-подбор"}
-              className="tap flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 text-[13px] font-semibold text-white"
+              // rounded-field, а не rounded-full: залитая пилюля с текстом —
+              // это форма «по умолчанию для всего», от которой мы уходим.
+              // Круглыми остаются только кнопки-иконки, где круг задан
+              // содержимым, а не вкусом.
+              className="tap flex h-9 shrink-0 items-center gap-1.5 rounded-field bg-accent px-3.5 text-[13px] font-semibold text-white"
             >
               <Icon name="sparkles" className="h-4 w-4" strokeWidth={2} />
               ИИ
@@ -466,7 +479,7 @@ export default function Home() {
                   { value: "brand", label: "Бренды" },
                 ] as const}
                 ariaLabel="Навигация по каталогу"
-                variant="on-dark"
+                variant="on-surface"
               />
             ) : <div />}
             <FxRateChip usdRate={config.usd_rate} onClick={() => setFxSheetOpen(true)} />
@@ -479,21 +492,26 @@ export default function Home() {
           </Suspense>
         )}
 
-        {/* Быстрые категории — светлые чипы на тёмном hero (сразу видно глубину
-            каталога). Данные: админские плитки → каталог → кэш; максимум 6. */}
-        <div className={`no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 ${hasBrandAxis ? "mt-2.5" : "mt-3"}`}>
+        {/* Категории — текстовый ряд, а не пилюли. Причина не в моде: в каталоге
+            выбранная категория уже обозначена подчёркнутым словом, и пилюля
+            здесь заставляла бы приложение говорить о категориях двумя разными
+            языками на соседних экранах.
+            Подложки нет, но высота строки 44px остаётся — это минимальная цель
+            касания, и она не обязана быть видимой.
+            Данные: админские плитки → каталог → кэш; максимум 6. */}
+        <div className={`no-scrollbar -mx-4 flex items-center gap-5 overflow-x-auto px-4 ${hasBrandAxis ? "mt-1" : "mt-2"}`}>
           {heroChips.map((c) => (
             <button
               key={c.key}
               onClick={() => navigate(safeInternalRoute(c.route))}
-              className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-full bg-white/[0.13] px-4 text-[13px] font-semibold text-[color:var(--app-hero-chip-ink)] outline-none transition-colors hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white/70"
+              className="tap flex h-11 shrink-0 items-center whitespace-nowrap text-footnote font-medium text-text outline-none transition-colors hover:text-accent focus-visible:text-accent"
             >
               {c.label}
             </button>
           ))}
           <button
             onClick={() => navigate("/catalog")}
-            className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-full px-4 text-[13px] font-semibold text-white/90 outline-none ring-1 ring-inset ring-white/25 transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/70"
+            className="tap flex h-11 shrink-0 items-center whitespace-nowrap text-footnote font-medium text-accent outline-none"
           >
             {axis === "brand" ? "Все бренды →" : "Все категории →"}
           </button>
@@ -833,12 +851,12 @@ function HeroActions({
     <div className="flex shrink-0 items-center gap-2">
       {/* Пилюля выросла с 36 до 44px: избранное и корзина — самые верхние
           действия экрана, и 32px высоты по правилу 44×44 им мало. */}
-      <div className="flex items-center rounded-full bg-white/[0.12]">
-        <button onClick={onFavorites} aria-label="Избранное" className="tap flex h-11 w-11 items-center justify-center rounded-full text-white outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+      <div className="flex items-center rounded-full bg-mutedbg">
+        <button onClick={onFavorites} aria-label="Избранное" className="tap flex h-11 w-11 items-center justify-center rounded-full text-text outline-none focus-visible:ring-2 focus-visible:ring-accent">
           <HeartGlyph className="h-[18px] w-[18px]" />
         </button>
-        <span aria-hidden className="h-4 w-px bg-white/20" />
-        <button onClick={onCart} aria-label={cartLabel} className="tap relative flex h-11 w-11 items-center justify-center rounded-full text-white outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+        <span aria-hidden className="h-4 w-px bg-border" />
+        <button onClick={onCart} aria-label={cartLabel} className="tap relative flex h-11 w-11 items-center justify-center rounded-full text-text outline-none focus-visible:ring-2 focus-visible:ring-accent">
           <CartGlyph className="h-[18px] w-[18px]" />
           <CartCount count={cartCount} offset="right-2 top-1.5" />
         </button>
@@ -1009,13 +1027,17 @@ function QuickScenarios({
   onMacbook: () => void;
   onSellItem: () => void;
 }) {
-  // Порядок не произвольный: Trade-In и Продать соседствуют — «у меня есть
-  // техника», Бизнесу и Опт — «нужна техника для бизнеса» (см. спеку).
+  // Осталось два пункта из четырёх. «Бизнесу» и «Опт» — не то же самое, что
+  // Trade-In и «Продать»: первые два делает обычный покупатель, вторые два
+  // адресованы юрлицам, и попадают туда единицы. Четыре РАВНЫЕ плитки — это
+  // отказ решать, что важнее, и платит за него первый экран.
+  //
+  // Из приложения они никуда не делись: обе строки уже стояли в профиле, в
+  // блоке «Связаться с нами» («Оптовая закупка», «Поставка для компании»), —
+  // то есть на главной они были вторым показом одного и того же.
   const items: { key: string; label: string; onClick: () => void }[] = [
     { key: "tradein", label: "Trade-In", onClick: () => onScenario("trade_in") },
     { key: "sell_item", label: "Продать", onClick: onSellItem },
-    { key: "b2b", label: "Бизнесу", onClick: () => onScenario("b2b") },
-    { key: "wholesale", label: "Опт", onClick: () => onScenario("wholesale") },
     // Плитки «Аксессуары» здесь больше нет: она вела в категорию «аксессуары»,
     // которой в каталоге не существует (кабелей/чехлов/зарядок нет вовсе).
     // Реальные категории показывает блок категорий — он строится из данных.
@@ -1040,7 +1062,7 @@ function QuickScenarios({
     // тоном отделяет пункт от фона, а поднимать его над страницей незачем —
     // рядом стоят настоящие карточки товаров, и спорить с ними по весу
     // служебные ссылки не должны.
-    <div className="stagger mt-4 grid grid-cols-4 gap-2 lg:hidden">
+    <div className="stagger mt-4 grid grid-cols-2 gap-2 lg:hidden">
       {items.map((s) => (
         <button
           key={s.key}

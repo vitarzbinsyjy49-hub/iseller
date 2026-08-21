@@ -45,7 +45,7 @@ export function ProfileChip({ user, variant }: { user: User | null; variant: "mo
       onClick={() => navigate("/profile")}
       aria-label={`Профиль: ${name}`}
       title={name}
-      className="tap flex h-11 w-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+      className="tap flex h-11 w-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       {/* Кружок 36px, область нажатия 44px — как у остальных круглых кнопок. */}
       {showPhoto ? (
@@ -56,7 +56,7 @@ export function ProfileChip({ user, variant }: { user: User | null; variant: "mo
           className="h-9 w-9 rounded-full object-cover"
         />
       ) : (
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/10 text-xs font-bold text-accent">
           {init}
         </span>
       )}

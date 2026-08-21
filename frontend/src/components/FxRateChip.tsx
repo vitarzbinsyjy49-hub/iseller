@@ -20,14 +20,17 @@ export function FxRateChip({
     <button
       type="button"
       onClick={onClick}
-      className="tap flex h-11 shrink-0 items-center gap-1 rounded-full bg-white/[0.13] px-3.5 text-[12.5px] font-bold text-[color:var(--app-hero-chip-ink)] outline-none ring-1 ring-inset ring-white/15 focus-visible:ring-2 focus-visible:ring-white/70"
+      // v5.7.0: верх главной стал светлым, и чип вместе с ним. Подложки нет
+      // вовсе — курс это справка, а не действие: он не обязан выглядеть кнопкой
+      // рядом с поиском и категориями.
+      className="tap flex h-11 shrink-0 items-center gap-1 rounded-full px-1 text-[12.5px] font-bold text-muted outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-accent"
     >
       <span>${formatted.value}</span>
       {formatted.delta !== null && (
-        // Не text-green/text-danger: это токены для светлых поверхностей,
-        // на тёмном hero-градиенте (--app-hero-bg) дают ~1.4:1/3.0:1 — провал
-        // WCAG AA. Точная пара под тёмный фон — см. text-[#8fd4ff] в SceneTrust.tsx.
-        <span className={formatted.rising ? "text-[#4ADE80]" : "text-[#F87171]"}>
+        // Токены светлых поверхностей вернулись: фон под чипом теперь светлый.
+        // Хардкоды #4ADE80/#F87171 стояли здесь ради контраста на тёмном
+        // hero-градиенте — на светлом они, наоборот, не добирают.
+        <span className={formatted.rising ? "text-green" : "text-danger"}>
           {formatted.rising ? "▲" : "▼"}{formatted.delta}
         </span>
       )}
