@@ -15,6 +15,7 @@ from app.api import admin, admin_crm, admin_promo, admin_users, ai, auth, cart, 
 from app.models import analytics_event as _analytics_event  # noqa: F401
 from app.models import cart as _cart  # noqa: F401
 from app.models import favorite as _favorite  # noqa: F401
+from app.models import fx_rate as _fx_rate  # noqa: F401
 from app.models import lead_item as _lead_item  # noqa: F401
 from app.models import home as _home  # noqa: F401
 from app.models import lead as _lead  # noqa: F401
