@@ -27,6 +27,24 @@ export type { ScenarioKey, ChoiceItem } from "../lib/scenario";
    ============================================================ */
 export type SheetClose = (afterClose?: () => void) => void;
 
+/** На сколько панель уезжает вниз при открытии и закрытии.
+ *
+ *  Прижатая к низу экрана шторка обязана приезжать снизу ЦЕЛИКОМ — на свою
+ *  высоту. Прежний общий сдвиг в 32px был не выездом, а подрагиванием: панель
+ *  почти сразу оказывалась на месте, и «выплывание» приходилось додумывать по
+ *  затуханию. Высоту читаем после того, как выставлен max-height, иначе она
+ *  будет от неограниченного контента.
+ *
+ *  Центрованная desktop-модалка (sm+) остаётся на коротком сдвиге: ехать ей
+ *  неоткуда, снизу экрана она не появляется. Там `undefined` возвращает
+ *  animateSheet* к их собственным значениям по умолчанию. */
+function sheetTravelPx(panel: HTMLElement, centered: boolean): number | undefined {
+  if (centered) return undefined;
+  // Запас в 1px: при дробном DPR округление высоты вниз оставляло бы у нижней
+  // кромки полоску панели, видимую до и после анимации.
+  return panel.offsetHeight + 1;
+}
+
 export function SheetShell({ onClose, labelledBy, panelClassName = "", children }: {
   onClose: () => void;
   labelledBy: string;
@@ -57,8 +75,9 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
     if (!panel || !backdrop) return;
     const rawAppHeight = getComputedStyle(document.documentElement).getPropertyValue("--app-height");
     const appHeightPx = parseFloat(rawAppHeight) || window.innerHeight;
-    panel.style.maxHeight = `${sheetMaxHeightPx(appHeightPx, window.innerWidth >= 640)}px`;
-    cancelAnimRef.current = animateSheetIn(panel, backdrop);
+    const centered = window.innerWidth >= 640;
+    panel.style.maxHeight = `${sheetMaxHeightPx(appHeightPx, centered)}px`;
+    cancelAnimRef.current = animateSheetIn(panel, backdrop, undefined, sheetTravelPx(panel, centered));
     return () => cancelAnimRef.current();
   }, []);
 
@@ -72,7 +91,7 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
     cancelAnimRef.current = animateSheetOut(panel, backdrop, () => {
       onCloseRef.current();
       afterClose?.();
-    });
+    }, undefined, sheetTravelPx(panel, window.innerWidth >= 640));
   }, []);
 
   // Блокировка фонового скролла без прыжка страницы (компенсируем ширину
@@ -115,7 +134,11 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
   return createPortal(
     <div
       ref={backdropRef}
-      className={`fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center ${closing ? "pointer-events-none" : ""}`}
+      // Подложка светлая (25%, было 40%) намеренно: страница под шторкой
+      // должна остаться читаемой и узнаваемой — шторка накрывает её, а не
+      // выключает. Отделяет панель от фона не темнота, а её собственная тень
+      // (shadow-sheet) и то, что она приезжает снизу целиком.
+      className={`fixed inset-0 z-50 flex items-end justify-center bg-black/25 sm:items-center ${closing ? "pointer-events-none" : ""}`}
       onClick={() => requestClose()}
     >
       <div

@@ -164,6 +164,18 @@ const BACKDROP_IN_MS = 150;
 const SHEET_IN_OFFSET_PX = 32;
 const SHEET_OUT_OFFSET_PX = 20;
 
+/** Проявляется ли панель вдобавок к сдвигу.
+ *
+ *  Нет — когда панель приезжает снизу ЦЕЛИКОМ: у настоящей шторки её край
+ *  виден с первого кадра, и полупрозрачная панель поверх контента читается не
+ *  как «выезжает», а как «мигает». Да — когда сдвиг короткий и сам по себе
+ *  смену состояния не показывает: desktop-модалка стоит по центру и ехать ей
+ *  неоткуда, а при «уменьшить движение» сдвига нет вовсе и проявление остаётся
+ *  единственным сигналом. */
+function sheetFades(reducedMotion: boolean, travelPx: number, baseline = SHEET_IN_OFFSET_PX): boolean {
+  return reducedMotion || travelPx <= baseline;
+}
+
 /** Выезд шторки снизу: панель (сдвиг + лёгкое проявление) и подложка (чистое
  *  затухание) одним вызовом.
  *
@@ -177,11 +189,17 @@ const SHEET_OUT_OFFSET_PX = 20;
  *  Первый кадр («от») применяется синхронно, ДО планирования rAF — вызывающий
  *  обязан звать это из useLayoutEffect (не useEffect), иначе браузер успеет
  *  нарисовать один кадр в конечном состоянии до того, как встанет исходное. */
-export function animateSheetIn(panel: HTMLElement, backdrop: HTMLElement, reducedMotion = prefersReducedMotion()): () => void {
-  const offset = reducedMotion ? 0 : SHEET_IN_OFFSET_PX;
+export function animateSheetIn(
+  panel: HTMLElement,
+  backdrop: HTMLElement,
+  reducedMotion = prefersReducedMotion(),
+  travelPx = SHEET_IN_OFFSET_PX,
+): () => void {
+  const offset = reducedMotion ? 0 : travelPx;
   const duration = reducedMotion ? FADE_MS : SHEET_IN_MS;
+  const fades = sheetFades(reducedMotion, travelPx);
   const applyPanel = (t: number) => {
-    panel.style.opacity = String(reducedMotion ? t : 0.86 + 0.14 * t);
+    panel.style.opacity = fades ? String(reducedMotion ? t : 0.86 + 0.14 * t) : "";
     panel.style.transform = offset ? `translate3d(0, ${offset * (1 - t)}px, 0)` : "";
   };
   applyPanel(0);
@@ -197,11 +215,18 @@ export function animateSheetIn(panel: HTMLElement, backdrop: HTMLElement, reduce
  *  размонтирование в SheetShell. Раньше задержку перед закрытием считали
  *  отдельно от самой CSS-анимации (`transitionDuration(190)`), и оба места
  *  приходилось держать в согласии руками. */
-export function animateSheetOut(panel: HTMLElement, backdrop: HTMLElement, done: () => void, reducedMotion = prefersReducedMotion()): () => void {
-  const offset = reducedMotion ? 0 : SHEET_OUT_OFFSET_PX;
+export function animateSheetOut(
+  panel: HTMLElement,
+  backdrop: HTMLElement,
+  done: () => void,
+  reducedMotion = prefersReducedMotion(),
+  travelPx = SHEET_OUT_OFFSET_PX,
+): () => void {
+  const offset = reducedMotion ? 0 : travelPx;
   const duration = reducedMotion ? FADE_MS : SHEET_OUT_MS;
+  const fades = sheetFades(reducedMotion, travelPx, SHEET_OUT_OFFSET_PX);
   const cancelPanel = animateNumber(0, 1, duration, (t) => {
-    panel.style.opacity = String(1 - t);
+    panel.style.opacity = fades ? String(1 - t) : "";
     panel.style.transform = offset ? `translate3d(0, ${offset * t}px, 0)` : "";
   }, done);
   const cancelBackdrop = animateOpacity(backdrop, 1, 0, duration);

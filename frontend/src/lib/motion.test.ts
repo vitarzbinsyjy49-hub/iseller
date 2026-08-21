@@ -228,6 +228,42 @@ describe("animateSheetIn", () => {
     });
   });
 
+  it("шторка на всю высоту едет снизу целиком и НЕ проявляется", () => {
+    withControlledRafQueue((tick) => {
+      const panel = fakeSheetElement();
+      const backdrop = fakeSheetElement();
+      // Прижатая к низу шторка приезжает на собственную высоту. Проявление ей
+      // не нужно и вредно: полупрозрачная панель поверх контента читается как
+      // мигание, а не как выезд.
+      animateSheetIn(panel, backdrop, false, 640);
+      expect(panel.style.transform).toContain("640px");
+      expect(panel.style.opacity).toBe("");
+      tick(0);
+      tick(SHEET_IN_MS);
+      expect(panel.style.transform).toBe("");
+      expect(panel.style.opacity).toBe("");
+      // Подложка затухает в обоих режимах — она и отделяет шторку от страницы.
+      expect(backdrop.style.opacity).toBe("1");
+    });
+  });
+
+  it("короткий сдвиг (desktop-модалка) по-прежнему проявляется", () => {
+    withControlledRafQueue(() => {
+      const panel = fakeSheetElement();
+      animateSheetIn(panel, fakeSheetElement(), false, 32);
+      expect(panel.style.opacity).toBe("0.86");
+    });
+  });
+
+  it("«уменьшить движение» гасит сдвиг даже у шторки на всю высоту", () => {
+    withControlledRafQueue(() => {
+      const panel = fakeSheetElement();
+      animateSheetIn(panel, fakeSheetElement(), true, 640);
+      expect(panel.style.transform).toBe("");
+      expect(panel.style.opacity).toBe("0");
+    });
+  });
+
   it("возвращает функцию отмены обеих цепочек", () => {
     withControlledRafQueue(() => {
       const cancel = animateSheetIn(fakeSheetElement(), fakeSheetElement(), false);
