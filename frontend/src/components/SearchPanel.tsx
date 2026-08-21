@@ -49,9 +49,25 @@ function PanelScroll({ deps, className = "", children, ...rest }: {
     if (!el) return;
     const apply = () => {
       const vv = window.visualViewport;
-      const height = vv?.height ?? window.innerHeight;
-      const top = el.getBoundingClientRect().top - (vv?.offsetTop ?? 0);
-      el.style.maxHeight = `${dropdownMaxHeightPx(top, height)}px`;
+      const offset = vv?.offsetTop ?? 0;
+      // Нижняя граница — не только клавиатура. Поверх панели стоит оболочка
+      // приложения: нижняя навигация (z-40) и панель корзины (z-30), обе позже
+      // панели в документе, то есть рисуются НАД ней. Ограничения одной лишь
+      // видимой высоты не хватало: панель влезала в экран, но её низ вместе с
+      // кнопкой «Спросить AI» оказывался под таб-баром.
+      //
+      // Берём фактический верх этих панелей, а не их высоту из констант: при
+      // открытой клавиатуре навигация может быть скрыта (html.kb-open), и тогда
+      // отнимать у панели её высоту не за что.
+      let limit = vv?.height ?? window.innerHeight;
+      for (const chrome of document.querySelectorAll<HTMLElement>(".js-bottom-nav")) {
+        const r = chrome.getBoundingClientRect();
+        if (r.height === 0) continue;  // скрыта — места не занимает
+        const chromeTop = r.top - offset;
+        if (chromeTop > 0) limit = Math.min(limit, chromeTop);
+      }
+      const top = el.getBoundingClientRect().top - offset;
+      el.style.maxHeight = `${dropdownMaxHeightPx(top, limit)}px`;
     };
     apply();
     const vv = window.visualViewport;
