@@ -3,6 +3,7 @@ import {
   bottomNavStack,
   computeSafeArea,
   formatCssVars,
+  dropdownMaxHeightPx,
   imagePaddingClass,
   isKeyboardOpen,
   pickViewportHeight,
@@ -161,6 +162,30 @@ describe("bottomNavStack (нижний стек CTA/навбар, v5.2.7)", () =
       const s = bottomNavStack(safe);
       expect(s.contentPadBottom).toBeGreaterThan(s.ctaBottomOffset + BAR_ABOVE_BUTTON);
     }
+  });
+});
+
+describe("dropdownMaxHeightPx", () => {
+  it("отдаёт всё свободное место под панелью", () => {
+    expect(dropdownMaxHeightPx(200, 812)).toBe(600);
+  });
+
+  it("сжимается вместе с видимой областью, когда открыта клавиатура", () => {
+    // 812 -> 380: без этого панель ограничивалась бы 60vh от НЕИЗМЕННОЙ высоты
+    // и нижним краем уходила под клавиатуру, а её последняя строка
+    // («Спросить AI») становилась недостижимой даже прокруткой.
+    expect(dropdownMaxHeightPx(200, 380)).toBe(180);
+    expect(dropdownMaxHeightPx(200, 500)).toBe(288);
+  });
+
+  it("не схлопывается в полоску, как бы мало места ни осталось", () => {
+    expect(dropdownMaxHeightPx(300, 320)).toBe(180);
+    expect(dropdownMaxHeightPx(500, 300)).toBe(180);
+  });
+
+  it("оставляет зазор до нижней кромки", () => {
+    expect(dropdownMaxHeightPx(100, 812, 12)).toBe(700);
+    expect(dropdownMaxHeightPx(100, 812, 0)).toBe(712);
   });
 });
 

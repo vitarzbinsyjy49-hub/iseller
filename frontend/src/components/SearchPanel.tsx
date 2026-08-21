@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { track } from "../lib/analytics";
 import { ProductCard as TCard } from "./ai/types";
 import { ProductImage } from "./ProductCard";
@@ -6,6 +6,7 @@ import { formatPrice } from "../lib/format";
 import { useLiveSearch, MIN_QUERY_LEN } from "../lib/liveSearch";
 import { clearSearchHistory, loadSearchHistory } from "../lib/searchHistory";
 import { Icon } from "./icons";
+import { dropdownMaxHeightPx } from "../lib/viewport";
 
 /** Сценарные чипы поиска: только маршруты, которые каталог реально понимает
  *  (query/category/today) — никаких выдуманных фильтров. Консультационные
@@ -20,6 +21,57 @@ const SCENARIO_CHIPS: { label: string; route: string }[] = [
   // Оставшиеся — поисковые запросы по реальным моделям, они не могут протухнуть
   // так же, как ссылка на категорию. Настоящие категории приходят в prop chips.
 ];
+
+/** Прокручиваемая оболочка панели с высотой по ВИДИМОЙ области.
+ *
+ *  Раньше высоту задавал `max-h-[min(60vh,480px)]` — и только состоянию с
+ *  пустым запросом; список результатов не ограничивался вовсе. Обе беды видны
+ *  при открытой клавиатуре: vh про неё не знает, панель уходит нижним краем
+ *  под клавиатуру, и последняя строка («Спросить AI») становится недостижимой
+ *  — прокрутка внутри панели не помогает, потому что не панель прокручена, а
+ *  её низ физически закрыт.
+ *
+ *  Считаем от visualViewport: он, в отличие от --app-height, сжимается вместе
+ *  с клавиатурой (--app-height нарочно берётся из СТАБИЛЬНОЙ высоты, чтобы не
+ *  дёргались шторки, — см. lib/telegram).
+ *
+ *  Пересчёт вешаем и на resize, и на scroll видимой области: на iOS открытие
+ *  клавиатуры сдвигает visualViewport, не меняя размера окна. */
+function PanelScroll({ deps, className = "", children, ...rest }: {
+  deps: unknown[];
+  className?: string;
+  children: ReactNode;
+} & Record<string, unknown>) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const apply = () => {
+      const vv = window.visualViewport;
+      const height = vv?.height ?? window.innerHeight;
+      const top = el.getBoundingClientRect().top - (vv?.offsetTop ?? 0);
+      el.style.maxHeight = `${dropdownMaxHeightPx(top, height)}px`;
+    };
+    apply();
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", apply);
+    vv?.addEventListener("scroll", apply);
+    window.addEventListener("resize", apply);
+    return () => {
+      vv?.removeEventListener("resize", apply);
+      vv?.removeEventListener("scroll", apply);
+      window.removeEventListener("resize", apply);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return (
+    <div ref={ref} className={`overflow-y-auto overscroll-contain ${className}`} {...rest}>
+      {children}
+    </div>
+  );
+}
 
 type Props = {
   /** Текущий текст в поисковом инпуте (владелец инпута — родитель). */
@@ -66,7 +118,7 @@ export default function SearchPanel({
 
   if (typing) {
     return (
-      <div role="listbox" aria-label="Результаты поиска">
+      <PanelScroll deps={[typing, searching, results?.length ?? -1]} role="listbox" aria-label="Результаты поиска">
         {searching && results === null ? (
           <p className="px-4 py-3.5 text-sm text-muted">Ищем…</p>
         ) : results && results.length > 0 ? (
@@ -122,13 +174,13 @@ export default function SearchPanel({
             </div>
           </div>
         )}
-      </div>
+      </PanelScroll>
     );
   }
 
   // ===== Пустой запрос: полезное состояние вместо пустого дропдауна =====
   return (
-    <div className="max-h-[min(60vh,480px)] overflow-y-auto overscroll-contain p-3">
+    <PanelScroll deps={[typing, history.length, chips.length, recentlyViewed?.length ?? -1]} className="p-3">
       {history.length > 0 && (
         <section aria-label="Недавние запросы">
           <div className="flex items-baseline justify-between px-1">
@@ -219,6 +271,6 @@ export default function SearchPanel({
           <span className="block text-[12px] text-muted">Опишите задачу — подберём из реального наличия</span>
         </span>
       </button>
-    </div>
+    </PanelScroll>
   );
 }
