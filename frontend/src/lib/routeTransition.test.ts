@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEPTH_MS,
-  PARALLAX_PCT,
   TAB_MS,
-  dimsExitingLayer,
   resolveRouteMotion,
   routeMotionDuration,
   routeMotionOffsets,
@@ -32,90 +29,65 @@ describe("resolveRouteMotion", () => {
 
   it("вкладки остаются плоскостью и при POP", () => {
     // Возврат браузера между двумя вкладками — это всё ещё соседние экраны
-    // одного уровня, а не выход из глубины: направление берём из их порядка.
+    // одного уровня: направление берём из их порядка, а не из истории.
     expect(resolveRouteMotion("/catalog", "/", "POP")).toEqual({ kind: "tab", enterFrom: "left" });
   });
 
-  it("переход на вложенный экран — вглубь, справа", () => {
-    expect(resolveRouteMotion("/catalog", "/product/7", "PUSH")).toEqual({
-      kind: "depth", enterFrom: "right",
+  describe("вложенные экраны — без сдвига", () => {
+    // Решение по итогам проверки на устройстве: вложенный экран подгружается
+    // отдельным chunk'ом и запрашивает свои данные, то есть меняет содержимое
+    // прямо посреди анимации. Сдвиг этот момент не сглаживает, а подчёркивает —
+    // он обещает непрерывность, которой под ним нет.
+    it("вход в карточку товара", () => {
+      expect(resolveRouteMotion("/catalog", "/product/7", "PUSH")).toEqual({ kind: "none" });
+      expect(resolveRouteMotion("/", "/product/7", "PUSH")).toEqual({ kind: "none" });
     });
-  });
 
-  it("возврат с вложенного экрана — слева", () => {
-    expect(resolveRouteMotion("/product/7", "/catalog", "POP")).toEqual({
-      kind: "depth", enterFrom: "left",
+    it("возврат из карточки товара", () => {
+      expect(resolveRouteMotion("/product/7", "/catalog", "POP")).toEqual({ kind: "none" });
     });
-  });
 
-  it("переход между двумя вложенными экранами тоже вглубь", () => {
-    // Из карточки товара в похожий товар: уровень не меняется, но это шаг
-    // вперёд по истории, и назад из него ведёт кнопка «Назад».
-    expect(resolveRouteMotion("/product/7", "/product/9", "PUSH")).toEqual({
-      kind: "depth", enterFrom: "right",
+    it("переход между двумя вложенными экранами", () => {
+      expect(resolveRouteMotion("/product/7", "/product/9", "PUSH")).toEqual({ kind: "none" });
     });
-  });
 
-  it("вложенные экраны вне списка вкладок не считаются вкладками", () => {
-    // /favorites и /history — глубина, хотя это корневые пути.
-    expect(resolveRouteMotion("/", "/favorites", "PUSH")).toEqual({
-      kind: "depth", enterFrom: "right",
+    it("корневые пути вне списка вкладок вкладками не считаются", () => {
+      // /favorites, /history, /cart — глубина, хотя путь короткий.
+      expect(resolveRouteMotion("/", "/favorites", "PUSH")).toEqual({ kind: "none" });
+      expect(resolveRouteMotion("/catalog", "/cart", "PUSH")).toEqual({ kind: "none" });
     });
   });
 });
 
 describe("routeMotionDuration", () => {
-  it("вкладки быстрее, чем глубина", () => {
+  it("сдвиг вкладок укладывается в порог, за которым переход читается как задержка", () => {
     expect(routeMotionDuration({ kind: "tab", enterFrom: "right" })).toBe(TAB_MS);
-    expect(routeMotionDuration({ kind: "depth", enterFrom: "right" })).toBe(DEPTH_MS);
-    expect(TAB_MS).toBeLessThan(DEPTH_MS);
+    expect(TAB_MS).toBeLessThanOrEqual(300);
   });
 
-  it("длительности не выходят за границу, после которой переход читается как задержка", () => {
-    expect(DEPTH_MS).toBeLessThanOrEqual(300);
-    expect(TAB_MS).toBeLessThanOrEqual(300);
+  it("без движения длительности нет", () => {
+    expect(routeMotionDuration({ kind: "none" })).toBe(0);
   });
 });
 
 describe("routeMotionOffsets", () => {
-  it("вкладки идут на всю ширину в противоположные стороны", () => {
+  it("вкладки идут на всю ширину навстречу друг другу", () => {
+    // Оба слоя проходят одинаковый путь: вкладки равноправны, ни одна не «под»
+    // другой. Параллакс (разная скорость слоёв) обозначал бы вложенность,
+    // которой между вкладками нет.
     expect(routeMotionOffsets({ kind: "tab", enterFrom: "right" })).toEqual({ enter: 100, exit: -100 });
     expect(routeMotionOffsets({ kind: "tab", enterFrom: "left" })).toEqual({ enter: -100, exit: 100 });
   });
 
-  it("вперёд: новый экран во всю ширину, старый — на треть", () => {
-    expect(routeMotionOffsets({ kind: "depth", enterFrom: "right" })).toEqual({
-      enter: 100, exit: -PARALLAX_PCT,
-    });
-  });
-
-  it("назад: уходящий во всю ширину, возвращающийся — с той же трети", () => {
-    // Симметрия обязательна: экран должен вернуться ровно оттуда, куда ушёл,
-    // иначе переход «туда-обратно» выглядит как два разных перехода.
-    expect(routeMotionOffsets({ kind: "depth", enterFrom: "left" })).toEqual({
-      enter: -PARALLAX_PCT, exit: 100,
-    });
-  });
-
-  it("верхний слой всегда проходит больше нижнего — это и есть параллакс", () => {
+  it("слои всегда расходятся в противоположные стороны", () => {
     for (const enterFrom of ["left", "right"] as const) {
-      const { enter, exit } = routeMotionOffsets({ kind: "depth", enterFrom });
-      const top = Math.max(Math.abs(enter), Math.abs(exit));
-      const bottom = Math.min(Math.abs(enter), Math.abs(exit));
-      expect(top).toBeGreaterThan(bottom);
+      const { enter, exit } = routeMotionOffsets({ kind: "tab", enterFrom });
+      expect(Math.sign(enter)).toBe(-Math.sign(exit));
+      expect(Math.abs(enter)).toBe(Math.abs(exit));
     }
   });
 
   it("без движения смещений нет", () => {
     expect(routeMotionOffsets({ kind: "none" })).toEqual({ enter: 0, exit: 0 });
-  });
-});
-
-describe("dimsExitingLayer", () => {
-  it("затемняет только тот слой, который уходит ПОД новый экран", () => {
-    expect(dimsExitingLayer({ kind: "depth", enterFrom: "right" })).toBe(true);
-    expect(dimsExitingLayer({ kind: "depth", enterFrom: "left" })).toBe(false);
-    expect(dimsExitingLayer({ kind: "tab", enterFrom: "right" })).toBe(false);
-    expect(dimsExitingLayer({ kind: "none" })).toBe(false);
   });
 });

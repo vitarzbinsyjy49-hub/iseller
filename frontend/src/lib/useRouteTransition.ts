@@ -46,8 +46,6 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useNavigationType, type Location } from "react-router-dom";
 import { animateOpacity, easeOutQuint, prefersReducedMotion } from "./motion";
 import {
-  DIM_OPACITY,
-  dimsExitingLayer,
   resolveRouteMotion,
   routeMotionDuration,
   routeMotionOffsets,
@@ -368,13 +366,6 @@ function runTransition(motion: RouteMotion, ghost: HTMLElement | null, main: HTM
     return;
   }
 
-  let dim: HTMLElement | null = null;
-  if (ghost && dimsExitingLayer(motion)) {
-    dim = document.createElement("div");
-    dim.className = "route-ghost__dim";
-    ghost.appendChild(dim);
-  }
-
   const unpin = pinLiveDocks(main);
   const previous = {
     transform: main.style.transform,
@@ -422,7 +413,6 @@ function runTransition(motion: RouteMotion, ghost: HTMLElement | null, main: HTM
     const eased = easeOutQuint(t);
     main.style.transform = `translate3d(${enter * (1 - eased)}%, 0, 0)`;
     if (ghost) ghost.style.transform = `translate3d(${exit * eased}%, 0, 0)`;
-    if (dim) dim.style.opacity = `${DIM_OPACITY * eased}`;
     if (t >= 1) return finish();
     raf = requestAnimationFrame(frame);
   };
