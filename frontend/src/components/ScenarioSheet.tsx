@@ -77,6 +77,11 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
     const appHeightPx = parseFloat(rawAppHeight) || window.innerHeight;
     const centered = window.innerWidth >= 640;
     panel.style.maxHeight = `${sheetMaxHeightPx(appHeightPx, centered)}px`;
+    // Скрытый документ не выдаёт кадров: requestAnimationFrame в нём не
+    // вызывается вообще. Шторка осталась бы сдвинутой вниз и невидимой до
+    // возвращения в приложение. Показывать всё равно нечего — оставляем её
+    // сразу в конечном положении (стили просто не трогаем).
+    if (document.hidden) return;
     cancelAnimRef.current = animateSheetIn(panel, backdrop, undefined, sheetTravelPx(panel, centered));
     return () => cancelAnimRef.current();
   }, []);
@@ -88,6 +93,10 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
     const panel = panelRef.current, backdrop = backdropRef.current;
     if (!panel || !backdrop) { onCloseRef.current(); afterClose?.(); return; }
     cancelAnimRef.current();
+    // Размонтирование держится на колбэке анимации, а кадров в скрытом
+    // документе не будет — шторка провисела бы до возвращения в приложение.
+    // Закрываем сразу: анимацию закрытия всё равно никто не увидит.
+    if (document.hidden) { onCloseRef.current(); afterClose?.(); return; }
     cancelAnimRef.current = animateSheetOut(panel, backdrop, () => {
       onCloseRef.current();
       afterClose?.();

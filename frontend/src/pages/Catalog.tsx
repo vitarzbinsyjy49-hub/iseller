@@ -9,6 +9,8 @@ import ProductCard from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
 import { Icon } from "../components/icons";
 import { enterRefCallback } from "../lib/useEnter";
+import { CatalogFilterSheet, CatalogSortSheet } from "../components/CatalogFilterSheet";
+import { activeFilterCount, filterButtonLabel, sortButtonLabel, type CatalogFilters } from "../lib/catalogFilters";
 
 /** Вкладка «Все» — единственная, что не приходит с сервера: она снимает фильтр,
  *  а не выбирает категорию. Сам список категорий строится из каталога
@@ -60,6 +62,9 @@ export default function Catalog() {
   // открывала каталог вообще без фильтра.
   const [brand, setBrand] = useState(params.get("brand") ?? "");
   const [brands, setBrands] = useState<string[]>([]);
+  // Какая шторка открыта. Одна на две: сортировка и фильтры физически не могут
+  // быть открыты одновременно, и отдельные флаги пришлось бы держать в согласии.
+  const [sheet, setSheet] = useState<null | "sort" | "filters">(null);
   // Категории — из каталога, с мгновенным стартом из кэша прошлого ответа.
   // Кэш ГЛОБАЛЬНЫЙ, поэтому при входе с брендом им пользоваться нельзя: иначе
   // на витрине Dyson на мгновение появился бы ряд всего магазина со
@@ -175,6 +180,28 @@ export default function Catalog() {
       next.delete("brand");
     }
     setParams(next);
+  }
+
+  // Свёрнутое в шторку состояние собираем в один объект: подпись кнопки,
+  // счётчик и сама шторка обязаны читать одно и то же, иначе кнопка начнёт
+  // врать о том, что применено.
+  const filters: CatalogFilters = { onlyStock, onlyToday, brand, priceMax };
+  const filterCount = activeFilterCount(filters);
+
+  function applyFilters(patch: Partial<CatalogFilters>) {
+    if (patch.onlyStock !== undefined) setOnlyStock(patch.onlyStock);
+    if (patch.onlyToday !== undefined) setOnlyToday(patch.onlyToday);
+    // Бренд идёт через pickBrand, а не setBrand: он живёт в URL и сбрасывает
+    // категорию — правило одно на все места, где бренд можно сменить.
+    if (patch.brand !== undefined) pickBrand(patch.brand);
+    if (patch.priceMax !== undefined) setPriceMax(patch.priceMax);
+  }
+
+  function resetFilters() {
+    setOnlyStock(false);
+    setOnlyToday(false);
+    setPriceMax("");
+    pickBrand("");
   }
 
   // Рамка есть у обоих состояний (у активного — в цвет фона), поэтому высота
@@ -341,26 +368,38 @@ export default function Catalog() {
           ))}
         </div>
 
-        {/* Фильтры (mobile/tablet): сортировка, наличие, сегодня, бренд, цена —
-            в ТОМ ЖЕ sticky-блоке, что и поиск/категории (см. комментарий выше). */}
-        <div className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
-          {SORTS.map((s) => (
-            <button key={s.key} onClick={() => setSort(s.key)} className={chip(sort === s.key)}>{s.label}</button>
-          ))}
-          <button onClick={() => setOnlyStock(!onlyStock)} className={chip(onlyStock)}>В наличии</button>
-          <button onClick={() => setOnlyToday(!onlyToday)} className={chip(onlyToday)}>Забрать сегодня</button>
-          <select
-            value={brand} onChange={(e) => pickBrand(e.target.value)}
-            className="tap shrink-0 appearance-none rounded-full bg-surface px-3.5 py-2 text-xs font-medium shadow-soft outline-none"
+        {/* Управление выдачей (mobile/tablet) — две кнопки вместо прежнего ряда
+            из семи элементов. Тот ряд занимал примерно треть первого экрана и
+            всем весом спорил с товаром, ради которого сюда заходят; всё, что в
+            нём было, переехало в шторки (components/CatalogFilterSheet).
+
+            Кнопки НЕ прокручиваются и не растягиваются: их всего две, и
+            горизонтальная лента из двух элементов — это лента, которую некуда
+            листать. Ряд остаётся в том же sticky-блоке, что поиск и категории. */}
+        <div className="flex items-center gap-2 lg:hidden">
+          <button
+            onClick={() => setSheet("sort")}
+            aria-haspopup="dialog"
+            className="tap flex shrink-0 items-center gap-1 rounded-field border border-border bg-surface px-3 py-2 text-xs font-medium text-text outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <option value="">Бренд</option>
-            {brands.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-          <input
-            value={priceMax} onChange={(e) => setPriceMax(e.target.value.replace(/\D/g, ""))}
-            placeholder="Цена до, ₽" inputMode="numeric"
-            className="w-24 shrink-0 rounded-full bg-surface px-3.5 py-2 text-xs shadow-soft outline-none placeholder:text-muted"
-          />
+            {sortButtonLabel(SORTS, sort)}
+            <Icon name="chevron-down" className="h-3.5 w-3.5 text-muted" strokeWidth={2.2} />
+          </button>
+          <button
+            onClick={() => setSheet("filters")}
+            aria-haspopup="dialog"
+            // Активные фильтры помечены цветом рамки и текста, а не заливкой:
+            // залитая кнопка снова стала бы самым тяжёлым объектом экрана.
+            // Молчащий свёрнутый фильтр читается как «каталог сломался,
+            // товаров мало» — счётчик в подписи и есть то, что об этом говорит.
+            className={`tap shrink-0 rounded-field border px-3 py-2 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+              filterCount > 0
+                ? "border-accent bg-accent/5 text-accent"
+                : "border-border bg-surface text-text"
+            }`}
+          >
+            {filterButtonLabel(filters)}
+          </button>
         </div>
       </div>
 
@@ -406,6 +445,24 @@ export default function Catalog() {
 
         </div>{/* /контент */}
       </div>{/* /desktop grid */}
+
+      {sheet === "sort" && (
+        <CatalogSortSheet
+          sorts={SORTS}
+          value={sort}
+          onPick={setSort}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {sheet === "filters" && (
+        <CatalogFilterSheet
+          value={filters}
+          brands={brands}
+          onChange={applyFilters}
+          onReset={resetFilters}
+          onClose={() => setSheet(null)}
+        />
+      )}
     </div>
   );
 }
