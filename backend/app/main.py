@@ -10,6 +10,7 @@ from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
 from app.api import admin, admin_crm, admin_promo, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, scenario_chat, telegram, users
+from app.api import fx as fx_router
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import analytics_event as _analytics_event  # noqa: F401
@@ -77,6 +78,7 @@ def _build_cors_kwargs() -> dict:
 app.add_middleware(CORSMiddleware, **_build_cors_kwargs())
 
 app.include_router(health.router, prefix="/api")
+app.include_router(fx_router.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")

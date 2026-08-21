@@ -6,9 +6,12 @@ GET /api/config/public — только безопасные значения: �
 
 Эндпоинт без auth: фронтенду ссылки нужны до логина, ничего приватного тут нет.
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.session import get_db
+from app.services import fx_rate
 
 router = APIRouter(prefix="/config", tags=["config"])
 
@@ -31,7 +34,7 @@ def ai_vendor() -> str:
 
 
 @router.get("/public")
-def public_config():
+def public_config(db: Session = Depends(get_db)):
     retail = settings.MANAGER_RETAIL_URL.strip()
     # Специализированные менеджеры пока могут быть не назначены —
     # тогда все обращения идут розничному (fallback на бэке, чтобы
@@ -56,4 +59,7 @@ def public_config():
         # Пусто => движок не Claude, и бейджа на витрине не будет.
         "ai_vendor": ai_vendor(),
         "ai_model": settings.AI_ANTHROPIC_MODEL.strip() if ai_vendor() else "",
+        # None, если строк в fx_rate_history ещё нет — фронт в этом случае не
+        # рисует чип вовсе, а не показывает 0 или битое значение.
+        "usd_rate": fx_rate.latest(db),
     }

@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
+from app.db.session import get_db
 from app.main import app
 
 #: Значения, которые обязаны остаться внутри. Проверяем по ЗНАЧЕНИЮ, а не по
@@ -24,12 +25,20 @@ SECRETS = {
 
 
 @pytest.fixture()
-def client(monkeypatch):
+def client(monkeypatch, db):
     for name, value in SECRETS.items():
         monkeypatch.setattr(settings, name, value, raising=False)
     monkeypatch.setattr(settings, "BOT_USERNAME", "isellerAIbot", raising=False)
     monkeypatch.setattr(settings, "MANAGER_RETAIL_URL", "https://t.me/manager", raising=False)
-    return TestClient(app)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_public_config_exposes_bot_username(client):
@@ -80,3 +89,22 @@ def test_no_claude_badge_for_other_engines(client, monkeypatch, provider):
     data = client.get("/api/config/public").json()
     assert data["ai_vendor"] == ""
     assert data["ai_model"] == ""
+
+
+# ------------------------------------------------------------ курс USD (чип)
+
+from datetime import date
+
+from app.models.fx_rate import FxRateHistory
+
+
+def test_public_config_usd_rate_is_null_without_data(client):
+    data = client.get("/api/config/public").json()
+    assert data["usd_rate"] is None
+
+
+def test_public_config_usd_rate_with_data(client, db):
+    db.add(FxRateHistory(date=date.today(), value=91.23))
+    db.commit()
+    data = client.get("/api/config/public").json()
+    assert data["usd_rate"] == {"value": 91.23, "delta": 0}
