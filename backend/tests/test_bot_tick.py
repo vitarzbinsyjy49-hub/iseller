@@ -75,6 +75,7 @@ def test_tick_runs_both_scans_and_drains(monkeypatch):
                         lambda db: called.append("carts") or {"queued": 0})
     monkeypatch.setattr("app.services.favorite_watch.scan",
                         lambda db: called.append("favorites"))
+    monkeypatch.setattr("app.services.fx_rate.sync", lambda db: False)
     monkeypatch.setattr("app.services.notifications.drain",
                         lambda db, limit: called.append("drain") or
                         {"sent": 0, "failed": 0, "retry": 0})
@@ -130,6 +131,7 @@ def _quiet_background(monkeypatch):
     monkeypatch.setattr("app.db.session.SessionLocal", lambda: FakeSession())
     monkeypatch.setattr("app.services.cart_reminders.scan", lambda db: {"queued": 0})
     monkeypatch.setattr("app.services.favorite_watch.scan", lambda db: {})
+    monkeypatch.setattr("app.services.fx_rate.sync", lambda db: False)
     monkeypatch.setattr("app.services.notifications.drain",
                         lambda db, limit: {"sent": 0, "failed": 0, "retry": 0})
 
@@ -276,6 +278,36 @@ def test_failed_scan_retries_on_the_next_tick(monkeypatch):
 
     assert len(attempts) == 3, "скан должен повторяться, а не молчать до конца интервала"
     assert "last_favorite_scan" not in state
+
+
+def test_tick_calls_fx_rate_sync(monkeypatch):
+    """Забыть подключить sync к тику — значит написать код, который никогда не
+    вызывается: тесты сервиса (test_fx_rate.py) при этом остаются зелёными."""
+    monkeypatch.setattr(bp, "_schema_ready", lambda state: True)
+
+    class FakeSession:
+        def __enter__(self):
+            return "db"
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr("app.db.session.SessionLocal", lambda: FakeSession())
+    monkeypatch.setattr("app.services.cart_reminders.scan", lambda db: {})
+    monkeypatch.setattr("app.services.favorite_watch.scan", lambda db: {})
+    monkeypatch.setattr("app.services.notifications.drain", lambda db: None)
+
+    called = {}
+
+    def fake_sync(db):
+        called["db"] = db
+        return True
+
+    monkeypatch.setattr("app.services.fx_rate.sync", fake_sync)
+
+    bp._tick({})
+
+    assert called.get("db") == "db"
 
 
 def test_first_scan_runs_regardless_of_system_uptime(monkeypatch):

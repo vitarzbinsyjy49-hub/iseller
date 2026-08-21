@@ -63,6 +63,7 @@ REQUIRED_SCHEMA: dict[str, tuple[str, ...]] = {
     "notifications": (),
     "product_favorites": ("notified_price", "notified_in_stock"),
     "carts": (),
+    "fx_rate_history": (),
 }
 
 
@@ -160,7 +161,7 @@ def _tick(state: dict) -> None:
     """
     from app.core.config import settings
     from app.db.session import SessionLocal
-    from app.services import cart_reminders, favorite_watch
+    from app.services import cart_reminders, favorite_watch, fx_rate
     from app.services.notifications import drain
 
     now = time.monotonic()
@@ -204,6 +205,9 @@ def _tick(state: dict) -> None:
                 stats = favorite_watch.scan(db)
                 state["last_favorite_scan"] = now
                 logger.info("скан избранного: %s", stats)
+
+            if fx_rate.sync(db):
+                logger.info("курс ЦБ РФ обновлён")
 
             stats = drain(db, limit=OUTBOX_BATCH)
             if stats["sent"] or stats["failed"]:
