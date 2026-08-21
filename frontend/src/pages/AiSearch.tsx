@@ -17,6 +17,7 @@ import { prefersReducedMotion, revealDurationMs, revealedChars } from "../lib/an
 import AnswerBody from "../components/AnswerBody";
 import { parseAnswer, plainText } from "../lib/answerFormat";
 import { Icon } from "../components/icons";
+import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 
 /** Намерения для товара, с карточки которого пришли. Формулировки короткие и
  *  от лица покупателя — они уходят в чат как его реплика. Товар в тексте не
@@ -376,7 +377,7 @@ export default function AiSearch() {
           который раньше подставлялся в поле и никем не читался.
           Плашка держится всю беседу: по ней видно, что AI помнит товар. */}
       {focus && (
-        <div className="fade-in mt-4 flex items-center gap-3 rounded-xl2 bg-surface p-3 shadow-soft">
+        <div ref={enterRefCallback("fade")} className="mt-4 flex items-center gap-3 rounded-xl2 bg-surface p-3 shadow-soft">
           <ProductImage src={focus.image} title={focus.title} category={focus.category}
             className="h-14 w-14 shrink-0 rounded-field" compact />
           <div className="min-w-0 flex-1">
@@ -401,9 +402,10 @@ export default function AiSearch() {
           {PRODUCT_INTENTS.map((intent) => (
             <button
               key={intent}
+              ref={enterGridRefCallback("fadeUp")}
               onClick={() => submit(intent)}
               disabled={loading}
-              className="card-appear tap rounded-full border border-accent bg-transparent px-3.5 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent hover:text-white disabled:opacity-50"
+              className="tap rounded-full border border-accent bg-transparent px-3.5 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent hover:text-white disabled:opacity-50"
             >
               {intent}
             </button>
@@ -416,8 +418,8 @@ export default function AiSearch() {
         <div className="stagger mt-4 grid grid-cols-2 gap-2 lg:hidden">
           {QUICK_ACTIONS.map((qa) => (
             <button
-              key={qa.label} onClick={() => handleQuick(qa)} disabled={loading}
-              className="card-appear tap rounded-xl2 bg-surface px-3 py-3 text-left shadow-soft disabled:opacity-50"
+              key={qa.label} ref={enterGridRefCallback("fadeUp")} onClick={() => handleQuick(qa)} disabled={loading}
+              className="tap rounded-xl2 bg-surface px-3 py-3 text-left shadow-soft disabled:opacity-50"
             >
               <span className="block text-[13px] font-semibold leading-4">{qa.label}</span>
               <span className="mt-0.5 block text-[11px] leading-4 text-muted">{qa.hint}</span>
@@ -428,7 +430,7 @@ export default function AiSearch() {
 
       {/* История прошлых запросов (localStorage, между сессиями) — mobile/tablet */}
       {chat.length === 0 && aiHistory.length > 0 && (
-        <div className="fade-in mt-4 lg:hidden">
+        <div ref={enterRefCallback("fade")} className="mt-4 lg:hidden">
           <div className="flex items-baseline justify-between px-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted">Вы спрашивали</p>
             <button
@@ -469,7 +471,7 @@ export default function AiSearch() {
         {chat.map((item, i) => {
           if (item.role === "user") {
             return (
-              <div key={i} className="card-appear flex justify-end">
+              <div key={i} ref={enterGridRefCallback("fadeUp")} className="flex justify-end">
                 <div className="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-sm text-white lg:max-w-[560px]">
                   {item.text}
                 </div>
@@ -481,7 +483,7 @@ export default function AiSearch() {
           const isRevealing = revealChars !== null && i === chat.length - 1;
           const fullText = item.answer.text ?? "";
           return (
-            <div key={i} className="card-appear">
+            <div key={i} ref={enterGridRefCallback("fadeUp")}>
               {/* max-w текста ответа на desktop ~760px — не растягиваем на всю ширину */}
               <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-sm shadow-soft lg:max-w-[760px]">
                 {/* Абзацы, списки и выделения; ненабранный хвост держит размер
@@ -502,7 +504,7 @@ export default function AiSearch() {
               )}
               {/* Кнопки-действия (v5.1): только у последнего ответа, чтобы старые не путали */}
               {!isRevealing && i === chat.length - 1 && (item.answer.actions ?? []).length > 0 && (
-                <div className="fade-in mt-2.5 flex flex-wrap gap-2">
+                <div ref={enterRefCallback("fade")} className="mt-2.5 flex flex-wrap gap-2">
                   {/* Быстрые ответы — реплики ПОКУПАТЕЛЯ, поэтому обведены
                       акцентом: визуально это продолжение его стороны диалога,
                       а не системное действие вроде «Позвать менеджера». */}
@@ -532,13 +534,13 @@ export default function AiSearch() {
           // w-fit обязателен. Контейнер чата — блочный, поэтому пузырь без него
           // растягивался во всю ширину экрана: три точки посреди пустой панели
           // читались как сломанная заглушка, а не как «собеседник печатает».
-          <div className="fade-in flex w-fit max-w-[92%] flex-col items-start gap-1.5 rounded-2xl rounded-bl-md bg-surface px-4 py-3.5 shadow-soft">
+          <div ref={enterRefCallback("fade")} className="flex w-fit max-w-[92%] flex-col items-start gap-1.5 rounded-2xl rounded-bl-md bg-surface px-4 py-3.5 shadow-soft">
             <div className="flex items-center gap-1.5">
               <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
               <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
               <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
             </div>
-            {waitLabel && <span className="fade-in text-xs text-muted">{waitLabel}</span>}
+            {waitLabel && <span ref={enterRefCallback("fade")} className="text-xs text-muted">{waitLabel}</span>}
           </div>
         )}
         {/* scroll-mb-40: автоскролл оставляет последнюю карточку над фикс-строкой ввода */}

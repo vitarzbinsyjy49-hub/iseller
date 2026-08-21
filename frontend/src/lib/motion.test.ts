@@ -1,15 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FADE_MS,
   ONBOARDING_APPEAR_MS,
   SHEET_IN_MS,
   SHEET_OUT_MS,
   animateAppear,
+  animateEnter,
   animateNumber,
+  animatePulse,
   animateSheetIn,
   animateSheetOut,
+  animateToastIn,
+  animateToastOut,
   easeOutQuint,
   scrollPositionAt,
+  staggerDelayMs,
   transitionDuration,
   transitionStyle,
 } from "./motion";
@@ -258,6 +263,147 @@ describe("animateSheetOut", () => {
       expect(finished).toBe(false);
       tick(FADE_MS);
       expect(finished).toBe(true);
+    });
+  });
+});
+
+describe("staggerDelayMs", () => {
+  it("растёт на 24мс за карточку и упирается в потолок 72мс", () => {
+    expect(staggerDelayMs(0)).toBe(0);
+    expect(staggerDelayMs(1)).toBe(24);
+    expect(staggerDelayMs(2)).toBe(48);
+    expect(staggerDelayMs(3)).toBe(72);
+    expect(staggerDelayMs(20)).toBe(72);
+  });
+});
+
+describe("animateEnter", () => {
+  it("fadeUp — сразу исходное положение синхронно, к концу — на месте", () => {
+    withControlledRafQueue((tick) => {
+      const el = fakeSheetElement();
+      animateEnter(el, "fadeUp", false);
+      expect(el.style.opacity).toBe("0");
+      expect(el.style.transform).toContain("6px");
+      tick(0);
+      tick(190);
+      expect(el.style.opacity).toBe("1");
+      expect(el.style.transform).toBe("");
+    });
+  });
+
+  it("pop — стартует с масштаба .98, к концу — масштаб 1", () => {
+    withControlledRafQueue((tick) => {
+      const el = fakeSheetElement();
+      animateEnter(el, "pop", false);
+      expect(el.style.transform).toContain("0.98");
+      tick(0);
+      tick(190);
+      expect(el.style.opacity).toBe("1");
+      expect(el.style.transform).toBe("");
+    });
+  });
+
+  it("fade — стартует с .72 (как переход между страницами), не с нуля", () => {
+    withControlledRafQueue((tick) => {
+      const el = fakeSheetElement();
+      animateEnter(el, "fade", false);
+      expect(el.style.opacity).toBe("0.72");
+      tick(0);
+      tick(150);
+      expect(el.style.opacity).toBe("1");
+    });
+  });
+
+  it("«уменьшить движение» — fadeUp/pop без сдвига и масштаба, но не мгновенно", () => {
+    withControlledRafQueue((tick) => {
+      const el = fakeSheetElement();
+      animateEnter(el, "fadeUp", true);
+      expect(el.style.opacity).toBe("0");
+      expect(el.style.transform).toBe("");
+      tick(0);
+      tick(FADE_MS / 2);
+      const mid = Number(el.style.opacity);
+      expect(mid).toBeGreaterThan(0);
+      expect(mid).toBeLessThan(1);
+    });
+  });
+
+  it("возвращает функцию отмены", () => {
+    withControlledRafQueue(() => {
+      const cancel = animateEnter(fakeSheetElement(), "fadeUp", false);
+      expect(() => cancel()).not.toThrow();
+    });
+  });
+});
+
+describe("animateEnter — задержка (замена .stagger)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("исходный кадр стоит сразу, а само проявление стартует только после delayMs", () => {
+    withControlledRafQueue((tick) => {
+      const el = fakeSheetElement();
+      animateEnter(el, "fadeUp", false, 100);
+      // Кадр «до» виден сразу — иначе элемент был бы полностью непрозрачным
+      // все 100мс задержки, а не терпеливо ждал в скрытом виде.
+      expect(el.style.opacity).toBe("0");
+      vi.advanceTimersByTime(50);
+      expect(el.style.opacity).toBe("0"); // ещё не стартовало
+      vi.advanceTimersByTime(50); // ровно delayMs — таймер сработал
+      tick(0);
+      tick(190);
+      expect(el.style.opacity).toBe("1");
+    });
+  });
+});
+
+describe("animateToastIn / animateToastOut", () => {
+  it("вход — сдвиг+масштаб от исходного к полному", () => {
+    withControlledRafQueue((tick) => {
+      const el = fakeSheetElement();
+      animateToastIn(el, false);
+      expect(el.style.opacity).toBe("0");
+      expect(el.style.transform).toContain("8px");
+      tick(0);
+      tick(190);
+      expect(el.style.opacity).toBe("1");
+      expect(el.style.transform).toBe("");
+    });
+  });
+
+  it("выход — от полного к нулю, без done (Toaster сам снимает тост таймером)", () => {
+    withControlledRafQueue((tick) => {
+      const el = fakeSheetElement();
+      animateToastOut(el, false);
+      tick(0);
+      tick(150);
+      expect(el.style.opacity).toBe("0");
+    });
+  });
+});
+
+describe("animatePulse", () => {
+  it("обычный режим — растёт до масштаба 1.18, потом возвращается к 1", () => {
+    withControlledRafQueue((tick) => {
+      const el = fakeSheetElement();
+      animatePulse(el, false);
+      tick(0); // фаза роста, кадр 0: анкер старта
+      tick(85); // конец фазы роста — пик
+      expect(el.style.transform).toBe("scale(1.18)");
+      tick(0); // фаза спада, кадр 0
+      tick(105); // конец фазы спада
+      expect(el.style.transform).toBe("");
+    });
+  });
+
+  it("«уменьшить движение» — масштаб не трогаем, только вспышка прозрачности", () => {
+    withControlledRafQueue((tick) => {
+      const el = fakeSheetElement();
+      animatePulse(el, true);
+      tick(0);
+      tick(FADE_MS);
+      expect(el.style.opacity).toBe("1");
+      expect(el.style.transform).toBe("");
     });
   });
 });

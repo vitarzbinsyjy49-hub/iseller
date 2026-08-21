@@ -19,6 +19,7 @@ import { usePublicConfig } from "../lib/appConfig";
 import { haptic, openExternalLink } from "../lib/telegram";
 import { toast } from "../lib/toast";
 import { Icon, type IconName } from "../components/icons";
+import { enterGridRefCallback } from "../lib/useEnter";
 
 type Section = {
   id: string;
@@ -139,8 +140,9 @@ export default function Info() {
           <section
             key={section.id}
             id={section.id}
+            ref={enterGridRefCallback("fadeUp")}
             // scroll-mt: под липкой шапкой якорь иначе встаёт под неё.
-            className="card-appear scroll-mt-4 rounded-xl2 bg-surface p-4 shadow-soft"
+            className="scroll-mt-4 rounded-xl2 bg-surface p-4 shadow-soft"
           >
             <div className="flex items-center gap-2.5">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
@@ -170,7 +172,7 @@ export default function Info() {
 
         {/* Контакты — отдельной секцией с действиями, а не текстом: телефон
             должен набираться тапом, а не выделяться и копироваться вручную. */}
-        <section id="contacts" className="card-appear scroll-mt-4 rounded-xl2 bg-surface p-4 shadow-soft">
+        <section id="contacts" ref={enterGridRefCallback("fadeUp")} className="scroll-mt-4 rounded-xl2 bg-surface p-4 shadow-soft">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
               <Icon name="chat" className="h-5 w-5" />

@@ -108,31 +108,6 @@ body {
 /* ================= Motion system v2 =================
    Никаких transition-all и анимированных теней/blur: состояние видно сразу,
    а transform/opacity остаются на compositor thread. */
-@keyframes fadeUp {
-  from { opacity: 0; transform: translate3d(0, 6px, 0); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes fadeIn {
-  from { opacity: .72; }
-  to   { opacity: 1; }
-}
-@keyframes toastIn {
-  from { opacity: 0; transform: translate3d(0, 8px, 0) scale(.98); }
-  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-}
-@keyframes toastOut {
-  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-  to   { opacity: 0; transform: translate3d(0, -4px, 0) scale(.98); }
-}
-@keyframes favoritePop {
-  0%   { transform: scale(1); }
-  45%  { transform: scale(1.18); }
-  to   { transform: scale(1); }
-}
-@keyframes popIn {
-  from { opacity: 0; transform: scale(0.98); }
-  to   { opacity: 1; transform: scale(1); }
-}
 @keyframes skeletonPulse {
   0%, 100% { opacity: .68; }
   50%      { opacity: 1; }
@@ -149,25 +124,6 @@ body {
   0%, 60%, 100% { transform: translateY(0); }
   30%           { transform: translateY(-3.5px); }
 }
-
-.card-appear { animation: fadeUp var(--motion-standard) var(--ease-standard) both; }
-.fade-in     { animation: fadeIn var(--motion-fast) ease-out both; }
-.pop-in      { animation: popIn var(--motion-standard) var(--ease-emphasized) both; }
-.toast-in    { animation: toastIn var(--motion-standard) var(--ease-emphasized) both; }
-.toast-out   { animation: toastOut var(--motion-fast) ease-in both; pointer-events: none; }
-.favorite-pop { animation: favoritePop var(--motion-standard) var(--ease-emphasized); }
-
-/* Каскад только первого визуального ряда: длинная лента больше не ждёт 450ms.
- *
- * Пятому и дальше раньше стояло `animation: none`, и это давало рваный ряд:
- * карточка с краю экрана оказывалась СРАЗУ на месте, пока соседи ещё ехали
- * снизу — на замере 251px против 257px у соседей. Задержку и правда нельзя
- * копить дальше, но гасить надо именно её, а не саму анимацию: теперь пятая и
- * следующие едут вместе с четвёртой, и ряд ровен в любой момент. */
-.stagger > *:nth-child(1) { animation-delay: 0ms; }
-.stagger > *:nth-child(2) { animation-delay: 24ms; }
-.stagger > *:nth-child(3) { animation-delay: 48ms; }
-.stagger > *:nth-child(n+4) { animation-delay: 72ms; }
 
 /* Микроотклик появляется быстрее 100ms; крупные поверхности почти не меняют размер. */
 .tap {
@@ -363,14 +319,16 @@ html.kb-open .js-bottom-nav { display: none; }
    чистое проявление, длительности остаются прежними. Прозрачность вестибулярный
    аппарат не трогает — по этой границе и проведено требование WCAG.
 
+   Появление карточек/тостов/бейджей (было .card-appear/.fade-in/.pop-in/
+   .toast-in/.toast-out/.favorite-pop) сюда больше не относится — оно на
+   rAF-моторе (lib/motion.ts::animateEnter/animateToastIn/animateToastOut/
+   animatePulse), не на CSS animation:. Причина ровно та, что и в абзаце выше:
+   на части устройств такая CSS-анимация гасится ДО НУЛЯ ЦЕЛИКОМ, что бы ни
+   было в этом медиа-запросе — так на живом iOS в Telegram замирала галочка
+   «Заявка принята» (AnimatedCheck.tsx) и не появлялись карточки товаров.
+
    Пульсацию точек «печатает» не глушим: она меняет только непрозрачность. */
 @media (prefers-reduced-motion: reduce) {
-  @keyframes fadeUp   { from { opacity: 0 } to { opacity: 1 } }
-  @keyframes popIn    { from { opacity: 0 } to { opacity: 1 } }
-  @keyframes toastIn  { from { opacity: 0 } to { opacity: 1 } }
-  @keyframes toastOut { from { opacity: 1 } to { opacity: 0 } }
-  @keyframes favoritePop { from { opacity: .6 } to { opacity: 1 } }
-
   /* Отклик на нажатие — это масштаб, то есть движение. Убираем сам transform,
      а не длительность: иначе кнопка «прыгала» бы мгновенно. */
   .tap:active, .press-surface:active { transform: none; }

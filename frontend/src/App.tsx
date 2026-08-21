@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ReactNode, useEffect, useState } from "react";
+import { enterRefCallback } from "./lib/useEnter";
 import { Route, Routes, useNavigate } from "react-router-dom";
 import { api } from "./lib/api";
 import { getStartParam, getTelegram, isInsideTelegram, initTelegramUi } from "./lib/telegram";
@@ -134,7 +135,7 @@ function DeferredPage({ children }: { children: ReactNode }) {
 /** Стабильная геометрия вместо полноэкранного спиннера: навигация остаётся на месте. */
 function RouteFallback() {
   return (
-    <div className="fade-in mx-auto max-w-md lg:max-w-none" aria-label="Загрузка страницы" aria-busy="true">
+    <div ref={enterRefCallback("fade")} className="mx-auto max-w-md lg:max-w-none" aria-label="Загрузка страницы" aria-busy="true">
       <div className="skeleton h-7 w-36 rounded-lg" />
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-64 rounded-xl2" />)}

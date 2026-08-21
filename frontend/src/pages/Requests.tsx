@@ -7,6 +7,7 @@ import { formatPrice } from "../lib/format";
 import { ErrorState } from "../components/StateViews";
 import { leadTitle, leadTypeLabel, leadMetadataRows } from "../lib/leads";
 import { Icon } from "../components/icons";
+import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 
 type Lead = {
   id: number; product_id: number | null; product_title: string | null; product_price: number | null;
@@ -115,7 +116,7 @@ export default function Requests() {
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-28 rounded-xl2" />)}
         </div>
       ) : visible.length === 0 ? (
-        <div className="fade-in mt-14 text-center">
+        <div ref={enterRefCallback("fade")} className="mt-14 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-mutedbg text-muted">
             <Icon name="doc" className="h-7 w-7" strokeWidth={1.6} />
           </div>
@@ -150,7 +151,7 @@ export default function Requests() {
         // Desktop: 2 колонки компактных карточек; mobile — прежний список
         <div className="stagger mt-4 space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
           {visible.map((l) => (
-            <div key={l.id} className="card-appear rounded-xl2 bg-surface p-4 shadow-soft transition-shadow lg:hover:shadow-[0_8px_24px_rgba(17,24,39,0.10)]">
+            <div key={l.id} ref={enterGridRefCallback("fadeUp")} className="rounded-xl2 bg-surface p-4 shadow-soft transition-shadow lg:hover:shadow-[0_8px_24px_rgba(17,24,39,0.10)]">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-[15px] font-semibold">{leadTitle(l)}</p>

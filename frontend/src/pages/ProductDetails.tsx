@@ -22,6 +22,7 @@ import { QuantityStepper } from "../components/QuantityStepper";
 import { specChips } from "../lib/specChips";
 import LegendaryProduct from "../components/LegendaryProduct";
 import PriceOfferBlock from "../components/PriceOfferBlock";
+import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 
 type Tab = "desc" | "specs" | "delivery";
 type LoadState = "loading" | "ready" | "not_found" | "error";
@@ -211,7 +212,7 @@ export default function ProductDetails() {
         </TopBtn>
         <FavButton id={p.id} visualClassName="h-9 w-9 bg-surface shadow-soft" />
         {shared && (
-          <span className="pop-in absolute right-4 top-12 rounded-full bg-text px-3 py-1.5 text-[11px] font-medium text-white">
+          <span ref={enterRefCallback("pop")} className="absolute right-4 top-12 rounded-full bg-text px-3 py-1.5 text-[11px] font-medium text-white">
             Ссылка скопирована
           </span>
         )}
@@ -256,7 +257,7 @@ export default function ProductDetails() {
           <FavButton id={p.id} visualClassName="h-[42px] w-[42px] border border-border bg-surface" />
         </div>
         {shared && (
-          <span className="pop-in absolute right-0 top-[52px] z-10 rounded-full bg-text px-3 py-1.5 text-[11px] font-medium text-white">
+          <span ref={enterRefCallback("pop")} className="absolute right-0 top-[52px] z-10 rounded-full bg-text px-3 py-1.5 text-[11px] font-medium text-white">
             Ссылка скопирована
           </span>
         )}
@@ -389,7 +390,7 @@ export default function ProductDetails() {
       </div>
 
       {tab === "desc" && (
-        <div className="fade-in mt-3 rounded-xl2 bg-surface p-4 shadow-soft">
+        <div ref={enterRefCallback("fade")} className="mt-3 rounded-xl2 bg-surface p-4 shadow-soft">
           {/* Регион переехал сюда из заголовка: он важен для покупки (комплект,
               вариант SIM), но не должен занимать место перед названием
               товара на каждой карточке. */}
@@ -414,7 +415,7 @@ export default function ProductDetails() {
       )}
 
       {tab === "specs" && (
-        <div className="fade-in mt-3 rounded-xl2 bg-surface p-4 shadow-soft">
+        <div ref={enterRefCallback("fade")} className="mt-3 rounded-xl2 bg-surface p-4 shadow-soft">
           {specRows.length > 0 ? (
             <div className="divide-y divide-border">
               {specRows.map((s) => (
@@ -431,7 +432,7 @@ export default function ProductDetails() {
       )}
 
       {tab === "delivery" && (
-        <div className="fade-in mt-3 space-y-4">
+        <div ref={enterRefCallback("fade")} className="mt-3 space-y-4">
           <section>
             <SubHead>Доставка и получение</SubHead>
             <div className="space-y-2">
@@ -758,7 +759,7 @@ function BackBtn({ onClick }: { onClick: () => void }) {
  *  а не как серая служебная строка. */
 function InfoTile({ icon, title, subtitle }: { icon: IconName; title: string; subtitle: string }) {
   return (
-    <div className="card-appear flex items-center gap-2.5 rounded-xl2 bg-surface px-3 py-2.5 shadow-soft">
+    <div ref={enterGridRefCallback("fadeUp")} className="flex items-center gap-2.5 rounded-xl2 bg-surface px-3 py-2.5 shadow-soft">
       <Icon name={icon} className="h-5 w-5 shrink-0 text-accent" />
       <div className="min-w-0">
         <p className="text-[13px] font-semibold leading-4">{title}</p>
@@ -774,7 +775,7 @@ function SubHead({ children }: { children: ReactNode }) {
 
 function DeliveryRow({ icon, title, subtitle }: { icon: IconName; title: string; subtitle: string }) {
   return (
-    <div className="card-appear flex items-center gap-3 rounded-xl2 bg-surface px-4 py-3 shadow-soft">
+    <div ref={enterGridRefCallback("fadeUp")} className="flex items-center gap-3 rounded-xl2 bg-surface px-4 py-3 shadow-soft">
       <Icon name={icon} className="h-6 w-6 shrink-0 text-accent" />
       <div className="min-w-0">
         <p className="text-sm font-semibold">{title}</p>

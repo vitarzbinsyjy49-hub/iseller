@@ -33,6 +33,7 @@ const AboutServiceSheet = lazy(() => import("../components/AboutServiceSheet"));
 const FxRateSheet = lazy(() => import("../components/FxRateSheet"));
 import { autoplayReady, nextSlideIndex, snapTargetLeft } from "../lib/carousel";
 import { animateScrollTo } from "../lib/motion";
+import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 
 type Category = { key: string; label: string; icon: string; count: number };
 type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
@@ -436,8 +437,9 @@ export default function Home() {
               mousedown preventDefault: тап по панели не блюрит инпут, клик доходит. */}
           {(searchOpen || search.trim().length >= 2) && (
             <div
+              ref={enterRefCallback("fade")}
               onMouseDown={(e) => e.preventDefault()}
-              className="fade-in absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-xl2 bg-white text-text shadow-sheet"
+              className="absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-xl2 bg-white text-text shadow-sheet"
             >
               <SearchPanel
                 query={search}
@@ -1042,10 +1044,11 @@ function QuickScenarios({
       {items.map((s) => (
         <button
           key={s.key}
+          ref={enterGridRefCallback("fadeUp")}
           onClick={s.onClick}
           // min-h-11 (44px) держит тач-таргет на минимуме, даже когда сама
           // плитка визуально компактнее — иконка+подпись сами по себе ниже.
-          className="card-appear tap flex min-h-11 min-w-0 flex-col items-center gap-1 rounded-xl2 bg-mutedbg px-1 py-2 text-center"
+          className="tap flex min-h-11 min-w-0 flex-col items-center gap-1 rounded-xl2 bg-mutedbg px-1 py-2 text-center"
         >
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface text-accent">
             <ScenarioIcon name={s.key} />

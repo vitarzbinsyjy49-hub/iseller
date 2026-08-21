@@ -7,6 +7,7 @@ import { ErrorState } from "../components/StateViews";
 import { useFavoriteIds } from "../lib/favorites";
 import { track } from "../lib/analytics";
 import { Icon } from "../components/icons";
+import { enterRefCallback } from "../lib/useEnter";
 
 /** Экран «Избранное»: карточки серверного избранного. Удаление сердечком —
  *  карточка исчезает сразу (фильтр по актуальным id), без перезагрузки. */
@@ -80,7 +81,7 @@ function EmptyFavorites({
   }, []);
 
   return (
-    <div className="fade-in mt-10 flex flex-col items-center px-6 text-center">
+    <div ref={enterRefCallback("fade")} className="mt-10 flex flex-col items-center px-6 text-center">
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-mutedbg">
         <svg viewBox="0 0 24 24" className="h-8 w-8 text-[#b6bcc5]" fill="none" stroke="currentColor"
           strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

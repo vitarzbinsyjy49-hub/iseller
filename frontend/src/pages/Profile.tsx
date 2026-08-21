@@ -16,6 +16,7 @@ import type { ScenarioKey } from "../lib/scenario";
 import { track } from "../lib/analytics";
 import { fetchLoyalty, formatRate, type LoyaltyAccount } from "../lib/loyalty";
 import { useOnboardingReplayStore } from "../store/onboardingReplay";
+import { enterRefCallback } from "../lib/useEnter";
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user);
@@ -121,7 +122,7 @@ export default function Profile() {
           что ярлыка нет и добавить его можно — иначе блока нет вовсе, а не
           «есть, но неактивен»: неработающая кнопка обесценивает соседние. */}
       {homeScreen === "missed" && (
-        <div className="pop-in mt-3 flex items-center gap-3 rounded-xl2 bg-surface p-4 shadow-soft">
+        <div ref={enterRefCallback("pop")} className="mt-3 flex items-center gap-3 rounded-xl2 bg-surface p-4 shadow-soft">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
             <Icon name="phone" className="h-5 w-5" />
           </span>

@@ -6,6 +6,7 @@ import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
 import { Icon } from "../components/icons";
+import { enterRefCallback } from "../lib/useEnter";
 
 /** История просмотров (/history): существующий /catalog/recently-viewed,
  *  никакой новой таблицы. Карточки с избранным и переходом в ProductDetails.
@@ -43,7 +44,7 @@ export default function History() {
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton aspect-[3/4] rounded-xl2" />)}
         </div>
       ) : cards.length === 0 ? (
-        <div className="fade-in mt-14 text-center">
+        <div ref={enterRefCallback("fade")} className="mt-14 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-mutedbg text-muted">
             <Icon name="clock" className="h-7 w-7" strokeWidth={1.6} />
           </div>

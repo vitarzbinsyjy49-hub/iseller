@@ -8,6 +8,7 @@ import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
 import { Icon } from "../components/icons";
+import { enterRefCallback } from "../lib/useEnter";
 
 /** Вкладка «Все» — единственная, что не приходит с сервера: она снимает фильтр,
  *  а не выбирает категорию. Сам список категорий строится из каталога
@@ -301,7 +302,7 @@ export default function Catalog() {
             onMouseDown + preventDefault: тап по чипу не блюрит инпут, значение
             подставляется до закрытия ряда. */}
         {searchFocused && !q.trim() && recentQueries.length > 0 && (
-          <div className="no-scrollbar fade-in -mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
+          <div ref={enterRefCallback("fade")} className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 lg:hidden">
             <span className="shrink-0 text-[11px] font-medium text-muted">Вы искали:</span>
             {recentQueries.map((h) => (
               <button
@@ -415,7 +416,7 @@ function NoResults({ query, onAskAi, onReset }: {
   query: string; onAskAi: () => void; onReset: () => void;
 }) {
   return (
-    <div className="fade-in mt-6 rounded-xl2 bg-surface p-6 text-center shadow-soft">
+    <div ref={enterRefCallback("fade")} className="mt-6 rounded-xl2 bg-surface p-6 text-center shadow-soft">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-mutedbg text-muted">
         <Icon name="search" className="h-7 w-7" strokeWidth={1.6} />
       </div>

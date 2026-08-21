@@ -18,6 +18,7 @@ import { pluralItems, shouldShowCartBar } from "../lib/cartMath";
 import { formatPrice } from "../lib/format";
 import { track } from "../lib/analytics";
 import { haptic } from "../lib/telegram";
+import { enterRefCallback } from "../lib/useEnter";
 
 export default function CartBar() {
   const { pathname } = useLocation();
@@ -39,8 +40,9 @@ export default function CartBar() {
     <div className="js-bottom-nav cart-dock fixed inset-x-0 z-30 px-4 lg:pointer-events-none lg:px-8">
       <div className="mx-auto max-w-md lg:pointer-events-auto lg:ml-auto lg:mr-0 lg:max-w-sm">
         <button
+          ref={enterRefCallback("pop")}
           onClick={open}
-          className="pop-in tap flex w-full items-center gap-3 rounded-xl2 bg-surface p-2.5 pl-3 text-left shadow-float ring-1 ring-border"
+          className="tap flex w-full items-center gap-3 rounded-xl2 bg-surface p-2.5 pl-3 text-left shadow-float ring-1 ring-border"
         >
           <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
             <CartGlyph />

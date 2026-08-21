@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { TOAST_EVENT, type ToastKind } from "../lib/toast";
+import { animateToastIn, animateToastOut } from "../lib/motion";
 
 type Item = { id: number; message: string; kind: ToastKind; closing?: boolean };
 
@@ -46,18 +47,35 @@ export default function Toaster() {
     // Ошибка идёт как alert (перебивает), обычное подтверждение — как status
     // (дожидается паузы): «Добавлено в избранное» не должно рвать чтение.
     <div className="toast-dock pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-2 px-4">
-      {items.map((t) => (
-        <div
-          key={t.id}
-          role={t.kind === "error" ? "alert" : "status"}
-          aria-live={t.kind === "error" ? "assertive" : "polite"}
-          className={`${t.closing ? "toast-out" : "toast-in"} pointer-events-auto max-w-xs rounded-full px-4 py-2 text-center text-[13px] font-medium text-white shadow-sheet ${
-            t.kind === "error" ? "bg-danger/95" : "bg-text/95"
-          }`}
-        >
-          {t.message}
-        </div>
-      ))}
+      {items.map((t) => <ToastItem key={t.id} toast={t} />)}
+    </div>
+  );
+}
+
+/** Отдельный компонент, а не div прямо в .map(): вход и выход анимируются
+ *  по-разному (animateToastIn/animateToastOut, lib/motion.ts), а хук на это
+ *  различие внутри цикла .map() не завести — правила хуков. Раньше это делали
+ *  два CSS-класса (`.toast-in`/`.toast-out`) — тот же баг, что и у остальных
+ *  CSS-анимаций проекта (см. lib/motion.ts, AnimatedCheck.tsx). */
+function ToastItem({ toast: t }: { toast: Item }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    return t.closing ? animateToastOut(el) : animateToastIn(el);
+  }, [t.closing]);
+
+  return (
+    <div
+      ref={ref}
+      role={t.kind === "error" ? "alert" : "status"}
+      aria-live={t.kind === "error" ? "assertive" : "polite"}
+      className={`pointer-events-auto max-w-xs rounded-full px-4 py-2 text-center text-[13px] font-medium text-white shadow-sheet ${
+        t.kind === "error" ? "bg-danger/95" : "bg-text/95"
+      }`}
+    >
+      {t.message}
     </div>
   );
 }

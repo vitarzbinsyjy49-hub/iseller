@@ -35,6 +35,7 @@ import {
 } from "../lib/cartMath";
 import { FormError, TextAreaField, TextField } from "../components/Field";
 import { Icon, type IconName } from "../components/icons";
+import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 
 type Fulfillment = "pickup" | "delivery" | "consult";
 type LoadState = "loading" | "ready" | "error";
@@ -221,7 +222,8 @@ function CartRow({
   const unavailable = !item.orderable;
   return (
     <div
-      className={`card-appear flex gap-3 rounded-xl2 bg-surface p-3 shadow-soft ${
+      ref={enterGridRefCallback("fadeUp")}
+      className={`flex gap-3 rounded-xl2 bg-surface p-3 shadow-soft ${
         unavailable ? "opacity-75 ring-1 ring-danger/25" : ""
       }`}
     >
@@ -291,7 +293,7 @@ function Notice({ tone, children }: { tone: "info" | "warn"; children: React.Rea
   const cls = tone === "warn"
     ? "bg-dangerbg text-dangerink"
     : "bg-accent/[0.08] text-accentdark";
-  return <p className={`fade-in mt-3 rounded-xl2 px-4 py-3 text-[12px] leading-4 ${cls}`}>{children}</p>;
+  return <p ref={enterRefCallback("fade")} className={`mt-3 rounded-xl2 px-4 py-3 text-[12px] leading-4 ${cls}`}>{children}</p>;
 }
 
 /* ---------------------------------------------------------------- checkout --- */
@@ -565,7 +567,7 @@ function EmptyCart() {
     <div className="mx-auto max-w-md lg:max-w-5xl">
       <h1 className="text-2xl font-bold">Корзина</h1>
 
-      <div className="fade-in mt-8 text-center">
+      <div ref={enterRefCallback("fade")} className="mt-8 text-center">
         <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-mutedbg text-muted">
           <CartGlyph className="h-9 w-9" />
         </span>

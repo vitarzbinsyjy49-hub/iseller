@@ -8,6 +8,7 @@ import { indexFromScroll } from "../lib/carousel";
 import { openExternalLink } from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
 import { Icon } from "./icons";
+import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 
 /** Событийная страница легендарного товара.
  *
@@ -99,7 +100,7 @@ export default function LegendaryProduct({
           </RoundBtn>
           <FavButton id={product.id} visualClassName="h-9 w-9 bg-white shadow-card" />
           {shared && (
-            <span className="pop-in absolute right-4 top-14 z-10 rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-[#241C2E]">
+            <span ref={enterRefCallback("pop")} className="absolute right-4 top-14 z-10 rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-[#241C2E]">
               Ссылка скопирована
             </span>
           )}
@@ -124,7 +125,8 @@ export default function LegendaryProduct({
                 alt={product.title}
                 // Афишу не режем нигде: заголовок и цена набраны в самом макете,
                 // и любой кроп их отъедает.
-                className="card-appear -mx-4 w-[calc(100%+2rem)] max-w-none lg:mx-0 lg:w-full lg:rounded-hero"
+                ref={enterRefCallback("fadeUp")}
+                className="-mx-4 w-[calc(100%+2rem)] max-w-none lg:mx-0 lg:w-full lg:rounded-hero"
                 decoding="async"
               />
             )}
@@ -152,7 +154,8 @@ export default function LegendaryProduct({
                   {items.map((item, i) => (
                     <li
                       key={item}
-                      className="card-appear flex items-baseline gap-4 border-t py-3.5 text-[15px] leading-6"
+                      ref={enterGridRefCallback("fadeUp")}
+                      className="flex items-baseline gap-4 border-t py-3.5 text-[15px] leading-6"
                       style={{ borderColor: "rgba(255,255,255,0.10)" }}
                     >
                       <span className="w-5 shrink-0 text-[13px] font-semibold" style={{ color: "#FFB0C4" }}>

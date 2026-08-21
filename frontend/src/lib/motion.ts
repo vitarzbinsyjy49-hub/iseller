@@ -208,13 +208,149 @@ export function animateSheetOut(panel: HTMLElement, backdrop: HTMLElement, done:
   return () => { cancelPanel(); cancelBackdrop(); };
 }
 
+/** Собрать transform из вертикального сдвига и масштаба, пропуская
+ *  тождественные слагаемые — иначе рраз при каждом кадре ставился бы
+ *  `translate3d(0, 0px, 0) scale(1)`, а не пустая строка, что мешает
+ *  сравнивать «анимация закончилась» с «стиль вообще не трогали». */
+function transformString(yPx: number, scale: number): string {
+  const parts: string[] = [];
+  if (yPx) parts.push(`translate3d(0, ${yPx}px, 0)`);
+  if (scale !== 1) parts.push(`scale(${scale})`);
+  return parts.join(" ");
+}
+
+export type EnterPreset = "fadeUp" | "fade" | "pop";
+
+// Те же числа и кейфреймы, что раньше жили в index.css у .card-appear/
+// .fade-in/.pop-in — только теперь на rAF-моторе, а не CSS animation:.
+const ENTER_FADE_FROM_OPACITY = 0.72; // как .fade-in и переход между страницами (Layout.tsx)
+const ENTER_FADEUP_MS = 190; // = --motion-standard
+const ENTER_FADE_MS = 150; // = --motion-fast
+const ENTER_POP_MS = 190; // = --motion-standard
+const ENTER_FADEUP_OFFSET_PX = 6;
+const ENTER_POP_FROM_SCALE = 0.98;
+
+/** Шаг задержки для списка карточек — раньше задавал `.stagger > *:nth-child(n)`
+ *  в index.css (тоже CSS animation-delay — тот же баг, что и у самой
+ *  анимации). Тот же расчёт, что был у онбординга: 0, 24, 48, а дальше ровно
+ *  72 — не растягивать же задержку на весь длинный список. */
+export function staggerDelayMs(index: number): number {
+  return Math.min(index * 24, 72);
+}
+
+/** Запустить анимацию не сразу, а через delayMs — сама функция передаётся,
+ *  а не готовый результат: `start()` не должен вызываться до истечения паузы. */
+function afterDelay(delayMs: number, start: () => () => void): () => void {
+  if (delayMs <= 0) return start();
+  let cancelInner = () => {};
+  // setTimeout, не window.setTimeout: этот модуль тестируется в node-окружении
+  // без DOM/window (см. animateAppear/animateSheetIn выше), а глобальный
+  // таймер там есть, в отличие от window.
+  const timer = setTimeout(() => { cancelInner = start(); }, delayMs);
+  return () => { clearTimeout(timer); cancelInner(); };
+}
+
+/** Проявление элемента при монтировании — общая замена трём CSS-классам:
+ *  `.card-appear` (карточки товаров, блоки страниц), `.fade-in` (лёгкие
+ *  подсказки/пустые состояния), `.pop-in` (бейджи, тосты-предшественники).
+ *
+ *  Почему JS, а не CSS: тот же баг, что уже чинили для шторок, баннера,
+ *  онбординга и — острее всего — галочки «Заявка принята»
+ *  (см. AnimatedCheck.tsx): на живом iOS в Telegram с «уменьшить движение»
+ *  такая CSS-анимация не просто ускоряется, а иногда замирает на СТАРТОВОМ
+ *  кадре — элемент не появляется вовсе, хотя в тестовом браузере всё рисуется
+ *  штатно. Это было почти во всех местах приложения разом — карточки
+ *  каталога/главной/корзины/заявок, это самая частая деталь интерфейса.
+ *
+ *  delayMs — замена `.stagger` (index.css): исходный кадр применяется сразу
+ *  (иначе элемент был бы виден все delayMs мс задержки), само проявление
+ *  стартует позже. */
+export function animateEnter(el: HTMLElement, preset: EnterPreset, reducedMotion = prefersReducedMotion(), delayMs = 0): () => void {
+  if (preset === "fade") {
+    const duration = reducedMotion ? FADE_MS : ENTER_FADE_MS;
+    el.style.opacity = String(ENTER_FADE_FROM_OPACITY);
+    return afterDelay(delayMs, () => animateOpacity(el, ENTER_FADE_FROM_OPACITY, 1, duration));
+  }
+  const offset = preset === "fadeUp" && !reducedMotion ? ENTER_FADEUP_OFFSET_PX : 0;
+  const fromScale = preset === "pop" && !reducedMotion ? ENTER_POP_FROM_SCALE : 1;
+  const duration = reducedMotion ? FADE_MS : (preset === "pop" ? ENTER_POP_MS : ENTER_FADEUP_MS);
+  const apply = (t: number) => {
+    el.style.opacity = String(t);
+    el.style.transform = transformString(offset * (1 - t), fromScale + (1 - fromScale) * t);
+  };
+  apply(0);
+  return afterDelay(delayMs, () => animateNumber(0, 1, duration, apply, () => { el.style.transform = ""; }));
+}
+
+// Числа — те же, что раньше в index.css у .toast-in/.toast-out.
+const TOAST_IN_MS = 190; // = --motion-standard
+const TOAST_OUT_MS = 150; // = --motion-fast
+const TOAST_IN_OFFSET_PX = 8;
+const TOAST_OUT_OFFSET_PX = 4;
+const TOAST_SCALE = 0.98;
+
+/** Появление тоста — замена `.toast-in`. */
+export function animateToastIn(el: HTMLElement, reducedMotion = prefersReducedMotion()): () => void {
+  const offset = reducedMotion ? 0 : TOAST_IN_OFFSET_PX;
+  const fromScale = reducedMotion ? 1 : TOAST_SCALE;
+  const duration = reducedMotion ? FADE_MS : TOAST_IN_MS;
+  const apply = (t: number) => {
+    el.style.opacity = String(t);
+    el.style.transform = transformString(offset * (1 - t), fromScale + (1 - fromScale) * t);
+  };
+  apply(0);
+  return animateNumber(0, 1, duration, apply, () => { el.style.transform = ""; });
+}
+
+/** Скрытие тоста — замена `.toast-out`. Без `done`: тост в Toaster.tsx и так
+ *  снимается своим таймером, а не по завершении анимации. */
+export function animateToastOut(el: HTMLElement, reducedMotion = prefersReducedMotion()): () => void {
+  const offset = reducedMotion ? 0 : TOAST_OUT_OFFSET_PX;
+  const toScale = reducedMotion ? 1 : TOAST_SCALE;
+  const duration = reducedMotion ? FADE_MS : TOAST_OUT_MS;
+  return animateNumber(0, 1, duration, (t) => {
+    el.style.opacity = String(1 - t);
+    el.style.transform = transformString(-offset * t, 1 - (1 - toScale) * t);
+  });
+}
+
+// 190мс = --motion-standard, как было у .favorite-pop, поделено на рост/спад
+// в той же пропорции, что и старые проценты кейфрейма (0% -> 45% -> 100%).
+const PULSE_GROW_MS = 85;
+const PULSE_SETTLE_MS = 105;
+const PULSE_SCALE = 1.18;
+
+/** Пульс сердечка избранного — замена `.favorite-pop`. Две последовательные
+ *  фазы (рост, спад), а не один проход с ручным late-выбором «до пика/после
+ *  пика» по значению t: animateNumber отдаёт t уже смягчённым (easeOutQuint),
+ *  а не долей прошедшего времени, и метка «пик на 45%» относилась к ДОЛЕ
+ *  ВРЕМЕНИ у исходного CSS-кейфрейма — пик приходился бы почти на самое
+ *  начало анимации, а не на середину. Раздельные фазы избегают этой путаницы:
+ *  каждая честно едет от 1 до цели своим отдельным вызовом мотора.
+ *
+ *  При «уменьшить движение» масштаб (это движение) заменяем на вспышку
+ *  прозрачности — тот же приём, что и в остальном модуле, а не «ничего»
+ *  (см. шапку файла). */
+export function animatePulse(el: HTMLElement | SVGElement, reducedMotion = prefersReducedMotion()): () => void {
+  if (reducedMotion) return animateOpacity(el, 0.6, 1, FADE_MS);
+  let cancelSettle = () => {};
+  const cancelGrow = animateNumber(1, PULSE_SCALE, PULSE_GROW_MS, (v) => {
+    el.style.transform = `scale(${v})`;
+  }, () => {
+    cancelSettle = animateNumber(PULSE_SCALE, 1, PULSE_SETTLE_MS, (v) => {
+      el.style.transform = `scale(${v})`;
+    }, () => { el.style.transform = ""; });
+  });
+  return () => { cancelGrow(); cancelSettle(); };
+}
+
 /** Плавно изменить прозрачность элемента — своими руками, без CSS-перехода.
  *
  *  CSS-переход здесь не годится: на устройствах с выключенной системной
  *  анимацией он применяется мгновенно, и затухание выглядит щелчком. Именно так
  *  и выглядела смена баннера на проде.
  */
-export function animateOpacity(el: HTMLElement, from: number, to: number, durationMs: number, done?: () => void): () => void {
+export function animateOpacity(el: HTMLElement | SVGElement, from: number, to: number, durationMs: number, done?: () => void): () => void {
   // Инлайновый transition убираем: если он остался от прежнего кода, браузер
   // попытается доводить значение сам поверх наших кадров.
   el.style.transition = "";

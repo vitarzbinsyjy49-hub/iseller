@@ -5,12 +5,13 @@
  *  её системный шрифт, и «пусто» выглядело чужеродно к остальному интерфейсу. */
 
 import { Icon, type IconName } from "./icons";
+import { enterRefCallback } from "../lib/useEnter";
 
 export function ErrorState({
   message = "Не удалось загрузить данные", onRetry,
 }: { message?: string; onRetry: () => void }) {
   return (
-    <div className="fade-in rounded-xl2 bg-surface p-6 text-center shadow-soft">
+    <div ref={enterRefCallback("fade")} className="rounded-xl2 bg-surface p-6 text-center shadow-soft">
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-dangerbg text-dangerink">
         <Icon name="alert" className="h-6 w-6" />
       </div>
@@ -29,7 +30,7 @@ export function EmptyState({
   icon = "search", message,
 }: { icon?: IconName; message: string }) {
   return (
-    <div className="fade-in mt-6 py-8 text-center">
+    <div ref={enterRefCallback("fade")} className="mt-6 py-8 text-center">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-mutedbg text-muted">
         <Icon name={icon} className="h-7 w-7" strokeWidth={1.6} />
       </div>

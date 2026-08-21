@@ -13,6 +13,7 @@ import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
 import { preloadRoute } from "../lib/routePreload";
 import { BrandWordmark } from "./BrandMark";
 import { Icon } from "./icons";
+import { enterRefCallback } from "../lib/useEnter";
 
 /** Desktop-шапка (>=1024px): логотип, навигация, поиск, действия.
  *  Видна только на lg+ — mobile UX (BottomNav + градиентный header) не трогаем.
@@ -189,8 +190,9 @@ export default function DesktopHeader() {
 
           {panelOpen && !q.trim() && (
             <div
+              ref={enterRefCallback("fade")}
               onMouseDown={(e) => e.preventDefault()}
-              className="fade-in absolute inset-x-0 top-full z-40 mt-2 w-full overflow-hidden rounded-xl2 border border-border bg-surface shadow-sheet"
+              className="absolute inset-x-0 top-full z-40 mt-2 w-full overflow-hidden rounded-xl2 border border-border bg-surface shadow-sheet"
             >
               <SearchPanel
                 query=""

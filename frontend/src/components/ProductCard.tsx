@@ -12,7 +12,8 @@ import { haptic } from "../lib/telegram";
 import { toast } from "../lib/toast";
 import { track } from "../lib/analytics";
 import { indexFromScroll, isSlideMounted, isTapGesture } from "../lib/carousel";
-import { animateScrollTo, transitionDuration } from "../lib/motion";
+import { animatePulse, animateScrollTo, transitionDuration } from "../lib/motion";
+import { enterGridRefCallback } from "../lib/useEnter";
 import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
 import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMath";
 import { QuantityStepper } from "./QuantityStepper";
@@ -282,15 +283,14 @@ export function FavButton({
   visualClassName?: string;
 }) {
   const [fav, toggle, busy] = useFavorite(id);
-  const [pop, setPop] = useState(false);
+  const heartRef = useRef<SVGSVGElement>(null);
 
   async function onClick(e: MouseEvent) {
     e.stopPropagation();
     e.preventDefault();
     if (busy) return;             // антидабл-клик
     haptic("light");
-    setPop(true);
-    window.setTimeout(() => setPop(false), 220);
+    if (heartRef.current) animatePulse(heartRef.current);
     try {
       const nowFav = await toggle();
       toast(nowFav ? "Добавлено в избранное" : "Удалено из избранного");
@@ -312,7 +312,7 @@ export function FavButton({
       className={`tap flex h-11 w-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent ${className}`}
     >
       <span className={`flex items-center justify-center rounded-full ${visualClassName}`}>
-        <svg viewBox="0 0 24 24" className={`h-[18px] w-[18px] transition-colors ${pop ? "favorite-pop" : ""}`}
+        <svg ref={heartRef} viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-colors"
           fill={fav ? "rgb(var(--app-danger))" : "none"} stroke={fav ? "rgb(var(--app-danger))" : "#9aa1ab"}
           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M19 14c1.5-1.5 2.5-3 2.5-5A5.5 5.5 0 0 0 12 5.6 5.5 5.5 0 0 0 2.5 9c0 2 1 3.5 2.5 5l7 7z" />
@@ -465,7 +465,8 @@ function ProductCard({ card, compact, onOpen }: Props) {
     // h-full + flex-col: в сетке все карточки одной высоты, кнопка прижата вниз.
     // lg:hover — desktop-состояние; tap scale остаётся на mobile.
     <div
-      className={`product-card-viewport card-appear lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface lg:hover:shadow-float ${
+      ref={enterGridRefCallback("fadeUp")}
+      className={`product-card-viewport lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface lg:hover:shadow-float ${
         compact ? "w-40 shrink-0 lg:w-auto" : ""
       } shadow-card`}
     >

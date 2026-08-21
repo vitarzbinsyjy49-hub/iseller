@@ -10,13 +10,12 @@
  *  наследуется от обёртки, отступы/ширина на самой обёртке дают тот же бокс,
  *  что раньше давал класс на самом теге. */
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
-import { animateAppear } from "../../lib/motion";
+import { animateAppear, staggerDelayMs } from "../../lib/motion";
 
-/** Шаг автоматической задержки для списка карточек/строк — те же интервалы,
- *  что раньше задавал `.stagger > *:nth-child(n)` в CSS. */
-export function staggerDelayMs(index: number): number {
-  return Math.min(index * 24, 72);
-}
+// Реэкспорт: staggerDelayMs переехал в lib/motion.ts (им пользуются и обычные
+// карточки списков через lib/useEnter, не только онбординг), но три сцены
+// онбординга уже импортируют его отсюда — незачем их трогать ради переезда.
+export { staggerDelayMs };
 
 export function Appear({
   delayMs = 0,
