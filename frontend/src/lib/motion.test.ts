@@ -2,13 +2,44 @@ import { describe, expect, it } from "vitest";
 import {
   FADE_MS,
   ONBOARDING_APPEAR_MS,
+  SHEET_IN_MS,
+  SHEET_OUT_MS,
   animateAppear,
   animateNumber,
+  animateSheetIn,
+  animateSheetOut,
   easeOutQuint,
   scrollPositionAt,
   transitionDuration,
   transitionStyle,
 } from "./motion";
+
+// Как withControlledRaf в animateAppear ниже, но поддерживает НЕСКОЛЬКО
+// одновременных цепочек rAF — animateSheetIn/Out гоняют панель и подложку
+// раздельными вызовами animateNumber/animateOpacity, и однослотовый pending
+// (как у animateNumber-теста) терял бы второй колбэк.
+function withControlledRafQueue<T>(run: (tick: (now: number) => void) => T): T {
+  let queue: FrameRequestCallback[] = [];
+  const originalRaf = globalThis.requestAnimationFrame;
+  const originalCancel = globalThis.cancelAnimationFrame;
+  globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => { queue.push(cb); return queue.length; }) as typeof requestAnimationFrame;
+  globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame;
+  const tick = (now: number) => {
+    const due = queue;
+    queue = [];
+    due.forEach((cb) => cb(now));
+  };
+  try {
+    return run(tick);
+  } finally {
+    globalThis.requestAnimationFrame = originalRaf;
+    globalThis.cancelAnimationFrame = originalCancel;
+  }
+}
+
+function fakeSheetElement(): HTMLElement {
+  return { style: { opacity: "", transform: "" } } as unknown as HTMLElement;
+}
 
 describe("transitionStyle", () => {
   it("обычный режим — движение", () => {
@@ -145,6 +176,88 @@ describe("animateAppear", () => {
       const el = fakeElement();
       const cancel = animateAppear(el, false);
       expect(() => cancel()).not.toThrow();
+    });
+  });
+});
+
+describe("animateSheetIn", () => {
+  it("обычный режим — сразу выставляет исходное положение синхронно", () => {
+    withControlledRafQueue(() => {
+      const panel = fakeSheetElement();
+      const backdrop = fakeSheetElement();
+      animateSheetIn(panel, backdrop, false);
+      // До первого rAF-тика — потому и обязателен useLayoutEffect у вызывающего:
+      // если бы это применялось только внутри rAF, один кадр отрисовался бы в
+      // конечном положении раньше, чем встанет исходное.
+      expect(panel.style.opacity).toBe("0.86");
+      expect(panel.style.transform).toContain("32px");
+      expect(backdrop.style.opacity).toBe("0");
+    });
+  });
+
+  it("обычный режим — к концу анимации оба элемента полностью видимы", () => {
+    withControlledRafQueue((tick) => {
+      const panel = fakeSheetElement();
+      const backdrop = fakeSheetElement();
+      animateSheetIn(panel, backdrop, false);
+      tick(0);
+      tick(SHEET_IN_MS);
+      expect(panel.style.opacity).toBe("1");
+      expect(panel.style.transform).toBe("");
+      expect(backdrop.style.opacity).toBe("1");
+    });
+  });
+
+  it("«уменьшить движение» — без сдвига, но не мгновенно", () => {
+    withControlledRafQueue((tick) => {
+      const panel = fakeSheetElement();
+      const backdrop = fakeSheetElement();
+      animateSheetIn(panel, backdrop, true);
+      expect(panel.style.opacity).toBe("0");
+      expect(panel.style.transform).toBe("");
+      tick(0);
+      tick(FADE_MS / 2);
+      const mid = Number(panel.style.opacity);
+      expect(mid).toBeGreaterThan(0);
+      expect(mid).toBeLessThan(1);
+    });
+  });
+
+  it("возвращает функцию отмены обеих цепочек", () => {
+    withControlledRafQueue(() => {
+      const cancel = animateSheetIn(fakeSheetElement(), fakeSheetElement(), false);
+      expect(() => cancel()).not.toThrow();
+    });
+  });
+});
+
+describe("animateSheetOut", () => {
+  it("done вызывается по завершении, не раньше", () => {
+    withControlledRafQueue((tick) => {
+      const panel = fakeSheetElement();
+      const backdrop = fakeSheetElement();
+      let finished = false;
+      animateSheetOut(panel, backdrop, () => { finished = true; }, false);
+      tick(0);
+      expect(finished).toBe(false);
+      tick(SHEET_OUT_MS);
+      expect(finished).toBe(true);
+      expect(panel.style.opacity).toBe("0");
+      expect(backdrop.style.opacity).toBe("0");
+    });
+  });
+
+  it("«уменьшить движение» — done тоже не мгновенно", () => {
+    withControlledRafQueue((tick) => {
+      const panel = fakeSheetElement();
+      const backdrop = fakeSheetElement();
+      let finished = false;
+      animateSheetOut(panel, backdrop, () => { finished = true; }, true);
+      tick(0);
+      tick(FADE_MS / 2);
+      expect(finished).toBe(false);
+      tick(FADE_MS);
+      expect(finished).toBe(true);
     });
   });
 });

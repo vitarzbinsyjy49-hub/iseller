@@ -44,7 +44,6 @@
   --motion-instant: 90ms;
   --motion-fast: 150ms;
   --motion-standard: 190ms;
-  --motion-sheet: 260ms;
   --ease-standard: cubic-bezier(.2, .8, .25, 1);
   --ease-emphasized: cubic-bezier(.22, 1, .36, 1);
 }
@@ -117,22 +116,6 @@ body {
   from { opacity: .72; }
   to   { opacity: 1; }
 }
-@keyframes slideUp {
-  from { opacity: .86; transform: translate3d(0, 32px, 0); }
-  to   { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-@keyframes slideDown {
-  from { opacity: 1; transform: translate3d(0, 0, 0); }
-  to   { opacity: 0; transform: translate3d(0, 20px, 0); }
-}
-@keyframes fadeOut {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-@keyframes backdropIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
 @keyframes toastIn {
   from { opacity: 0; transform: translate3d(0, 8px, 0) scale(.98); }
   to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
@@ -170,10 +153,6 @@ body {
 .card-appear { animation: fadeUp var(--motion-standard) var(--ease-standard) both; }
 .fade-in     { animation: fadeIn var(--motion-fast) ease-out both; }
 .pop-in      { animation: popIn var(--motion-standard) var(--ease-emphasized) both; }
-.sheet-in    { animation: slideUp var(--motion-sheet) var(--ease-standard) both; }
-.sheet-out   { animation: slideDown var(--motion-standard) ease-in both; pointer-events: none; }
-.backdrop-in { animation: backdropIn var(--motion-fast) ease-out both; }
-.backdrop-out { animation: fadeOut var(--motion-standard) ease-in both; pointer-events: none; }
 .toast-in    { animation: toastIn var(--motion-standard) var(--ease-emphasized) both; }
 .toast-out   { animation: toastOut var(--motion-fast) ease-in both; pointer-events: none; }
 .favorite-pop { animation: favoritePop var(--motion-standard) var(--ease-emphasized); }
@@ -388,8 +367,6 @@ html.kb-open .js-bottom-nav { display: none; }
 @media (prefers-reduced-motion: reduce) {
   @keyframes fadeUp   { from { opacity: 0 } to { opacity: 1 } }
   @keyframes popIn    { from { opacity: 0 } to { opacity: 1 } }
-  @keyframes slideUp  { from { opacity: 0 } to { opacity: 1 } }
-  @keyframes slideDown { from { opacity: 1 } to { opacity: 0 } }
   @keyframes toastIn  { from { opacity: 0 } to { opacity: 1 } }
   @keyframes toastOut { from { opacity: 1 } to { opacity: 0 } }
   @keyframes favoritePop { from { opacity: .6 } to { opacity: 1 } }

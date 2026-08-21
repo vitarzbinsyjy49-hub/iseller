@@ -9,10 +9,10 @@
  *  SheetShell — общая оболочка (portal, backdrop, Escape, scroll-lock, focus
  *  trap), переиспользуется AiRoadmapSheet/LoyaltyRoadmapSheet — не удалять.
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { haptic } from "../lib/telegram";
-import { transitionDuration } from "../lib/motion";
+import { animateSheetIn, animateSheetOut } from "../lib/motion";
 import type { ChoiceItem } from "../lib/scenario";
 import { Icon } from "./icons";
 
@@ -33,28 +33,34 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
   children: ReactNode | ((close: SheetClose) => ReactNode);
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
-  const closeTimer = useRef<number | null>(null);
+  const cancelAnimRef = useRef<() => void>(() => {});
   const closingRef = useRef(false);
   const [closing, setClosing] = useState(false);
   onCloseRef.current = onClose;
+
+  // Выезд при монтировании. useLayoutEffect, не useEffect: animateSheetIn
+  // ставит первый кадр синхронно и ждёт, что DOM ещё не нарисован — иначе один
+  // кадр мелькнёт в конечном положении до того, как встанет исходное.
+  useLayoutEffect(() => {
+    const panel = panelRef.current, backdrop = backdropRef.current;
+    if (!panel || !backdrop) return;
+    cancelAnimRef.current = animateSheetIn(panel, backdrop);
+    return () => cancelAnimRef.current();
+  }, []);
 
   const requestClose = useCallback<SheetClose>((afterClose) => {
     if (closingRef.current) return;
     closingRef.current = true;
     setClosing(true);
-    // Ноля здесь быть не может: при «уменьшить движение» шит всё равно гаснет
-    // (index.css переопределяет slideDown в чистую прозрачность), и нулевая
-    // задержка снимала его с экрана ДО того, как затухание успевало проиграть.
-    const delay = transitionDuration(190);
-    closeTimer.current = window.setTimeout(() => {
+    const panel = panelRef.current, backdrop = backdropRef.current;
+    if (!panel || !backdrop) { onCloseRef.current(); afterClose?.(); return; }
+    cancelAnimRef.current();
+    cancelAnimRef.current = animateSheetOut(panel, backdrop, () => {
       onCloseRef.current();
       afterClose?.();
-    }, delay);
-  }, []);
-
-  useEffect(() => () => {
-    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    });
   }, []);
 
   // Блокировка фонового скролла без прыжка страницы (компенсируем ширину
@@ -96,7 +102,8 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
 
   return createPortal(
     <div
-      className={`${closing ? "backdrop-out" : "backdrop-in"} fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center`}
+      ref={backdropRef}
+      className={`fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center ${closing ? "pointer-events-none" : ""}`}
       onClick={() => requestClose()}
     >
       <div
@@ -106,7 +113,15 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
         aria-labelledby={labelledBy}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className={`${closing ? "sheet-out" : "sheet-in"} flex max-h-[88vh] w-full max-w-md flex-col rounded-t-3xl bg-surface shadow-sheet outline-none safe-bottom sm:max-h-[90vh] sm:rounded-3xl ${panelClassName}`}
+        // Высота — от --app-height (index.css, lib/telegram.ts), не от сырых
+        // vh: у сырых vh в Telegram WebView есть переходный кадр между «пока не
+        // осевшей» высотой раскрытия и viewportStableHeight — панель, прижатая
+        // к низу экрана, на этот кадр ловит другой max-height и «досаживается»
+        // сверху вниз. --app-height ставится ИМЕННО из stable-высоты первым
+        // приоритетом (см. pickViewportHeight), этого скачка не даёт. Fallback
+        // (var не установлена — вне Telegram) — 100vh*0.88/0.9, то есть те же
+        // 88vh/90vh, что были.
+        className={`flex max-h-[calc(var(--app-height,100vh)*0.88)] w-full max-w-md flex-col rounded-t-3xl bg-surface shadow-sheet outline-none safe-bottom sm:max-h-[calc(var(--app-height,100vh)*0.9)] sm:rounded-3xl ${closing ? "pointer-events-none" : ""} ${panelClassName}`}
       >
         {typeof children === "function" ? children(requestClose) : children}
       </div>

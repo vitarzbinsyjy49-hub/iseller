@@ -156,6 +156,58 @@ export function animateAppear(el: HTMLElement, reducedMotion = prefersReducedMot
   }, () => { el.style.transform = ""; });
 }
 
+/** Длительности и сдвиг шторки — те же числа, что раньше жили в CSS-классах
+ *  `.sheet-in`/`.sheet-out`/`.backdrop-in`/`.backdrop-out` (index.css). */
+export const SHEET_IN_MS = 260;
+export const SHEET_OUT_MS = 190;
+const BACKDROP_IN_MS = 150;
+const SHEET_IN_OFFSET_PX = 32;
+const SHEET_OUT_OFFSET_PX = 20;
+
+/** Выезд шторки снизу: панель (сдвиг + лёгкое проявление) и подложка (чистое
+ *  затухание) одним вызовом.
+ *
+ *  Замена CSS `.sheet-in`/`.backdrop-in`. Тот же баг, что уже чинили для
+ *  баннера витрины и слайдов онбординга (см. animateOpacity/animateAppear
+ *  выше): системное «убрать анимации» гасит CSS `animation:` целиком, что бы
+ *  ни задавал `@media (prefers-reduced-motion)` внутри неё — шторка не
+ *  «тише открывается», она прыгает на экран мгновенно. На «Курс и цены» это
+ *  особенно заметно: большая панель на весь экран, скачок читается как вспышка.
+ *
+ *  Первый кадр («от») применяется синхронно, ДО планирования rAF — вызывающий
+ *  обязан звать это из useLayoutEffect (не useEffect), иначе браузер успеет
+ *  нарисовать один кадр в конечном состоянии до того, как встанет исходное. */
+export function animateSheetIn(panel: HTMLElement, backdrop: HTMLElement, reducedMotion = prefersReducedMotion()): () => void {
+  const offset = reducedMotion ? 0 : SHEET_IN_OFFSET_PX;
+  const duration = reducedMotion ? FADE_MS : SHEET_IN_MS;
+  const applyPanel = (t: number) => {
+    panel.style.opacity = String(reducedMotion ? t : 0.86 + 0.14 * t);
+    panel.style.transform = offset ? `translate3d(0, ${offset * (1 - t)}px, 0)` : "";
+  };
+  applyPanel(0);
+  backdrop.style.opacity = "0";
+
+  const cancelPanel = animateNumber(0, 1, duration, applyPanel, () => { panel.style.transform = ""; });
+  const cancelBackdrop = animateOpacity(backdrop, 0, 1, reducedMotion ? FADE_MS : BACKDROP_IN_MS);
+  return () => { cancelPanel(); cancelBackdrop(); };
+}
+
+/** Закрытие шторки — зеркало animateSheetIn. `done` вызывается по завершении
+ *  анимации панели — на нём, а не на отдельном таймере, держится
+ *  размонтирование в SheetShell. Раньше задержку перед закрытием считали
+ *  отдельно от самой CSS-анимации (`transitionDuration(190)`), и оба места
+ *  приходилось держать в согласии руками. */
+export function animateSheetOut(panel: HTMLElement, backdrop: HTMLElement, done: () => void, reducedMotion = prefersReducedMotion()): () => void {
+  const offset = reducedMotion ? 0 : SHEET_OUT_OFFSET_PX;
+  const duration = reducedMotion ? FADE_MS : SHEET_OUT_MS;
+  const cancelPanel = animateNumber(0, 1, duration, (t) => {
+    panel.style.opacity = String(1 - t);
+    panel.style.transform = offset ? `translate3d(0, ${offset * t}px, 0)` : "";
+  }, done);
+  const cancelBackdrop = animateOpacity(backdrop, 1, 0, duration);
+  return () => { cancelPanel(); cancelBackdrop(); };
+}
+
 /** Плавно изменить прозрачность элемента — своими руками, без CSS-перехода.
  *
  *  CSS-переход здесь не годится: на устройствах с выключенной системной
