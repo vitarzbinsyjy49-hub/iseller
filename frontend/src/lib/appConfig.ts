@@ -25,6 +25,9 @@ export type PublicConfig = {
   ai_vendor: string;
   /** Название модели для подписи, если vendor известен. */
   ai_model: string;
+  /** Курс USD ЦБ РФ на сегодня + дельта к предыдущему дню. null — данных ещё
+   *  нет (холодный старт до первого успешного sync у бота) — не рисуем чип. */
+  usd_rate: { value: number; delta: number } | null;
 };
 
 const EMPTY: PublicConfig = {
@@ -35,6 +38,7 @@ const EMPTY: PublicConfig = {
   // Пустой vendor => бейджа «Powered by Claude» нет. Именно такой должна быть
   // реакция на недоступный конфиг: молчание, а не утверждение по умолчанию.
   ai_vendor: "", ai_model: "",
+  usd_rate: null,
 };
 
 let cached: PublicConfig | null = null;
