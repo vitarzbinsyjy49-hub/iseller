@@ -87,6 +87,16 @@ const PINNABLE_SELECTOR = ".cta-dock, .fixed";
 /** Выше этого z-index лежит оболочка приложения (BottomNav 40, CartBar 30). */
 const SHELL_Z = 40;
 
+/** Метки, по которым копии в снимке находят свои оригиналы. Живут только
+ *  внутри одного вызова captureGhost и снимаются сразу после. */
+const PIN_MARK = "data-route-pin";
+const SCROLL_MARK = "data-route-scroll";
+
+/** Ленты, прокрутку которых нужно перенести в снимок. Селектор классовый и
+ *  дешёвый: перебирать всех потомков <main>, спрашивая у каждого scrollLeft,
+ *  значит заставить браузер пересчитать раскладку тысячи раз. */
+const SCROLLER_SELECTOR = ".no-scrollbar, [class*='overflow-x-auto'], [class*='overflow-y-auto']";
+
 function isFixed(el: Element): boolean {
   return getComputedStyle(el).position === "fixed";
 }
@@ -107,6 +117,110 @@ function pinTo(el: HTMLElement, rect: DOMRect, originLeft: number, originTop: nu
   el.style.bottom = "auto";
 }
 
+/** Есть ли у элемента собственный текст (а не только дети-элементы).
+ *  Такой элемент разбирать на части нельзя: поверхностный клон потерял бы
+ *  текст, и в снимке осталась бы пустая коробка. */
+function hasOwnText(el: Element): boolean {
+  for (const node of Array.from(el.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim()) return true;
+  }
+  return false;
+}
+
+/** Пустышка вместо невидимого поддерева: держит ровно то же место в раскладке,
+ *  не имея ни одного потомка.
+ *
+ *  ПОВЕРХНОСТНЫЙ клон самого элемента, а не голый div. Сначала здесь стоял div
+ *  с той же шириной и высотой — и раскладка поехала: вместе с элементом
+ *  терялись его классы, а с ними внешние отступы, display и место в сетке. Всё,
+ *  что ниже пропущенного блока, поднималось вверх; на главной картинка уезжала
+ *  на тысячу с лишним пикселей. Свой тег и свои классы элемент сохраняет —
+ *  меняется только то, что внутри него ничего нет.
+ *
+ *  Размеры прибиваем инлайном: содержимого, которое их задавало, больше нет.
+ *  flex тоже — иначе растягивающийся потомок займёт не своё место. */
+function frozen(source: Element, rect: DOMRect): Element {
+  const el = source.cloneNode(false) as Element;
+  // Картинке за кадром незачем оставаться картинкой: браузер декодировал бы её
+  // ради снимка, в котором она не видна.
+  if (el instanceof HTMLImageElement) {
+    el.removeAttribute("src");
+    el.removeAttribute("srcset");
+  }
+  if (el instanceof HTMLElement) {
+    el.style.width = `${rect.width}px`;
+    el.style.height = `${rect.height}px`;
+    el.style.flex = "0 0 auto";
+  }
+  return el;
+}
+
+/** Клонировать только то, что попадает в кадр.
+ *
+ *  Снимок показывает ОДИН экран, а копировался весь документ страницы: на
+ *  главной это 3186 узлов и 96 картинок, то есть около 17 мс на настольной
+ *  машине и втрое-впятеро больше на телефоне — целая пачка кадров, потерянных
+ *  ровно в тот момент, когда начинается движение. Рывок при заходе в товар из
+ *  поиска на главной был именно этим.
+ *
+ *  Поэтому: то, что за пределами кадра, превращается в распорку той же
+ *  величины. Видимая часть клонируется как была — на неё и смотрят. Уехавшее
+ *  за край при движении снимка не открывается: он смещается целиком, вместе со
+ *  своей коробкой, и новых областей внутри него не появляется.
+ *
+ *  Вглубь идём только по большим контейнерам: разбирать на части плитку товара
+ *  дороже, чем скопировать её целиком.
+ */
+const MAX_PRUNE_DEPTH = 8;
+
+function cloneInFrame(source: Element, view: DOMRect, depth: number): Node {
+  const rect = source.getBoundingClientRect();
+
+  // display:none — копируем оболочку без содержимого. Такой узел не рисует
+  // ничего ни сам, ни через потомков, и места в раскладке не занимает.
+  //
+  // Это оказалось самой дорогой утечкой: разметка держит целую desktop-колонку
+  // под `hidden lg:block`, и на телефоне она невидима, но существует — 1879
+  // узлов с полными сетками товаров внутри. Проверка на «за кадром» её не
+  // ловила: у скрытого элемента прямоугольник нулевой, то есть формально он и
+  // не снаружи кадра. Вычисленный стиль спрашиваем только у нулевых по размеру
+  // — их единицы, и лишней работы это не создаёт.
+  if (rect.width === 0 && rect.height === 0 && getComputedStyle(source).display === "none") {
+    return source.cloneNode(false);
+  }
+  const outside =
+    rect.bottom <= view.top || rect.top >= view.bottom ||
+    rect.right <= view.left || rect.left >= view.right;
+  // Поддерево за кадром выбрасываем — но только если внутри нет прилипшей
+  // панели. У такой панели собственные координаты экранные, а вот её предок
+  // по потоку вполне может быть прокручен далеко за край: выбросив предка, мы
+  // унесли бы вместе с ним видимую панель.
+  if (outside && rect.width > 0 && rect.height > 0 && !source.querySelector(PINNABLE_SELECTOR)) {
+    return frozen(source, rect);
+  }
+
+  // Разбирать имеет смысл то, что заведомо не помещается в кадр. Помимо
+  // очевидного «выше/шире экрана» сюда обязательно входят ПРОКРУЧИВАЕМЫЕ ленты:
+  // коробка горизонтальной карусели ровно по ширине экрана, а дети уходят
+  // далеко за правый край. По размеру коробки такая лента выглядит помещающейся
+  // и копировалась целиком — со всеми двумя десятками карточек, из которых
+  // видно полторы.
+  const overflows =
+    source.scrollWidth > source.clientWidth + 4 || source.scrollHeight > source.clientHeight + 4;
+  const worthSplitting =
+    depth > 0 &&
+    source.childElementCount > 0 &&
+    !hasOwnText(source) &&
+    (rect.height > view.height || rect.width > view.width || overflows);
+  if (!worthSplitting) return source.cloneNode(true);
+
+  const shell = source.cloneNode(false) as Element;
+  for (const child of Array.from(source.children)) {
+    shell.appendChild(cloneInFrame(child, view, depth - 1));
+  }
+  return shell;
+}
+
 /** Снимок уходящего экрана. Возвращает элемент в body или null, если снимать
  *  нечего (нулевые размеры — например, вкладка свёрнута). */
 function captureGhost(main: HTMLElement): HTMLElement | null {
@@ -122,32 +236,80 @@ function captureGhost(main: HTMLElement): HTMLElement | null {
   ghost.style.width = `${rect.width}px`;
   ghost.style.height = `${rect.height}px`;
 
+  // Отступы живут на САМОЙ коробке снимка, а не на внутреннем слое. Коробка с
+  // overflow:hidden — это область прокрутки, и именно к её границам прилипает
+  // position:sticky. Пока отступ был внутри, липкая шапка каталога вставала в
+  // снимке на 12px выше живой: в странице она держится за верх содержимого
+  // <main>, а в снимке хваталась за верхний край коробки.
+  ghost.style.boxSizing = "border-box";
+  ghost.style.paddingTop = cs.paddingTop;
+  // Горизонтальные поля берём из фактического положения первого потомка, а не
+  // из padding самого <main>. Padding — не единственное, что сужает его
+  // содержимое: на desktop там ещё scrollbar-gutter: stable both-edges,
+  // резервирующий по полосе прокрутки с каждой стороны. Снимок про этот резерв
+  // не знал и выходил на 30px шире оригинала — всё внутри него смещалось.
+  // Замер по живому потомку воспроизводит содержимое точно, чем бы оно ни было
+  // сужено.
+  const firstChild = main.firstElementChild;
+  if (firstChild) {
+    const childRect = firstChild.getBoundingClientRect();
+    ghost.style.paddingLeft = `${Math.max(0, childRect.left - rect.left)}px`;
+    ghost.style.paddingRight = `${Math.max(0, rect.right - childRect.right)}px`;
+  } else {
+    ghost.style.paddingLeft = cs.paddingLeft;
+    ghost.style.paddingRight = cs.paddingRight;
+  }
+
   const inner = document.createElement("div");
-  // Горизонтальные поля контента задаёт padding самого <main>. Клон лежит в
-  // своей коробке, и без них текст уехал бы вплотную к краю экрана.
-  inner.style.paddingLeft = cs.paddingLeft;
-  inner.style.paddingRight = cs.paddingRight;
-  inner.style.paddingTop = cs.paddingTop;
   // Позиция прокрутки: сдвигаем содержимое вверх ровно на scrollTop, чтобы в
   // кадре было видно то же, что видел пользователь, а не начало страницы.
   // Отрицательный margin, а не transform: transform сделал бы inner содержащим
   // блоком, и прибитые ниже панели отсчитывались бы от него, а не от ghost.
   inner.style.marginTop = `${-main.scrollTop}px`;
-  for (const child of Array.from(main.children)) inner.appendChild(child.cloneNode(true));
+
+  // Помечаем панели ДО клонирования: метка уедет в копию вместе с элементом, и
+  // копия найдётся по ней, а не по порядковому номеру. Порядок ненадёжен —
+  // выброшенное за кадром поддерево сдвинуло бы нумерацию, и панель прибилась
+  // бы по чужим координатам.
+  const live = Array.from(main.querySelectorAll<HTMLElement>(PINNABLE_SELECTOR)).filter(isFixed);
+  live.forEach((el, i) => el.setAttribute(PIN_MARK, String(i)));
+
+  // Тем же способом — прокрученные ленты. cloneNode не переносит scrollLeft, и
+  // горизонтальные карусели («Хиты», «Недавно смотрели», ряд категорий) в
+  // снимке отматывались бы в начало: экран уезжает, и одновременно с этим
+  // ленты внутри него прыгают на первый элемент.
+  const scrolled = Array.from(main.querySelectorAll<HTMLElement>(SCROLLER_SELECTOR))
+    .filter((el) => el.scrollLeft !== 0 || el.scrollTop !== 0);
+  scrolled.forEach((el, i) => el.setAttribute(SCROLL_MARK, String(i)));
+
+  for (const child of Array.from(main.children)) {
+    inner.appendChild(cloneInFrame(child, rect, MAX_PRUNE_DEPTH));
+  }
   ghost.appendChild(inner);
+  // В документ кладём ДО правок ниже: без раскладки прокрутку не выставить, а
+  // getBoundingClientRect у копии панели вернул бы нули.
+  document.body.appendChild(ghost);
+
+  scrolled.forEach((el, i) => {
+    el.removeAttribute(SCROLL_MARK);
+    const copy = ghost.querySelector<HTMLElement>(`[${SCROLL_MARK}="${i}"]`);
+    if (!copy) return;  // ленту выбросило за кадром — её и не видно
+    copy.removeAttribute(SCROLL_MARK);
+    copy.scrollLeft = el.scrollLeft;
+    copy.scrollTop = el.scrollTop;
+  });
 
   // Панели в клоне остались бы fixed — то есть привязанными к экрану, а не к
   // снимку: они не уехали бы вместе с ним и продублировали бы панель нового
-  // экрана. Замеры берём с ЖИВЫХ панелей (у клона ещё нет раскладки).
-  const live = main.querySelectorAll<HTMLElement>(PINNABLE_SELECTOR);
-  const copies = ghost.querySelectorAll<HTMLElement>(PINNABLE_SELECTOR);
+  // экрана. Замеры берём с ЖИВЫХ панелей — у копии координаты уже свои.
   live.forEach((el, i) => {
-    const copy = copies[i];
-    if (!copy || !isFixed(el)) return;
+    el.removeAttribute(PIN_MARK);
+    const copy = ghost.querySelector<HTMLElement>(`[${PIN_MARK}="${i}"]`);
+    if (!copy) return;
+    copy.removeAttribute(PIN_MARK);
     pinTo(copy, el.getBoundingClientRect(), rect.left, rect.top);
   });
 
-  document.body.appendChild(ghost);
   return ghost;
 }
 
