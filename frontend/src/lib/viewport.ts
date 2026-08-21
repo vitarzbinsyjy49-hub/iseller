@@ -151,8 +151,8 @@ export function bottomNavStack(safeBottom: number): {
 export function imagePaddingClass(
   naturalWidth: number,
   naturalHeight: number
-): "p-2" | "p-1" {
-  if (naturalWidth <= 0 || naturalHeight <= 0) return "p-2";
+): "p-3" | "p-2" {
+  if (naturalWidth <= 0 || naturalHeight <= 0) return "p-3";
   const ratio = naturalHeight / naturalWidth;
-  return ratio >= 1.5 || ratio <= 1 / 1.5 ? "p-1" : "p-2";
+  return ratio >= 1.5 || ratio <= 1 / 1.5 ? "p-2" : "p-3";
 }

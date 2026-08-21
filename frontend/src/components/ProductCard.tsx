@@ -16,6 +16,7 @@ import { animatePulse, animateScrollTo, transitionDuration } from "../lib/motion
 import { enterGridRefCallback } from "../lib/useEnter";
 import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
 import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMath";
+import { cardBadges } from "../lib/cardBadges";
 import { QuantityStepper } from "./QuantityStepper";
 import { preloadRoute } from "../lib/routePreload";
 import { Icon } from "./icons";
@@ -80,7 +81,7 @@ export function ProductImage({
   src, title, category, className = "", compact = false, bleed = false,
 }: { src?: string; title: string; category?: string | null; className?: string; compact?: boolean; bleed?: boolean }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const [pad, setPad] = useState<"p-2" | "p-1">("p-2");
+  const [pad, setPad] = useState<"p-3" | "p-2">("p-3");
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const showImg = src && failedSrc !== src;
   return (
@@ -349,8 +350,11 @@ export function Badge({ color, children }: {
   };
   // inline-flex + gap: у бейджа может быть иконка перед подписью («Хит»), и она
   // обязана стоять на общей вертикальной оси с текстом, а не «висеть» рядом.
+  // px-1.5 и font-medium вместо px-2/font-semibold: бейдж лежит поверх
+  // фотографии товара, и каждый лишний пиксель его подложки отнят у того, ради
+  // чего плитка существует. Читаемость держит контраст заливки, а не жир шрифта.
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-4 ${map[color]}`}>{children}</span>
+    <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium leading-4 ${map[color]}`}>{children}</span>
   );
 }
 
@@ -428,7 +432,12 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
       // карточки. Текст тёмный, а не белый: белое на этом золоте даёт 2,8:1
       // при норме 4,5:1, тёмное — 6,9:1. Золото приглушённое (#C8921F), то же,
       // что было в рамке: менять фирменный тон вместе с носителем незачем.
-      className={`tap flex h-11 w-full items-center justify-center gap-1.5 rounded-field text-[13px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
+      // Высота 44px неприкосновенна — это минимальная цель касания. Вес снят
+      // тем, что снимается без неё: радиус ушёл на общую шкалу (12px вместо 14px,
+      // tailwind.config), начертание — с semibold на medium. Заливка осталась
+      // синей: это единственное действие плитки, и превращать его в обводку
+      // значит прятать то, ради чего на витрину пришли.
+      className={`tap flex h-11 w-full items-center justify-center gap-1.5 rounded-field text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
         card.is_legendary
           ? "bg-[#C8921F] text-[#241800] hover:bg-[#b3811a]"
           : "bg-accent text-white hover:bg-accentdark"
@@ -447,6 +456,7 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
 function ProductCard({ card, compact, onOpen }: Props) {
   const navigate = useNavigate();
   const disc = discountPct(card.price, card.old_price);
+  const badges = cardBadges(card, disc);
   const open = useCallback(() => {
     onOpen?.(card);
     navigate(`/product/${card.id}`);
@@ -466,9 +476,14 @@ function ProductCard({ card, compact, onOpen }: Props) {
     // lg:hover — desktop-состояние; tap scale остаётся на mobile.
     <div
       ref={enterGridRefCallback("fadeUp")}
-      className={`product-card-viewport lift flex h-full flex-col overflow-hidden rounded-xl2 bg-surface lg:hover:shadow-float ${
+      // Волосяная рамка вместо тени (v5.6.0). Плитка лежит в потоке сетки и
+      // никуда не всплывает — тень давала ей высоту, которой у неё нет, а два
+      // десятка теней на экране складывались в серую рябь между карточками.
+      // Отделяют плитку от фона контраст поверхности и пространство; тень
+      // остаётся там, где высота настоящая, — на наведении и у панелей.
+      className={`product-card-viewport lift flex h-full flex-col overflow-hidden rounded-xl2 border border-border bg-surface lg:hover:shadow-float ${
         compact ? "w-40 shrink-0 lg:w-auto" : ""
-      } shadow-card`}
+      }`}
     >
       {/* Легендарная карточка не отличается ни рамкой, ни бликом.
 
@@ -490,12 +505,25 @@ function ProductCard({ card, compact, onOpen }: Props) {
           compact={compact} onOpen={open} bleed={card.is_legendary}
         />
         <div className="pointer-events-none absolute left-2 top-2 z-10 flex flex-col items-start gap-1">
-          {/* «Хит» на легендарном товаре гасит backend (to_card): правило одно
+          {/* Не более двух бейджей и в фиксированном порядке важности — правило
+              живёт в lib/cardBadges с тестами. Раньше рисовались все подходящие
+              сразу, и стопка из четырёх заливок ложилась поверх фотографии,
+              ничего при этом не выделяя: когда выделено всё, не выделено ничто.
+
+              «Хит» на легендарном товаре гасит backend (to_card): правило одно
               на все места, где рисуется карточка, а не продублировано в вёрстке. */}
-          {card.is_legendary && <Badge color="gold">Легендарный</Badge>}
-          {card.is_hot && <Badge color="orange"><Icon name="flame" className="h-3 w-3" strokeWidth={2.2} />Хит</Badge>}
-          {disc && <Badge color="red">−{disc}%</Badge>}
-          {card.condition === "used" && <Badge color="gray">Б/у</Badge>}
+          {badges.map((kind) => {
+            if (kind === "legendary") return <Badge key={kind} color="gold">Легендарный</Badge>;
+            if (kind === "discount") return <Badge key={kind} color="red">−{disc}%</Badge>;
+            if (kind === "hot") {
+              return (
+                <Badge key={kind} color="orange">
+                  <Icon name="flame" className="h-3 w-3" strokeWidth={2.2} />Хит
+                </Badge>
+              );
+            }
+            return <Badge key={kind} color="gray">Б/у</Badge>;
+          })}
         </div>
         {/* Бейджа «Сегодня» здесь нет намеренно. Он отмечал исключение, пока
             забрать в день обращения можно было единичные позиции. Сейчас флаг
@@ -510,22 +538,27 @@ function ProductCard({ card, compact, onOpen }: Props) {
       </div>
 
       <div className="flex flex-1 flex-col p-3">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-[17px] font-bold leading-6 tracking-tight">{formatPrice(card.price)}</span>
-          {/* old_price показываем только когда реально даёт скидку — иначе цифры вводят в заблуждение */}
-          {disc !== null && (
-            <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price!)}</span>
-          )}
-        </div>
+        {/* Порядок «название -> цена», а не наоборот (v5.6.0). Цена, стоящая
+            первой, заставляет читать плитку задом наперёд: сначала сумма, потом
+            выяснение, за что она. Сначала предмет, затем его цена — и цена
+            остаётся самым тяжёлым элементом блока за счёт размера и насыщенности,
+            а не за счёт места в очереди. */}
         <button onClick={open} onPointerDown={() => preloadRoute("/product")} className="block w-full text-left">
           {/* Название на карточке — чистое, без приставки региона: товары
               должны начинаться с модели («iPhone 17 Pro…»), а не с флага
               перед ней. title_clean уже вырезает «(HK-KR, SIM+eSIM)» из
               текста; сам регион — на странице товара, во вкладке «Описание». */}
-          <p className="mt-1 line-clamp-2 min-h-[2.35rem] text-[13px] font-medium leading-[1.35]">
+          <p className="line-clamp-2 min-h-[2.25rem] text-footnote font-medium">
             {productName(card)}
           </p>
         </button>
+        <div className="mt-1.5 flex items-baseline gap-1.5">
+          <span className="text-title font-bold tracking-tight">{formatPrice(card.price)}</span>
+          {/* old_price показываем только когда реально даёт скидку — иначе цифры вводят в заблуждение */}
+          {disc !== null && (
+            <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price!)}</span>
+          )}
+        </div>
         {/* Подпись наличия читает РЕЖИМ, а не голый in_stock: у предзаказа
             in_stock=true, и карточка писала «В наличии», хотя в корзине тот же
             товар честно помечен предзаказом. Две разные правды об одном товаре

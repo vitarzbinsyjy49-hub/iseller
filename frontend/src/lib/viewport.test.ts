@@ -166,14 +166,22 @@ describe("bottomNavStack (нижний стек CTA/навбар, v5.2.7)", () =
 
 describe("imagePaddingClass (режим изображения ProductCard)", () => {
   it("обычные фото — стандартный отступ", () => {
-    expect(imagePaddingClass(1000, 1000)).toBe("p-2");
-    expect(imagePaddingClass(800, 1000)).toBe("p-2");
+    // v5.6.0: обе ступени подняты на шаг (p-2/p-1 -> p-3/p-2). Фотографии не
+    // хватало воздуха: товар упирался в края плитки, и рядом с ценой и кнопкой
+    // это читалось как теснота, а не как витрина.
+    expect(imagePaddingClass(1000, 1000)).toBe("p-3");
+    expect(imagePaddingClass(800, 1000)).toBe("p-3");
   });
   it("сильно вытянутые (портрет и ландшафт) — уменьшенный отступ", () => {
-    expect(imagePaddingClass(600, 1200)).toBe("p-1"); // Dyson/стик вертикальный
-    expect(imagePaddingClass(1600, 900)).toBe("p-1"); // широкий MacBook-баннер
+    expect(imagePaddingClass(600, 1200)).toBe("p-2"); // Dyson/стик вертикальный
+    expect(imagePaddingClass(1600, 900)).toBe("p-2"); // широкий MacBook-баннер
   });
   it("нулевые размеры не ломают рендер", () => {
-    expect(imagePaddingClass(0, 0)).toBe("p-2");
+    expect(imagePaddingClass(0, 0)).toBe("p-3");
+  });
+  it("вытянутое фото всегда получает меньше отступа, чем обычное", () => {
+    // Отношение ступеней важнее их абсолютных значений: вытянутый кадр и так
+    // занимает меньше квадрата, и одинаковый отступ сделал бы товар мельче.
+    expect(imagePaddingClass(600, 1200)).not.toBe(imagePaddingClass(1000, 1000));
   });
 });
