@@ -160,6 +160,11 @@ export function animateAppear(el: HTMLElement, reducedMotion = prefersReducedMot
  *  `.sheet-in`/`.sheet-out`/`.backdrop-in`/`.backdrop-out` (index.css). */
 export const SHEET_IN_MS = 260;
 export const SHEET_OUT_MS = 190;
+/** Возврат шторки на место после отпущенного жеста. Короче входа: панель уже
+ *  на экране и проходит не всю высоту, а те десятки пикселей, на которые её
+ *  успели утянуть. Растянуть это до 260мс значит показать «подумал и вернул»
+ *  вместо «не хватило». */
+export const SHEET_SETTLE_MS = 200;
 const BACKDROP_IN_MS = 150;
 const SHEET_IN_OFFSET_PX = 32;
 const SHEET_OUT_OFFSET_PX = 20;

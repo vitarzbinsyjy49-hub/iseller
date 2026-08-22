@@ -12,7 +12,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { haptic } from "../lib/telegram";
-import { animateSheetIn, animateSheetOut } from "../lib/motion";
+import { SHEET_OUT_MS, SHEET_SETTLE_MS, animateNumber, animateSheetIn, animateSheetOut } from "../lib/motion";
+import {
+  isVerticalDrag,
+  sheetBackdropOpacity,
+  sheetDragOffset,
+  shouldDismissSheet,
+} from "../lib/sheetDrag";
 import { sheetMaxHeightPx } from "../lib/viewport";
 import type { ChoiceItem } from "../lib/scenario";
 import { Icon } from "./icons";
@@ -38,6 +44,28 @@ export type SheetClose = (afterClose?: () => void) => void;
  *  Центрованная desktop-модалка (sm+) остаётся на коротком сдвиге: ехать ей
  *  неоткуда, снизу экрана она не появляется. Там `undefined` возвращает
  *  animateSheet* к их собственным значениям по умолчанию. */
+/** Зона у верхней кромки, откуда шторку можно тянуть ВСЕГДА — независимо от
+ *  того, прокручено ли её содержимое. Ровно здесь нарисована ручка, и жест за
+ *  ручку обязан работать даже посреди прокрученного списка: она за тем и
+ *  нарисована. 44px — та же минимальная цель касания, что у всего остального. */
+const HANDLE_ZONE_PX = 44;
+
+/** Ближайший прокручиваемый предок внутри панели — или null, если такого нет.
+ *  Нужен, чтобы отличить «тянут шторку» от «прокручивают её содержимое»: пока
+ *  списку есть куда прокручиваться вверх, жест вниз адресован ему. */
+function scrollerWithin(target: EventTarget | null, panel: HTMLElement): HTMLElement | null {
+  let el = target instanceof HTMLElement ? target : null;
+  while (el && el !== panel.parentElement) {
+    if (el.scrollHeight > el.clientHeight + 1) {
+      const overflowY = getComputedStyle(el).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") return el;
+    }
+    if (el === panel) break;
+    el = el.parentElement;
+  }
+  return null;
+}
+
 function sheetTravelPx(panel: HTMLElement, centered: boolean): number | undefined {
   if (centered) return undefined;
   // Запас в 1px: при дробном DPR округление высоты вниз оставляло бы у нижней
@@ -58,6 +86,18 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
   const closingRef = useRef(false);
   const [closing, setClosing] = useState(false);
   onCloseRef.current = onClose;
+
+  /** Текущий жест. В ref, а не в состоянии: на каждом кадре движения пальца
+   *  перерисовывать React значит гарантированно от него отстать. */
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number; startY: number; startAt: number;
+    height: number;
+    scroller: HTMLElement | null;
+    fromHandle: boolean;
+    active: boolean;
+    offset: number;
+  } | null>(null);
 
   // Выезд при монтировании. useLayoutEffect, не useEffect: animateSheetIn
   // ставит первый кадр синхронно и ждёт, что DOM ещё не нарисован — иначе один
@@ -84,6 +124,44 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
     if (document.hidden) return;
     cancelAnimRef.current = animateSheetIn(panel, backdrop, undefined, sheetTravelPx(panel, centered));
     return () => cancelAnimRef.current();
+  }, []);
+
+  /** Довести отпущенную шторку до края и закрыть.
+   *
+   *  Длительность считается от ОСТАВШЕГОСЯ пути: если панель уже утянута почти
+   *  вниз, ехать ей нечего, и полные 190мс читались бы как задержка после
+   *  собственного движения руки. */
+  const dismissFromDrag = useCallback((fromPx: number) => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosing(true);
+    const panel = panelRef.current, backdrop = backdropRef.current;
+    if (!panel || !backdrop) { onCloseRef.current(); return; }
+    cancelAnimRef.current();
+    const target = panel.getBoundingClientRect().height + 1;
+    if (document.hidden) { onCloseRef.current(); return; }
+    const fromOpacity = Number(backdrop.style.opacity || "1");
+    const remaining = Math.max(0, 1 - fromPx / Math.max(target, 1));
+    const duration = Math.max(110, Math.round(SHEET_OUT_MS * remaining));
+    cancelAnimRef.current = animateNumber(0, 1, duration, (t) => {
+      panel.style.transform = `translate3d(0, ${fromPx + (target - fromPx) * t}px, 0)`;
+      backdrop.style.opacity = String(fromOpacity * (1 - t));
+    }, () => onCloseRef.current());
+  }, []);
+
+  /** Вернуть шторку на место: жеста не хватило, чтобы закрыть. */
+  const settleBack = useCallback((fromPx: number) => {
+    const panel = panelRef.current, backdrop = backdropRef.current;
+    if (!panel || !backdrop) return;
+    const clear = () => { panel.style.transform = ""; backdrop.style.opacity = ""; };
+    if (document.hidden) { clear(); return; }
+    const fromOpacity = Number(backdrop.style.opacity || "1");
+    cancelAnimRef.current();
+    cancelAnimRef.current = animateNumber(0, 1, SHEET_SETTLE_MS, (t) => {
+      const y = fromPx * (1 - t);
+      panel.style.transform = y ? `translate3d(0, ${y}px, 0)` : "";
+      backdrop.style.opacity = String(fromOpacity + (1 - fromOpacity) * t);
+    }, clear);
   }, []);
 
   const requestClose = useCallback<SheetClose>((afterClose) => {
@@ -157,6 +235,71 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
         aria-labelledby={labelledBy}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => {
+          if (closingRef.current || e.pointerType === "mouse") return;
+          const panel = panelRef.current;
+          if (!panel) return;
+          const rect = panel.getBoundingClientRect();
+          const fromHandle = e.clientY - rect.top <= HANDLE_ZONE_PX;
+          dragRef.current = {
+            pointerId: e.pointerId,
+            startX: e.clientX, startY: e.clientY, startAt: performance.now(),
+            height: rect.height,
+            scroller: fromHandle ? null : scrollerWithin(e.target, panel),
+            fromHandle,
+            active: false,
+            offset: 0,
+          };
+        }}
+        onPointerMove={(e) => {
+          const drag = dragRef.current;
+          const panel = panelRef.current, backdrop = backdropRef.current;
+          if (!drag || !panel || !backdrop || e.pointerId !== drag.pointerId) return;
+          const dx = e.clientX - drag.startX;
+          const dy = e.clientY - drag.startY;
+
+          if (!drag.active) {
+            if (!isVerticalDrag(dx, dy)) return;
+            // Пока списку есть куда прокручиваться вверх, движение вниз
+            // адресовано ему, а не шторке. Исключение — жест за ручку.
+            const contentAtTop = !drag.scroller || drag.scroller.scrollTop <= 0;
+            if (dy > 0 && !contentAtTop) { dragRef.current = null; return; }
+            // Вверх шторку тянут только за ручку: в остальных местах это
+            // прокрутка содержимого, и перехватывать её нельзя.
+            if (dy < 0 && !drag.fromHandle) { dragRef.current = null; return; }
+            drag.active = true;
+            // Вход мог ещё не доиграть — палец главнее анимации.
+            cancelAnimRef.current();
+            // Захват указателя — удобство, а не условие работы: он лишь
+            // доводит события до панели, если палец ушёл за её край. Бросает
+            // при незнакомом pointerId, и необёрнутый вызов обрывал обработчик
+            // ДО применения сдвига — жест терял первый кадр и начинался
+            // рывком (поймано на синтетических событиях).
+            try { panel.setPointerCapture?.(e.pointerId); } catch { /* не критично */ }
+          }
+
+          const offset = sheetDragOffset(dy);
+          drag.offset = offset;
+          panel.style.transform = offset ? `translate3d(0, ${offset}px, 0)` : "";
+          backdrop.style.opacity = String(sheetBackdropOpacity(offset, drag.height));
+        }}
+        onPointerUp={(e) => {
+          const drag = dragRef.current;
+          dragRef.current = null;
+          if (!drag || !drag.active || e.pointerId !== drag.pointerId) return;
+          const elapsedMs = performance.now() - drag.startAt;
+          if (shouldDismissSheet({ offset: drag.offset, height: drag.height, elapsedMs })) {
+            dismissFromDrag(drag.offset);
+          } else {
+            settleBack(drag.offset);
+          }
+        }}
+        onPointerCancel={() => {
+          const drag = dragRef.current;
+          dragRef.current = null;
+          // Прерванный системой жест — не решение закрыть: возвращаем на место.
+          if (drag?.active) settleBack(drag.offset);
+        }}
         // Высота — от --app-height (index.css, lib/telegram.ts), не от сырых
         // vh: у сырых vh в Telegram WebView есть переходный кадр между «пока не
         // осевшей» высотой раскрытия и viewportStableHeight — панель, прижатая
