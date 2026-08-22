@@ -10,6 +10,7 @@ import { useOnboardingReplayStore } from "./store/onboardingReplay";
 import { useAuthStore, User } from "./store/auth";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Toaster from "./components/Toaster";
+import { ProductSkeleton } from "./components/StateViews";
 import Layout from "./components/Layout";
 import { OnboardingStories } from "./components/onboarding/OnboardingStories";
 import Home from "./pages/Home";
@@ -107,7 +108,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
           <Route path="/catalog" element={<DeferredPage><Catalog /></DeferredPage>} />
-          <Route path="/product/:id" element={<DeferredPage><ProductDetails /></DeferredPage>} />
+          <Route path="/product/:id" element={<DeferredPage fallback={<ProductSkeleton />}><ProductDetails /></DeferredPage>} />
           <Route path="/ai" element={<DeferredPage><AiSearch /></DeferredPage>} />
           <Route path="/apply/:scenario" element={<DeferredPage><ScenarioChat /></DeferredPage>} />
           <Route path="/sell" element={<DeferredPage><SellItem /></DeferredPage>} />
@@ -130,9 +131,16 @@ export default function App() {
   );
 }
 
-function DeferredPage({ children }: { children: ReactNode }) {
+/** `fallback` — запасной экран на время загрузки чанка.
+ *
+ *  По умолчанию нейтральная сетка: она годится списочным экранам, которых
+ *  большинство. Но карточке товара она НЕ годится — там своя раскладка, и
+ *  показать сетку каталога значит показать форму, которая через мгновение
+ *  сменится другой. Прыжок раскладки читается как рывок анимации, хотя
+ *  анимация ни при чём. */
+function DeferredPage({ children, fallback }: { children: ReactNode; fallback?: ReactNode }) {
   return (
-    <Suspense fallback={<RouteFallback />}>
+    <Suspense fallback={fallback ?? <RouteFallback />}>
       {children}
     </Suspense>
   );

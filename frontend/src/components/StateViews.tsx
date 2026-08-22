@@ -38,3 +38,67 @@ export function EmptyState({
     </div>
   );
 }
+
+/** Скелетон карточки товара.
+ *
+ *  Повторяет ИТОГОВУЮ раскладку страницы, а не «что-нибудь серое»: полоса
+ *  действий сверху, квадрат галереи, две строки заголовка, цена, наличие, ряд
+ *  характеристик, блок доверия. Всё — на своих местах и своей высоты.
+ *
+ *  Зачем так. При заходе в товар подряд показывались ТРИ разные формы: сначала
+ *  запасной экран Suspense (а он в форме каталога — заголовок и сетка карточек),
+ *  потом собственный скелетон страницы из квадрата и двух полосок, потом сама
+ *  страница. Каждая смена — прыжок раскладки, и вместе они читались как «сначала
+ *  посередине что-то, потом уже карточка». Причём это не лечится ускорением:
+ *  сколько бы ни грузилось, форм всё равно три.
+ *
+ *  Поэтому один и тот же скелетон стоит и запасным экраном чанка, и состоянием
+ *  загрузки данных. Тогда подряд идут не три формы, а одна — и подстановка
+ *  настоящего содержимого не двигает то, что уже нарисовано.
+ *
+ *  pb-cta — тот же отступ под фиксированной кнопкой, что у самой страницы: без
+ *  него высота прокрутки скакала бы в момент появления контента.
+ */
+export function ProductSkeleton() {
+  return (
+    <div className="mx-auto max-w-md pb-cta lg:max-w-[1440px] lg:pb-12" aria-busy="true" aria-label="Загрузка товара">
+      {/* Строка действий: назад / поиск / поделиться / избранное */}
+      <div className="-mx-4 -mt-3 mb-3 flex items-center gap-2 px-3 py-1 lg:hidden">
+        <div className="skeleton h-9 w-9 rounded-full" />
+        <div className="flex-1" />
+        <div className="skeleton h-9 w-9 rounded-full" />
+        <div className="skeleton h-9 w-9 rounded-full" />
+        <div className="skeleton h-9 w-9 rounded-full" />
+      </div>
+
+      <div className="lg:grid lg:grid-cols-[48fr_52fr] lg:items-start lg:gap-8 xl:gap-12">
+        <div className="skeleton aspect-square w-full rounded-xl2" />
+
+        <div>
+          {/* Заголовок — две строки: столько же занимает настоящее название */}
+          <div className="skeleton mt-4 h-5 w-11/12 rounded-lg lg:mt-0" />
+          <div className="skeleton mt-2 h-5 w-7/12 rounded-lg" />
+
+          {/* Цена и наличие */}
+          <div className="skeleton mt-4 h-8 w-2/5 rounded-lg" />
+          <div className="skeleton mt-2.5 h-4 w-1/3 rounded" />
+
+          {/* Ряд характеристик */}
+          <div className="mt-4 flex gap-2">
+            <div className="skeleton h-8 w-20 rounded-field" />
+            <div className="skeleton h-8 w-16 rounded-field" />
+            <div className="skeleton h-8 w-24 rounded-field" />
+          </div>
+
+          {/* Блок доверия: четыре строки-обещания */}
+          <div className="mt-5 space-y-2.5">
+            <div className="skeleton h-4 w-3/4 rounded" />
+            <div className="skeleton h-4 w-2/3 rounded" />
+            <div className="skeleton h-4 w-4/5 rounded" />
+            <div className="skeleton h-4 w-1/2 rounded" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

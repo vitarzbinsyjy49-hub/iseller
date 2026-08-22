@@ -10,7 +10,7 @@ import { formatPrice, discountPct } from "../lib/format";
 import { ProductImage, Badge, FavButton } from "../components/ProductCard";
 import { Icon, type IconName } from "../components/icons";
 import { RegionFlags } from "../components/flags";
-import { ErrorState } from "../components/StateViews";
+import { ErrorState, ProductSkeleton } from "../components/StateViews";
 import LeadForm from "../components/LeadForm";
 import { haptic, isInsideTelegram, openExternalLink } from "../lib/telegram";
 import { pickShareTarget } from "../lib/share";
@@ -125,13 +125,9 @@ export default function ProductDetails() {
       </div>
     );
   }
-  if (!p) return (
-    <div className="mx-auto max-w-md">
-      <div className="skeleton aspect-square rounded-xl2" />
-      <div className="skeleton mt-4 h-6 w-2/3 rounded-lg" />
-      <div className="skeleton mt-2 h-8 w-1/3 rounded-lg" />
-    </div>
-  );
+  // Тот же скелетон, что стоит запасным экраном чанка (App.tsx): между
+  // «чанк грузится» и «данные грузятся» раскладка не меняется вовсе.
+  if (!p) return <ProductSkeleton />;
 
   // Легендарная позиция получает событийный экран вместо обычной раскладки.
   // Именно ЭКРАН, а не отдельный роут: покупка, избранное, «поделиться» и
