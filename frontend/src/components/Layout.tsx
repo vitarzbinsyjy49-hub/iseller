@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { Outlet, useLocation } from "react-router-dom";
+import AuroraBackground from "./AuroraBackground";
 import BottomNav from "./BottomNav";
 import CartBar from "./CartBar";
 import DesktopHeader from "./DesktopHeader";
@@ -111,6 +112,11 @@ export default function Layout() {
 
   return (
     <div className="flex h-full flex-col">
+      {/* Живой фон лежит под всем контентом и сам решает, на каких маршрутах
+          показываться. Здесь, а не внутри страниц: <main> прокручивается, и
+          прибитый к экрану слой не должен зависеть от того, какая страница в
+          нём сейчас смонтирована. */}
+      <AuroraBackground />
       {/* Тёмная подложка верхней зоны (статус-бар/Telegram-хром) на ВСЕХ экранах:
           красит вырез safe-area цветом шапки (index.css .hero-top-inset), чтобы верх
           был цельным тёмным, без белой полосы. Высота = --app-content-top-offset

@@ -65,7 +65,10 @@ export default function LaunchCountdown({ onOpenRoadmap }: { onOpenRoadmap: () =
         </span>
         {/* aria-live не ставим: экранный диктор, объявляющий остаток каждую
             секунду, перекрывает чтение всего остального на экране. */}
-        <span className="block text-[11.5px] leading-4 text-muted">
+        {/* Не text-muted: полоса лежит на живом фоне, а серый на цветном
+            выцветает. Тёмный с прозрачностью держит контраст и на белом, и на
+            цветном пятне. */}
+        <span className="block text-[11.5px] leading-4 text-text/70">
           Осталось {left.text} — что появится дальше
         </span>
       </span>

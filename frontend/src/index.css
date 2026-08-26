@@ -372,3 +372,97 @@ html.kb-open .js-bottom-nav { display: none; }
   /* Прокрутка прыжком, без пролёта содержимого мимо глаз. */
   * { scroll-behavior: auto !important; }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Живой фон (v6): мягкие цветные пятна, медленно плывущие под контентом.
+
+   Почему пятна, а не размытие. Красивый «переливающийся» фон обычно делают
+   через filter: blur() по цветным кругам — и на слабых телефонах это самый
+   дорогой способ из возможных: размытие пересчитывается каждый кадр. Здесь
+   пятно мягкое САМО ПО СЕБЕ, потому что это радиальный градиент с прозрачным
+   краем; фильтра нет вообще, а анимация трогает только transform — такую
+   браузер отдаёт видеоядру и страницу не перерисовывает.
+
+   Почему fixed. Слой прибит к экрану, а не к содержимому: при прокрутке он
+   стоит на месте, поэтому длинная лента каталога не тянет его за собой и не
+   вызывает перерисовку. Побочно это даёт эффект глубины.
+
+   z-index: -10 — слой уходит ЗА весь контент, но остаётся над фоном body.
+   Ловить его нажатием нельзя (pointer-events: none), иначе он перехватывал бы
+   тапы по всему экрану.
+   ───────────────────────────────────────────────────────────────────────── */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+/* Синее сверху слева — там же, где логотип: цвет бренда встречает взгляд
+   первым. Оранжевое справа уравновешивает его тёплым. Третье пятно синее и
+   самое бледное: оно нужно, чтобы низ экрана не оставался пустым при
+   прокрутке, но спорить с карточками товаров ему нечем. */
+.aurora-1 {
+  width: min(86vw, 340px); height: min(86vw, 340px);
+  /* Смещения В ПИКСЕЛЯХ, а не в долях экрана. С vh композиция зависела от
+     высоты устройства: на высоком экране пятно уезжало за верхний край и фон
+     пропадал вовсе (поймано на проверке — на экране 2122px в высоту верхнее
+     пятно оказалось на −281px). Размер по-прежнему в долях ШИРИНЫ: она у
+     телефонов и различается, и определяет, каким пятно выглядит. */
+  top: -110px; left: -80px;
+  background: radial-gradient(circle, rgb(var(--app-accent) / .34), transparent 70%);
+  animation: aurora-drift-1 40s ease-in-out infinite alternate;
+}
+.aurora-2 {
+  width: min(74vw, 300px); height: min(74vw, 300px);
+  top: 40px; right: -90px;
+  background: radial-gradient(circle, rgb(var(--app-orange) / .22), transparent 70%);
+  animation: aurora-drift-2 48s ease-in-out infinite alternate;
+}
+.aurora-3 {
+  width: min(66vw, 270px); height: min(66vw, 270px);
+  /* Третье — единственное, что привязано к высоте экрана: его задача закрыть
+     нижнюю половину, а она у разных телефонов разная. */
+  top: 45%; left: -40px;
+  background: radial-gradient(circle, rgb(var(--app-accent) / .16), transparent 70%);
+  animation: aurora-drift-3 44s ease-in-out infinite alternate;
+}
+
+/* Зерно поверх пятен. Именно оно превращает заливку в «поверхность»: без него
+   градиент читается как плашка. Растеризуется один раз и дальше бесплатно. */
+.aurora-grain {
+  position: absolute;
+  inset: 0;
+  opacity: .05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 120px;
+}
+
+/* Циклы намеренно разной длины и взаимно непростые: совпади они, пятна начали
+   бы возвращаться в одну и ту же композицию, и движение стало бы читаться как
+   петля. */
+@keyframes aurora-drift-1 {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(64px, 56px, 0) scale(1.14); }
+}
+@keyframes aurora-drift-2 {
+  from { transform: translate3d(0, 0, 0) scale(1.08); }
+  to   { transform: translate3d(-56px, 70px, 0) scale(.94); }
+}
+@keyframes aurora-drift-3 {
+  from { transform: translate3d(0, 0, 0) scale(.96); }
+  to   { transform: translate3d(78px, -48px, 0) scale(1.16); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Пятна остаются, движение уходит: фон и без анимации делает своё дело, а
+     плывущее изображение — ровно то, от чего человек защищается настройкой. */
+  .aurora-blob { animation: none; }
+}
