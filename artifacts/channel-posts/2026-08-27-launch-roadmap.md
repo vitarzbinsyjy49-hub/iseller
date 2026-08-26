@@ -51,3 +51,11 @@ Telegram **multipart-байтами**, не строкой-URL — с нашег
 Rich-разметку автотесты не проверяют (все они мокают `httpx`), поэтому один раз
 отправить пост в тестовый чат и посмотреть глазами: `<details>` и `<table>`
 рендерятся в Telegram по-разному на разных клиентах.
+
+## Опубликовано
+
+26.08.2026, slug `launch_roadmap_2026_09`, `telegram_message_id = 44`
+(t.me/isellerhub/44). Обложка лежит на проде в `/code/uploads/cover-launch-roadmap.png`.
+
+Пост правится на том же `message_id` — менять текст только через админку или
+`apply_info_posts(slugs=["launch_roadmap_2026_09"])`, иначе в канале появится дубль.
