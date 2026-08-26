@@ -700,3 +700,47 @@ def test_static_reply_texts_are_html_safe():
         assert not re.search(r"&(?!(amp|lt|gt|quot|#\d+);)", text), text
         # Незакрытых тегов быть не должно: считаем открывающие и закрывающие.
         assert text.count("<") == text.count(">"), text
+
+
+# ------------------------------------------------- покрытие всех диплинков сразу
+
+def test_every_deep_link_gets_a_button_to_the_same_screen():
+    """Каждый payload из STATIC_ROUTES обязан дать ответ бота с web_app-кнопкой
+    ровно на тот экран, который резолвит Mini App.
+
+    Тест перечисляет не сами payload'ы, а СЛОВАРЬ: добавить новый диплинк и
+    забыть про него в reply_for_payload теперь нельзя — забытый payload молча
+    падал бы в общее меню, и кнопка канала вела бы «куда-то в магазин».
+    """
+    from app.services.telegram_bot import STATIC_ROUTES, reply_for_payload
+
+    for payload, route in STATIC_ROUTES.items():
+        reply = reply_for_payload(payload)
+        assert reply is not None, f"payload {payload}: бот не ответил"
+        urls = [b["web_app"]["url"] for row in reply.keyboard for b in row if "web_app" in b]
+        assert urls, f"payload {payload}: ответ без web_app-кнопки"
+        assert any(u.endswith(route) for u in urls), (
+            f"payload {payload}: бот ведёт на {urls}, а Mini App на {route}"
+        )
+
+
+def test_unknown_and_broken_input_never_leaves_the_user_in_silence():
+    """Мусор на входе — не повод промолчать: человек, опечатавшийся в команде
+    или приславший что угодно, обязан получить ответ с рабочими кнопками."""
+    for text in ["/kataloq", "/start@isellerAIbot", "/start   ", "  /menu  ",
+                 "🙂" * 50, "x" * 4000, "/start неизвестный_payload"]:
+        reply = build_reply(private_message(text))
+        assert reply is not None, f"бот промолчал на {text[:30]!r}"
+        assert reply.text.strip(), f"пустой ответ на {text[:30]!r}"
+        assert reply.keyboard, f"ответ без кнопок на {text[:30]!r}"
+
+
+def test_product_payload_rejects_anything_that_is_not_a_plain_number():
+    """payload приходит из ссылки, которую мог собрать кто угодно, а результат
+    подставляется в URL кнопки."""
+    from app.services.telegram_bot import parse_product_payload
+
+    for bad in ["product_", "product_abc", "product_0", "product_-1", "product_٤٢",
+                "product_1e3", "product_" + "9" * 13, "product_1 2"]:
+        assert parse_product_payload(bad) is None, bad
+    assert parse_product_payload("product_42") == 42

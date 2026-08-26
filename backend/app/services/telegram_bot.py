@@ -173,6 +173,22 @@ def parse_product_payload(payload: str) -> int | None:
     return value if value > 0 else None
 
 
+#: Статические payload'ы диплинков -> экран Mini App. Словарь, а не цепочка
+#: if'ов: по нему проходит тест, который требует от бота web_app-кнопки на тот
+#: же путь для КАЖДОГО payload'а. Новый диплинк, добавленный только сюда и
+#: забытый в reply_for_payload, роняет тест, а не тихо ведёт в общее меню.
+STATIC_ROUTES: dict[str, str] = {
+    "catalog": "/catalog",
+    "ai": "/ai",
+    "requests": "/requests",
+    "sell": "/sell",
+    "marketplace": "/marketplace",
+    # Роудмап живёт шторкой в профиле, своего маршрута у него нет — открываем
+    # профиль и просим его развернуть шторку меткой в адресе.
+    "roadmap": "/profile?roadmap=1",
+}
+
+
 def resolve_payload_path(payload: str) -> str | None:
     """Путь Mini App для deep-link payload'а, или None если payload незнаком.
 
@@ -182,20 +198,9 @@ def resolve_payload_path(payload: str) -> str | None:
     прямом переходе в Mini App, минуя чат с ботом вовсе. Разъедутся эти два
     пути — человек с прямой ссылки попадёт не туда, куда с ссылки через бота.
     """
-    if payload == "catalog":
-        return "/catalog"
-    if payload == "ai":
-        return "/ai"
-    if payload == "requests":
-        return "/requests"
-    if payload == "sell":
-        return "/sell"
-    if payload == "marketplace":
-        return "/marketplace"
-    # Кнопка поста про планы магазина. Роудмап живёт шторкой в профиле, своего
-    # маршрута у него нет — открываем профиль и просим его развернуть шторку.
-    if payload == "roadmap":
-        return "/profile?roadmap=1"
+    route = STATIC_ROUTES.get(payload)
+    if route is not None:
+        return route
     product_id = parse_product_payload(payload)
     if product_id is not None:
         return f"/product/{product_id}"
