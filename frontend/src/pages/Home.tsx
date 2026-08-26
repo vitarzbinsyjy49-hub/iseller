@@ -25,8 +25,9 @@ import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
 import { BrandWordmark } from "../components/BrandMark";
 import { FxRateChip } from "../components/FxRateChip";
+import LaunchCountdown from "../components/LaunchCountdown";
 
-const BetaRoadmapSheet = lazy(() => import("../components/BetaRoadmapSheet"));
+const RoadmapSheet = lazy(() => import("../components/RoadmapSheet"));
 const AboutServiceSheet = lazy(() => import("../components/AboutServiceSheet"));
 // Как соседние шторки выше: открывается только тапом по чипу, в основной
 // чанк первого экрана попадать не должна (мобильные сети, Mini App).
@@ -233,7 +234,7 @@ export default function Home() {
   const [extra, setExtra] = useState<{ sale: TCard[]; apple: TCard[]; gaming: TCard[] } | null>(null);
   // Консультационная заявка без товара (fallback, когда ссылка менеджера пуста)
   const [consult, setConsult] = useState(false);
-  const [beta, setBeta] = useState(false);
+  const [roadmap, setRoadmap] = useState(false);
   const [about, setAbout] = useState(false);
   const [fxSheetOpen, setFxSheetOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -347,23 +348,7 @@ export default function Home() {
               бренда на экране. Белой плашки под ним больше нет — слово набрано
               вёрсткой и берёт белый прямо у hero, а плашка читалась наклейкой. */}
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <BrandWordmark size={30} />
-              {/* Чип, а не боковой ярлык: на 375px прикреплённая к краю плашка
-                  встаёт ровно в зону горизонтального свайпа между страницами
-                  (lib/usePageSwipe) и начинает ловить чужие жесты. Здесь она
-                  ничего не перекрывает и не требует «закрыть навсегда». */}
-              <button
-                onClick={() => { track("beta_roadmap_opened", { source: "home_hero" }); setBeta(true); }}
-                aria-label="Бета-версия: что уже работает и что будет дальше"
-                // -my-2.5 + py-2.5: сама плашка остаётся 23px в высоту, а зона
-                // нажатия дотягивается до 44px и при этом не растит строку.
-                className="tap -my-3 flex shrink-0 items-center rounded-full px-2.5 py-3 text-[10px] font-bold uppercase tracking-[0.08em] text-muted outline-none transition-colors hover:bg-mutedbg focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                <span className="rounded-full px-2 py-1 ring-1 ring-inset ring-border">Beta</span>
-              </button>
-            </div>
-
+            <BrandWordmark size={30} />
           </div>
           <HeroActions
             cartCount={cart.items_count}
@@ -373,15 +358,22 @@ export default function Home() {
           />
         </div>
 
-        {/* Крупный поиск — главный элемент верха (relative: под ним панель подсказок).
-            onBlur на обёртке: закрываем панель, только если фокус ушёл наружу
-            (кнопки панели держат фокус через preventDefault на mousedown). */}
+        {/* До 27.08 15:15 — полоса обратного отсчёта, после исчезает сама.
+            Тап ведёт в тот же роудмап, что и строка «Что будет дальше» в
+            профиле: пока полоса есть, это самый заметный вход в планы. */}
+        <LaunchCountdown
+          onOpenRoadmap={() => { track("beta_roadmap_opened", { source: "home_launch" }); setRoadmap(true); }}
+        />
+
         {/* Фраза бренда переехала сюда из-под логотипа и вместе с местом сменила
             вес: 11px серым она была подписью к картинке, а на первом экране
             магазина главный вопрос — «что здесь можно найти». Текст тот же, но
             теперь он отвечает на него, а не украшает шапку. */}
         <p className="mt-3 text-h2 font-bold tracking-tight">Техника, которую легко найти</p>
 
+        {/* Крупный поиск — главный элемент верха (relative: под ним панель подсказок).
+            onBlur на обёртке: закрываем панель, только если фокус ушёл наружу
+            (кнопки панели держат фокус через preventDefault на mousedown). */}
         <div
           className="relative mt-2.5 flex gap-2"
           onBlur={(e) => {
@@ -714,9 +706,9 @@ export default function Home() {
       )}
 
       {/* Отдельным chunk'ом: роудмап открывают единицы, а весит он как экран. */}
-      {beta && (
+      {roadmap && (
         <Suspense fallback={null}>
-          <BetaRoadmapSheet onClose={() => setBeta(false)} />
+          <RoadmapSheet onClose={() => setRoadmap(false)} />
         </Suspense>
       )}
       {about && (

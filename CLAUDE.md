@@ -36,6 +36,7 @@ Telegram Mini App магазин техники (Apple, Dyson, PlayStation) + б
 | Уведомления в Telegram, напоминания, избранное | `services/notifications.py` | `docs/context/notifications.md` |
 | Поделиться, ярлык на экран, бейджи спроса, события аналитики | `lib/share.ts`, `social_proof.py` | `docs/context/sharing-and-social-proof.md` |
 | Сверка цен с BSA (конкурент), новая выгрузка канала | `services/bsa_parser.py`, `scripts/import_bsa.py` | `docs/context/bsa-price-sync.md` |
+| Роудмап в приложении, сроки, отсчёт до запуска | `lib/roadmap.ts`, `lib/launch.ts` | список ОДИН на три шторки; онлайн-оплаты в нём нет и быть не должно |
 | Что уже выпущено и что планируется | — | `docs/context/releases.md` |
 
 ## Деплой
@@ -165,7 +166,7 @@ in_stock -> popularity -> позиция категории из плиток ->
 ## Проверки перед тем, как считать работу сделанной
 
 ```bash
-cd backend && python -m pytest -q          # 774 теста
+cd backend && python -m pytest -q          # 1105 тестов
 cd frontend && npx tsc --noEmit && npx vitest run && npm run build
 cd admin && npx tsc --noEmit && npm run build
 ```

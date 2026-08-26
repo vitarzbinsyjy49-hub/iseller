@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuthStore } from "../store/auth";
@@ -18,11 +18,17 @@ import { fetchLoyalty, formatRate, type LoyaltyAccount } from "../lib/loyalty";
 import { useOnboardingReplayStore } from "../store/onboardingReplay";
 import { enterRefCallback } from "../lib/useEnter";
 
+// Отдельным chunk'ом: роудмап открывают единицы, а весит он как экран.
+const RoadmapSheet = lazy(() => import("../components/RoadmapSheet"));
+
 export default function Profile() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const config = usePublicConfig();
   const [leadCount, setLeadCount] = useState<number | null>(null);
+  // Вход в роудмап переехал сюда с чипа BETA на главной: слово «бета» уходит
+  // из продукта 27 августа, а планы магазина нужны и после запуска.
+  const [roadmap, setRoadmap] = useState(false);
   const favCount = useFavoriteIds().length;  // из памяти, без лишнего запроса
   // v6: Опт/бизнес/Trade-In ведут в AI-чат заявки (/apply/:scenario) — тот же
   // раздел, что и с Главной (см. Home.tsx), не встроенный bottom-sheet.
@@ -155,6 +161,8 @@ export default function Profile() {
           onClick={() => navigate("/info#contacts")} />
         <MenuRow icon="info" title="О магазине" subtitle="Доставка, оплата, гарантия и контакты"
           onClick={() => navigate("/info")} />
+        <MenuRow icon="refresh" title="Что будет дальше" subtitle="Планы магазина на сентябрь и дальше"
+          onClick={() => { track("beta_roadmap_opened", { source: "profile" }); setRoadmap(true); }} />
         <MenuRow icon="sparkles" title="Показать вступление" subtitle="Тот же экран, что при первом входе" last
           onClick={() => useOnboardingReplayStore.getState().start()} />
       </div>
@@ -176,6 +184,12 @@ export default function Profile() {
       </div>
       </div>{/* /правая колонка */}
       </div>{/* /desktop 2 колонки */}
+
+      {roadmap && (
+        <Suspense fallback={null}>
+          <RoadmapSheet onClose={() => setRoadmap(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }
