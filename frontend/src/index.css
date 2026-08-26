@@ -78,9 +78,12 @@ html, body { height: 100%; }
      начинается под нативной шапкой), в браузере с viewport-fit=cover — env(). */
   padding-top: var(--app-content-top-offset, env(safe-area-inset-top, 0px));
   box-sizing: border-box;
-  /* Фон root = фон body: между Telegram chrome и контентом нет белой полосы
-     чужого оттенка, и отступ сверху выглядит как продолжение приложения. */
-  background: rgb(var(--app-bg));
+  /* Своего фона у #root НЕТ — и это важно. Он был здесь ради того, чтобы между
+     Telegram chrome и контентом не белела полоса чужого оттенка, но ровно тот
+     же цвет даёт body, и он же закрывает всю область экрана. Зато собственный
+     фон #root закрашивал живой фон (.aurora) целиком: слой с пятнами по
+     правилам отрисовки лежит НИЖЕ фонов обычных блоков, и увидеть его можно
+     было только в зоне оттягивания, куда #root не достаёт. */
   overflow: hidden; /* единственный скролл — внутри <main>; body не скроллит */
 }
 body {
@@ -397,6 +400,13 @@ html.kb-open .js-bottom-nav { display: none; }
   z-index: -10;
   overflow: hidden;
   pointer-events: none;
+  /* Верх остаётся чистым: там живут кнопки Telegram («закрыть», «обновить») и
+     вырез статус-бара, и цветное пятно под ними читается как грязь. Маска
+     гасит слой у самой кромки и полностью открывает его ниже. -webkit- нужен
+     для WKWebView на iOS: без префикса маска там просто не применяется, и
+     верх снова станет цветным. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 96px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 96px);
 }
 
 .aurora-blob {
