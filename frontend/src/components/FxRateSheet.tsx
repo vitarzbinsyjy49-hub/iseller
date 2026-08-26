@@ -6,7 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { toSparklinePoints } from "../lib/sparkline";
+import FxRateChart from "./FxRateChart";
 import { SheetShell } from "./ScenarioSheet";
 
 const FORMAT = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -53,7 +53,6 @@ export default function FxRateSheet({
   // FORMAT даёт ДВА знака, и порог 0.05 спрятал бы настоящие «0,02»-«0,04».
   // Гарантированный случай остаётся тем же: делта ровно 0 в день запуска.
   const deltaRoundsToZero = deltaFormatted === "0,00";
-  const points = history ? toSparklinePoints(history.map((h) => h.value), 300, 70) : "";
 
   return (
     <SheetShell onClose={onClose} labelledBy="fx-rate-title">
@@ -102,18 +101,13 @@ export default function FxRateSheet({
               <h4 className="text-[13px] font-bold uppercase tracking-[0.04em] text-muted">
                 Курс за {HISTORY_DAYS} дней
               </h4>
-              <div className="mt-2 min-h-[70px] rounded-xl2 border border-border p-3.5">
+              <div className="mt-2 rounded-xl2 border border-border p-3.5">
                 {history === null ? (
-                  <div className="skeleton h-[70px] w-full rounded-lg" />
+                  <div className="skeleton h-[150px] w-full rounded-lg" />
                 ) : history.length < 2 ? (
                   <p className="text-[13px] text-muted">Пока недостаточно данных для графика.</p>
                 ) : (
-                  <svg viewBox="0 0 300 70" width="100%" height="70">
-                    <polyline
-                      fill="none" stroke="rgb(var(--app-accent))" strokeWidth="2.5"
-                      strokeLinecap="round" strokeLinejoin="round" points={points}
-                    />
-                  </svg>
+                  <FxRateChart points={history} />
                 )}
                 {history !== null && history.length >= 2 && history.length < HISTORY_DAYS && (
                   <p className="mt-2 text-[12px] text-muted">
