@@ -1,0 +1,11 @@
+[Unit]
+Description=Ежедневная сводка о состоянии AI Seller админу в Telegram
+After=docker.service warp-svc.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/techshop/deploy/daily_health_report.py
+# Отчёт про упавший сервер нужен именно тогда, когда что-то упало, поэтому
+# ненулевой код возврата не должен глушить следующие запуски.
+SuccessExitStatus=0 1
