@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuthStore } from "../store/auth";
 import {
@@ -29,6 +29,10 @@ export default function Profile() {
   // Вход в роудмап переехал сюда с чипа BETA на главной: слово «бета» уходит
   // из продукта 27 августа, а планы магазина нужны и после запуска.
   const [roadmap, setRoadmap] = useState(false);
+  // Кнопка канального поста ведёт на /profile?roadmap=1 (deep link payload
+  // "roadmap", см. telegram_bot.resolve_payload_path): своего маршрута у шторки
+  // нет, поэтому профиль сам разворачивает её по метке в адресе.
+  const search = useLocation().search;
   const favCount = useFavoriteIds().length;  // из памяти, без лишнего запроса
   // v6: Опт/бизнес/Trade-In ведут в AI-чат заявки (/apply/:scenario) — тот же
   // раздел, что и с Главной (см. Home.tsx), не встроенный bottom-sheet.
@@ -41,6 +45,13 @@ export default function Profile() {
   function openManager(url: string) {
     if (!openExternalLink(url || config.manager_retail_url)) navigate("/ai");
   }
+
+  useEffect(() => {
+    if (new URLSearchParams(search).get("roadmap") === "1") {
+      track("beta_roadmap_opened", { source: "deeplink" });
+      setRoadmap(true);
+    }
+  }, [search]);
 
   useEffect(() => {
     api<{ leads: unknown[] }>("/leads/my").then((d) => setLeadCount(d.leads.length)).catch(() => setLeadCount(0));

@@ -176,12 +176,13 @@ def info_keyboard(mini_app_url: str, manager_url: str = "", bot_username: str = 
 #: прайса подставляются в момент публикации из настроек и из БД — поэтому в
 #: посте хранится ОПИСАНИЕ кнопки, а не готовый URL: сменится ссылка менеджера,
 #: и все посты подхватят новую, вместо того чтобы тащить вмороженную старую.
-BUTTON_KINDS = ("catalog", "ai", "requests", "manager", "channel", "section", "url")
+BUTTON_KINDS = ("catalog", "ai", "requests", "roadmap", "manager", "channel", "section", "url")
 
 BUTTON_KIND_LABELS = {
     "catalog": "Каталог",
     "ai": "AI-подбор",
     "requests": "Мои заявки",
+    "roadmap": "Что будет дальше",
     "manager": "Менеджер",
     "channel": "Наш канал",
     "section": "Раздел прайса",
@@ -207,7 +208,7 @@ def resolve_button(
     if not text or kind not in BUTTON_KINDS:
         return None
 
-    if kind in ("catalog", "ai", "requests"):
+    if kind in ("catalog", "ai", "requests", "roadmap"):
         url = deep_link(bot_username, kind, app_short_name)
     elif kind == "manager":
         url = manager_url

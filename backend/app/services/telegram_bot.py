@@ -192,6 +192,10 @@ def resolve_payload_path(payload: str) -> str | None:
         return "/sell"
     if payload == "marketplace":
         return "/marketplace"
+    # Кнопка поста про планы магазина. Роудмап живёт шторкой в профиле, своего
+    # маршрута у него нет — открываем профиль и просим его развернуть шторку.
+    if payload == "roadmap":
+        return "/profile?roadmap=1"
     product_id = parse_product_payload(payload)
     if product_id is not None:
         return f"/product/{product_id}"
@@ -232,6 +236,14 @@ def reply_for_payload(payload: str) -> Reply | None:
             return Reply(WELCOME, main_keyboard())
         return Reply(
             "Витрина техники, которую разместили другие пользователи.",
+            _keyboard(_row(button)),
+        )
+    if payload == "roadmap":
+        button = _web_app_button("🗺 Что будет дальше", "/profile?roadmap=1")
+        if button is None:
+            return Reply(WELCOME, main_keyboard())
+        return Reply(
+            "Планы магазина на сентябрь и дальше — прямо в приложении.",
             _keyboard(_row(button)),
         )
 
