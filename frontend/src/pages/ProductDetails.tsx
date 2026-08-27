@@ -594,50 +594,55 @@ function ProductCta({ product, onNotify, tone = "app" }: {
     );
   }
 
-  if (item) {
-    return (
-      <div>
-        <div className="flex items-center gap-2.5">
-          <div className="w-32 shrink-0">
-            <QuantityStepper
-              quantity={item.quantity} max={item.max_quantity} busy={busy}
-              onChange={change} ariaLabel={`Количество: ${product.title}`}
-            />
-          </div>
-          <button
-            onClick={() => navigate("/cart?from=product")}
-            className={`tap h-11 flex-1 rounded-xl2 text-[15px] font-bold transition-colors ${t.primary}`}
-          >
-            Перейти в корзину
-          </button>
-        </div>
-        <p className={`mt-1.5 text-center text-[11px] ${t.note}`}>
-          {note || "Итоговую стоимость подтвердит менеджер"}
-        </p>
-      </div>
-    );
-  }
+  // Тот же переход, что на карточке витрины (.cart-morph в index.css): строка
+  // «Добавить + Купить сейчас» и строка «степпер + Перейти в корзину» лежат
+  // друг на друге и меняются встречным движением. Одна разметка на оба
+  // состояния вместо двух ранних return'ов — иначе кнопки подменялись бы в
+  // один кадр, а на этом экране они и есть главное действие.
+  const added = !!item;
 
   return (
     <div>
-      <div className="flex items-center gap-2.5">
-        <button
-          onClick={() => add("cta")}
-          disabled={pending}
-          className={`tap h-11 flex-1 rounded-xl2 text-[15px] font-bold transition-opacity disabled:opacity-60 ${t.primary}`}
-        >
-          {pending ? "Добавляем…" : "Добавить в корзину"}
-        </button>
-        <button
-          onClick={buyNow}
-          disabled={pending}
-          className={`tap h-11 shrink-0 rounded-xl2 border px-4 text-[13px] font-semibold transition-opacity disabled:opacity-60 ${t.secondary}`}
-        >
-          Купить сейчас
-        </button>
+      <div className="cart-morph h-11">
+        {item && (
+          <div className="cart-morph-layer cart-morph-enter flex items-center gap-2.5">
+            <div className="w-32 shrink-0">
+              <QuantityStepper
+                quantity={item.quantity} max={item.max_quantity} busy={busy}
+                onChange={change} ariaLabel={`Количество: ${product.title}`}
+              />
+            </div>
+            <button
+              onClick={() => navigate("/cart?from=product")}
+              className={`tap h-11 flex-1 rounded-xl2 text-[15px] font-bold ${t.primary}`}
+            >
+              Перейти в корзину
+            </button>
+          </div>
+        )}
+        <div className="cart-morph-layer flex items-center gap-2.5" data-hidden={added} aria-hidden={added}>
+          <button
+            onClick={() => add("cta")}
+            disabled={pending}
+            tabIndex={added ? -1 : undefined}
+            className={`tap h-11 flex-1 rounded-xl2 text-[15px] font-bold disabled:opacity-60 ${t.primary}`}
+          >
+            {pending ? "Добавляем…" : "Добавить в корзину"}
+          </button>
+          <button
+            onClick={buyNow}
+            disabled={pending}
+            tabIndex={added ? -1 : undefined}
+            className={`tap h-11 shrink-0 rounded-xl2 border px-4 text-[13px] font-semibold disabled:opacity-60 ${t.secondary}`}
+          >
+            Купить сейчас
+          </button>
+        </div>
       </div>
       <p className={`mt-1.5 text-center text-[11px] ${t.note}`}>
-        {note || "Не оплата и не бронь — заявку подтвердит менеджер"}
+        {note || (added
+          ? "Итоговую стоимость подтвердит менеджер"
+          : "Не оплата и не бронь — заявку подтвердит менеджер")}
       </p>
     </div>
   );

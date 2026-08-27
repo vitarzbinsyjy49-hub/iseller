@@ -9,6 +9,7 @@ import ProductCard from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
 import { Icon } from "../components/icons";
 import { enterRefCallback } from "../lib/useEnter";
+import { useHideOnScroll } from "../lib/useHideOnScroll";
 import { CatalogFilterSheet, CatalogSortSheet } from "../components/CatalogFilterSheet";
 import { activeFilterCount, filterButtonLabel, sortButtonLabel, type CatalogFilters } from "../lib/catalogFilters";
 
@@ -39,6 +40,8 @@ function plural(n: number, one: string, few: string, many: string) {
 }
 
 export default function Catalog() {
+  // Панель инструментов уезжает при прокрутке вниз (см. комментарий у неё).
+  const hideToolbarRef = useHideOnScroll();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [cards, setCards] = useState<TCard[] | null>(null);
@@ -268,8 +271,17 @@ export default function Catalog() {
 
           Desktop (v5.2.4): панель статична (lg:static) и занимает место в потоке —
           отрицательная компенсация нужна только sticky-режиму, на desktop она
-          лишь создавала наложение на карточки. */}
-      <div className="seam-guard sticky -top-3 z-20 -mx-4 space-y-2 border-b border-border bg-bg px-4 pb-2.5 pt-2 lg:static lg:top-auto lg:mx-0 lg:border-0 lg:px-0 lg:pb-0 lg:pt-0">
+          лишь создавала наложение на карточки.
+
+          Панель уезжает при прокрутке вниз и возвращается при прокрутке вверх
+          (toolbar-hide + useHideOnScroll): три ряда инструментов — четверть
+          экрана, и пока человек листает товар, экран нужен товару. Прячется
+          transform'ом, место в потоке остаётся за ней, поэтому карточки не
+          прыгают. */}
+      <div
+        ref={hideToolbarRef}
+        className="seam-guard toolbar-hide sticky -top-3 z-20 -mx-4 space-y-2 border-b border-border bg-bg px-4 pb-2.5 pt-2 lg:static lg:top-auto lg:mx-0 lg:border-0 lg:px-0 lg:pb-0 lg:pt-0"
+      >
         <div className="flex items-center gap-2">
         {/* Поиск каталога — ТОЛЬКО mobile/tablet. На desktop единственный поиск —
             в шапке (DesktopHeader), пишет в тот же URL-параметр `query`. */}

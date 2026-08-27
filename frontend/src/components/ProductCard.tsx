@@ -411,22 +411,34 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
     );
   }
 
-  if (item) {
-    return (
-      <QuantityStepper
-        quantity={item.quantity}
-        max={item.max_quantity}
-        busy={busy}
-        size="sm"
-        onChange={change}
-        ariaLabel={`Количество: ${card.title}`}
-      />
-    );
-  }
+  // Кнопка и степпер лежат друг на друге и меняются встречным движением
+  // (.cart-morph в index.css). Кнопка остаётся в DOM и после добавления —
+  // уходить нечему, если размонтировать её тем же кадром, каким появился
+  // степпер; вместо этого она гаснет и уменьшается, а степпер раскрывается ей
+  // навстречу. Скрытый слой недоступен ни пальцу (pointer-events), ни
+  // скринридеру, ни табу: невидимая кнопка «Добавить» поверх «−» добавляла бы
+  // товар вместо уменьшения.
+  const added = !!item;
 
   return (
+    <div className="cart-morph h-11">
+    {item && (
+      <div className="cart-morph-layer cart-morph-enter">
+        <QuantityStepper
+          quantity={item.quantity}
+          max={item.max_quantity}
+          busy={busy}
+          size="sm"
+          onChange={change}
+          ariaLabel={`Количество: ${card.title}`}
+        />
+      </div>
+    )}
     <button
       onClick={add}
+      data-hidden={added}
+      aria-hidden={added}
+      tabIndex={added ? -1 : undefined}
       aria-label={`Добавить в корзину: ${card.title}`}
       // Легендарный товар отличается ЦВЕТОМ ДЕЙСТВИЯ, а не рамкой вокруг
       // карточки. Текст тёмный, а не белый: белое на этом золоте даёт 2,8:1
@@ -437,7 +449,7 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
       // tailwind.config), начертание — с semibold на medium. Заливка осталась
       // синей: это единственное действие плитки, и превращать его в обводку
       // значит прятать то, ради чего на витрину пришли.
-      className={`tap flex h-11 w-full items-center justify-center gap-1.5 rounded-field text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
+      className={`tap cart-morph-layer flex h-11 w-full items-center justify-center gap-1.5 rounded-field text-[13px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent ${
         card.is_legendary
           ? "bg-[#C8921F] text-[#241800] hover:bg-[#b3811a]"
           : "bg-accent text-white hover:bg-accentdark"
@@ -449,6 +461,7 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
       </svg>
       Добавить
     </button>
+    </div>
   );
 }
 

@@ -113,6 +113,72 @@ body {
 }
 .app-hero { background: var(--app-hero-bg); }
 
+/* ================= Панель каталога уходит с дороги =================
+   Sticky-панель каталога — это три ряда: поиск, категории, сортировка с
+   фильтрами. Пока человек листает товар, она занимает четверть экрана, на
+   котором он ищет ровно не её. Вниз — панель уезжает, вверх — возвращается
+   сразу, потому что вверх человек листает именно за ней. Направление считает
+   lib/useHideOnScroll.ts, здесь только движение.
+
+   Двигается transform: панель остаётся в потоке на своём месте, поэтому
+   карточки под ней не прыгают, а браузер отдаёт сдвиг видеоядру. */
+.toolbar-hide {
+  transition: transform var(--motion-standard) var(--ease-standard);
+}
+.toolbar-hide[data-hidden="true"] {
+  /* Высота панели плюс её отрицательный sticky-сдвиг (-top-3 = 12px): без
+     компенсации нижняя граница остаётся у кромки тонкой полосой. */
+  transform: translate3d(0, calc(-100% - 12px), 0);
+}
+@media (min-width: 1024px) {
+  /* На desktop панель статична (lg:static) и занимает место в потоке — сдвиг
+     увёл бы со страницы кусок разметки, а не освободил экран. */
+  .toolbar-hide,
+  .toolbar-hide[data-hidden="true"] { transform: none; transition: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Панель всё равно уходит: это не украшение, а место под товар. Уходит
+     мгновенно — от плавного движения человек и защищается настройкой. */
+  .toolbar-hide { transition: none; }
+}
+
+/* ================= Кнопка корзины переходит в степпер =================
+   Раньше «Добавить» исчезала, а на её месте возникал степпер — подмена в один
+   кадр, из-за которой самое частое действие витрины выглядело как перерисовка
+   страницы, а не как ответ на нажатие. Теперь обе строки лежат друг на друге в
+   контейнере фиксированной высоты и меняются встречным движением: уходящая
+   уменьшается и гаснет, приходящая раскрывается из того же размера. Высота
+   контейнера не меняется — сетка карточек не шелохнётся.
+
+   Только opacity и transform: оба свойства композитор считает без перерисовки,
+   а нажатий на эту кнопку в сессии десятки. */
+.cart-morph { position: relative; }
+.cart-morph-layer {
+  position: absolute;
+  inset: 0;
+  /* background-color здесь же: у кнопки был свой transition-colors, а два
+     правила transition на одном элементе не складываются — побеждает одно, и
+     без этой строки терялся бы плавный ховер. */
+  transition: opacity var(--motion-fast) var(--ease-emphasized),
+              transform var(--motion-standard) var(--ease-emphasized),
+              background-color var(--motion-fast) var(--ease-standard);
+}
+.cart-morph-layer[data-hidden="true"] {
+  opacity: 0;
+  transform: scale(.94);
+  /* Ушедший слой нельзя нажать: иначе поверх степпера остаётся невидимая
+     кнопка «Добавить» и тап по «−» добавляет товар. */
+  pointer-events: none;
+}
+.cart-morph-enter { animation: cart-morph-in var(--motion-standard) var(--ease-emphasized) both; }
+@keyframes cart-morph-in { from { opacity: 0; transform: scale(.94); } }
+@media (prefers-reduced-motion: reduce) {
+  .cart-morph-layer { transition: opacity var(--motion-fast) linear; }
+  .cart-morph-layer[data-hidden="true"] { transform: none; }
+  .cart-morph-enter { animation-name: cart-morph-in-flat; }
+}
+@keyframes cart-morph-in-flat { from { opacity: 0; } }
+
 /* Скрыть скроллбары в горизонтальных лентах */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
