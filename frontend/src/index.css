@@ -400,13 +400,56 @@ html.kb-open .js-bottom-nav { display: none; }
   z-index: -10;
   overflow: hidden;
   pointer-events: none;
-  /* Верх остаётся чистым: там живут кнопки Telegram («закрыть», «обновить») и
-     вырез статус-бара, и цветное пятно под ними читается как грязь. Маска
-     гасит слой у самой кромки и полностью открывает его ниже. -webkit- нужен
-     для WKWebView на iOS: без префикса маска там просто не применяется, и
-     верх снова станет цветным. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 96px);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 96px);
+  /* Верх приглушён, но НЕ выключен. Раньше маска гасила слой у кромки до нуля,
+     и первые 96px страницы оставались серыми — ровно там, где над ними лежит
+     шапка Telegram с кнопкой «Закрыть». Получался шов: серая плашка, под ней
+     серая полоса, а ещё ниже цвет. Теперь верх открыт наполовину, а шапке
+     задан цвет этой самой полосы (setTopColor, палитра в AuroraBackground) —
+     плашка и страница читаются как одна плоскость. Половина, а не полная сила:
+     под кнопками Telegram насыщенное пятно выглядит грязью.
+     -webkit- нужен для WKWebView на iOS: без префикса маска там просто не
+     применяется, и верх станет цветным на полную. */
+  -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / .55) 0, #000 88px);
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / .55) 0, #000 88px);
+}
+
+
+/* Палитра пятен — единственное, что различает экраны: композиция (размеры,
+   позиции, циклы) у всех одна, иначе экраны перестали бы быть одним
+   приложением. Значения каналами, как остальные токены, чтобы прозрачность
+   задавалась отдельно и читалась в одном месте с цветом.
+   По умолчанию (без data-variant) — палитра главной: если новый экран забудут
+   описать, он получит бренд, а не пустоту. Оттенок верхней плашки Telegram для
+   каждого варианта лежит в components/AuroraBackground.tsx рядом с маршрутом. */
+.aurora {
+  --aurora-1: var(--app-accent);  --aurora-1-a: .34;
+  --aurora-2: var(--app-orange);  --aurora-2-a: .22;
+  --aurora-3: var(--app-accent);  --aurora-3-a: .16;
+}
+/* AI: холодный индиго вместо тёплого — экран про машинный подбор, и тёплое
+   пятно там читалось как продолжение витрины. Индиго нигде больше в интерфейсе
+   не встречается и поэтому не заведён как токен палитры: он не роль, а фон
+   одного экрана. */
+.aurora[data-variant="ai"] {
+  --aurora-1: var(--app-accent);  --aurora-1-a: .30;
+  --aurora-2: 108 99 255;         --aurora-2-a: .20;
+  --aurora-3: 108 99 255;         --aurora-3-a: .12;
+}
+/* Профиль и баллы: закат — оранжевый с розовым. Это экраны про накопленное, и
+   тёплый фон отделяет их от синей витрины, не заводя нового цвета: оба канала
+   уже есть в палитре. */
+.aurora[data-variant="warm"] {
+  --aurora-1: var(--app-orange);  --aurora-1-a: .28;
+  --aurora-2: var(--app-danger);  --aurora-2-a: .13;
+  --aurora-3: var(--app-orange);  --aurora-3-a: .12;
+}
+/* Информация: один синий втрое тише. Экран длинного текста — фону здесь нельзя
+   спорить со строками, и вся его работа в том, чтобы страница не была белым
+   листом. */
+.aurora[data-variant="calm"] {
+  --aurora-1: var(--app-accent);  --aurora-1-a: .20;
+  --aurora-2: var(--app-accent);  --aurora-2-a: .12;
+  --aurora-3: var(--app-accent);  --aurora-3-a: .10;
 }
 
 .aurora-blob {
@@ -415,8 +458,9 @@ html.kb-open .js-bottom-nav { display: none; }
   will-change: transform;
 }
 
-/* Синее сверху слева — там же, где логотип: цвет бренда встречает взгляд
-   первым. Оранжевое справа уравновешивает его тёплым. Третье пятно синее и
+/* Композиция одна на все экраны, меняется только палитра (см. data-variant
+   выше). Первое пятно сверху слева — там же, где логотип: главный цвет
+   варианта встречает взгляд первым. Второе справа уравновешивает его. Третье
    самое бледное: оно нужно, чтобы низ экрана не оставался пустым при
    прокрутке, но спорить с карточками товаров ему нечем. */
 .aurora-1 {
@@ -427,13 +471,13 @@ html.kb-open .js-bottom-nav { display: none; }
      пятно оказалось на −281px). Размер по-прежнему в долях ШИРИНЫ: она у
      телефонов и различается, и определяет, каким пятно выглядит. */
   top: -110px; left: -80px;
-  background: radial-gradient(circle, rgb(var(--app-accent) / .34), transparent 70%);
+  background: radial-gradient(circle, rgb(var(--aurora-1) / var(--aurora-1-a)), transparent 70%);
   animation: aurora-drift-1 40s ease-in-out infinite alternate;
 }
 .aurora-2 {
   width: min(74vw, 300px); height: min(74vw, 300px);
   top: 40px; right: -90px;
-  background: radial-gradient(circle, rgb(var(--app-orange) / .22), transparent 70%);
+  background: radial-gradient(circle, rgb(var(--aurora-2) / var(--aurora-2-a)), transparent 70%);
   animation: aurora-drift-2 48s ease-in-out infinite alternate;
 }
 .aurora-3 {
@@ -441,7 +485,7 @@ html.kb-open .js-bottom-nav { display: none; }
   /* Третье — единственное, что привязано к высоте экрана: его задача закрыть
      нижнюю половину, а она у разных телефонов разная. */
   top: 45%; left: -40px;
-  background: radial-gradient(circle, rgb(var(--app-accent) / .16), transparent 70%);
+  background: radial-gradient(circle, rgb(var(--aurora-3) / var(--aurora-3-a)), transparent 70%);
   animation: aurora-drift-3 44s ease-in-out infinite alternate;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { applyTelegramColors, startParamFrom } from "./telegram";
+import { applyTelegramColors, setTopColor, startParamFrom } from "./telegram";
 
 describe("applyTelegramColors", () => {
   it("вызывает все три сеттера с переданными цветами, когда они есть", () => {
@@ -46,5 +46,13 @@ describe("startParamFrom", () => {
     expect(startParamFrom({ initDataUnsafe: {} })).toBeNull();
     expect(startParamFrom({ initDataUnsafe: { start_param: "" } })).toBeNull();
     expect(startParamFrom({ initDataUnsafe: { start_param: "   " } })).toBeNull();
+  });
+});
+
+describe("setTopColor", () => {
+  it("вне DOM и вне Telegram не бросает — цвет просто некуда применить", () => {
+    // Юнит-окружение без document: обе части функции защищены, и вызов из
+    // useEffect не должен ронять экран ни в тестах, ни при пререндере.
+    expect(() => setTopColor("#e9f1f8")).not.toThrow();
   });
 });

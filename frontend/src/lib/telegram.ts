@@ -264,6 +264,32 @@ export function applyTelegramColors(
   try { tg.setBottomBarColor?.(colors.bottomBar); } catch {}
 }
 
+/** Перекрасить верх приложения. Один вызов на смену маршрута — из
+ *  AuroraBackground, где рядом лежит и палитра пятен: цвет шапки подобран под
+ *  фон конкретного экрана, и хранить их порознь значит однажды поменять одно
+ *  без другого.
+ *
+ *  Красит ТРИ вещи одним цветом, потому что визуально это одна плоскость:
+ *  --app-header-color (её читает .hero-top-inset — полоса под вырезом
+ *  статус-бара в fullscreen), шапку Telegram с кнопкой «Закрыть» и фон-подложку
+ *  Telegram, видимую при оттягивании страницы. Нижний бар не трогаем: он белый
+ *  на всех экранах.
+ *
+ *  Переменную ставим ДО проверки на Telegram: вне Telegram (обычный браузер,
+ *  desktop-верстка) хрома нет, а полоса выреза и остальной CSS всё равно должны
+ *  получить цвет экрана. */
+export function setTopColor(color: string): void {
+  try {
+    document.documentElement.style.setProperty("--app-header-color", color);
+  } catch {}
+  // Второй try — из-за getTelegram: он читает window напрямую, и без обёртки
+  // вызов падал бы там, где окна нет вовсе (юнит-тесты, пререндер).
+  try {
+    const tg = getTelegram();
+    if (tg) applyTelegramColors(tg, { header: color, background: color, bottomBar: APP_SURFACE });
+  } catch {}
+}
+
 /** Прочитать все источники и записать CSS-переменные на <html>.
  *  Источник значений (документация для iOS/Android):
  *  - высота: Telegram viewportStableHeight → viewportHeight →
