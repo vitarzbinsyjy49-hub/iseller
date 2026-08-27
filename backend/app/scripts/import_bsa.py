@@ -149,12 +149,29 @@ def mac_subcategory(title: str) -> str:
 
 
 def upsert(db, *, sku: str, title: str, price: int, category: str,
-           subcategory: str, brand: str, photo_name: str | None, dry_run: bool) -> str:
-    """Создать или обновить позицию. Возвращает «создан»/«обновлён»/«без изменений»."""
+           subcategory: str, brand: str, photo_name: str | None, dry_run: bool,
+           prices_only: bool = False) -> str:
+    """Создать или обновить позицию. Возвращает «создан»/«обновлён»/«без изменений».
+
+    `prices_only` — еженедельный режим сверки: у поставщика меняются ЦЕНЫ, а
+    состав каталога владелец ведёт сам. Тогда скрипт не заводит новых карточек
+    (их пришлось бы наполнять фото, описанием и решением «продаём ли мы это
+    вообще») и не переписывает названия, категории и наличие у существующих —
+    трогает ровно цену и ровно у тех позиций, которые уже есть в каталоге.
+    """
     row = db.query(Product).filter_by(sku=sku).one_or_none()
     final_price = max(price - NAKIDKA, 0)
 
+    if row is not None and prices_only:
+        if row.price == final_price:
+            return "без изменений"
+        if not dry_run:
+            row.price = final_price
+        return "обновлён"
+
     if row is None:
+        if prices_only:
+            return "нет в каталоге"
         if dry_run:
             return "создан"
         row = Product(sku=sku, title=title, brand=brand, category=category,
@@ -189,6 +206,15 @@ def upsert(db, *, sku: str, title: str, price: int, category: str,
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--confirm", action="store_true")
+    parser.add_argument(
+        "--prices-only", action="store_true",
+        help="только цены уже существующих позиций: не создавать новые карточки "
+             "и не трогать названия, категории и наличие",
+    )
+    parser.add_argument(
+        "--diff", action="store_true",
+        help="показать список «было → стало» по каждой изменившейся позиции",
+    )
     args = parser.parse_args()
     dry_run = not args.confirm
 
@@ -224,23 +250,39 @@ def main() -> int:
     db = SessionLocal()
     stats: dict[str, int] = {}
     no_photo: list[str] = []
+    # «Было → стало» собираем ДО записи: после коммита старую цену уже не
+    # спросить, а именно этот список владелец и утверждает перед применением.
+    diff: list[tuple[str, int, int, str]] = []
+
+    def remember(sku: str, new_price: int, title: str) -> None:
+        row = db.query(Product).filter_by(sku=sku).one_or_none()
+        if row is None or row.price is None:
+            return
+        was = int(row.price)
+        if was != max(new_price - NAKIDKA, 0):
+            diff.append((sku, was, max(new_price - NAKIDKA, 0), title))
+
     try:
         for item in phones:
             photo = photo_for_iphone(item)
             if photo is None:
                 no_photo.append(item.sku)
+            remember(item.sku, item.price, item.title)
             result = upsert(db, sku=item.sku, title=item.title, price=item.price,
                             category="смартфоны", subcategory="iPhone", brand="Apple",
-                            photo_name=photo, dry_run=dry_run)
+                            photo_name=photo, dry_run=dry_run,
+                            prices_only=args.prices_only)
             stats[result] = stats.get(result, 0) + 1
 
         for mac in macs:
             photo = photo_for_mac(mac)
             if photo is None:
                 no_photo.append(mac.sku)
+            remember(mac.sku, mac.price, mac.full_title)
             result = upsert(db, sku=mac.sku, title=mac.full_title, price=mac.price,
                             category=mac.category, subcategory=mac_subcategory(mac.title),
-                            brand="Apple", photo_name=photo, dry_run=dry_run)
+                            brand="Apple", photo_name=photo, dry_run=dry_run,
+                            prices_only=args.prices_only)
             stats[result] = stats.get(result, 0) + 1
 
         if dry_run:
@@ -248,11 +290,21 @@ def main() -> int:
         else:
             db.commit()
 
-        for key in ("создан", "обновлён", "без изменений"):
+        if args.diff and diff:
+            print("изменения цены (было → стало):")
+            for sku, was, now, title in sorted(diff, key=lambda d: d[2] - d[1]):
+                delta = now - was
+                print(f"   {sku:<34} {was:>9,} → {now:>9,}  {delta:+,}".replace(",", " "))
+            print()
+
+        for key in ("создан", "обновлён", "без изменений", "нет в каталоге"):
+            if key == "создан" and args.prices_only:
+                continue
             print(f"   {key:<16} {stats.get(key, 0)}")
-        print(f"   без фото:        {len(no_photo)}")
-        if no_photo:
-            print("     ", ", ".join(no_photo[:8]), "…" if len(no_photo) > 8 else "")
+        if not args.prices_only:
+            print(f"   без фото:        {len(no_photo)}")
+            if no_photo:
+                print("     ", ", ".join(no_photo[:8]), "…" if len(no_photo) > 8 else "")
         if dry_run:
             print("\nЭто предпросмотр. Для выполнения добавьте --confirm.")
         return 0
