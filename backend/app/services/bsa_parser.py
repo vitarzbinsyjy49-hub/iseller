@@ -214,6 +214,19 @@ _CATEGORY_RULES: tuple[tuple[str, str], ...] = (
 
 _MIN_PRICE_MAC = 5_000
 
+#: Состояние товара, приписанное к строке прайса. Это НЕ украшение названия: у
+#: помятой коробки и у аппарата после сервиса та же модель и тот же артикул
+#: производителя, что у нового, но цена другая — и без отметки в нашем артикуле
+#: одна строка молча затирает другую. Ровно так iMac M4 (10/10/16/256GB) Silver
+#: и iMac M4 (10/10/24/1TB) Silver столкнулись в выгрузке 27.08.2026.
+_MAC_CONDITION_RULES: tuple[tuple[str, str], ...] = (
+    ("после сервиса", "SERVICE"),
+    ("мят", "BOX"),          # «мятая 📦» — помята упаковка, не товар
+    ("asis", "ASIS"),
+    ("уцен", "SALE"),
+    ("витрин", "DEMO"),
+)
+
 
 @dataclass
 class MacItem:
@@ -222,6 +235,7 @@ class MacItem:
     category: str
     article: str = ""
     regions: list[str] = field(default_factory=list)
+    condition: str = ""   # BOX / SERVICE / ASIS — см. _MAC_CONDITION_RULES
 
     @property
     def full_title(self) -> str:
@@ -239,7 +253,8 @@ class MacItem:
         """
         base = self.article or re.sub(r"[^A-Za-z0-9]+", "-", self.title).strip("-")
         region = "".join(self.regions) or "NA"
-        return f"{base}-{region}".upper()
+        tail = f"-{self.condition}" if self.condition else ""
+        return f"{base}-{region}{tail}".upper()
 
 
 def parse_mac_line(line: str) -> MacItem | None:
@@ -281,8 +296,9 @@ def parse_mac_line(line: str) -> MacItem | None:
 
     low = title.lower()
     category = next((c for key, c in _CATEGORY_RULES if key in low), "компьютеры")
+    condition = next((code for key, code in _MAC_CONDITION_RULES if key in low), "")
     return MacItem(title=title, price=price, category=category,
-                   article=article, regions=regions)
+                   article=article, regions=regions, condition=condition)
 
 
 def parse_mac(text: str) -> tuple[list[MacItem], list[str]]:

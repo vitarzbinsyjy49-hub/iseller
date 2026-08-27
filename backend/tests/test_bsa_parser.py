@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.bsa_parser import parse, parse_line
+from app.services.bsa_parser import parse, parse_line, parse_mac_line
 from app.services.price_posts import split_region
 
 DUMP = Path(__file__).resolve().parents[1] / "app" / "scripts" / "data" / "bsa_2026_08_11.txt"
@@ -258,3 +258,23 @@ def test_asis_and_normal_line_give_different_skus():
     asis = parse_line("17 Pro Max 1TB Orange-136.000🇰🇷🇭🇰ASIS")
     assert normal is not None and asis is not None
     assert normal.sku != asis.sku
+
+
+def test_mac_condition_marks_split_the_sku():
+    """Помятая коробка и аппарат после сервиса — не тот же товар, что новый.
+
+    Артикул производителя у них общий, цена разная. Пока состояние не попадало
+    в наш SKU, дешёвая строка молча затирала цену нового: в выгрузке 27.08.2026
+    так столкнулись iMac M4 Silver (мятая коробка) и он же новый.
+    """
+    fresh = parse_mac_line("🇷🇺 [MWUU3] iMac M4 (10/10/16/256GB) Silver — 173500")
+    dented = parse_mac_line("🇷🇺 [MWUU3] iMac M4 (10/10/16/256GB) Silver (мятая 📦) — 170500")
+    serviced = parse_mac_line("🇷🇺 [Z1EH001Q1] iMac M4 (10/10/24/1TB) Silver (после сервиса) — 210500")
+
+    assert fresh is not None and dented is not None and serviced is not None
+    assert fresh.condition == "" and dented.condition == "BOX"
+    assert serviced.condition == "SERVICE"
+    assert fresh.sku != dented.sku
+    assert fresh.sku == "MWUU3-RU"
+    assert dented.sku == "MWUU3-RU-BOX"
+    assert serviced.sku.endswith("-SERVICE")
