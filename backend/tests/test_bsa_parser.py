@@ -235,3 +235,26 @@ def test_all_parsed_mac_items_get_a_known_subcategory():
     # Единственное, что законно попадает в «Аксессуары», — сам Magic Keyboard
     # (см. правило выше); всё остальное должно узнаваться по префиксу.
     assert all("keyboard" in t.lower() for t in fallback), fallback
+
+
+def test_asis_after_price_is_recognized():
+    """ASIS справа от цены — тот же ASIS, что слева.
+
+    Поставщик пишет пометку с обеих сторон цены. Пока её искали только слева,
+    строка «...Orange-136.000🇰🇷🇭🇰ASIS» давала артикул ОБЫЧНОГО аппарата с
+    уценённой ценой и затирала настоящую цену нового: на выгрузке 27.08.2026
+    это уронило 17 Pro Max 1TB Orange на 15 000 ₽.
+    """
+    item = parse_line("17 Pro Max 1TB Orange-136.000🇰🇷🇭🇰ASIS")
+    assert item is not None
+    assert item.asis is True
+    assert item.sku.endswith("ASIS")
+    assert item.price == 136000
+
+
+def test_asis_and_normal_line_give_different_skus():
+    """Уценённый и новый аппарат не должны сходиться в один артикул."""
+    normal = parse_line("17 Pro Max 1TB Orange-155.500🇰🇷🇭🇰(1sim+e sim)")
+    asis = parse_line("17 Pro Max 1TB Orange-136.000🇰🇷🇭🇰ASIS")
+    assert normal is not None and asis is not None
+    assert normal.sku != asis.sku

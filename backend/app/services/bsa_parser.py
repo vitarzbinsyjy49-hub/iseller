@@ -163,13 +163,19 @@ def parse_line(line: str) -> Item | None:
     model_raw, storage_raw, rest = model_match.groups()
 
     rest_low = rest.lower()
-    asis = "asis" in rest_low
     color_key = next((c for c in sorted(COLOR_RU, key=len, reverse=True)
                       if c in rest_low), None)
     if color_key is None:
         return None
 
+    # Пометки ищем по ВСЕЙ строке, а не только слева от цены: поставщик пишет
+    # их с обеих сторон — «17 Pro 512 Blue (eSim) ASIS 🇯🇵-101500» и
+    # «17 Pro Max 1TB Orange-136.000🇰🇷🇭🇰ASIS». Пока ASIS искался только
+    # слева, вторая форма давала ОБЫЧНЫЙ артикул с уценённой ценой, и она
+    # затирала цену нового аппарата — на выгрузке 27.08 это уронило
+    # 17 Pro Max 1TB Orange на 15 000 ₽ ниже настоящей цены.
     tail = f"{rest} {right}"
+    tail_low = tail.lower()
     return Item(
         model="17 Pro Max" if model_raw.lower() == "17 pro max"
         else "17 Pro" if model_raw.lower() == "17 pro"
@@ -179,8 +185,8 @@ def parse_line(line: str) -> Item | None:
         price=price,
         regions=regions,
         sim=_sim(tail),
-        asis=asis,
-        activated="актив" in tail.lower(),
+        asis="asis" in tail_low,
+        activated="актив" in tail_low,
     )
 
 

@@ -200,6 +200,24 @@ def main() -> int:
             print("   ", line)
         return 1
 
+    # Два разных товара с одним артикулом — это не «дубль в прайсе», а потеря
+    # различия при разборе: пометка (ASIS, актив), регион или sim не доехали до
+    # артикула, и в базу молча уедет ЦЕНА ПОСЛЕДНЕЙ строки. Именно так уценённый
+    # аппарат однажды сделал новый на 15 000 ₽ дешевле. Останавливаемся так же,
+    # как на неразобранной строке: цена — не то место, где стоит угадывать.
+    seen: dict[str, int] = {}
+    clashes: list[str] = []
+    for item in phones + macs:
+        previous = seen.get(item.sku)
+        if previous is not None and previous != item.price:
+            clashes.append(f"{item.sku}: {previous} и {item.price}")
+        seen[item.sku] = item.price
+    if clashes:
+        print("!! один артикул с разными ценами, импорт остановлен:")
+        for line in clashes:
+            print("   ", line)
+        return 1
+
     print(f"разобрано: {len(phones)} iPhone + {len(macs)} Mac/мониторы/аксессуары")
     print(f"цена витрины = цена поставщика − {NAKIDKA} ₽, гарантия 1 месяц\n")
 
