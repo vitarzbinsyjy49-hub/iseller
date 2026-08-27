@@ -30,6 +30,11 @@ import { animateShiftY, TOOLBAR_HIDE_MS, transitionDuration } from "./motion";
 export const REVEAL_ZONE_PX = 120;
 /** Меньшее движение считается дрожанием пальца, а не намерением. */
 export const MOVE_EPS_PX = 6;
+/** У самой кромки списка панели нечего прятать под собой: контент ещё не
+ *  подъехал под неё. Там она отдаёт свой сплошной фон, и живой фон страницы
+ *  идёт от верха экрана без шва. Отмеряется в пикселях от нуля, а не строгим
+ *  нулём: iOS отдаёт дробные позиции. */
+export const ATOP_PX = 4;
 /** Отрицательный sticky-сдвиг панели (-top-3 у неё в разметке Catalog.tsx).
  *  Совпадает с padding-top скролл-контейнера; меняется вместе с ним. */
 export const STICKY_OFFSET_PX = 12;
@@ -97,9 +102,20 @@ export function useHideOnScroll(enabled = true) {
       );
     };
 
+    let atop = true;
+    const setAtop = (next: boolean) => {
+      if (next === atop) return;
+      atop = next;
+      el.dataset.atop = String(next);
+    };
+    el.dataset.atop = "true";
+
     const apply = () => {
       raf = 0;
       const top = scroller.scrollTop;
+      // Прозрачность панели считается ОТДЕЛЬНО от её ухода: у кромки она видна
+      // и прозрачна одновременно, и это не одно состояние, а два.
+      setAtop(top <= ATOP_PX);
       const next = nextToolbarHidden(hidden, top, top - lastTop);
       if (Math.abs(top - lastTop) >= MOVE_EPS_PX) lastTop = top;
       if (next === hidden) return;
@@ -129,6 +145,7 @@ export function useHideOnScroll(enabled = true) {
       cancelShift?.();
       if (raf) cancelAnimationFrame(raf);
       delete el.dataset.hidden;
+      delete el.dataset.atop;
       el.style.transform = "";
     };
   }, [enabled]);
