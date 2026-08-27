@@ -13,7 +13,8 @@ import { toast } from "../lib/toast";
 import { track } from "../lib/analytics";
 import { indexFromScroll, isSlideMounted, isTapGesture } from "../lib/carousel";
 import { animatePulse, animateScrollTo, transitionDuration } from "../lib/motion";
-import { enterGridRefCallback } from "../lib/useEnter";
+import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
+import { useCartSwapOut } from "../lib/useCartSwap";
 import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
 import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMath";
 import { cardBadges } from "../lib/cardBadges";
@@ -368,6 +369,7 @@ export function Badge({ color, children }: {
  *  Вместо неё — переход на карточку, где живёт «Узнать о поступлении». */
 function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) {
   const { item, busy } = useCartEntry(card.id);
+  const addButtonRef = useCartSwapOut<HTMLButtonElement>(!!item);
   // Режим приходит с backend. Старый ответ без него (кэш/AI-фикстура) —
   // ориентируемся на in_stock, как делала витрина до корзины.
   const orderable = card.availability_mode ? canAddToCart(card.availability_mode) : card.in_stock !== false;
@@ -423,7 +425,7 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
   return (
     <div className="cart-morph h-11">
     {item && (
-      <div className="cart-morph-layer cart-morph-enter">
+      <div ref={enterRefCallback("pop")} className="cart-morph-layer">
         <QuantityStepper
           quantity={item.quantity}
           max={item.max_quantity}
@@ -435,6 +437,7 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
       </div>
     )}
     <button
+      ref={addButtonRef}
       onClick={add}
       data-hidden={added}
       aria-hidden={added}

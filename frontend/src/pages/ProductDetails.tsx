@@ -23,6 +23,7 @@ import { specChips } from "../lib/specChips";
 import LegendaryProduct from "../components/LegendaryProduct";
 import PriceOfferBlock from "../components/PriceOfferBlock";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
+import { useCartSwapOut } from "../lib/useCartSwap";
 
 type Tab = "desc" | "specs" | "delivery";
 type LoadState = "loading" | "ready" | "not_found" | "error";
@@ -600,12 +601,13 @@ function ProductCta({ product, onNotify, tone = "app" }: {
   // состояния вместо двух ранних return'ов — иначе кнопки подменялись бы в
   // один кадр, а на этом экране они и есть главное действие.
   const added = !!item;
+  const addRowRef = useCartSwapOut<HTMLDivElement>(added);
 
   return (
     <div>
       <div className="cart-morph h-11">
         {item && (
-          <div className="cart-morph-layer cart-morph-enter flex items-center gap-2.5">
+          <div ref={enterRefCallback("pop")} className="cart-morph-layer flex items-center gap-2.5">
             <div className="w-32 shrink-0">
               <QuantityStepper
                 quantity={item.quantity} max={item.max_quantity} busy={busy}
@@ -620,7 +622,7 @@ function ProductCta({ product, onNotify, tone = "app" }: {
             </button>
           </div>
         )}
-        <div className="cart-morph-layer flex items-center gap-2.5" data-hidden={added} aria-hidden={added}>
+        <div ref={addRowRef} className="cart-morph-layer flex items-center gap-2.5" data-hidden={added} aria-hidden={added}>
           <button
             onClick={() => add("cta")}
             disabled={pending}

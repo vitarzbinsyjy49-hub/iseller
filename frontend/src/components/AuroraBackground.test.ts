@@ -4,9 +4,9 @@ import { auroraFor, DEFAULT_HEADER, hasAurora, headerColorFor } from "./AuroraBa
 /** Маршруты, на которых фон включён намеренно. Дублируют карту в компоненте —
  *  в этом и смысл: строка отсюда пропадает только вместе с решением убрать фон
  *  с экрана, а не случайной правкой карты. */
-const WITH_AURORA = ["/", "/ai", "/profile", "/loyalty", "/info"];
+const WITH_AURORA = ["/", "/ai", "/profile", "/loyalty", "/info", "/catalog"];
 /** Экраны-«работа»: плотная сетка карточек или заполнение формы. */
-const WITHOUT_AURORA = ["/catalog", "/cart", "/favorites", "/requests", "/history", "/product/12"];
+const WITHOUT_AURORA = ["/cart", "/favorites", "/requests", "/history", "/product/12"];
 
 describe("маршруты живого фона", () => {
   it.each(WITH_AURORA)("%s — фон есть, и у него полная схема", (path) => {

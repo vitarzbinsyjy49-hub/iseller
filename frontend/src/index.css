@@ -117,30 +117,14 @@ body {
    Sticky-панель каталога — это три ряда: поиск, категории, сортировка с
    фильтрами. Пока человек листает товар, она занимает четверть экрана, на
    котором он ищет ровно не её. Вниз — панель уезжает, вверх — возвращается
-   сразу, потому что вверх человек листает именно за ней. Направление считает
-   lib/useHideOnScroll.ts, здесь только движение.
+   сразу, потому что вверх человек листает именно за ней.
 
-   Двигается transform: панель остаётся в потоке на своём месте, поэтому
-   карточки под ней не прыгают, а браузер отдаёт сдвиг видеоядру. */
-.toolbar-hide {
-  transition: transform var(--motion-standard) var(--ease-standard);
-}
-.toolbar-hide[data-hidden="true"] {
-  /* Высота панели плюс её отрицательный sticky-сдвиг (-top-3 = 12px): без
-     компенсации нижняя граница остаётся у кромки тонкой полосой. */
-  transform: translate3d(0, calc(-100% - 12px), 0);
-}
-@media (min-width: 1024px) {
-  /* На desktop панель статична (lg:static) и занимает место в потоке — сдвиг
-     увёл бы со страницы кусок разметки, а не освободил экран. */
-  .toolbar-hide,
-  .toolbar-hide[data-hidden="true"] { transform: none; transition: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  /* Панель всё равно уходит: это не украшение, а место под товар. Уходит
-     мгновенно — от плавного движения человек и защищается настройкой. */
-  .toolbar-hide { transition: none; }
-}
+   Здесь НЕТ ни перехода, ни transform: и направление, и само движение считает
+   lib/useHideOnScroll.ts на rAF-моторе. Первая версия двигала панель
+   CSS-переходом, и на живом телефоне она не уезжала, а перещёлкивалась — этот
+   webview гасит декларативную анимацию целиком (причина разобрана в
+   lib/motion.ts). Атрибут data-hidden остаётся как отметка состояния: по нему
+   видно в отладке и в тестах, что панель считает себя спрятанной. */
 
 /* ================= Кнопка корзины переходит в степпер =================
    Раньше «Добавить» исчезала, а на её месте возникал степпер — подмена в один
@@ -153,31 +137,18 @@ body {
    Только opacity и transform: оба свойства композитор считает без перерисовки,
    а нажатий на эту кнопку в сессии десятки. */
 .cart-morph { position: relative; }
-.cart-morph-layer {
-  position: absolute;
-  inset: 0;
-  /* background-color здесь же: у кнопки был свой transition-colors, а два
-     правила transition на одном элементе не складываются — побеждает одно, и
-     без этой строки терялся бы плавный ховер. */
-  transition: opacity var(--motion-fast) var(--ease-emphasized),
-              transform var(--motion-standard) var(--ease-emphasized),
-              background-color var(--motion-fast) var(--ease-standard);
-}
+.cart-morph-layer { position: absolute; inset: 0; }
+/* ПОКОЙ, а не переход: это состояние карточки, у которой товар уже в корзине к
+   моменту отрисовки (вернулись на витрину, перезагрузили страницу). Само
+   превращение играют animateSwapOut и animateEnter("pop") из lib/motion.ts,
+   инлайновым стилем — он перебивает эти значения на время анимации.
+   pointer-events: ушедший слой нельзя нажать, иначе поверх степпера остаётся
+   невидимая кнопка «Добавить» и тап по «−» добавляет товар. */
 .cart-morph-layer[data-hidden="true"] {
   opacity: 0;
   transform: scale(.94);
-  /* Ушедший слой нельзя нажать: иначе поверх степпера остаётся невидимая
-     кнопка «Добавить» и тап по «−» добавляет товар. */
   pointer-events: none;
 }
-.cart-morph-enter { animation: cart-morph-in var(--motion-standard) var(--ease-emphasized) both; }
-@keyframes cart-morph-in { from { opacity: 0; transform: scale(.94); } }
-@media (prefers-reduced-motion: reduce) {
-  .cart-morph-layer { transition: opacity var(--motion-fast) linear; }
-  .cart-morph-layer[data-hidden="true"] { transform: none; }
-  .cart-morph-enter { animation-name: cart-morph-in-flat; }
-}
-@keyframes cart-morph-in-flat { from { opacity: 0; } }
 
 /* Скрыть скроллбары в горизонтальных лентах */
 .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -508,6 +479,15 @@ html.kb-open .js-bottom-nav { display: none; }
   --aurora-1: var(--app-orange);  --aurora-1-a: .28;
   --aurora-2: var(--app-danger);  --aurora-2-a: .13;
   --aurora-3: var(--app-orange);  --aurora-3-a: .12;
+}
+/* Каталог: тот же синий, что на справке, но вдвое слабее — самый тихий фон в
+   приложении. Экран рабочий: цвет живёт в промежутках между плитками и по
+   краям, а под белыми карточками с фотографиями товара его быть не должно
+   слышно вовсе. */
+.aurora[data-variant="quiet"] {
+  --aurora-1: var(--app-accent);  --aurora-1-a: .11;
+  --aurora-2: var(--app-accent);  --aurora-2-a: .07;
+  --aurora-3: var(--app-accent);  --aurora-3-a: .06;
 }
 /* Информация: один синий втрое тише. Экран длинного текста — фону здесь нельзя
    спорить со строками, и вся его работа в том, чтобы страница не была белым

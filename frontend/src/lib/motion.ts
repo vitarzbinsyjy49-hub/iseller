@@ -312,6 +312,43 @@ export function animateEnter(el: HTMLElement, preset: EnterPreset, reducedMotion
   return afterDelay(delayMs, () => animateNumber(0, 1, duration, apply, () => { el.style.transform = ""; }));
 }
 
+/** Уход слоя, на место которого встаёт другой (кнопка «Добавить» → степпер).
+ *  Зеркало пресета `pop` у animateEnter: тот же масштаб и та же кривая, только
+ *  наоборот — иначе встречное движение двух слоёв выглядит как два разных
+ *  события, а не как одно превращение.
+ *
+ *  Короче входа: уходящее не несёт информации, задерживать на нём взгляд
+ *  незачем. При «уменьшить движение» остаётся только затухание. */
+export const SWAP_OUT_MS = 150;
+const SWAP_OUT_TO_SCALE = 0.94;
+
+export function animateSwapOut(el: HTMLElement, reducedMotion = prefersReducedMotion()): () => void {
+  const toScale = reducedMotion ? 1 : SWAP_OUT_TO_SCALE;
+  const duration = reducedMotion ? FADE_MS : SWAP_OUT_MS;
+  return animateNumber(0, 1, duration, (t) => {
+    el.style.opacity = String(1 - t);
+    el.style.transform = transformString(0, 1 + (toScale - 1) * t);
+  });
+}
+
+/** Панель каталога, уезжающая за верхний край. Длиннее шторки (260мс): у панели
+ *  нет затемнения под ней, и весь её путь человек видит целиком — на 190мс это
+ *  читалось не как уход, а как рывок. Проверено на живом телефоне. */
+export const TOOLBAR_HIDE_MS = 300;
+
+/** Сдвинуть элемент по вертикали на `toPx` от `fromPx`. Отдельная функция, а не
+ *  CSS-переход, по общему правилу модуля: этот webview гасит декларативную
+ *  анимацию, и панель на CSS-переходе просто перещёлкивалась. */
+export function animateShiftY(
+  el: HTMLElement, fromPx: number, toPx: number,
+  durationMs: number, onFrame?: (y: number) => void,
+): () => void {
+  return animateNumber(fromPx, toPx, durationMs, (y) => {
+    onFrame?.(y);
+    el.style.transform = y ? `translate3d(0, ${y}px, 0)` : "";
+  });
+}
+
 // Числа — те же, что раньше в index.css у .toast-in/.toast-out.
 const TOAST_IN_MS = 190; // = --motion-standard
 const TOAST_OUT_MS = 150; // = --motion-fast
