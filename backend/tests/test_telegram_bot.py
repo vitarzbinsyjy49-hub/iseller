@@ -744,3 +744,41 @@ def test_product_payload_rejects_anything_that_is_not_a_plain_number():
                 "product_1e3", "product_" + "9" * 13, "product_1 2"]:
         assert parse_product_payload(bad) is None, bad
     assert parse_product_payload("product_42") == 42
+
+
+def _video_update(sender_id: int, file_id: str = "BAACAgIAAxkBAAI") -> dict:
+    return {"message": {
+        "chat": {"type": "private"},
+        "from": {"id": sender_id},
+        "video": {"file_id": file_id, "duration": 1608},
+    }}
+
+
+def test_video_from_admin_returns_file_id(monkeypatch):
+    """Ролик на 1,7 ГБ бот загрузить не может (Bot API — 50 МБ), а отправить
+    по file_id уже загруженный файл — может, без ограничения размера. Поэтому
+    админ пересылает видео боту, а бот отдаёт ключ к нему."""
+    monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    reply = telegram_bot.build_reply(_video_update(999, "FILE_ID_ABC"))
+    assert reply is not None
+    assert "FILE_ID_ABC" in reply.text
+    assert "<code>" in reply.text
+
+
+def test_video_from_stranger_is_ignored(monkeypatch):
+    """file_id — ключ к файлу для нашего бота, посторонним он не выдаётся.
+    Прежнее поведение для чужих медиа (молчать) не меняется."""
+    monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    assert telegram_bot.build_reply(_video_update(12345)) is None
+
+
+def test_photo_takes_the_largest_size(monkeypatch):
+    """У фото Telegram присылает список размеров — нужен самый крупный."""
+    monkeypatch.setattr("app.core.config.settings.ADMIN_TELEGRAM_ID", "999")
+    update = {"message": {
+        "chat": {"type": "private"},
+        "from": {"id": 999},
+        "photo": [{"file_id": "SMALL"}, {"file_id": "BIG"}],
+    }}
+    reply = telegram_bot.build_reply(update)
+    assert reply is not None and "BIG" in reply.text

@@ -295,6 +295,55 @@ def reply_for_payload(payload: str) -> Reply | None:
     )
 
 
+#: Медиа, у которого нам бывает нужен file_id, и подпись типа для ответа.
+_FILE_ID_KINDS: tuple[tuple[str, str], ...] = (
+    ("video", "видео"),
+    ("animation", "гиф"),
+    ("document", "файл"),
+    ("audio", "аудио"),
+    ("photo", "фото"),
+)
+
+
+def _file_id_reply(message: dict) -> Reply | None:
+    """Ответ с file_id на присланное админом медиа, иначе None.
+
+    Зачем. Bot API поднимает файлы до 50 МБ — ролик на 1,7 ГБ бот загрузить не
+    может НИКАК. Зато отправка уже загруженного файла ПО file_id размером не
+    ограничена. Значит путь один: человек заливает файл руками (клиент Telegram
+    берёт до 2 ГБ), пересылает боту, а бот дальше публикует его в канал с
+    подписью и кнопками — то, чего вручную не сделать, потому что инлайн-кнопки
+    ставит только бот.
+
+    Отвечаем ТОЛЬКО админу: file_id — это ключ к файлу для нашего бота, и
+    раздавать его кому попало незачем. Всем остальным медиа как молчали, так и
+    молчат — прежнее поведение не меняется.
+    """
+    from app.services.notifications import admin_chat_id
+
+    admin = admin_chat_id()
+    if admin is None:
+        return None
+    sender = message.get("from") or {}
+    if not isinstance(sender, dict) or sender.get("id") != admin:
+        return None
+
+    for key, label in _FILE_ID_KINDS:
+        payload = message.get(key)
+        if not payload:
+            continue
+        # У фото Telegram присылает список размеров — берём последний, он же
+        # самый крупный; у остального объект один.
+        item = payload[-1] if isinstance(payload, list) else payload
+        if not isinstance(item, dict):
+            continue
+        file_id = item.get("file_id")
+        if not file_id:
+            continue
+        return Reply(f"file_id этого {label}:\n\n<code>{file_id}</code>")
+    return None
+
+
 def build_reply(update: dict) -> Reply | None:
     """Ответ на апдейт Telegram, или None если реагировать не нужно.
 
@@ -309,6 +358,11 @@ def build_reply(update: dict) -> Reply | None:
     chat = message.get("chat") or {}
     if chat.get("type") != "private":
         return None
+
+    file_reply = _file_id_reply(message)
+    if file_reply is not None:
+        return file_reply
+
     text = message.get("text")
     if not isinstance(text, str) or not text.strip():
         return None
