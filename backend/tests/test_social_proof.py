@@ -24,7 +24,15 @@ from app.services.social_proof import (
 )
 from tests.conftest import make_product
 
-NOW = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
+# Отсчёт от РЕАЛЬНОГО «сейчас», а не от зашитой даты. Фиксированная дата тут
+# была миной с часовым механизмом: заявки в тестах ставятся как NOW - days_ago,
+# а `apply_social_proof` в API-тестах считает окно от настоящего времени — и
+# ровно через SOCIAL_PROOF_ORDER_WINDOW_DAYS дней после зашитого числа свежая
+# заявка (days_ago=0) уезжала за окно, роняя test_product_detail_exposes_social_proof
+# на ровном месте. Детерминизм от этого не страдает: юнит-тесты чистой функции
+# передают этот же NOW в order_counts(now=...) явно, а внутри одного прогона он
+# один и тот же.
+NOW = datetime.now(timezone.utc)
 
 
 def naive(dt: datetime) -> datetime:
