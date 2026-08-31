@@ -205,7 +205,13 @@ function CardCarousel({
   }
 
   return (
-    <div className="relative">
+    // isolate: во время инерционного свайпа iOS/WebView композитит скролл-
+    // контейнер и рисует его ПОВЕРХ абсолютных соседей карточки (бейдж «Хит»,
+    // сердечко) вопреки z-index — они пропадали на время жеста, а на
+    // перелистанном за край фото было видно, как лайк уходит ПОД снимок.
+    // Отдельный контекст наложения запирает скролл внутри карусели, и внешние
+    // оверлеи снова рисуются над ним.
+    <div className="relative isolate">
       <div
         ref={scrollRef}
         role="button"
@@ -520,7 +526,7 @@ function ProductCard({ card, compact, onOpen }: Props) {
           id={card.id} images={gallery} title={card.title} category={card.category}
           compact={compact} onOpen={open} bleed={card.is_legendary}
         />
-        <div className="pointer-events-none absolute left-2 top-2 z-10 flex flex-col items-start gap-1">
+        <div className="pointer-events-none absolute left-2 top-2 z-20 flex flex-col items-start gap-1 [will-change:transform]">
           {/* Не более двух бейджей и в фиксированном порядке важности — правило
               живёт в lib/cardBadges с тестами. Раньше рисовались все подходящие
               сразу, и стопка из четырёх заливок ложилась поверх фотографии,
@@ -550,7 +556,7 @@ function ProductCard({ card, compact, onOpen }: Props) {
             вопрос, который человек к тому моменту действительно задал. */}
         {/* right-0.5/top-0.5, а не right-2/top-2: обёртка стала 44px, кружок
             внутри неё смещён на 6px — итоговый отступ кружка тот же 8px. */}
-        <FavButton id={card.id} className="absolute right-0.5 top-0.5 z-10" />
+        <FavButton id={card.id} className="absolute right-0.5 top-0.5 z-20 [will-change:transform]" />
       </div>
 
       <div className="flex flex-1 flex-col p-3">
