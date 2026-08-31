@@ -6,7 +6,8 @@
 #   1) pg_dump боевой БД -> /opt/backups/techshop_YYYY-mm-dd_HHMM.sql.gz на сервере;
 #   2) tar-синхронизация кода (серверный .env НЕ трогается);
 #   3) пересборка и перезапуск стека;
-#   4) health check /api/health — если он не прошёл, скрипт завершается ошибкой
+#   4) сверка Caddyfile с тем, что реально видит контейнер caddy;
+#   5) health check /api/health — если он не прошёл, скрипт завершается ошибкой
 #      (код и контейнеры уже обновлены; откат = git checkout + повторный запуск,
 #       данные целы — бэкап из шага 1).
 set -euo pipefail
@@ -56,13 +57,13 @@ BACKUP_DIR="/opt/backups"
 # изнутри docker-сети через `compose exec`, а не localhost:8000 на хосте.
 HEALTH_CMD="docker compose -f docker-compose.prod.yml exec -T backend python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)\""
 
-echo ">> 1/4 бэкап боевой БД (pg_dump -> $BACKUP_DIR)"
+echo ">> 1/5 бэкап боевой БД (pg_dump -> $BACKUP_DIR)"
 ssh "$SERVER" "set -e; mkdir -p $BACKUP_DIR; cd $REMOTE_DIR && \
   docker compose -f docker-compose.prod.yml exec -T db sh -c 'pg_dump -U \"\$POSTGRES_USER\" \"\$POSTGRES_DB\"' \
   | gzip > $BACKUP_DIR/techshop_\$(date +%F_%H%M).sql.gz && \
   ls -lh $BACKUP_DIR | tail -3"
 
-echo ">> 2/4 синхронизирую код на сервер ($SERVER:$REMOTE_DIR)"
+echo ">> 2/5 синхронизирую код на сервер ($SERVER:$REMOTE_DIR)"
 tar czf - \
   --exclude=node_modules \
   --exclude=dist \
@@ -78,10 +79,64 @@ tar czf - \
   --exclude=release-evidence \
   . | ssh "$SERVER" "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
 
-echo ">> 3/4 пересобираю и перезапускаю стек"
+echo ">> 3/5 пересобираю и перезапускаю стек"
 ssh "$SERVER" "set -e; cd $REMOTE_DIR; docker compose -f docker-compose.prod.yml up -d --build; docker image prune -f >/dev/null 2>&1 || true"
 
-echo ">> 4/4 health check (внутри docker-сети, до 60 секунд)"
+# --- 4/5: Caddyfile отдельно, потому что шаг 3 его НЕ применяет ---------------
+# В compose смонтирован ОДИН ФАЙЛ (./deploy/Caddyfile:/etc/caddy/Caddyfile), а
+# tar выше заменяет его новым inode. Bind-mount одного файла держит СТАРЫЙ inode:
+# снаружи конфиг новый, внутри контейнера — вечно прежний. `up -d --build` caddy
+# не пересоздаёт (спецификация контейнера не менялась), `caddy reload` перечитывает
+# тот же старый файл и рапортует об успехе. В итоге правки Caddyfile молча не
+# доезжали до прода: на сервере grep показывает новое, curl -I отдаёт старое.
+# Поэтому сверяем контрольные суммы ФАЙЛА НА ДИСКЕ и файла ВНУТРИ контейнера.
+echo ">> 4/5 сверяю Caddyfile с контейнером"
+if ssh "$SERVER" "bash -s -- '$REMOTE_DIR'" <<'REMOTE_CADDY'
+set -euo pipefail
+cd "$1"
+
+# ВАЖНО: </dev/null на каждой команде, которая может читать stdin. Этот скрипт
+# сам приезжает на сервер ЧЕРЕЗ stdin (`bash -s`), и `docker compose exec -T`
+# без перенаправления съедает его остаток: bash упирается в EOF и молча выходит
+# с нулём, не выполнив ни одной строки ниже.
+host_sum=$(md5sum deploy/Caddyfile | awk '{print $1}')
+live_sum=$(docker compose -f docker-compose.prod.yml exec -T caddy \
+             md5sum /etc/caddy/Caddyfile 2>/dev/null </dev/null | awk '{print $1}' || true)
+
+if [ "$host_sum" = "$live_sum" ]; then
+  echo "   caddy видит актуальный конфиг"
+  exit 0
+fi
+
+echo "   конфиг разъехался с контейнером — проверяю синтаксис перед применением"
+# Домены нужны, чтобы {$DOMAIN} раскрылся при валидации. Читаем ровно две
+# переменные, а не сорсим весь .env: остальное там — секреты, им тут не место.
+DOMAIN=$(grep -E '^DOMAIN=' .env | head -1 | cut -d= -f2-)
+ADMIN_DOMAIN=$(grep -E '^ADMIN_DOMAIN=' .env | head -1 | cut -d= -f2-)
+export DOMAIN ADMIN_DOMAIN
+
+# Валидируем ДО пересоздания: битый Caddyfile уронит caddy, а это оба домена
+# разом. Не прошло — контейнер не трогаем, прод остаётся на прежнем конфиге.
+if ! docker run --rm \
+       -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+       -e DOMAIN -e ADMIN_DOMAIN \
+       caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1 </dev/null; then
+  echo "   !! Caddyfile НЕ валиден"
+  exit 1
+fi
+
+echo "   синтаксис в порядке — пересоздаю caddy"
+docker compose -f docker-compose.prod.yml up -d --force-recreate caddy </dev/null
+REMOTE_CADDY
+then
+  :
+else
+  echo "!! Caddyfile не применён. Контейнер caddy НЕ тронут — домены живы на прежнем конфиге."
+  echo "!! Проверить руками: ssh $SERVER 'cd $REMOTE_DIR && docker run --rm -v \$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile'"
+  exit 1
+fi
+
+echo ">> 5/5 health check (внутри docker-сети, до 60 секунд)"
 if ssh "$SERVER" "cd $REMOTE_DIR && for i in \$(seq 1 12); do $HEALTH_CMD >/dev/null 2>&1 && exit 0; sleep 5; done; exit 1"; then
   echo ">> health OK"
 else
