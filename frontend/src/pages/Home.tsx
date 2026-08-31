@@ -34,6 +34,7 @@ const AboutServiceSheet = lazy(() => import("../components/AboutServiceSheet"));
 const FxRateSheet = lazy(() => import("../components/FxRateSheet"));
 import { autoplayReady, nextSlideIndex, snapTargetLeft } from "../lib/carousel";
 import { animateScrollTo } from "../lib/motion";
+import { useCollapsingHeader } from "../lib/useCollapsingHeader";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 
 type Category = { key: string; label: string; icon: string; count: number };
@@ -197,6 +198,9 @@ export default function Home() {
   const navigate = useNavigate();
   const config = usePublicConfig();
   const cart = useCart();
+  // Крупный заголовок тает под липкой шапкой при прокрутке. Ref на весь верх:
+  // внутри хук сам находит обе части по data-атрибутам в разметке ниже.
+  const collapsingHeader = useCollapsingHeader();
   // v6: Trade-In/бизнес/опт ведут в AI-чат заявки (/apply/:scenario) вместо
   // встроенного bottom-sheet. Меню MacBook (v5.4.0) остаётся как есть — это
   // prefill в /ai, не lead-сценарий.
@@ -329,7 +333,7 @@ export default function Home() {
   const alsoLike = (feed?.recommended ?? []).filter((c) => !forYouIds.has(c.id) && !recentIds.has(c.id));
 
   return (
-    <div className="mx-auto max-w-md lg:max-w-none">
+    <div ref={collapsingHeader} className="mx-auto max-w-md lg:max-w-none">
       {/* ===== Единый верх: системная область Telegram + hero одного цвета. Тёмную
           подложку выреза статус-бара даёт глобальный .hero-top-inset в Layout (на
           всех экранах); здесь только сам hero. ===== */}
@@ -342,7 +346,17 @@ export default function Home() {
           Складываясь с отступом шапки и отступом сетки, это давало 46px пустоты
           между категориями и плитками (замерено). Цель касания должна ПОМЕЩАТЬСЯ
           в отступ, а не добавляться к нему. */}
-      <header className="-mx-4 -mt-3 px-4 pb-2 pt-2 lg:hidden">
+      {/* Липкая шапка — ПРЯМОЙ ребёнок страницы, а не часть верхнего блока, и
+          это не стилистика. `position: sticky` действует только внутри коробки
+          родителя: пока шапка лежала внутри <header> вместе с заголовком и
+          поиском, она уезжала с экрана ровно тогда, когда этот блок кончался, —
+          то есть переставала быть липкой на первом же экране товаров (поймано на
+          стенде). Родителем обязан быть контейнер во всю высоту страницы.
+
+          -mx-4/-mt-3 гасят отступы <main> (px-4 pt-3): фон шапки должен доходить
+          до кромок экрана и начинаться от самого верха, а собственный padding
+          она возвращает уже внутри себя. */}
+      <header data-collapsing-nav className="app-navbar -mx-4 -mt-3 px-4 pb-2 pt-2 lg:hidden">
         <div className="flex items-center justify-between gap-3">
           {/* Логотип крупнее кнопок справа намеренно: это единственная точка
               бренда на экране. Белой плашки под ним больше нет — слово набрано
@@ -357,7 +371,9 @@ export default function Home() {
             profile={<ProfileChip user={user} variant="mobile" />}
           />
         </div>
+      </header>
 
+      <div className="pb-2 lg:hidden">
         {/* До 27.08 15:15 — полоса обратного отсчёта, после исчезает сама.
             Тап ведёт в тот же роудмап, что и строка «Что будет дальше» в
             профиле: пока полоса есть, это самый заметный вход в планы. */}
@@ -368,8 +384,18 @@ export default function Home() {
         {/* Фраза бренда переехала сюда из-под логотипа и вместе с местом сменила
             вес: 11px серым она была подписью к картинке, а на первом экране
             магазина главный вопрос — «что здесь можно найти». Текст тот же, но
-            теперь он отвечает на него, а не украшает шапку. */}
-        <p className="mt-3 text-h2 font-bold tracking-tight">Техника, которую легко найти</p>
+            теперь он отвечает на него, а не украшает шапку.
+            26px вместо 20 и <h1> вместо <p>: это заголовок ЭКРАНА, а не подпись
+            к чему-то, и он единственный, кто на этом верху имеет право быть
+            крупным. Пока он был одного веса с остальными пятью рядами, у экрана
+            не было главного элемента вовсе — отсюда и ощущение веб-страницы.
+            Растворяется при прокрутке (data-collapsing-title). */}
+        <h1
+          data-collapsing-title
+          className="mt-1 text-h1 font-bold tracking-tight [text-wrap:balance]"
+        >
+          Техника, которую легко найти
+        </h1>
 
         {/* Крупный поиск — главный элемент верха (relative: под ним панель подсказок).
             onBlur на обёртке: закрываем панель, только если фокус ушёл наружу
@@ -503,24 +529,33 @@ export default function Home() {
             ВЫБРАНА», а здесь выбранной нет — все ссылки равноправны. Один знак с
             двумя смыслами хуже двух разных знаков.
             Данные: админские плитки → каталог → кэш; максимум 6. */}
+        {/* bg-surface/70, а не сплошной белый — и это не украшение, а иерархия
+            материалов. Раньше весь верх состоял из девяти одинаковых белых
+            пилюль (действия, поиск, кнопка ИИ, тумблер осей, курс, четыре
+            категории): один радиус, одна заливка, один вес — экран читался как
+            выгрузка библиотеки компонентов. Теперь материал говорит о роли:
+            поиск сплошной, потому что это поле ввода и оно главное; категории
+            полупрозрачны и живой фон идёт сквозь них; шапка — стекло. Текст на
+            них по-прежнему почти чёрный (контраст ~14:1), читаемость не
+            тронута. */}
         <div className={`no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 ${hasBrandAxis ? "mt-2" : "mt-3"}`}>
           {heroChips.map((c) => (
             <button
               key={c.key}
               onClick={() => navigate(safeInternalRoute(c.route))}
-              className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-field border border-border bg-surface px-3.5 text-footnote font-medium text-text outline-none transition-colors hover:border-accent hover:text-accent focus-visible:ring-2 focus-visible:ring-accent"
+              className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-field border border-border bg-surface/70 px-3.5 text-footnote font-medium text-text outline-none transition-colors hover:border-accent hover:text-accent focus-visible:ring-2 focus-visible:ring-accent"
             >
               {c.label}
             </button>
           ))}
           <button
             onClick={() => navigate("/catalog")}
-            className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-field border border-border bg-surface px-3.5 text-footnote font-medium text-accent outline-none transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-accent"
+            className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-field border border-border bg-surface/70 px-3.5 text-footnote font-medium text-accent outline-none transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-accent"
           >
             {axis === "brand" ? "Все бренды →" : "Все категории →"}
           </button>
         </div>
-      </header>
+      </div>
 
       {/* ===== Быстрые сценарии (mobile): не категории, а намерения пользователя.
           Товарные ведут в каталог, консультационные — к профильному менеджеру из

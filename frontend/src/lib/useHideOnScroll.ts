@@ -50,8 +50,13 @@ export function nextToolbarHidden(prev: boolean, top: number, delta: number): bo
 
 /** Ближайший прокручиваемый предок. В приложении это <main> из Layout: скроллит
  *  не окно, а он, поэтому слушать window бесполезно. Ищем по вычисленному
- *  overflow, а не по имени тега: разметка Layout ещё будет меняться. */
-function scrollParentOf(el: HTMLElement): HTMLElement | null {
+ *  overflow, а не по имени тега: разметка Layout ещё будет меняться.
+ *
+ *  Экспортируется, потому что тем же способом ищет скроллер useCollapsingHeader:
+ *  «где на самом деле происходит прокрутка» — знание об устройстве Layout, и
+ *  копия этих восьми строк разъехалась бы с оригиналом при первой же правке
+ *  каркаса. */
+export function scrollParentOf(el: HTMLElement): HTMLElement | null {
   for (let node = el.parentElement; node; node = node.parentElement) {
     const overflowY = getComputedStyle(node).overflowY;
     if (overflowY === "auto" || overflowY === "scroll") return node;
