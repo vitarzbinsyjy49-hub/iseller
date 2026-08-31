@@ -74,6 +74,7 @@ tar czf - \
   --exclude=.claude \
   --exclude=.worktrees \
   --exclude=artifacts \
+  --exclude=docs/handoff \
   --exclude=release-evidence \
   . | ssh "$SERVER" "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
 
