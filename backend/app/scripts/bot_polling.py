@@ -63,6 +63,18 @@ REQUIRED_SCHEMA: dict[str, tuple[str, ...]] = {
     "notifications": (),
     "product_favorites": ("notified_price", "notified_in_stock"),
     "carts": (),
+    # Скан корзин джойнит users и тянет ВСЕ её колонки через ORM — значит новая
+    # колонка в users ломает бота ровно так же, как своя собственная. Здесь
+    # перечислены все, что приезжают мини-миграциями: они были в том же SELECT,
+    # который упал на acquisition_source, и молча ждали своей очереди уронить
+    # деплой. Тест test_required_schema_covers_every_mini_migration_column
+    # держит этот список сомкнутым со списком в app/main.py.
+    "users": (
+        "photo_url",
+        "last_bot_message_id",
+        "onboarding_seen_at",
+        "acquisition_source",
+    ),
     "fx_rate_history": (),
 }
 

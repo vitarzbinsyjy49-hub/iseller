@@ -5,6 +5,7 @@
 Отсюда главное требование: что бы ни случилось в фоне, приём сообщений
 продолжается. Упавший тик = переставший отвечать бот.
 """
+import inspect as inspect_module
 import pytest
 
 import app.scripts.bot_polling as bp
@@ -356,3 +357,38 @@ def test_first_scan_runs_regardless_of_system_uptime(monkeypatch):
     assert bp._due(None, 10.0, 1800) is True      # ни разу не сканировали
     assert bp._due(0.0, 10.0, 1800) is False      # сканировали в момент 0 — рано
     assert bp._due(5.0, 1805.0, 1800) is True     # интервал прошёл
+
+
+def test_required_schema_covers_every_mini_migration_column():
+    """Каждая колонка, добавленная мини-миграцией в таблицу из REQUIRED_SCHEMA,
+    обязана быть в этом же REQUIRED_SCHEMA.
+
+    Мини-миграция и список ожиданий бота — две половины одного решения, но
+    лежат в разных файлах, и вторую забыть легко: так колонка
+    users.acquisition_source приехала в `ALTER TABLE`, попала в ORM-модель (а
+    значит и в SELECT скана корзин, который джойнит users) — и уронила бота
+    полноэкранным UndefinedColumn на деплое, хотя механизм ожидания схемы был
+    написан ровно против этого.
+    """
+    import re
+
+    from app.main import _apply_demo_migrations
+
+    source = inspect_module.getsource(_apply_demo_migrations)
+    pattern = r"ALTER TABLE (\w+) ADD COLUMN IF NOT EXISTS (\w+)"
+    missed = [
+        f"{table}.{column}"
+        for table, column in re.findall(pattern, source)
+        if table in bp.REQUIRED_SCHEMA and column not in bp.REQUIRED_SCHEMA[table]
+    ]
+    assert missed == [], (
+        f"мини-миграция добавила {missed}, а бот этих колонок не ждёт — "
+        f"на следующем деплое будет UndefinedColumn"
+    )
+
+
+def test_required_schema_waits_for_the_users_table():
+    """Скан корзин джойнит users и тянет её колонки через ORM — новая колонка в
+    users ломает бота так же, как своя собственная. Пока этой строки не было,
+    деплой с users.acquisition_source дал трейсбек в логах бота."""
+    assert "users" in bp.REQUIRED_SCHEMA
