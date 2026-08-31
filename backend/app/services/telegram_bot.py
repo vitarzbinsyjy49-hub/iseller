@@ -16,6 +16,7 @@ callback_query бот не получает и обработчика для н�
 """
 from __future__ import annotations
 
+import string
 from dataclasses import dataclass, field
 from html import escape
 
@@ -173,6 +174,37 @@ def parse_product_payload(payload: str) -> int | None:
     return value if value > 0 else None
 
 
+#: Префикс рекламных payload'ов: t.me/<bot>/<app>?startapp=ad_<канал>. Открытый
+#: напрямую (startapp), он же попадает в initDataUnsafe.start_param на фронте и
+#: летит в /auth/telegram — так appearance пишет acquisition_source (см.
+#: app/api/auth.py). Через обычный чат-диплинк (?start=) source не долетает —
+#: Telegram не прокидывает start_param в Mini App, открытый кнопкой из чата,
+#: поэтому для рекламных постов используем ИМЕННО ?startapp=, а не ?start=.
+AD_PAYLOAD_PREFIX = "ad_"
+
+#: Символы, допустимые в метке канала — ровно то, что Telegram пропускает в
+#: startapp-параметре (A-Z a-z 0-9 _ -).
+AD_SLUG_ALPHABET = frozenset(string.ascii_letters + string.digits + "_-")
+
+
+def parse_ad_payload(payload: str) -> str | None:
+    """«ad_moskvatoday» -> «moskvatoday» — метка рекламного канала, иначе None.
+
+    Тот же принцип, что у parse_product_payload: строгий allowlist символов,
+    потому что payload собирает кто угодно (в данном случае — мы сами, вручную,
+    под каждое размещение) и он летит и в URL кнопки, и в БД как есть.
+    Allowlist перечислен явно, а не через `isalnum()`: тот пропускает юникод
+    («ad_москва», «ad_٤٢»), а Telegram в startapp отдаёт только эти символы —
+    всё остальное к нам приходит мимо реальной ссылки и источником не является.
+    """
+    if not payload.startswith(AD_PAYLOAD_PREFIX):
+        return None
+    slug = payload[len(AD_PAYLOAD_PREFIX):]
+    if not slug or len(slug) > 40 or not all(c in AD_SLUG_ALPHABET for c in slug):
+        return None
+    return slug
+
+
 #: Статические payload'ы диплинков -> экран Mini App. Словарь, а не цепочка
 #: if'ов: по нему проходит тест, который требует от бота web_app-кнопки на тот
 #: же путь для КАЖДОГО payload'а. Новый диплинк, добавленный только сюда и
@@ -204,6 +236,11 @@ def resolve_payload_path(payload: str) -> str | None:
     product_id = parse_product_payload(payload)
     if product_id is not None:
         return f"/product/{product_id}"
+    # Рекламная метка сама по себе не экран — открываем каталог, как по
+    # обычной ссылке "catalog". Источник трафика фронт всё равно передаст в
+    # /auth/telegram отдельным полем (start_param), это чисто про навигацию.
+    if parse_ad_payload(payload) is not None:
+        return STATIC_ROUTES["catalog"]
     from app.services.price_posts import SECTIONS_BY_SLUG   # локально: избегаем цикла
 
     section = SECTIONS_BY_SLUG.get(payload)
@@ -217,7 +254,11 @@ def reply_for_payload(payload: str) -> Reply | None:
     """
     from app.services.price_posts import SECTIONS_BY_SLUG   # локально: избегаем цикла
 
-    if payload == "catalog":
+    # Рекламная метка через чат-диплинк (?start=, не ?startapp=) — bonus-путь
+    # для старых клиентов/ручных ссылок. Атрибуция здесь не пишется (Telegram
+    # не прокидывает start_param в web_app-кнопку, открытую из чата), но
+    # человек хотя бы попадает в каталог, а не в безликое главное меню.
+    if payload == "catalog" or parse_ad_payload(payload) is not None:
         return build_reply({"message": {"chat": {"type": "private"}, "text": "/catalog"}})
     if payload == "ai":
         return build_reply({"message": {"chat": {"type": "private"}, "text": "/ai"}})

@@ -29,6 +29,13 @@ class User(Base):
     # новых, и уже существующих пользователей одним состоянием, без
     # отдельного флага.
     onboarding_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Откуда пришёл ПЕРВЫЙ раз — значение start_param диплинка (реклама в
+    # каналах: "ad_<канал>"), с которым человек впервые открыл Mini App.
+    # Пишется РОВНО ОДИН РАЗ при создании user (см. api/auth._get_or_create_user)
+    # и больше не перезаписывается — иначе органический повторный вход затёр бы
+    # рекламный источник, и отчёт по каналам стал бы врать в первый же день.
+    # NULL — пришёл не по рекламной ссылке (или до того, как эта колонка появилась).
+    acquisition_source: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

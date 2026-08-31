@@ -54,7 +54,14 @@ export default function App() {
     async function login() {
       try {
         const endpoint = isInsideTelegram() ? "/auth/telegram" : "/auth/dev";
-        const body = isInsideTelegram() ? { init_data: getTelegram()!.initData } : {};
+        // start_param читаем здесь же, ДО запроса: это тот самый ad_<канал> из
+        // t.me/<bot>/<app>?startapp=..., и бэкенду он нужен один раз — при
+        // создании пользователя, — чтобы записать источник первого прихода
+        // (см. app/api/auth.py). Дальше он же используется ниже для навигации.
+        const startParam = getStartParam();
+        const body = isInsideTelegram()
+          ? { init_data: getTelegram()!.initData, start_param: startParam ?? undefined }
+          : {};
         const tokens = await api<{ access_token: string; refresh_token: string }>(endpoint, {
           method: "POST",
           body: JSON.stringify(body),
@@ -74,7 +81,7 @@ export default function App() {
         // резолвит его тот же источник правды, что и сам бот для web_app-кнопок
         // (backend: resolve_payload_path). Неизвестный/устаревший payload —
         // остаёмся на главной, тихо, как и бот в этом случае падает в меню.
-        const payload = getStartParam();
+        const payload = startParam;
         if (payload) {
           try {
             const { route } = await api<{ route: string }>(`/deeplink/${encodeURIComponent(payload)}`);

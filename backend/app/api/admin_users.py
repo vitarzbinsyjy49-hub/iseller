@@ -43,6 +43,9 @@ def _row(user: User, stats: dict) -> dict:
         "role": user.role,
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_seen_at": user.last_seen_at.isoformat() if user.last_seen_at else None,
+        # Каким рекламным каналом привели (ad_<канал>) — None у органики и у
+        # всех, кто пришёл до этого патча.
+        "acquisition_source": user.acquisition_source,
         "balance": stats["balance"],
         "lifetime_spent": stats["lifetime_spent"],
         "level": level.to_dict(),
@@ -53,6 +56,7 @@ def _row(user: User, stats: dict) -> dict:
 def list_users(
     db: Session = Depends(get_db),
     q: str | None = None,
+    source: str | None = None,
     sort: str = "recent",
     limit: int = 100,
     offset: int = 0,
@@ -66,6 +70,10 @@ def list_users(
     """
     limit = max(1, min(limit, 500))
     stmt = select(User)
+    if source and source.strip():
+        # Точное совпадение: source — код кампании ("ad_moskvatoday"), не текст
+        # для нечёткого поиска, опечатка в фильтре не должна тихо вернуть 0.
+        stmt = stmt.where(User.acquisition_source == source.strip())
     if q and q.strip():
         needle = f"%{q.strip().lower()}%"
         stmt = stmt.where(

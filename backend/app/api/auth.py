@@ -16,8 +16,10 @@ from app.core.security import (
     verify_telegram_init_data,
 )
 from app.services.token_revocation import is_refresh_token_revoked, revoke_refresh_token
+from app.services.telegram_bot import parse_ad_payload
 from app.db.audit import audit
 from app.db.session import get_db
+from app.models.analytics_event import AnalyticsEvent
 from app.models.user import User
 from app.schemas.auth import AdminLoginIn, RefreshIn, TelegramAuthIn, TokenPair
 from app.api.deps import client_ip
@@ -25,7 +27,9 @@ from app.api.deps import client_ip
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _get_or_create_user(db: Session, tg_user: dict, request: Request) -> User:
+def _get_or_create_user(
+    db: Session, tg_user: dict, request: Request, start_param: str | None = None,
+) -> User:
     user = db.execute(select(User).where(User.telegram_id == tg_user["id"])).scalar_one_or_none()
     created = user is None
     if created:
@@ -35,9 +39,23 @@ def _get_or_create_user(db: Session, tg_user: dict, request: Request) -> User:
     user.first_name = tg_user.get("first_name")
     user.last_name = tg_user.get("last_name")
     user.photo_url = tg_user.get("photo_url")
+    # Источник первого прихода — ТОЛЬКО при создании и ТОЛЬКО из ?startapp=
+    # рекламной ссылки (ad_<канал>). Существующему пользователю не трогаем:
+    # органический повторный визит по ad-ссылке не должен переписывать его
+    # настоящий источник. product_/share-ссылки в start_param сюда не попадают
+    # намеренно — это не рекламный канал, а шеринг между людьми.
+    ad_slug = parse_ad_payload(start_param) if (created and start_param) else None
+    if ad_slug is not None:
+        user.acquisition_source = f"ad_{ad_slug}"
     db.commit()
     db.refresh(user)
     audit(db, f"tg:{user.telegram_id}", "register" if created else "login", ip=client_ip(request))
+    if ad_slug is not None:
+        # Сырое событие — тот же слой, что и продуктовая аналитика (см.
+        # app/api/events.py), но пишет бэкенд сам: это первый вход пользователя,
+        # клиенту ещё нечем было бы его отправить.
+        db.add(AnalyticsEvent(user_id=user.id, event="ad_signup", payload={"source": ad_slug}))
+        db.commit()
     return user
 
 
@@ -51,7 +69,7 @@ def auth_telegram(body: TelegramAuthIn, request: Request, db: Session = Depends(
         tg_user = verify_telegram_init_data(body.init_data)
     except TelegramAuthError as e:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Telegram auth failed: {e}")
-    user = _get_or_create_user(db, tg_user, request)
+    user = _get_or_create_user(db, tg_user, request, start_param=body.start_param)
     return _token_pair(f"user:{user.id}")
 
 

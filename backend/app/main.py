@@ -230,6 +230,10 @@ def _apply_demo_migrations() -> None:
         # состоянием покрыты и новые, и уже существующие пользователи, без
         # отдельного флага различения (см. app/api/users.py: mark_onboarding_seen).
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_seen_at TIMESTAMPTZ",
+        # Источник первого прихода по рекламной ссылке (?startapp=ad_<канал>),
+        # пишется один раз при создании user — см. app/api/auth.py и
+        # app/services/telegram_bot.py (parse_ad_payload).
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS acquisition_source VARCHAR(64)",
     ]
     for stmt in statements:
         try:
