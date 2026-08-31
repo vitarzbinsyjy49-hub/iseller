@@ -437,8 +437,8 @@ html.kb-open .js-bottom-nav { display: none; }
    через filter: blur() по цветным кругам — и на слабых телефонах это самый
    дорогой способ из возможных: размытие пересчитывается каждый кадр. Здесь
    пятно мягкое САМО ПО СЕБЕ, потому что это радиальный градиент с прозрачным
-   краем; фильтра нет вообще, а анимация трогает только transform — такую
-   браузер отдаёт видеоядру и страницу не перерисовывает.
+   краем; фильтра нет вообще, а анимация трогает только transform и opacity —
+   такие свойства браузер отдаёт видеоядру и страницу не перерисовывает.
 
    Почему fixed. Слой прибит к экрану, а не к содержимому: при прокрутке он
    стоит на месте, поэтому длинная лента каталога не тянет его за собой и не
@@ -519,7 +519,7 @@ html.kb-open .js-bottom-nav { display: none; }
 .aurora-blob {
   position: absolute;
   border-radius: 50%;
-  will-change: transform;
+  will-change: transform, opacity;
 }
 
 /* Композиция одна на все экраны, меняется только палитра (см. data-variant
@@ -528,29 +528,32 @@ html.kb-open .js-bottom-nav { display: none; }
    самое бледное: оно нужно, чтобы низ экрана не оставался пустым при
    прокрутке, но спорить с карточками товаров ему нечем. */
 .aurora-1 {
-  width: min(86vw, 340px); height: min(86vw, 340px);
+  /* Пятна крупнее и стартовые позиции дальше за кромкой, чем нужно для покоя:
+     ход анимации вырос до ~160px (см. keyframes ниже), и без этого запаса
+     пятно на дальней фазе отходило бы от края экрана, оголяя угол. */
+  width: min(94vw, 380px); height: min(94vw, 380px);
   /* Смещения В ПИКСЕЛЯХ, а не в долях экрана. С vh композиция зависела от
      высоты устройства: на высоком экране пятно уезжало за верхний край и фон
      пропадал вовсе (поймано на проверке — на экране 2122px в высоту верхнее
      пятно оказалось на −281px). Размер по-прежнему в долях ШИРИНЫ: она у
      телефонов и различается, и определяет, каким пятно выглядит. */
-  top: -110px; left: -80px;
+  top: -150px; left: -130px;
   background: radial-gradient(circle, rgb(var(--aurora-1) / var(--aurora-1-a)), transparent 70%);
-  animation: aurora-drift-1 40s ease-in-out infinite alternate;
+  animation: aurora-drift-1 22s ease-in-out infinite alternate;
 }
 .aurora-2 {
-  width: min(74vw, 300px); height: min(74vw, 300px);
-  top: 40px; right: -90px;
+  width: min(82vw, 340px); height: min(82vw, 340px);
+  top: 20px; right: -130px;
   background: radial-gradient(circle, rgb(var(--aurora-2) / var(--aurora-2-a)), transparent 70%);
-  animation: aurora-drift-2 48s ease-in-out infinite alternate;
+  animation: aurora-drift-2 27s ease-in-out infinite alternate;
 }
 .aurora-3 {
-  width: min(66vw, 270px); height: min(66vw, 270px);
+  width: min(74vw, 310px); height: min(74vw, 310px);
   /* Третье — единственное, что привязано к высоте экрана: его задача закрыть
      нижнюю половину, а она у разных телефонов разная. */
-  top: 45%; left: -40px;
+  top: 45%; left: -90px;
   background: radial-gradient(circle, rgb(var(--aurora-3) / var(--aurora-3-a)), transparent 70%);
-  animation: aurora-drift-3 44s ease-in-out infinite alternate;
+  animation: aurora-drift-3 25s ease-in-out infinite alternate;
 }
 
 /* Зерно поверх пятен. Именно оно превращает заливку в «поверхность»: без него
@@ -563,20 +566,25 @@ html.kb-open .js-bottom-nav { display: none; }
   background-size: 120px;
 }
 
-/* Циклы намеренно разной длины и взаимно непростые: совпади они, пятна начали
-   бы возвращаться в одну и ту же композицию, и движение стало бы читаться как
-   петля. */
+/* Циклы намеренно разной длины и взаимно непростые (22 / 27 / 25 —
+   попарно взаимно простые): совпади они, пятна начали бы возвращаться в одну и
+   ту же композицию, и движение стало бы читаться как петля.
+
+   Ход крупный намеренно — фон должен ЧИТАТЬСЯ как живой на беглый взгляд, а не
+   угадываться. ease-in-out + alternate держат его плавным: пятно замедляется у
+   каждого края, разворота рывком нет. Помимо transform дышит и opacity
+   (~0.8↔1.0) — тоже композиторное свойство, страницу не перерисовывает. */
 @keyframes aurora-drift-1 {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to   { transform: translate3d(64px, 56px, 0) scale(1.14); }
+  from { transform: translate3d(0, 0, 0) scale(1); opacity: .8; }
+  to   { transform: translate3d(160px, 132px, 0) scale(1.22); opacity: 1; }
 }
 @keyframes aurora-drift-2 {
-  from { transform: translate3d(0, 0, 0) scale(1.08); }
-  to   { transform: translate3d(-56px, 70px, 0) scale(.94); }
+  from { transform: translate3d(0, 0, 0) scale(1.1); opacity: 1; }
+  to   { transform: translate3d(-150px, 166px, 0) scale(.9); opacity: .82; }
 }
 @keyframes aurora-drift-3 {
-  from { transform: translate3d(0, 0, 0) scale(.96); }
-  to   { transform: translate3d(78px, -48px, 0) scale(1.16); }
+  from { transform: translate3d(0, 0, 0) scale(.95); opacity: .85; }
+  to   { transform: translate3d(172px, -120px, 0) scale(1.24); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
