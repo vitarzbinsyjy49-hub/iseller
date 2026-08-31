@@ -1,5 +1,6 @@
-/** Живой фон: три мягких пятна, медленно плывущие под контентом, и цвет верха
- *  Telegram под ними.
+/** Живой фон: четыре мягких пятна, медленно плывущие под контентом, и цвет верха
+ *  Telegram под ними. Четвёртое пятно прибито к низу экрана — без него нижняя
+ *  треть оставалась без цвета в части фаз анимации.
  *
  *  Стили — в `index.css` (класс `.aurora` и соседние): там же живёт правило
  *  «уменьшение движения», и держать анимацию рядом с остальными правилами
@@ -7,8 +8,10 @@
  *
  *  Показывается НЕ везде. Фон работает на впечатление там, где человек
  *  осматривается — главная, экран AI, профиль, баллы, информация; на каталоге
- *  он есть, но вдвое слабее самого тихого из них. В корзине, оформлении заявки
- *  и избранном фона нет вовсе: там человек занят делом от начала до конца.
+ *  он есть, но вдвое слабее самого тихого из них, а в карточке товара (variant
+ *  "faint") — ещё вдвое тише каталога: только чтобы низ длинной страницы не
+ *  уходил в белый лист. В корзине, оформлении заявки, заявках, истории и
+ *  избранном фона нет вовсе: там человек занят делом от начала до конца.
  *
  *  Палитра у экранов РАЗНАЯ, и это единственное, чем они отличаются: сама
  *  композиция (размеры, позиции, циклы) общая, иначе экраны перестали бы быть
@@ -20,7 +23,7 @@ import { useLocation } from "react-router-dom";
 import { setTopColor } from "../lib/telegram";
 
 /** Вариант палитры → селектор `[data-variant]` в index.css. */
-export type AuroraVariant = "brand" | "ai" | "warm" | "calm" | "quiet";
+export type AuroraVariant = "brand" | "ai" | "warm" | "calm" | "quiet" | "faint";
 
 /** Цвет верхней плашки Telegram идёт В ПАРЕ с палитрой пятен и живёт здесь же.
  *  Разъехаться им негде: раньше цвет был один на всё приложение (#f6f7f9,
@@ -35,7 +38,9 @@ export type AuroraScheme = { variant: AuroraVariant; header: string };
 export const DEFAULT_HEADER = "#f6f7f9";
 
 /** Маршруты с живым фоном. Точное совпадение, без вложенных путей: /ai — да,
- *  /ai/что-то-ещё — решать отдельно, когда такой экран появится. */
+ *  /ai/что-то-ещё — решать отдельно, когда такой экран появится. Единственное
+ *  исключение — карточка товара `/product/:id`, у неё динамический сегмент;
+ *  она обрабатывается по префиксу ниже, в auroraFor. */
 const AURORA_BY_ROUTE: Record<string, AuroraScheme> = {
   "/": { variant: "brand", header: "#e9f1f8" },
   "/ai": { variant: "ai", header: "#ecedf9" },
@@ -51,9 +56,19 @@ const AURORA_BY_ROUTE: Record<string, AuroraScheme> = {
   "/catalog": { variant: "quiet", header: "#f2f5f8" },
 };
 
+/** Карточка товара — самый слабый фон приложения. Страница длинная и плотная
+ *  (галерея, характеристики, липкая кнопка), спорить с фото товара фону нельзя;
+ *  вся его работа — чтобы низ под характеристиками не читался как белый лист. */
+const PRODUCT_SCHEME: AuroraScheme = { variant: "faint", header: "#eef2f7" };
+
 /** Схема экрана или null, если на нём живого фона нет. */
 export function auroraFor(pathname: string): AuroraScheme | null {
-  return AURORA_BY_ROUTE[pathname] ?? null;
+  const exact = AURORA_BY_ROUTE[pathname];
+  if (exact) return exact;
+  // Карточка товара — единственный путь с фоном по префиксу, а не по точному
+  // совпадению: id в сегменте. Сам раздел `/product` без id фона не получает.
+  if (pathname.startsWith("/product/")) return PRODUCT_SCHEME;
+  return null;
 }
 
 export function hasAurora(pathname: string): boolean {
@@ -80,6 +95,7 @@ export default function AuroraBackground() {
       <div className="aurora-blob aurora-1" />
       <div className="aurora-blob aurora-2" />
       <div className="aurora-blob aurora-3" />
+      <div className="aurora-blob aurora-4" />
       <div className="aurora-grain" />
     </div>
   );

@@ -479,6 +479,9 @@ html.kb-open .js-bottom-nav { display: none; }
   --aurora-1: var(--app-accent);  --aurora-1-a: .34;
   --aurora-2: var(--app-orange);  --aurora-2-a: .22;
   --aurora-3: var(--app-accent);  --aurora-3-a: .16;
+  /* Четвёртое пятно прибито к низу (см. .aurora-4). Тёплый оттенок: оно
+     внизу-справа и уравновешивает жёлтое пятно вверху-справа. */
+  --aurora-4: var(--app-orange);  --aurora-4-a: .14;
 }
 /* AI: холодный индиго вместо тёплого — экран про машинный подбор, и тёплое
    пятно там читалось как продолжение витрины. Индиго нигде больше в интерфейсе
@@ -488,6 +491,7 @@ html.kb-open .js-bottom-nav { display: none; }
   --aurora-1: var(--app-accent);  --aurora-1-a: .30;
   --aurora-2: 108 99 255;         --aurora-2-a: .20;
   --aurora-3: 108 99 255;         --aurora-3-a: .12;
+  --aurora-4: 108 99 255;         --aurora-4-a: .12;
 }
 /* Профиль и баллы: закат — оранжевый с розовым. Это экраны про накопленное, и
    тёплый фон отделяет их от синей витрины, не заводя нового цвета: оба канала
@@ -496,6 +500,7 @@ html.kb-open .js-bottom-nav { display: none; }
   --aurora-1: var(--app-orange);  --aurora-1-a: .28;
   --aurora-2: var(--app-danger);  --aurora-2-a: .13;
   --aurora-3: var(--app-orange);  --aurora-3-a: .12;
+  --aurora-4: var(--app-danger);  --aurora-4-a: .11;
 }
 /* Каталог: один синий, без тёплого пятна — оно спорило бы с фотографиями
    товара. Сила почти как на главной: первая версия была вдвое тише справки, и
@@ -506,6 +511,7 @@ html.kb-open .js-bottom-nav { display: none; }
   --aurora-1: var(--app-accent);  --aurora-1-a: .26;
   --aurora-2: var(--app-accent);  --aurora-2-a: .17;
   --aurora-3: var(--app-accent);  --aurora-3-a: .16;
+  --aurora-4: var(--app-accent);  --aurora-4-a: .15;
 }
 /* Информация: один синий втрое тише. Экран длинного текста — фону здесь нельзя
    спорить со строками, и вся его работа в том, чтобы страница не была белым
@@ -514,6 +520,18 @@ html.kb-open .js-bottom-nav { display: none; }
   --aurora-1: var(--app-accent);  --aurora-1-a: .20;
   --aurora-2: var(--app-accent);  --aurora-2-a: .12;
   --aurora-3: var(--app-accent);  --aurora-3-a: .10;
+  --aurora-4: var(--app-accent);  --aurora-4-a: .09;
+}
+
+/* Карточка товара: фон едва различим — примерно вдвое тише справки. Страница
+   длинная и плотная (галерея, характеристики, липкая кнопка покупки), спорить
+   с фото товара фону нельзя; вся его работа в том, чтобы низ под
+   характеристиками не читался как белый лист. */
+.aurora[data-variant="faint"] {
+  --aurora-1: var(--app-accent);  --aurora-1-a: .10;
+  --aurora-2: var(--app-accent);  --aurora-2-a: .07;
+  --aurora-3: var(--app-accent);  --aurora-3-a: .06;
+  --aurora-4: var(--app-accent);  --aurora-4-a: .05;
 }
 
 .aurora-blob {
@@ -525,8 +543,9 @@ html.kb-open .js-bottom-nav { display: none; }
 /* Композиция одна на все экраны, меняется только палитра (см. data-variant
    выше). Первое пятно сверху слева — там же, где логотип: главный цвет
    варианта встречает взгляд первым. Второе справа уравновешивает его. Третье
-   самое бледное: оно нужно, чтобы низ экрана не оставался пустым при
-   прокрутке, но спорить с карточками товаров ему нечем. */
+   держит середину. Четвёртое прибито к НИЗУ экрана (bottom, а не top): у
+   первых трёх якорь сверху, и в фазе, когда третье уезжает вверх, нижняя
+   треть оставалась без цвета — на это и жаловались. */
 .aurora-1 {
   /* Пятна крупнее и стартовые позиции дальше за кромкой, чем нужно для покоя:
      ход анимации вырос до ~160px (см. keyframes ниже), и без этого запаса
@@ -549,11 +568,23 @@ html.kb-open .js-bottom-nav { display: none; }
 }
 .aurora-3 {
   width: min(74vw, 310px); height: min(74vw, 310px);
-  /* Третье — единственное, что привязано к высоте экрана: его задача закрыть
-     нижнюю половину, а она у разных телефонов разная. */
+  /* Привязано к высоте экрана: держит середину, а она у разных телефонов
+     разная. Раньше отвечало и за низ — теперь низ на четвёртом пятне, поэтому
+     подъём в keyframes смягчён (было −120px, стало −80px). */
   top: 45%; left: -90px;
   background: radial-gradient(circle, rgb(var(--aurora-3) / var(--aurora-3-a)), transparent 70%);
   animation: aurora-drift-3 25s ease-in-out infinite alternate;
+}
+.aurora-4 {
+  /* Якорь СНИЗУ и заметно за кромкой: большая часть пятна под нижним краем
+     экрана, в кадре — только верхняя дуга свечения. Так нижняя треть закрыта в
+     любой фазе, а вертикальный ход в keyframes маленький (−40px), чтобы низ не
+     оголялся. Высоте экрана НЕ привязано (bottom + пиксели), в отличие от
+     третьего. */
+  width: min(120vw, 480px); height: min(120vw, 480px);
+  bottom: -220px; right: -40px;
+  background: radial-gradient(circle, rgb(var(--aurora-4) / var(--aurora-4-a)), transparent 70%);
+  animation: aurora-drift-4 29s ease-in-out infinite alternate;
 }
 
 /* Зерно поверх пятен. Именно оно превращает заливку в «поверхность»: без него
@@ -566,7 +597,7 @@ html.kb-open .js-bottom-nav { display: none; }
   background-size: 120px;
 }
 
-/* Циклы намеренно разной длины и взаимно непростые (22 / 27 / 25 —
+/* Циклы намеренно разной длины и взаимно непростые (22 / 27 / 25 / 29 —
    попарно взаимно простые): совпади они, пятна начали бы возвращаться в одну и
    ту же композицию, и движение стало бы читаться как петля.
 
@@ -584,7 +615,13 @@ html.kb-open .js-bottom-nav { display: none; }
 }
 @keyframes aurora-drift-3 {
   from { transform: translate3d(0, 0, 0) scale(.95); opacity: .85; }
-  to   { transform: translate3d(172px, -120px, 0) scale(1.24); opacity: 1; }
+  to   { transform: translate3d(150px, -80px, 0) scale(1.2); opacity: 1; }
+}
+/* Четвёртое: якорь снизу, поэтому вертикаль почти не трогаем (−40px) — иначе
+   низ снова оголится. Горизонталь широкая для читаемого движения. */
+@keyframes aurora-drift-4 {
+  from { transform: translate3d(0, 0, 0) scale(1); opacity: .8; }
+  to   { transform: translate3d(-140px, -40px, 0) scale(1.12); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
