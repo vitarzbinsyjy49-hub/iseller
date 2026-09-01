@@ -13,6 +13,7 @@ from app.api import admin, admin_crm, admin_promo, admin_users, ai, auth, cart, 
 from app.api import fx as fx_router
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
+from app.models import ad_touch as _ad_touch  # noqa: F401
 from app.models import analytics_event as _analytics_event  # noqa: F401
 from app.models import cart as _cart  # noqa: F401
 from app.models import favorite as _favorite  # noqa: F401

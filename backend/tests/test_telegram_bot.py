@@ -78,11 +78,27 @@ def test_parse_command(text, expected):
 
 # ---------------------------------------------------------------- /start
 
-def test_start_text_matches_spec():
+def test_start_text_leads_with_the_offer_not_the_disclaimer():
+    """Порядок абзацев — решение, а не вёрстка. Первый экран после «Запустить»
+    видит в том числе платный трафик, за который заплачено поштучно: сначала
+    ассортимент, наличие и как забрать, и только потом дисклеймер. Раньше он
+    стоял вторым и работал ушатом холодной воды ровно там, где человек решает,
+    оставаться ли."""
     reply = build_reply(private_message("/start"))
-    assert reply.text.startswith("Добро пожаловать в AI Seller 👋")
-    assert "Техника Apple, Dyson и PlayStation по актуальным ценам." in reply.text
-    assert "AI-подбором" in reply.text
+    assert reply.text.startswith("AI Seller — техника Apple, Dyson и PlayStation 👋")
+    assert "в наличии" in reply.text
+    assert "гарантия 1 месяц" in reply.text
+    # Дисклеймер остаётся, но последним абзацем.
+    assert reply.text.index("в наличии") < reply.text.index("не интернет-магазин")
+
+
+def test_welcome_avoids_superlatives():
+    """По ст. 5 ФЗ «О рекламе» превосходная степень требует доказательств, и
+    модерация Директа на неё реагирует. Текст бота обязан совпадать по смыслу с
+    текстом объявлений — значит и здесь её быть не должно."""
+    lowered = telegram_bot.WELCOME.lower()
+    for word in ("самые", "самый", "самая", "лучш", "дешевле всех", "№1"):
+        assert word not in lowered, word
 
 
 def test_welcome_includes_legal_disclaimer():
@@ -142,13 +158,13 @@ def test_every_declared_command_gets_an_answer():
 
 def test_plain_text_gets_hint_and_main_keyboard():
     reply = build_reply(private_message("хочу айфон"))
-    assert reply.text == "Откройте магазин или воспользуйтесь AI-подбором."
+    assert reply.text == telegram_bot.FALLBACK_TEXT
     assert reply.keyboard == build_reply(private_message("/start")).keyboard
 
 
 def test_unknown_command_answers_instead_of_silence():
     reply = build_reply(private_message("/catalogue"))   # опечатка
-    assert reply.text == "Откройте магазин или воспользуйтесь AI-подбором."
+    assert reply.text == telegram_bot.FALLBACK_TEXT
 
 
 # ---------------------------------------------------------------- что игнорируем
@@ -181,7 +197,7 @@ def test_missing_urls_drop_buttons_but_keep_the_answer(monkeypatch):
     monkeypatch.setattr(settings, "MINI_APP_URL", "", raising=False)
     monkeypatch.setattr(settings, "TELEGRAM_CHANNEL_URL", "", raising=False)
     reply = build_reply(private_message("/start"))
-    assert reply.text.startswith("Добро пожаловать")
+    assert reply.text == telegram_bot.WELCOME
     assert [b["url"] for b in all_buttons(reply)] == ["https://t.me/manager"]
 
 
@@ -231,7 +247,7 @@ def test_webhook_sends_reply(client, monkeypatch):
     assert len(sent) == 1
     chat_id, reply, incoming_message_id = sent[0]
     assert chat_id == 777
-    assert reply.text.startswith("Добро пожаловать")
+    assert reply.text == telegram_bot.WELCOME
     assert incoming_message_id == 10  # message_id из private_message()
 
 
@@ -425,7 +441,7 @@ def test_requests_payload_opens_the_orders_screen_focused():
 def test_unknown_payload_falls_back_to_the_main_menu():
     """Устаревшая ссылка из старого поста не должна упираться в тишину."""
     reply = build_reply(private_message("/start price_deleted_section"))
-    assert reply.text.startswith("Добро пожаловать")
+    assert reply.text == telegram_bot.WELCOME
 
 
 def test_sell_payload_opens_the_wizard_focused():
@@ -513,7 +529,7 @@ def test_shared_product_link_without_mini_app_falls_back_to_menu(monkeypatch):
     """
     monkeypatch.setattr(settings, "MINI_APP_URL", "", raising=False)
     reply = build_reply(private_message("/start product_42"))
-    assert reply.text.startswith("Добро пожаловать")
+    assert reply.text == telegram_bot.WELCOME
 
 
 # ------------------------------------------------- разметка ответов (ревизия)

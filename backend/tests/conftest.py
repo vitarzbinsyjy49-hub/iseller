@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.session import Base
+from app.models.ad_touch import AdTouch  # noqa: F401 — регистрация таблицы (первое касание рекламы)
 from app.models.product import Product  # noqa: F401 — регистрация таблицы
 from app.models.user import User  # noqa: F401 — регистрация таблицы (FK избранного)
 from app.models.favorite import ProductFavorite  # noqa: F401 — регистрация таблицы

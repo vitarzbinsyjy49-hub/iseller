@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
+from app.services import ad_touch
 from app.services.telegram_bot import build_reply, send_reply
 
 logger = logging.getLogger("techshop.telegram")
@@ -59,6 +60,10 @@ async def telegram_webhook(
         chat_id = (message.get("chat") or {}).get("id")
         if chat_id is None:
             return {"ok": True}
+        # То же самое, что делает long polling: транспорт разный, атрибуция
+        # общая. Разъедься эти две ветки — источник писался бы только при одном
+        # способе приёма апдейтов, и это заметили бы после первой же кампании.
+        ad_touch.remember_from_update(db, update)
         send_reply(chat_id, reply, incoming_message_id=message.get("message_id"), db=db)
     except Exception:  # noqa: BLE001 — см. пункт 1 в докстринге модуля
         logger.exception(

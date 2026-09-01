@@ -16,6 +16,7 @@ from app.core.security import (
     verify_telegram_init_data,
 )
 from app.services.token_revocation import is_refresh_token_revoked, revoke_refresh_token
+from app.services import ad_touch
 from app.services.telegram_bot import parse_ad_payload
 from app.db.audit import audit
 from app.db.session import get_db
@@ -45,6 +46,16 @@ def _get_or_create_user(
     # настоящий источник. product_/share-ссылки в start_param сюда не попадают
     # намеренно — это не рекламный канал, а шеринг между людьми.
     ad_slug = parse_ad_payload(start_param) if (created and start_param) else None
+    if created and ad_slug is None:
+        # Метка не пришла в start_param — смотрим первое касание в чате с ботом
+        # (t.me/<bot>?start=ad_*): Telegram НЕ прокидывает start_param в Mini
+        # App, открытый web_app-кнопкой из чата, поэтому по такой ссылке
+        # источник может дойти до нас только так. Приоритет остаётся за
+        # start_param: он точнее и приходит в том же запросе.
+        # Условие `created` общее с веткой выше не случайно: первое касание —
+        # это первое касание, и у существующего пользователя оно ничего не
+        # переписывает, как и рекламный start_param.
+        ad_slug = ad_touch.slug_for(db, tg_user["id"])
     if ad_slug is not None:
         user.acquisition_source = f"ad_{ad_slug}"
     db.commit()

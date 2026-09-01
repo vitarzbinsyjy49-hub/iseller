@@ -28,6 +28,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import setup_logging
+from app.services import ad_touch
 from app.services.telegram_bot import (
     TELEGRAM_API,
     build_reply,
@@ -321,6 +322,13 @@ def run() -> int:
                     # процесса и пропадает вместе с ней. См. telegram_bot.send_reply.
                     from app.db.session import SessionLocal
                     with SessionLocal() as db:
+                        # Первое касание рекламы пишем ДО ответа: ответ уходит в
+                        # сеть (через WARP-прокси) и может не дойти, а источник
+                        # трафика к этому моменту уже известен и терять его
+                        # незачем. Функция best-effort — свои ошибки гасит сама.
+                        slug = ad_touch.remember_from_update(db, update)
+                        if slug:
+                            logger.info("первое касание рекламы: %s (чат %s)", slug, chat_id)
                         send_reply(chat_id, reply, incoming_message_id=message.get("message_id"), db=db)
                     logger.info("ответ отправлен в чат %s", chat_id)
                 except Exception:  # noqa: BLE001 — один плохой апдейт не роняет бота

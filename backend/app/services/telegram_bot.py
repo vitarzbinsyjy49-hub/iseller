@@ -38,20 +38,39 @@ def telegram_http_kwargs() -> dict:
     return {"proxy": proxy} if proxy else {}
 
 
+#: Первый экран после «Запустить» — в том числе для платного трафика, за
+#: который заплачено поштучно. Порядок абзацев здесь — решение, а не вёрстка:
+#: сначала то, ради чего человек кликнул (ассортимент, наличие, как забрать),
+#: и только потом дисклеймер. Раньше он стоял вторым и работал ушатом холодной
+#: воды ровно на том месте, где человек решает, оставаться ли.
+#:
+#: Дисклеймер не убран и убран быть не может: он снимает риск квалификации как
+#: «дистанционной торговли» — сделка идёт очно, а не через бота.
+#:
+#: Превосходной степени («самые низкие цены», «лучший выбор») здесь нет
+#: намеренно: по ст. 5 ФЗ «О рекламе» такое утверждение требует доказательств,
+#: и модерация Яндекс.Директа на него реагирует. Все факты ниже взяты из самого
+#: проекта, а не придуманы под объявление: гарантия 1 месяц — warranty_months=1
+#: у всех товаров каталога, Горбушка и проверка при вас — из info_posts.py и
+#: экрана «Профиль» Mini App. Текст объявлений обязан совпадать с этим по
+#: смыслу, иначе объявления не пройдут модерацию.
 WELCOME = (
-    "Добро пожаловать в AI Seller 👋\n"
+    "AI Seller — техника Apple, Dyson и PlayStation 👋\n"
     "\n"
-    "Техника Apple, Dyson и PlayStation по актуальным ценам.\n"
+    "В каталоге только то, что есть в наличии: цена, фото и характеристики "
+    "по каждой позиции.\n"
     "\n"
-    "Откройте каталог или воспользуйтесь AI-подбором — он поможет выбрать "
-    "устройство под ваши задачи и бюджет.\n"
+    "Забрать можно на Горбушке в Москве или заказать доставку по России. "
+    "Проверяем технику при вас, оплата после проверки, гарантия 1 месяц.\n"
     "\n"
-    "ℹ️ AI Seller — информационный ИИ-каталог, не интернет-магазин. Бот и "
-    "приложение помогают подобрать технику и оформить заявку; сама сделка "
-    "— оплата и передача товара — проходит очно, наличными, при получении."
+    "ℹ️ Информационный ИИ-каталог, а не интернет-магазин: бот помогает "
+    "подобрать технику и оформить заявку, сделка проходит очно при получении."
 )
 
-FALLBACK_TEXT = "Откройте магазин или воспользуйтесь AI-подбором."
+#: Ответ на обычный текст и на опечатку в команде. Клавиатура под ним — та же
+#: main_keyboard, поэтому и называем разделы её же словами: «магазин» в тексте
+#: против «каталога» на кнопке заставлял человека искать несуществующий пункт.
+FALLBACK_TEXT = "Откройте каталог или подберите технику с AI."
 
 # Список для setMyCommands: в меню Telegram команда идёт без ведущего слэша.
 BOT_COMMANDS: list[tuple[str, str]] = [
@@ -174,35 +193,86 @@ def parse_product_payload(payload: str) -> int | None:
     return value if value > 0 else None
 
 
-#: Префикс рекламных payload'ов: t.me/<bot>/<app>?startapp=ad_<канал>. Открытый
-#: напрямую (startapp), он же попадает в initDataUnsafe.start_param на фронте и
-#: летит в /auth/telegram — так appearance пишет acquisition_source (см.
-#: app/api/auth.py). Через обычный чат-диплинк (?start=) source не долетает —
-#: Telegram не прокидывает start_param в Mini App, открытый кнопкой из чата,
-#: поэтому для рекламных постов используем ИМЕННО ?startapp=, а не ?start=.
+#: Префикс рекламных payload'ов: ad_<кампания>. Работает по обеим ссылкам:
+#: t.me/<bot>/<app>?startapp=ad_<кампания> (прямой вход в Mini App — Telegram
+#: кладёт метку в initDataUnsafe.start_param, фронт отдаёт её в /auth/telegram)
+#: и t.me/<bot>?start=ad_<кампания> (вход в ЧАТ с ботом). Во втором случае
+#: Telegram start_param в Mini App НЕ прокидывает — источник пишется другим
+#: путём, через первое касание (см. services/ad_touch.py). Платный трафик ведём
+#: именно в чат: только он даёт боту право писать человеку дальше.
 AD_PAYLOAD_PREFIX = "ad_"
 
 #: Символы, допустимые в метке канала — ровно то, что Telegram пропускает в
 #: startapp-параметре (A-Z a-z 0-9 _ -).
 AD_SLUG_ALPHABET = frozenset(string.ascii_letters + string.digits + "_-")
 
+#: Потолок метки. Считается вместе с остальным: «ad_» (3) + метка (40) +
+#: «_product_» (9) + id товара (12, кап parse_product_payload) = ровно 64 —
+#: лимит Telegram на start-параметр. Двигать любое из этих чисел вверх нельзя,
+#: не пересчитав остальные (держит test_ad_product_payload_fits_telegram_limit).
+AD_SLUG_MAX = 40
 
-def parse_ad_payload(payload: str) -> str | None:
-    """«ad_moskvatoday» -> «moskvatoday» — метка рекламного канала, иначе None.
+#: Хвост рекламного payload'а с товаром: «ad_direct_product_42».
+#: Формат согласован с обычным «product_42» из parse_product_payload и обратно
+#: совместим: до этого патча такая строка проходила как метка целиком и вела в
+#: каталог, поэтому старые ссылки не ломаются ни в какой момент выкатки.
+AD_PRODUCT_SEPARATOR = "_product_"
 
-    Тот же принцип, что у parse_product_payload: строгий allowlist символов,
-    потому что payload собирает кто угодно (в данном случае — мы сами, вручную,
-    под каждое размещение) и он летит и в URL кнопки, и в БД как есть.
+
+def _valid_ad_slug(slug: str) -> str | None:
+    """Метка кампании, если она проходит allowlist, иначе None.
+
     Allowlist перечислен явно, а не через `isalnum()`: тот пропускает юникод
     («ad_москва», «ad_٤٢»), а Telegram в startapp отдаёт только эти символы —
     всё остальное к нам приходит мимо реальной ссылки и источником не является.
     """
-    if not payload.startswith(AD_PAYLOAD_PREFIX):
-        return None
-    slug = payload[len(AD_PAYLOAD_PREFIX):]
-    if not slug or len(slug) > 40 or not all(c in AD_SLUG_ALPHABET for c in slug):
+    if not slug or len(slug) > AD_SLUG_MAX or not all(c in AD_SLUG_ALPHABET for c in slug):
         return None
     return slug
+
+
+def split_ad_payload(payload: str) -> tuple[str | None, int | None]:
+    """«ad_direct_product_42» -> («direct», 42); «ad_direct» -> («direct», None).
+
+    Метка и товар разбираются ВМЕСТЕ и ровно в одном месте: разъедься они —
+    объявление вело бы на один экран, а источник писался бы от другой кампании.
+
+    Метка НЕ включает хвост товара намеренно. Иначе каждое объявление стало бы
+    отдельным источником, и точный `==` фильтр админки перестал бы агрегировать
+    кампанию целиком.
+
+    Разбор с конца (rpartition) и с откатом: если хвост после «_product_» не
+    похож на id товара, вся строка снова считается меткой — ровно то поведение,
+    которое было до этого патча. Поэтому «ad_product_42» — это по-прежнему
+    кампания «product_42» и каталог, а не товар без кампании.
+    """
+    if not payload.startswith(AD_PAYLOAD_PREFIX):
+        return None, None
+    body = payload[len(AD_PAYLOAD_PREFIX):]
+    head, separator, tail = body.rpartition(AD_PRODUCT_SEPARATOR)
+    if separator:
+        slug = _valid_ad_slug(head)
+        # Валидация id — та же и тем же кодом, что у обычного диплинка на товар:
+        # только ASCII-цифры, ограничение длины, > 0.
+        product_id = parse_product_payload(f"product_{tail}")
+        if slug is not None and product_id is not None:
+            return slug, product_id
+    return _valid_ad_slug(body), None
+
+
+def parse_ad_payload(payload: str) -> str | None:
+    """«ad_moskvatoday» -> «moskvatoday» — метка рекламной кампании, иначе None.
+
+    Тип возврата фиксирован: функцию зовут из api/auth.py и из services/ad_touch.py,
+    и «метка» — это всё, что им нужно. Товар из того же payload'а достаёт
+    parse_ad_product_id.
+    """
+    return split_ad_payload(payload)[0]
+
+
+def parse_ad_product_id(payload: str) -> int | None:
+    """«ad_direct_product_42» -> 42. Рекламный payload без товара -> None."""
+    return split_ad_payload(payload)[1]
 
 
 #: Статические payload'ы диплинков -> экран Mini App. Словарь, а не цепочка
@@ -236,10 +306,15 @@ def resolve_payload_path(payload: str) -> str | None:
     product_id = parse_product_payload(payload)
     if product_id is not None:
         return f"/product/{product_id}"
-    # Рекламная метка сама по себе не экран — открываем каталог, как по
-    # обычной ссылке "catalog". Источник трафика фронт всё равно передаст в
-    # /auth/telegram отдельным полем (start_param), это чисто про навигацию.
-    if parse_ad_payload(payload) is not None:
+    # Рекламный payload. С товаром — сразу карточка: человек кликнул объявление
+    # «PS5 Slim за 42 900» и обязан увидеть именно её, а не витрину, на которой
+    # эту PS5 ещё надо найти. Без товара метка сама по себе не экран — открываем
+    # каталог, как по обычной ссылке "catalog". Атрибуция идёт отдельно (см.
+    # AD_PAYLOAD_PREFIX), здесь чисто про навигацию.
+    ad_slug, ad_product_id = split_ad_payload(payload)
+    if ad_slug is not None:
+        if ad_product_id is not None:
+            return f"/product/{ad_product_id}"
         return STATIC_ROUTES["catalog"]
     from app.services.price_posts import SECTIONS_BY_SLUG   # локально: избегаем цикла
 
@@ -254,11 +329,15 @@ def reply_for_payload(payload: str) -> Reply | None:
     """
     from app.services.price_posts import SECTIONS_BY_SLUG   # локально: избегаем цикла
 
-    # Рекламная метка через чат-диплинк (?start=, не ?startapp=) — bonus-путь
-    # для старых клиентов/ручных ссылок. Атрибуция здесь не пишется (Telegram
-    # не прокидывает start_param в web_app-кнопку, открытую из чата), но
-    # человек хотя бы попадает в каталог, а не в безликое главное меню.
-    if payload == "catalog" or parse_ad_payload(payload) is not None:
+    # Рекламный переход через чат (?start=). Ответ обязан совпадать с тем, куда
+    # ведёт resolve_payload_path тот же payload по ?startapp=, иначе человек с
+    # двух ссылок на одно объявление попадёт на разные экраны.
+    ad_slug, ad_product_id = split_ad_payload(payload)
+    if ad_slug is not None and ad_product_id is not None:
+        # Переиспользуем ветку обычного диплинка на товар, а не дублируем её:
+        # два похожих ответа разъезжаются на первой же правке текста.
+        return reply_for_payload(f"product_{ad_product_id}")
+    if payload == "catalog" or ad_slug is not None:
         return build_reply({"message": {"chat": {"type": "private"}, "text": "/catalog"}})
     if payload == "ai":
         return build_reply({"message": {"chat": {"type": "private"}, "text": "/ai"}})
