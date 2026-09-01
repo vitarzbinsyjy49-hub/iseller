@@ -297,6 +297,9 @@ type Lead = {
   manager_comment: string | null; assigned_to?: string | null;
   created_at: string; updated_at?: string | null;
   items_count?: number; estimated_total?: number | null; currency?: string;
+  // Рекламная кампания, приведшая АВТОРА заявки (users.acquisition_source).
+  // Это не source: тот — экран происхождения заявки внутри приложения.
+  acquisition_source?: string | null;
   items?: LeadItem[];
   status_history?: { from: string | null; to: string | null; actor: string; created_at: string | null }[];
 };
@@ -367,7 +370,7 @@ function Leads({ token }: { token: string }) {
               <thead>
                 <tr style={{ color: C.sub, textAlign: "left" }}>
                   {["№", "Дата", "Клиент", "Телефон", "Telegram", "Позиции", "Сумма",
-                    "Получение", "Статус", "Источник", "Менеджер", ""].map((h) => (
+                    "Получение", "Статус", "Источник", "Реклама", "Менеджер", ""].map((h) => (
                     <th key={h} style={{ padding: "10px 12px", borderBottom: `1px solid ${C.border}`, fontWeight: 600, whiteSpace: "nowrap" }}>
                       {h}
                     </th>
@@ -411,6 +414,15 @@ function Leads({ token }: { token: string }) {
                     </td>
                     <td style={td}><StatusPill status={l.status} /></td>
                     <td style={{ ...td, color: C.sub, whiteSpace: "nowrap" }}>{SOURCE_RU[l.source] ?? l.source}</td>
+                    {/* Рекламная кампания автора заявки. Считать регистрации по
+                        каналу мы умели и раньше (Клиенты -> фильтр «Источник»),
+                        а деньги приносят заявки — их разбивки не было вовсе.
+                        Пусто = органика или приход до запуска атрибуции. */}
+                    <td style={{ ...td, color: C.sub, whiteSpace: "nowrap" }}>
+                      {l.acquisition_source
+                        ? <code style={{ fontSize: 12 }}>{l.acquisition_source}</code>
+                        : "—"}
+                    </td>
                     <td style={{ ...td, color: C.sub }}>{l.assigned_to || "—"}</td>
                     <td style={td}>
                       <button style={{ ...btnGhost, padding: "6px 10px", fontSize: 13 }} onClick={() => setOpenId(l.id)}>

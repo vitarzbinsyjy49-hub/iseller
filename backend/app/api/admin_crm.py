@@ -51,7 +51,34 @@ def list_leads(
     if type_filter:
         stmt = stmt.where(Lead.lead_type == type_filter)
     rows = db.execute(stmt.limit(limit)).scalars().all()
-    return {"leads": [l.to_dict() for l in rows]}
+    sources = _acquisition_sources(db, rows)
+    return {"leads": [
+        {**lead.to_dict(), "acquisition_source": sources.get(lead.user_id)}
+        for lead in rows
+    ]}
+
+
+def _acquisition_sources(db: Session, leads: list[Lead]) -> dict[int, str | None]:
+    """user_id -> рекламный источник его первого прихода (ad_<кампания>).
+
+    Зачем отдельно от Lead.source. `Lead.source` — это ЭКРАН происхождения
+    (`ai`, `product`, `catalog`, `home`), и админка с витриной читают один и тот
+    же LEAD_SOURCES: запиши туда «ad_direct» — и заявка получит источник,
+    которого нет в справочнике. Рекламный канал живёт в users и приезжает сюда
+    джойном, без изменения схемы заявки.
+
+    Считать регистрации по кампании мы умели и раньше (GET /admin/users?source=),
+    а деньги приносят заявки — их разбивки не было вовсе.
+
+    Отдельным запросом по списку id, а не JOIN'ом в основном стейтменте: тот же
+    приём, что в lead_detail для товаров, и он не мешает фильтрам и лимиту выше.
+    """
+    ids = {lead.user_id for lead in leads if lead.user_id}
+    if not ids:
+        return {}
+    return dict(db.execute(
+        select(User.id, User.acquisition_source).where(User.id.in_(ids))
+    ).all())
 
 
 @router.get("/leads/{lead_id}")
