@@ -218,8 +218,8 @@ def main() -> int:
     args = parser.parse_args()
     dry_run = not args.confirm
 
-    phones, failed_phones = parse((DATA / "bsa_2026_08_27.txt").read_text(encoding="utf-8"))
-    macs, failed_macs = parse_mac((DATA / "bsa_mac_2026_08_27.txt").read_text(encoding="utf-8"))
+    phones, failed_phones = parse((DATA / "bsa_2026_09_02.txt").read_text(encoding="utf-8"))
+    macs, failed_macs = parse_mac((DATA / "bsa_mac_2026_09_02.txt").read_text(encoding="utf-8"))
     if failed_phones or failed_macs:
         print("!! не разобраны строки, импорт остановлен:")
         for line in failed_phones + failed_macs:

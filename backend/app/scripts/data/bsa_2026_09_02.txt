@@ -1,0 +1,135 @@
+# Выгрузка BSA от 02.09.2026, как прислана. НЕ редактировать вручную:
+# это исходник, по которому парсер строит каталог. Правки — в парсер.
+
+## iPhone 17 Pro / 17 Pro Max
+17 Pro 256/512/1TB
+17 Pro 256 Silver-102.000🇭🇰🇰🇷(1sim+e sim)
+17 Pro 256 Silver-98.500🇺🇸🇯🇵е sim
+17 Pro 256 Silver-96.000🇺🇸е sim актив 🔥
+17 Pro 256 Orange-99.700🇰🇷🇭🇰(1sim+e sim)
+17 Pro 256 Orange-95.800🇯🇵е sim
+17 Pro 256 Orange-93.700🇺🇸е sim актив 🔥
+17 Pro 256 Blue-101.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 256 Blue-98.000🇯🇵е sim
+17 Pro 256 Blue-93.700🇺🇸е sim актив 🔥
+17 Pro 512 Silver-126.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 512 Silver-115.000🇯🇵e sim
+17 Pro 512 Silver-110.500🇺🇸e sim актив 🔥
+17 Pro 512 Orange-119.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro 512 Orange-115.000🇯🇵e sim
+17 Pro 512 Orange-109.500🇺🇸e sim актив 🔥
+17 Pro 512 Blue-121.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro 512 Blue-116.500🇯🇵e sim
+17 Pro 512 Blue eSim ASIS 🇯🇵 -104000
+17 Pro 512 Orange Sim+eSim ASIS 🇭🇰 -113000
+17 Pro 512 Orange eSim ASIS 🇯🇵 -104000
+17 Pro 1TB Silver-142.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 1TB Silver-132.000🇰🇷🇭🇰(1sim+e sim) актив 🔥
+17 Pro 1TB Silver-128.700🇯🇵eSIM
+17 Pro 1TB Silver-125.500🇺🇸eSIM актив 🔥
+17 Pro 1TB Silver-112.000🇯🇵eSIM(актив/111 циклов )
+17 Pro 1TB Orange-135.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 1TB Orange-125.500🇺🇸🇯🇵eSim
+17 Pro 1TB Blue-138.700🇰🇷🇭🇰(1sim+e sim)
+17 Pro 1TB Blue-135.500🇰🇷🇭🇰(1sim+e sim) актив 🔥
+17 Pro 1TB Blue-126.700🇯🇵eSim
+17 Pro 1TB Silver eSim ASIS 🇯🇵-116000
+17 Pro 1TB Blue eSim ASIS 🇯🇵-115000
+17 Pro 1TB Orange eSim ASIS 🇯🇵-114000
+17 Pro Max 256/512/1TB/2TB
+17 Pro Max 256 Silver-112.700🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 256 Silver-105.000🇯🇵e Sim
+17 Pro Max 256 Silver-102.000🇺🇸e Sim актив 🔥
+17 Pro Max 256 Orange-110.700🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 256 Orange -99.000 (Новый, замена дисплея АСЦ)🇭🇰
+17 Pro Max 256 Orange-103.700🇺🇸🇯🇵е sim
+17 Pro Max 256 Orange-100.000🇺🇸е sim актив 🔥
+17 Pro Max 256 Blue-111.500🇭🇰🇰🇷(1sim+e sim)
+17 Pro Max 256 Blue-104.200🇺🇸🇯🇵е sim
+17 Pro Max 256 Blue-100.500🇺🇸е sim актив 🔥
+17 Pro Max 512 Silver-132.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 512 Silver-122.000🇯🇵e sim
+17 Pro Max 512 Orange-130.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 512 Orange-119.500🇭🇰(1sim+e sim) замена дисплея в СЦ
+17 Pro Max 512 Orange-119.000🇯🇵🇺🇸e sim
+17 Pro Max 512 Orange-116.000🇺🇸e sim актив 🔥
+17 Pro Max 512 Blue-129.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 512 Blue-121.500🇺🇸🇯🇵e sim
+17 Pro Max 512 Blue-116.500🇺🇸e sim актив 🔥
+17 Pro Max 1TB Silver-158.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 1TB Silver-138.500🇯🇵e sim
+17 Pro Max 1TB Orange-155.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 1TB Orange-136.000🇰🇷🇭🇰ASIS
+17 Pro Max 1TB Orange-134.000🇯🇵e sim
+17 Pro Max 1TB Blue-154.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 1TB Blue-135.500🇯🇵e sim
+17 Pro Max 1TB Blue-132.000🇺🇸e simа актив 🔥
+17 Pro Max 1TB Blue eSim ASIS 🇯🇵 — 126000
+17 Pro Max 1TB Orange eSim ASIS 🇯🇵 — 126000
+17 Pro Max 2TB Silver-175.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 2TB Silver-162.500🇯🇵е sim
+17 Pro Max 2TB Orange-169.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 2TB Orange-147.500🇺🇸🇯🇵е sim
+17 Pro Max 2TB Orange-145.000🇺🇸е sim актив 🔥
+17 Pro Max 2TB Blue-172.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 2TB Blue-150.000🇯🇵e sim
+17 Pro Max 2TB Blue eSim ASIS 🇯🇵-132500
+17 Pro Max 2TB Orange eSim ASIS 🇯🇵-132500
+
+## iPhone 17
+17e 256 Black -57.700🇮🇳(1Sim + eSim )
+17e 256 Black-55.200🇺🇸eSim
+17e 256 Black-49.300🇺🇸eSim актив 🔥
+17e 256 White -56.700🇮🇳(1Sim + eSim )
+17e 256 White -54.000🇺🇸eSim
+17e 256 White -49.300🇺🇸eSim актив🔥
+17e 256 Pink -56.700🇮🇳(1Sim + eSim )
+17e 512 Black-73.000;🇮🇳(1 Sim + eSim )
+17e 512 Black-65.000🇺🇸e sim
+17e 512 White -73.000🇮🇳(1 Sim + eSim )
+17e 512 White -66.000;🇯🇵eSim
+17e 512 Pink -73.200🇮🇳(1 Sim + eSim )
+17e 512 Pink-66.000;🇯🇵eSim
+17 256 Black-74.200🇮🇳(1 sim+e sim )
+17 256 Black -69.000🇺🇸eSim актив🔥
+17 256 Black   69.200🇺🇸eSim ASIS
+17 256 Blue-74.000🇮🇳(1 sim+e sim )
+17 256 Blue-72.000🇺🇸eSim
+17 256 Blue-68.500🇺🇸eSim актив 🔥
+17 256 Mist Blue -🇺🇸 69.200 eSim ASIS
+17 256 White-74.200🇮🇳 (1 sim+e sim)
+17 256 White-70.500🇮🇳 (1 sim+e sim)актив 🔥
+17 256 White -72.500🇺🇸eSim
+17 256 White -🇺🇸 69.200 eSim ASIS
+17 256 Sage-74.000🇮🇳(1 sim+e sim)
+17 256 Sage -72.700🇯🇵e sim
+17 256 Sage -70.000🇺🇸e sim актив 🔥
+17 256 Sage -🇺🇸 69.200 eSim ASIS
+17 256 Lavender-74.500🇮🇳(1 sim+e sim )
+17 256 Lavender-68.000🇺🇸eSim актив 🔥
+17 256 Lavender- 🇺🇸 69.200 eSim ASIS
+17 512 White-90.500🇮🇳1 sim+e sim )
+17 512 White-86.000🇮🇳1 sim+e sim ) актив 🔥
+17 512 White -83.500🇯🇵eSim актив 🔥
+17 512 Sage-91.500🇮🇳(1 sim+e sim )
+17 512 Sage-85.700🇮🇳(1 sim+e sim ) актив 🔥
+17 512 Sage-87.000🇺🇸🇯🇵eSim
+17 512 Blue-88.500🇮🇳(1 sim+e sim )
+17 512 Blue-85.500🇮🇳(1 sim+e sim )актив 🔥
+17 512 Blue -86.000🇺🇸🇯🇵eSim
+17 512 Lavender-93.000🇮🇳(1 sim+e sim )
+17 512 Lavender-87.000🇮🇳(1 sim+e sim ) актив 🔥
+17 512 Lavender-89.000🇺🇸🇯🇵е sim
+17 512 Lavender-86.500*🇺🇸е sim актив 🔥
+17 512 Black-90.500🇮🇳(1 sim+e sim )
+17 512 Black-84.000🇮🇳(1 sim+e sim ) актив 🔥
+17 512 Black -87.700 🇺🇸eSim
+17 512 Black -83.000 🇯🇵🇺🇸eSim актив 🔥
+17 512 Black eSim ASIS 🇺🇸 -79000
+17 512 Black (Sim+Esim) ASIS 🇭🇰-82000
+17 512 White eSim ASIS 🇺🇸 -79000
+17 512 White (Sim+Esim) ASIS 🇭🇰 -82000
+17 512 Mist Blue eSim ASIS 🇺🇸 -79000
+17 512 Mist Blue (Sim+Esim) ASIS 🇭🇰 -82000
+17 512 Sage eSim ASIS 🇺🇸 -79000
+17 512 Lavender (Sim+Esim) ASIS 🇭🇰-82000
