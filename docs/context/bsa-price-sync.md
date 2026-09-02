@@ -27,8 +27,7 @@
 | `backend/app/scripts/import_bsa.py` | оркестратор: читает txt из `data/`, парсит, апсертит `Product` по SKU, тянет фото с `rocketniks.ru`, dry-run по умолчанию |
 | `backend/app/scripts/data/bsa_*.txt`, `bsa_mac_*.txt` | входные файлы — **не сырой JSON-экспорт**, а вручную вычищенный текст прайса, см. ниже |
 
-Прогонялось один раз, 11.08.2026 — 175 позиций (`git log` по этим файлам).
-С тех пор ни разу, задокументировано не было — этот файл первый.
+Прогоны: 11.08, 18.08, 27.08, 02.09.2026 (`git log` по `data/`).
 
 ## Шаги на новую выгрузку
 
@@ -39,16 +38,33 @@
 
 2. **Достать читаемый текст сообщений.** Структура экспорта: `messages[]`,
    `type=="message"`, поле `text` — либо строка, либо список chunks (строка
-   или `{"type":..., "text":...}`) — конкатенировать. Пример разбора (Python):
+   или `{"type":..., "text":...}`) — конкатенировать.
+
+   **Одного `text` НЕ ХВАТАЕТ.** Форматированные посты Telegram Desktop
+   отдаёт деревом `rich_message` (`blocks[] -> paragraph -> concat -> bold /
+   text_link / plain`), а `text` у них ПУСТАЯ строка. В выгрузке от
+   02.09.2026 именно так пришли оба поста с iPhone (id 12966 — 17/17e/Air,
+   id 12968 — 17 Pro/Pro Max): плоский разбор показывал «сообщение без
+   текста», и весь блок iPhone молча пропадал — а это основная часть
+   прайса. Разбирать надо ОБА поля: `text` или, если он пуст,
+   рекурсивный обход `rich_message`. Пример разбора (Python):
    ```python
    import json
    data = json.load(open(path, encoding="utf-8"))
    def flatten(t):
        if isinstance(t, str): return t
        return "".join(c if isinstance(c, str) else c.get("text","") for c in t)
+   def rich(node):
+       if isinstance(node, str): return node
+       if isinstance(node, list): return "".join(rich(x) for x in node)
+       if isinstance(node, dict):
+           if node.get("type") == "paragraph": return rich(node.get("text")) + "\n"
+           if "blocks" in node: return "".join(rich(b) for b in node["blocks"])
+           if "text" in node: return rich(node["text"])
+       return ""
    for m in data["messages"]:
        if m.get("type") == "message":
-           txt = flatten(m.get("text", ""))
+           txt = flatten(m.get("text", "")) or rich(m.get("rich_message"))
    ```
    (Уже сделано один раз для выгрузки от 18.08.2026 — сырой вывод лежит в
    `C:\Users\pipij\AppData\Local\Temp\claude\C--iseller-demo\0b1b3e94-7774-4138-ada7-6353b3b80dff\scratchpad\bigsale_texts.txt`,
@@ -104,14 +120,38 @@
    Показать пользователю вывод (создан/обновлён/без изменений/без фото) —
    владелец подтверждает руками, это НЕ автоматическое применение.
 
-7. **Только после подтверждения — `--confirm`.** Скрипт пишет напрямую в
+7. **Только после подтверждения — `--confirm`.** На еженедельной сверке
+   почти всегда нужен `--prices-only`: без него скрипт заводит новые карточки
+   под каждую новую комбинацию память/регион/ASIS (02.09.2026 таких было 102
+   против 40 реальных изменений цены), а состав каталога владелец ведёт сам.
+   `--diff` печатает «было → стало» построчно — это и есть то, что владелец
+   утверждает. Скрипт пишет напрямую в
    прод-БД через SQLAlchemy, в обход HTTP/админки — сделать `pg_dump` бэкап
    перед этим не помешает, если давно не было `update-server.sh` (он бэкапит
    на каждом деплое, но этот скрипт от деплоя не зависит и может запускаться
    отдельно).
 
-8. **После применения — сказать пользователю про канал.** Цены в Mini App
-   подтянутся из БД сами. Посты в `@isellerhub` (раздел админки «Прайс
-   канала») — **отдельное ручное действие**, price_posts не идёт следом
-   автоматически. Без этого напоминания легко решить, что дело сделано, хотя
-   витрина канала ещё показывает старые цены.
+8. **Посты канала — отдельный шаг, следом не идёт.** Цены в Mini App
+   подтянутся из БД сами, а `@isellerhub` продолжит показывать старые, пока
+   не применишь план `price_channel`. Это делается из админки («Прайс
+   канала») или командой на проде:
+   ```bash
+   ssh iseller "docker compose -f /opt/techshop/docker-compose.prod.yml exec -T backend python -c \"
+   from app.db.session import SessionLocal
+   from app.services import price_channel
+   db = SessionLocal()
+   slugs = [p.slug for p in price_channel.build_plan(db) if p.action == 'update']
+   print(price_channel.apply_plan(db, slugs=slugs))
+   \""
+   ```
+   `build_plan` ничего не отправляет — сначала смотреть его вывод.
+
+   **Фильтр по `action == 'update'` здесь не косметика.** Сдвиг цен меняет
+   длину строк, а секция iPhone режется на посты по длине текста — от этого
+   в плане появляется `action == 'create'` на новую страницу
+   (`price_iphone_p3` 02.09.2026). Это НОВЫЙ пост в канале, а не правка
+   существующего: спрашивать владельца отдельно, «обновить цены» такого не
+   подразумевает.
+
+   Все посты секций получают `action == 'update'` даже без единого изменения
+   цены — в тексте стоит дата, и она меняется ежедневно. Это нормально.
