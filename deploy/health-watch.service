@@ -1,0 +1,16 @@
+[Unit]
+Description=Сторож AI Seller: тревога в Telegram в момент поломки
+After=docker.service warp-svc.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/techshop/deploy/health_watch.py
+# Тревога про упавший сервер нужна именно тогда, когда что-то упало, поэтому
+# ненулевой код возврата (Telegram не принял) не должен глушить следующие
+# запуски таймера.
+SuccessExitStatus=0 1
+# Проверки ходят к docker, curl и psql — при полностью залёгшем сервере каждая
+# упирается в свой таймаут. Общий предел, чтобы запуски не наслаивались друг
+# на друга: таймер тикает раз в две минуты.
+TimeoutStartSec=100

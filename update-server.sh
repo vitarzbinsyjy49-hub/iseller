@@ -79,6 +79,13 @@ tar czf - \
   --exclude=release-evidence \
   . | ssh "$SERVER" "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
 
+# Сторож здоровья (health-watch.timer) проверяет сервер раз в две минуты и
+# пишет в Telegram, когда контейнер лёг. Пересборка стека — это ровно та
+# картина, на которую он и обучен реагировать, только тут её устраиваем мы
+# сами. Ставим паузу на 15 минут, чтобы деплой не рассылал ложных тревог;
+# файл лежит в /run и переживёт неудачный деплой не дольше перезагрузки.
+ssh "$SERVER" "mkdir -p /run && echo \$(( \$(date +%s) + 900 )) > /run/techshop-health.pause" || true
+
 echo ">> 3/5 пересобираю и перезапускаю стек"
 ssh "$SERVER" "set -e; cd $REMOTE_DIR; docker compose -f docker-compose.prod.yml up -d --build; docker image prune -f >/dev/null 2>&1 || true"
 
@@ -145,6 +152,9 @@ else
   ssh "$SERVER" "cd $REMOTE_DIR && docker compose -f docker-compose.prod.yml ps --format 'table {{.Service}}\t{{.Status}}'" || true
   exit 1
 fi
+
+# Деплой прошёл health check — стек снова боевой, сторожу можно смотреть.
+ssh "$SERVER" "rm -f /run/techshop-health.pause" || true
 
 echo ">> статус контейнеров:"
 ssh "$SERVER" "cd $REMOTE_DIR && docker compose -f docker-compose.prod.yml ps --format 'table {{.Service}}\t{{.Status}}'"
