@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { api } from "../lib/api";
 import { useAuthStore } from "../store/auth";
 import {
   addToHomeScreen,
@@ -17,6 +16,7 @@ import { track } from "../lib/analytics";
 import { fetchLoyalty, formatRate, type LoyaltyAccount } from "../lib/loyalty";
 import { useOnboardingReplayStore } from "../store/onboardingReplay";
 import { enterRefCallback } from "../lib/useEnter";
+import { useLeadsBadge } from "../store/leadsBadge";
 
 // Отдельным chunk'ом: роудмап открывают единицы, а весит он как экран.
 const RoadmapSheet = lazy(() => import("../components/RoadmapSheet"));
@@ -25,7 +25,6 @@ export default function Profile() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const config = usePublicConfig();
-  const [leadCount, setLeadCount] = useState<number | null>(null);
   // Вход в роудмап переехал сюда с чипа BETA на главной: слово «бета» уходит
   // из продукта 27 августа, а планы магазина нужны и после запуска.
   const [roadmap, setRoadmap] = useState(false);
@@ -53,9 +52,10 @@ export default function Profile() {
     }
   }, [search]);
 
-  useEffect(() => {
-    api<{ leads: unknown[] }>("/leads/my").then((d) => setLeadCount(d.leads.length)).catch(() => setLeadCount(0));
-  }, []);
+  const leadTotal = useLeadsBadge((s) => s.total);
+  const leadUnseen = useLeadsBadge((s) => s.unseen);
+  const refreshLeads = useLeadsBadge((s) => s.refresh);
+  useEffect(() => { void refreshLeads(); }, [refreshLeads]);
 
   // Счёт лояльности. Сбой запроса оставляет блок в нейтральном виде — карточка
   // с ошибкой в профиле пугает сильнее, чем отсутствие цифры.
@@ -158,14 +158,46 @@ export default function Profile() {
         </div>
       )}
 
+      {/* Заявки подняты из общего меню в отдельную кнопку: это единственная
+          строка профиля, за которой человек возвращается СПЕЦИАЛЬНО — узнать,
+          что ответил менеджер. Остальные пункты открывают справочное, и
+          соседство с ними прятало заявки в ряду равных.
+          Бейдж считает только изменения, сделанные менеджером после последнего
+          захода (lib/leads.ts, unseenLeadCount) — не общее число заявок. */}
+      <button
+        onClick={() => navigate("/requests")}
+        className="tap mt-3 flex w-full items-center gap-3 rounded-xl2 bg-surface px-4 py-4 text-left shadow-soft"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+          <Icon name="doc" className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-semibold">Мои заявки</span>
+          <span className="mt-0.5 block truncate text-xs text-muted">
+            {leadTotal === null
+              ? "Загружаем…"
+              : leadTotal === 0
+                ? "Здесь появятся ваши обращения"
+                : `Всего ${leadTotal}`}
+          </span>
+        </span>
+        {leadUnseen > 0 && (
+          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold text-white">
+            {leadUnseen}
+          </span>
+        )}
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-muted" fill="none"
+             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </button>
+
       {/* Меню */}
       <div className="mt-3 overflow-hidden rounded-xl2 bg-surface shadow-soft">
         <MenuRow icon="heart" title="Избранное"
           badge={favCount > 0 ? String(favCount) : undefined}
           subtitle={favCount > 0 ? undefined : "Сохраняйте понравившиеся товары"}
           onClick={() => navigate("/favorites")} />
-        <MenuRow icon="doc" title="Мои заявки" badge={leadCount === null ? "…" : String(leadCount)}
-          onClick={() => navigate("/requests")} />
         <MenuRow icon="clock" title="История просмотров" subtitle="Товары, которые вы открывали"
           onClick={() => navigate("/history")} />
         <MenuRow icon="pin" title="Точка выдачи" subtitle="Горбушка, Москва — ежедневно 10:00–21:00"

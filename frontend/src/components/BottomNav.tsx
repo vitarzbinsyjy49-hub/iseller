@@ -4,6 +4,7 @@ import { preloadRoute } from "../lib/routePreload";
 import { hasOpaqueDock, navSurface, supportsBackdropFilter } from "../lib/navGlass";
 import { animateNumber, prefersReducedMotion } from "../lib/motion";
 import { catalogSearchRoute } from "../lib/searchRoutes";
+import { useLeadsBadge } from "../store/leadsBadge";
 
 /** Сколько наливается стекло. Короче открытия шторки (260мс): панель не
  *  приезжает, а меняет материал — движения нет, есть проявление. */
@@ -182,6 +183,11 @@ export default function BottomNav() {
   const surface = useNavSurface(pathname);
   const [nav, setNav] = useState<HTMLElement | null>(null);
   useGlassFill(nav, surface);
+  const leadUnseen = useLeadsBadge((s) => s.unseen);
+  const refreshLeads = useLeadsBadge((s) => s.refresh);
+  // Панель живёт в Layout и переживает переходы, поэтому запрос один на сессию,
+  // а не на каждый заход в профиль. Профиль читает тот же стор.
+  useEffect(() => { void refreshLeads(); }, [refreshLeads]);
 
   return (
     // lg:hidden — на desktop навигация в DesktopHeader, мобильный bottom nav скрыт
@@ -218,10 +224,16 @@ export default function BottomNav() {
                 isActive ? "text-accent" : "text-muted"
               }`}
             >
-              <span className={`nav-icon flex h-7 min-w-10 items-center justify-center rounded-full ${
+              <span className={`nav-icon relative flex h-7 min-w-10 items-center justify-center rounded-full ${
                 isActive ? "nav-icon-active" : ""
               }`}>
                 {item.icon(isActive)}
+                {/* Точка, а не цифра: в ряду вкладок число нечитаемо мелким, а
+                    сообщить надо ровно одно — «там что-то изменилось».
+                    Цифра есть в самом профиле, на кнопке заявок. */}
+                {item.to === "/profile" && leadUnseen > 0 && (
+                  <span className="absolute right-1 top-0 h-2 w-2 rounded-full bg-accent ring-2 ring-surface" />
+                )}
               </span>
               {/* nav-label — точка, за которую подпись прячется на коротком
                   экране (index.css). Голым текстовым узлом её не выбрать. */}
