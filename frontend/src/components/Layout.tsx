@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import AuroraBackground from "./AuroraBackground";
 import BottomNav from "./BottomNav";
+import SearchOverlay from "./SearchOverlay";
 import CartBar from "./CartBar";
 import DesktopHeader from "./DesktopHeader";
 import { BrandWordmark } from "./BrandMark";
@@ -49,6 +50,7 @@ function rememberRouteScroll(routeId: string, scrollTop: number) {
  *  — в его docstring. */
 export default function Layout() {
   const location = useLocation();
+  const [searchOpen, setSearchOpen] = useState(false);
   const { isTabRoute, goBack, swipeHandlers } = usePageSwipe();
   const cart = useCart();
   const mainRef = useRef<HTMLElement>(null);
@@ -157,7 +159,12 @@ export default function Layout() {
         </div>
       </main>
       <CartBar />
-      <BottomNav />
+      {/* Поиск живёт здесь, а не на страницах: круг доступен с каждого экрана,
+          и панель обязана открываться поверх ТОГО экрана, где её позвали.
+          Состояние держит Layout — он переживает переходы между маршрутами,
+          как и сама навигация. */}
+      <BottomNav onOpenSearch={() => setSearchOpen(true)} />
+      <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }

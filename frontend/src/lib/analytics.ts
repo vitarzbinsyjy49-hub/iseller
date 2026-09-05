@@ -19,6 +19,10 @@ export type AppEvent =
   // запроса (политика v5.1.1: сырые запросы в аналитику не пишем).
   | "search_focused"
   | "search_query_submitted"
+  // Переход в раздел приложения прямо из поиска (круг в нижней навигации).
+  // Отдельное событие, а не search_query_submitted: это НЕ поиск товара, и
+  // смешав их, мы перестанем видеть, зачем поиск открывают на самом деле.
+  | "search_section_opened"
   | "search_result_clicked"
   | "search_ai_escalated"
   | "quick_scenario_clicked"

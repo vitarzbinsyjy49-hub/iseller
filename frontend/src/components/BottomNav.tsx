@@ -3,7 +3,6 @@ import { Link, useLocation } from "react-router-dom";
 import { preloadRoute } from "../lib/routePreload";
 import { hasOpaqueDock, navSurface, supportsBackdropFilter } from "../lib/navGlass";
 import { animateNumber, prefersReducedMotion } from "../lib/motion";
-import { catalogSearchRoute } from "../lib/searchRoutes";
 import { useLeadsBadge } from "../store/leadsBadge";
 
 /** Сколько наливается стекло. Короче открытия шторки (260мс): панель не
@@ -24,17 +23,6 @@ const stroke = (active: boolean) => ({
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 });
-
-/** Дописывает `focus=search` к маршруту, каким бы он ни был — включая уже
- *  готовый `?query=...`. Строковая конкатенация `${route}?focus=search`
- *  ломается ровно в день, когда catalogSearchRoute() начнёт возвращать
- *  собственный `?`; URLSearchParams этого не боится. */
-function withSearchFocus(route: string): string {
-  const [path, search] = route.split("?");
-  const qs = new URLSearchParams(search);
-  qs.set("focus", "search");
-  return `${path}?${qs.toString()}`;
-}
 
 /** Четыре вкладки плюс отдельный круг поиска — раскладка Telegram iOS 26.
  *
@@ -178,7 +166,7 @@ function useGlassFill(el: HTMLElement | null, surface: "glass" | "solid") {
   }, [el, surface]);
 }
 
-export default function BottomNav() {
+export default function BottomNav({ onOpenSearch }: { onOpenSearch: () => void }) {
   const { pathname } = useLocation();
   const surface = useNavSurface(pathname);
   const [nav, setNav] = useState<HTMLElement | null>(null);
@@ -248,20 +236,19 @@ export default function BottomNav() {
           );
         })}
       </div>
-      {/* Круг поиска — вторая точка ряда, как у Telegram. Поиск становится
-          доступен с КАЖДОГО экрана, а не только с главной и каталога, и
-          оказывается под большим пальцем. Маршрут берётся из searchRoutes.ts:
-          строка всегда ищет по каталогу, и второго обработчика здесь не
-          заводится.
+      {/* Круг поиска — вторая точка ряда, как у Telegram.
 
-          Метка focus=search дописывается через URLSearchParams, а не
-          строковой конкатенацией: catalogSearchRoute() существует именно
-          затем, чтобы решать, какие параметры уйдут в URL (сегодня — только
-          `query`), и наращивать её результат через "?" вручную означало бы
-          держать здесь предположение о её форме, которое переживёт хелпер
-          на день его изменения и тихо соберёт битый адрес. */}
-      <Link
-        to={withSearchFocus(catalogSearchRoute(""))}
+          Кнопка, а не ссылка, и это не деталь разметки. Раньше круг вёл на
+          /catalog?focus=search, и со стороны это читалось как «кнопка просто
+          открывает каталог»: экран сменился, панели подсказок нет, куда делся
+          поиск — непонятно. Поиск, доступный с каждого экрана, обязан
+          открываться НА этом экране, поверх него (components/SearchOverlay).
+
+          preloadRoute("/catalog") остаётся: из панели чаще всего уходят именно
+          в каталог, и чанк успевает подгрузиться, пока человек печатает. */}
+      <button
+        type="button"
+        onClick={onOpenSearch}
         onPointerDown={() => preloadRoute("/catalog")}
         aria-label="Поиск"
         className="nav-surface nav-circle tap flex h-14 w-14 shrink-0 items-center justify-center text-muted"
@@ -270,7 +257,7 @@ export default function BottomNav() {
              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
         </svg>
-      </Link>
+      </button>
     </nav>
   );
 }
