@@ -145,12 +145,15 @@ export function isKeyboardOpen(
  *    navHeight        — полная высота навбара (контент + его safe-inset);
  *    ctaBottomOffset  — нижняя кромка кнопки над низом вьюпорта (= navHeight + 16);
  *    clearance        — зазор кнопка↔навбар: всегда 16px в любой safe-area;
- *    contentPadBottom — .pb-cta: чтобы контент не уходил под панель. */
+ *    contentPadBottom — .pb-cta: чтобы контент не уходил под панель;
+ *    navContentPadBottom — .pb-nav: отступ контента под фиксированной навигацией
+ *                        (= navHeight + 12px буфер), safe-area считается один раз. */
 export function bottomNavStack(safeBottom: number): {
   navHeight: number;
   ctaBottomOffset: number;
   clearance: number;
   contentPadBottom: number;
+  navContentPadBottom: number;
 } {
   const NAV_CONTENT = 64; // --bottom-nav-content
   // Зазор под плавающей пилюлей. Ровно то же число, что --nav-float-gap в
@@ -158,6 +161,7 @@ export function bottomNavStack(safeBottom: number): {
   // «неточность», а тест, который врёт про прод.
   const FLOAT_GAP = 10;
   const CLEARANCE = 16; // подъём кнопки над навбаром
+  const NAV_CONTENT_PAD = 12; // буфер контента под навигацией (был захардкожен в 76px = 64 + 12)
   const CTA_AIR = 80; // .pb-cta = ctaBottomOffset + 80 (бар над кнопкой ~64px + воздух)
   const safe = Number.isFinite(safeBottom) && safeBottom > 0 ? safeBottom : 0;
   const effSafe = Math.max(8, safe); // max(0.5rem, safe) — один раз
@@ -168,6 +172,7 @@ export function bottomNavStack(safeBottom: number): {
     ctaBottomOffset,
     clearance: ctaBottomOffset - navHeight,
     contentPadBottom: ctaBottomOffset + CTA_AIR,
+    navContentPadBottom: navHeight + NAV_CONTENT_PAD,
   };
 }
 

@@ -167,6 +167,12 @@ describe("bottomNavStack (нижний стек CTA/навбар, v5.2.7)", () =
     expect(s.ctaBottomOffset).toBeGreaterThan(s.navHeight);
     expect(s.clearance).toBe(16);
   });
+
+  it("отступ контента под навигацией считает safe-area один раз", () => {
+    // 64 контент + 34 safe + 10 зазор + 12 запас = 120, а не 128 (с двойным safe)
+    expect(bottomNavStack(34).navContentPadBottom).toBe(64 + 34 + 10 + 12);
+    expect(bottomNavStack(0).navContentPadBottom).toBe(64 + 8 + 10 + 12);
+  });
 });
 
 describe("dropdownMaxHeightPx", () => {

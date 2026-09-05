@@ -467,13 +467,14 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
 .safe-bottom { padding-bottom: max(0.5rem, var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))); }
 
 /* Нижний отступ скролл-контента под фиксированной навигацией:
-   высота контента навигации (~60px) + запас 16px + safe-area.
-   Ровно одна safe-area компенсация (та же переменная, что у .safe-bottom). */
+   --bottom-nav-height + 12px буфер. safe-area уже внутри --bottom-nav-height
+   и второе слагаемое дало бы двойной инсет на iPhone.
+   Ровно одна safe-area компенсация в --bottom-nav-height (та же, что у .safe-bottom). */
 /* Только mobile/tablet (<1024px): на desktop нижней навигации нет,
    там действует tailwind lg:pb-12 (этот блок объявлен после утилит и
    без media-ограничения перебивал бы её). */
 @media (max-width: 1023.98px) {
-  .pb-nav { padding-bottom: calc(76px + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))); }
+  .pb-nav { padding-bottom: calc(var(--bottom-nav-height) + 12px); }
 }
 
 /* ===== Нижний стек страницы товара (v5.2.7 / фикс v5.2.7.1) =====
@@ -518,7 +519,7 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
 @media (max-width: 1023.98px) {
   .cart-dock { bottom: calc(var(--bottom-nav-height) + 8px); }
   html.has-cart-bar .pb-nav {
-    padding-bottom: calc(76px + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)) + var(--cart-bar-space));
+    padding-bottom: calc(var(--bottom-nav-height) + 12px + var(--cart-bar-space));
   }
 }
 @media (min-width: 1024px) {
@@ -529,15 +530,15 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
 }
 
 /* ===== Стек toast'ов =====
-   Toast встаёт НАД панелью корзины, а не поверх неё: раньше он висел на той же
-   высоте (76px + safe ≈ позиция .cart-dock) и закрывал сумму заявки ровно в тот
-   момент, когда сообщал «Добавлено в корзину». Подъём берём из того же
-   --cart-bar-space, что даёт нижний отступ контенту, и по тому же признаку
-   html.has-cart-bar — три величины не разъедутся. */
+   Toast встаёт НАД панелью корзины, а не поверх неё. Та же высота, что
+   .pb-nav: --bottom-nav-height + 12px буфер. safe-area учитывается один раз
+   (внутри --bottom-nav-height). Подъём берём из того же --cart-bar-space,
+   что даёт нижний отступ контенту, и по тому же признаку html.has-cart-bar —
+   три величины не разъедутся. */
 @media (max-width: 1023.98px) {
-  .toast-dock { bottom: calc(76px + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))); }
+  .toast-dock { bottom: calc(var(--bottom-nav-height) + 12px); }
   html.has-cart-bar .toast-dock {
-    bottom: calc(76px + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)) + var(--cart-bar-space));
+    bottom: calc(var(--bottom-nav-height) + 12px + var(--cart-bar-space));
   }
 }
 @media (min-width: 1024px) {
