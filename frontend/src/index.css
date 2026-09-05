@@ -347,9 +347,44 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
    data-glass — выключатель самого свойства, а не его нуля: blur(0) всё равно
    заставляет браузер завести слой подложки и пересчитывать его покадрово. Та
    же механика и та же причина, что у .app-navbar выше. */
+
+/* Панель оторвана от нижней кромки и стала пилюлей — раскладка Telegram iOS 26.
+   Это не только вид: размывать надо примерно на треть меньше пикселей, чем у
+   панели во всю ширину, а нижняя навигация — единственный элемент, который
+   переживает КАЖДУЮ прокрутку приложения.
+
+   Боковые поля намеренно узкие (8px, не 16–20). У Telegram пилюля идёт почти
+   во всю ширину; с широкими полями четыре вкладки становятся теснее нынешних
+   пяти без всякой на то нужды. */
 .nav-surface {
   background: rgb(var(--app-surface) / .97);
   box-shadow: 0 -8px 24px rgba(17, 24, 39, .035);
+}
+/* Ряд сам по себе невидим — он только держит позицию пилюли и круга. */
+.nav-row {
+  left: 8px;
+  right: 8px;
+  bottom: max(var(--nav-float-gap), var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)));
+}
+/* Форма у обоих одна: рамка теперь по кругу, а не только сверху — у
+   оторванной панели «верхней кромки» в прежнем смысле нет. */
+.nav-pill, .nav-circle {
+  border-radius: 999px;
+  border: 1px solid rgb(var(--app-border));
+  /* Скругление обязано резать и подложку размытия, иначе в углах остаётся
+     волосяной шов прямоугольного слоя. */
+  overflow: hidden;
+  box-shadow: 0 6px 24px rgba(17, 24, 39, .10);
+}
+
+/* Над непрозрачной панелью страницы (.cta-dock) стекла нет — размывать там
+   нечего, это решение navGlass.ts. Но заливка .97 поверх подложки того же
+   цвета делает пилюлю невидимой: она сливается с доком в один прямоугольник.
+   Поэтому в сплошном состоянии капсулу держат обводка и тень, а не фон. */
+.nav-row[data-glass="off"] .nav-pill,
+.nav-row[data-glass="off"] .nav-circle {
+  border-color: rgb(var(--app-border));
+  box-shadow: 0 4px 16px rgba(17, 24, 39, .14);
 }
 
 /* Стекло надевается только при явном разрешении И только если браузер умеет
@@ -357,7 +392,7 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
    ставит атрибут один раз при монтировании, а @supports — это гарантия уровнем
    ниже, которая не зависит от того, угадал ли JS. */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .nav-surface[data-glass="on"] {
+  .nav-row[data-glass="on"] .nav-surface {
     /* --nav-glass-t: 0 — панель ещё сплошная, 1 — стекло налито целиком.
        Значение ставит покадрово JS (lib/motion.ts, animateNumber), а не
        CSS-переход: этот webview гасит декларативную анимацию целиком, и
@@ -371,17 +406,18 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
     background: rgb(var(--app-surface) / calc(.97 - .15 * var(--nav-glass-t)));
     -webkit-backdrop-filter: blur(calc(var(--nav-glass-t) * 20px)) saturate(calc(100% + var(--nav-glass-t) * 80%));
     backdrop-filter: blur(calc(var(--nav-glass-t) * 20px)) saturate(calc(100% + var(--nav-glass-t) * 80%));
-    /* Блик по верхней кромке. Именно он, а не размытие, читается как «стекло»:
-       размытие даёт глубину, свет даёт материал. Стоит ноль — это тень, а не
-       слой подложки. */
+    /* Блик по кромке. Именно он, а не размытие, читается как «стекло»:
+       размытие даёт глубину, свет даёт материал. У пилюли блик идёт по всему
+       периметру, а не только сверху — у оторванной панели «верхней кромки» в
+       прежнем смысле нет. Стоит ноль: это тень, а не слой подложки. */
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / .92),
-      0 -10px 28px rgba(17, 24, 39, .08);
+      0 6px 28px rgba(17, 24, 39, .12);
   }
-  /* Верхняя граница у стекла своя: сплошная линия рамки поперёк размытия
-     выглядит как шов, а не как кромка линзы. Наливается вместе со стеклом. */
-  .nav-surface[data-glass="on"] {
-    border-top-color: rgb(255 255 255 / calc(var(--nav-glass-t) * .55));
+  /* Граница у стекла своя: сплошная линия рамки поперёк размытия выглядит как
+     шов, а не как кромка линзы. Наливается вместе со стеклом. */
+  .nav-row[data-glass="on"] .nav-surface {
+    border-color: rgb(255 255 255 / calc(var(--nav-glass-t) * .55));
   }
 
   /* Преломление на кромке — то самое «liquid» из iOS 26: узкая полоса сверху,
@@ -397,7 +433,7 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
      умеют почти все, а ссылку на SVG-фильтр — далеко не все. Без неё остаётся
      размытие с бликом, то есть стекло без «liquid», а не сломанная панель. */
   @supports ((backdrop-filter: url("#nav-refract")) or (-webkit-backdrop-filter: url("#nav-refract"))) {
-    .nav-surface[data-glass="on"]::before {
+    .nav-row[data-glass="on"] .nav-surface::before {
       content: "";
       position: absolute;
       inset-inline: 0;
@@ -417,7 +453,7 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
      это про иерархию, и она обязана переживать смену подложки; на .82 этот
      цвет даёт 4.96:1 против 3.17:1 у прежнего. Активную вкладку не трогаем:
      её акцентный синий — решение всего приложения, а не этой панели. */
-  .nav-surface[data-glass="on"] .text-muted { color: rgb(var(--app-sub-strong)); }
+  .nav-row[data-glass="on"] .nav-surface .text-muted { color: rgb(var(--app-sub-strong)); }
 }
 
 /* Короткий экран (телефон в альбомной ориентации, открытая клавиатура на

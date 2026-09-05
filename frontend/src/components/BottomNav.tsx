@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { preloadRoute } from "../lib/routePreload";
 import { hasOpaqueDock, navSurface, supportsBackdropFilter } from "../lib/navGlass";
 import { animateNumber, prefersReducedMotion } from "../lib/motion";
+import { catalogSearchRoute } from "../lib/searchRoutes";
 
 /** Сколько наливается стекло. Короче открытия шторки (260мс): панель не
  *  приезжает, а меняет материал — движения нет, есть проявление. */
@@ -23,6 +24,13 @@ const stroke = (active: boolean) => ({
   strokeLinejoin: "round" as const,
 });
 
+/** Четыре вкладки плюс отдельный круг поиска — раскладка Telegram iOS 26.
+ *
+ *  Заявок здесь больше нет: они переехали в профиль выделенной кнопкой с
+ *  бейджем непросмотренных изменений (pages/Profile.tsx). Причина не в
+ *  экономии места, а в частоте: в заявки заходят после того, как что-то
+ *  заказали, а не по дороге между экранами.
+ */
 const items: Item[] = [
   {
     to: "/", label: "Главная",
@@ -47,15 +55,6 @@ const items: Item[] = [
       <svg viewBox="0 0 24 24" className="h-6 w-6" {...stroke(a)}>
         <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4" />
         <circle cx="12" cy="12" r="4" />
-      </svg>
-    ),
-  },
-  {
-    to: "/requests", label: "Заявки",
-    icon: (a) => (
-      <svg viewBox="0 0 24 24" className="h-6 w-6" {...stroke(a)}>
-        <rect x="4.5" y="3.5" width="15" height="17" rx="2.5" />
-        <path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4.5" />
       </svg>
     ),
   },
@@ -178,11 +177,8 @@ export default function BottomNav() {
     // js-bottom-nav: при открытой клавиатуре скрывается через html.kb-open (index.css)
     <nav
       ref={setNav}
-      // Стартуем сплошными и отдаём атрибут useGlassFill: React ставит его
-      // один раз, дальше им управляет покадровый мотор. Держать значение в
-      // JSX нельзя — рендер перебивал бы кадр анимации.
       data-glass="off"
-      className="js-bottom-nav nav-surface safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border lg:hidden">
+      className="js-bottom-nav nav-row fixed z-40 flex items-center gap-2 lg:hidden">
       {/* Фильтр преломления кромки. Лежит здесь, а не в index.css: SVG-фильтр
           обязан быть узлом документа, ссылаться на него из стилей можно только
           по id. aria-hidden и нулевой размер — это определение, а не картинка.
@@ -194,7 +190,7 @@ export default function BottomNav() {
           <feDisplacementMap in="SourceGraphic" in2="noise" scale="9" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </svg>
-      <div className="mx-auto flex max-w-md justify-around py-1.5">
+      <div className="nav-surface nav-pill flex flex-1 justify-around py-1.5">
         {items.map((item) => {
           const isActive = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
           return (
@@ -220,6 +216,22 @@ export default function BottomNav() {
           );
         })}
       </div>
+      {/* Круг поиска — вторая точка ряда, как у Telegram. Поиск становится
+          доступен с КАЖДОГО экрана, а не только с главной и каталога, и
+          оказывается под большим пальцем. Маршрут берётся из searchRoutes.ts:
+          строка всегда ищет по каталогу, и второго обработчика здесь не
+          заводится. */}
+      <Link
+        to={`${catalogSearchRoute("")}?focus=search`}
+        onPointerDown={() => preloadRoute("/catalog")}
+        aria-label="Поиск"
+        className="nav-surface nav-circle tap flex h-14 w-14 shrink-0 items-center justify-center text-muted"
+      >
+        <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor"
+             strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+        </svg>
+      </Link>
     </nav>
   );
 }
