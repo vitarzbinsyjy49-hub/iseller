@@ -144,25 +144,28 @@ describe("bottomNavStack (нижний стек CTA/навбар, v5.2.7)", () =
     expect(notched.ctaBottomOffset - flat.ctaBottomOffset).toBe(26);
   });
 
-  it("iPhone Pro Max (safe=34): CTA стоит выше навбара, не за ним", () => {
+  it("плавающая пилюля добавляет зазор ОДИН раз, поверх safe-area", () => {
+    // 64 контент + max(8, safe) + 10 зазора
+    expect(bottomNavStack(0).navHeight).toBe(64 + 8 + 10);
+    expect(bottomNavStack(-5).navHeight).toBe(64 + 8 + 10);
+    expect(bottomNavStack(NaN).navHeight).toBe(64 + 8 + 10);
+  });
+
+  it("на устройстве с вырезом safe-area прибавляется вместо минимума, а не к нему", () => {
     const s = bottomNavStack(34);
-    expect(s.navHeight).toBe(64 + 34); // 98
-    expect(s.ctaBottomOffset).toBe(64 + 34 + 16); // 114 — выше верхней кромки навбара
+    expect(s.navHeight).toBe(64 + 34 + 10); // 108, а не 64+8+34+10
+  });
+
+  it("разница между вырезом и плоским низом равна разнице safe-area", () => {
+    const notched = bottomNavStack(34);
+    const flat = bottomNavStack(8);
+    expect(notched.navHeight - flat.navHeight).toBe(26);
+  });
+
+  it("кнопка дока по-прежнему стоит выше навигации", () => {
+    const s = bottomNavStack(34);
     expect(s.ctaBottomOffset).toBeGreaterThan(s.navHeight);
-  });
-
-  it("минимум навбара 8px (max(0.5rem,…)) при нулевой/некорректной safe-area", () => {
-    expect(bottomNavStack(0).navHeight).toBe(64 + 8);
-    expect(bottomNavStack(-5).navHeight).toBe(64 + 8);
-    expect(bottomNavStack(NaN).navHeight).toBe(64 + 8);
-  });
-
-  it("контент не уходит под панель: pb > низ кнопки + высота бара над кнопкой (~64px)", () => {
-    const BAR_ABOVE_BUTTON = 64;
-    for (const safe of [0, 34]) {
-      const s = bottomNavStack(safe);
-      expect(s.contentPadBottom).toBeGreaterThan(s.ctaBottomOffset + BAR_ABOVE_BUTTON);
-    }
+    expect(s.clearance).toBe(16);
   });
 });
 

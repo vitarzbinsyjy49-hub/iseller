@@ -153,12 +153,16 @@ export function bottomNavStack(safeBottom: number): {
   contentPadBottom: number;
 } {
   const NAV_CONTENT = 64; // --bottom-nav-content
+  // Зазор под плавающей пилюлей. Ровно то же число, что --nav-float-gap в
+  // index.css: эта функция — зеркало CSS-геометрии, и расхождение здесь не
+  // «неточность», а тест, который врёт про прод.
+  const FLOAT_GAP = 10;
   const CLEARANCE = 16; // подъём кнопки над навбаром
   const CTA_AIR = 80; // .pb-cta = ctaBottomOffset + 80 (бар над кнопкой ~64px + воздух)
   const safe = Number.isFinite(safeBottom) && safeBottom > 0 ? safeBottom : 0;
   const effSafe = Math.max(8, safe); // max(0.5rem, safe) — один раз
-  const navHeight = NAV_CONTENT + effSafe;
-  const ctaBottomOffset = NAV_CONTENT + effSafe + CLEARANCE;
+  const navHeight = NAV_CONTENT + effSafe + FLOAT_GAP;
+  const ctaBottomOffset = navHeight + CLEARANCE;
   return {
     navHeight,
     ctaBottomOffset,

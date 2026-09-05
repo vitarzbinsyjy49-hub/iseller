@@ -488,7 +488,17 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
    низа: щели нет, кнопка ровно на 16px выше навбара. */
 :root {
   --bottom-nav-content: 64px;
-  --bottom-nav-height: calc(var(--bottom-nav-content) + max(0.5rem, var(--app-safe-bottom, env(safe-area-inset-bottom, 0px))));
+  /* Зазор между пилюлей навигации и нижней кромкой экрана. Та же величина
+     продублирована константой FLOAT_GAP в lib/viewport.ts — там она нужна
+     тестам геометрии; менять эти два числа только вместе. */
+  --nav-float-gap: 10px;
+  /* safe-area входит РОВНО ОДИН раз (тот же max(0.5rem,…), что и .safe-bottom
+     на самой навигации), зазор прибавляется поверх неё. */
+  --bottom-nav-height: calc(
+    var(--bottom-nav-content)
+    + max(0.5rem, var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)))
+    + var(--nav-float-gap)
+  );
   /* Высота панели корзины вместе с зазором. Один источник и для позиции самой
      панели, и для нижнего отступа контента под ней. */
   --cart-bar-space: 80px;
