@@ -351,7 +351,13 @@ function syncViewportVars(tg: TelegramWebApp | null): void {
   // высота полосы. Telegram может сообщить fullscreen РАНЬШЕ, чем
   // contentSafeAreaInset, и знак успел бы мигнуть в полосе высотой 0.
   root.classList.toggle("brand-mark-on", brandMarkVisible({
-    insideTelegram: !!tg,
+    // Та же строгая величина, что и у computeSafeArea выше (`inside`), а не
+    // просто !!tg: объект telegram-web-app.js, загруженный вне Telegram,
+    // тоже существует, но с пустым initData — !!tg один это не отличает.
+    // Сейчас это без последствий (contentSafeTop вне Telegram и так null,
+    // и brandMarkVisible вернёт false по другому условию), но защита не
+    // должна держаться на совпадении вместо явного условия.
+    insideTelegram: inside,
     isFullscreen: !!tg?.isFullscreen,
     contentSafeTop: tg?.contentSafeAreaInset?.top ?? null,
   }));

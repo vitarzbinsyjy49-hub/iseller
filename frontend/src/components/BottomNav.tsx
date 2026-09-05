@@ -10,7 +10,7 @@ import { useLeadsBadge } from "../store/leadsBadge";
  *  приезжает, а меняет материал — движения нет, есть проявление. */
 const GLASS_FILL_MS = 220;
 
-/** Нижняя навигация: 5 вкладок, SVG-иконки, активная — Telegram blue.
+/** Нижняя навигация: 4 вкладки, SVG-иконки, активная — Telegram blue.
  *  Сознательно НЕ используем NavLink: обычный Link + useLocation дают тот же
  *  active-state без NavLinkWithRef (у NavLink были крэши hasValidRef при
  *  расхождении версий react-router-dom/React в чужих окружениях). */

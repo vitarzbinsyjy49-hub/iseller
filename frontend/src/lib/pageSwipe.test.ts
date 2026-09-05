@@ -10,7 +10,7 @@ describe("tabIndexOf", () => {
   it("узнаёт корневые вкладки", () => {
     expect(tabIndexOf("/")).toBe(0);
     expect(tabIndexOf("/catalog")).toBe(1);
-    expect(tabIndexOf("/profile")).toBe(4);
+    expect(tabIndexOf("/profile")).toBe(3);
   });
   it("вкладка с параметрами запроса и вложенным путём — та же вкладка", () => {
     expect(tabIndexOf("/catalog/apple")).toBe(1);
@@ -19,6 +19,9 @@ describe("tabIndexOf", () => {
     expect(tabIndexOf("/product/42")).toBe(-1);
     expect(tabIndexOf("/favorites")).toBe(-1);
     expect(tabIndexOf("/history")).toBe(-1);
+    // Заявки переехали в профиль и перестали быть вкладкой — теперь это
+    // вложенный экран, как и остальные в этом списке.
+    expect(tabIndexOf("/requests")).toBe(-1);
   });
   it("«/» не матчит всё подряд по префиксу", () => {
     expect(tabIndexOf("/product/1")).not.toBe(0);
@@ -36,6 +39,9 @@ describe("resolveSwipeNav — вкладки", () => {
   });
   it("на вкладке жест ловится из любого места, не только от края", () => {
     expect(resolveSwipeNav("/ai", "right", false)).toEqual({ kind: "tab", to: "/catalog" });
+  });
+  it("после /ai теперь сразу /profile — /requests из плоскости ушёл", () => {
+    expect(resolveSwipeNav("/ai", "left", false)).toEqual({ kind: "tab", to: "/profile" });
   });
 });
 

@@ -38,7 +38,7 @@
 import { create } from "zustand";
 
 import { api } from "../lib/api";
-import { unseenLeadCount, type LeadSeenLike } from "../lib/leads";
+import { seenMarkFor, unseenLeadCount, type LeadSeenLike } from "../lib/leads";
 
 const SEEN_KEY = "leads_seen_at";
 
@@ -73,7 +73,7 @@ type LeadsBadgeState = {
   /** Изменившихся с последнего просмотра. */
   unseen: number;
   refresh: (force?: boolean) => Promise<void>;
-  markSeen: () => void;
+  markSeen: (leads?: LeadSeenLike[]) => void;
 };
 
 // Вне видимого состояния стора: детали кэширования, не то, на что должны
@@ -105,8 +105,13 @@ export const useLeadsBadge = create<LeadsBadgeState>((set) => ({
     })();
     return inFlight;
   },
-  markSeen: () => {
-    writeSeen(new Date().toISOString());
+  markSeen: (leads = []) => {
+    // seenMarkFor штампует максимальный updated_at ЗАГРУЖЕННЫХ заявок, а не
+    // часы устройства — см. докстринг lib/leads.ts. Requests.tsx зовёт это
+    // сразу после успешной загрузки списка и передаёт его сюда; вызовы без
+    // аргумента (если появятся) получают прежний запасной путь — текущее
+    // время — через пустой массив.
+    writeSeen(seenMarkFor(leads));
     set({ unseen: 0 });
   },
 }));

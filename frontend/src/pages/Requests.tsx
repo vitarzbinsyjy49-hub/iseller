@@ -69,7 +69,7 @@ export default function Requests() {
         // Раздел открыт — изменения по заявкам считаются увиденными. Штампуем
         // ПОСЛЕ успешной загрузки: погасить бейдж на экране, который не смог
         // показать заявки, значит потерять уведомление молча.
-        useLeadsBadge.getState().markSeen();
+        useLeadsBadge.getState().markSeen(d.leads);
       })
       .catch(() => setError(true));
   };
