@@ -4,6 +4,7 @@ import AuroraBackground from "./AuroraBackground";
 import BottomNav from "./BottomNav";
 import CartBar from "./CartBar";
 import DesktopHeader from "./DesktopHeader";
+import { BrandWordmark } from "./BrandMark";
 import { usePageSwipe } from "../lib/usePageSwipe";
 import { setBackButton } from "../lib/telegram";
 import { useCart } from "../lib/cart";
@@ -117,11 +118,16 @@ export default function Layout() {
           прибитый к экрану слой не должен зависеть от того, какая страница в
           нём сейчас смонтирована. */}
       <AuroraBackground />
-      {/* Тёмная подложка верхней зоны (статус-бар/Telegram-хром) на ВСЕХ экранах:
-          красит вырез safe-area цветом шапки (index.css .hero-top-inset), чтобы верх
-          был цельным тёмным, без белой полосы. Высота = --app-content-top-offset
-          (0 вне fullscreen → невидима, ничего не смещает). */}
-      <div aria-hidden className="hero-top-inset lg:hidden" />
+      {/* Знак бренда в полосе плавающих кнопок Telegram. Виден только в
+          fullscreen: вне него полоса имеет нулевую высоту и рисовать негде
+          (решение — brandMarkVisible в lib/viewport.ts, покрыто тестами).
+          Здесь читаем его дешёвый признак: класс tg-fullscreen на <html>,
+          который уже проставляет lib/telegram.ts. */}
+      <div aria-hidden className="hero-top-inset lg:hidden">
+        <span className="brand-slot">
+          <BrandWordmark size={26} />
+        </span>
+      </div>
       <DesktopHeader />
       <main
         ref={mainRef}

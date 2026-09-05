@@ -179,3 +179,30 @@ export function imagePaddingClass(
   const ratio = naturalHeight / naturalWidth;
   return ratio >= 1.5 || ratio <= 1 / 1.5 ? "p-2" : "p-3";
 }
+
+export type BrandMarkSources = {
+  insideTelegram: boolean;
+  /** Telegram.WebApp.isFullscreen. */
+  isFullscreen: boolean;
+  /** Telegram.WebApp.contentSafeAreaInset.top — высота пояса, в котором
+   *  Telegram держит свои плавающие кнопки. */
+  contentSafeTop?: number | null;
+};
+
+/** Виден ли знак бренда в полосе плавающих кнопок Telegram.
+ *
+ *  Знак живёт в чужой полосе, и права на неё у нас появляются РОВНО в
+ *  fullscreen: только там Telegram убирает свою шапку и оставляет висеть над
+ *  страницей две пилюли, между которыми есть свободное место. Вне fullscreen
+ *  webview начинается ПОД шапкой Telegram, полоса имеет нулевую высоту, и знак
+ *  в ней был бы схлопнутым узлом поверх контента.
+ *
+ *  Третье условие — ненулевая высота пояса — не перестраховка: клиент может
+ *  сообщить fullscreen раньше, чем пришлют contentSafeAreaInset, и знак успел
+ *  бы мигнуть в полосе высотой 0.
+ */
+export function brandMarkVisible(s: BrandMarkSources): boolean {
+  if (!s.insideTelegram || !s.isFullscreen) return false;
+  const top = s.contentSafeTop;
+  return typeof top === "number" && Number.isFinite(top) && top > 0;
+}

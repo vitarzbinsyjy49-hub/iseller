@@ -120,8 +120,36 @@ body {
   height: var(--app-content-top-offset, env(safe-area-inset-top, 0px));
   background: var(--app-header-color);
   z-index: 30;
+  /* Знак некликабелен, а под полосой лежат кнопки Telegram «Закрыть» и «⋯».
+     Перехват нажатий здесь означал бы, что из приложения нельзя выйти. */
   pointer-events: none;
+  /* Верхний пояс — системный статус-бар (часы, сеть, батарея), туда нельзя
+     класть ничего. Знак центрируется в НИЖНЕМ поясе, где Telegram держит свои
+     плавающие кнопки. Отсюда padding сверху ровно на высоту статус-бара. */
+  padding-top: var(--tg-safe-area-top, 0px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+
+/* Знак внутри полосы.
+   120px с каждой стороны — место под пилюли Telegram. Расчёт: на 390pt
+   свободного остаётся 150pt при потребности знака ~125pt; на минимальных
+   375pt — 135pt. Влезает на всех устройствах, где Telegram даёт fullscreen,
+   поэтому отдельной ветки для узких экранов нет.
+   overflow:hidden — последняя защита: если Telegram однажды расширит свои
+   кнопки, знак обрежется, а не наедет на них. */
+.hero-top-inset > .brand-slot {
+  max-width: calc(100% - 240px);
+  overflow: hidden;
+  color: #fff;
+}
+
+/* Вне fullscreen полоса имеет нулевую высоту, но её содержимое всё равно
+   участвовало бы в раскладке flex-контейнера и могло бы вылезть за границы.
+   Класс tg-fullscreen ставит lib/telegram.ts. */
+html:not(.tg-fullscreen) .hero-top-inset > .brand-slot { display: none; }
+
 .app-hero { background: var(--app-hero-bg); }
 
 /* ============ Липкая шапка главной: стекло, которое наливается ============

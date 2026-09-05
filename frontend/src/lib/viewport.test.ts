@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bottomNavStack,
+  brandMarkVisible,
   computeSafeArea,
   formatCssVars,
   dropdownMaxHeightPx,
@@ -208,5 +209,28 @@ describe("imagePaddingClass (режим изображения ProductCard)", ()
     // Отношение ступеней важнее их абсолютных значений: вытянутый кадр и так
     // занимает меньше квадрата, и одинаковый отступ сделал бы товар мельче.
     expect(imagePaddingClass(600, 1200)).not.toBe(imagePaddingClass(1000, 1000));
+  });
+});
+
+describe("brandMarkVisible", () => {
+  it("вне Telegram знака нет: полосы кнопок не существует", () => {
+    expect(brandMarkVisible({ insideTelegram: false, isFullscreen: true, contentSafeTop: 46 })).toBe(false);
+  });
+
+  it("в Telegram без fullscreen знака нет: шапка Telegram вне webview", () => {
+    expect(brandMarkVisible({ insideTelegram: true, isFullscreen: false, contentSafeTop: 46 })).toBe(false);
+  });
+
+  it("fullscreen с нулевой полосой не показывает знак: рисовать его негде", () => {
+    expect(brandMarkVisible({ insideTelegram: true, isFullscreen: true, contentSafeTop: 0 })).toBe(false);
+  });
+
+  it("fullscreen с ненулевой полосой показывает знак", () => {
+    expect(brandMarkVisible({ insideTelegram: true, isFullscreen: true, contentSafeTop: 46 })).toBe(true);
+  });
+
+  it("отсутствующая величина полосы читается как ноль, а не как истина", () => {
+    expect(brandMarkVisible({ insideTelegram: true, isFullscreen: true, contentSafeTop: null })).toBe(false);
+    expect(brandMarkVisible({ insideTelegram: true, isFullscreen: true, contentSafeTop: NaN })).toBe(false);
   });
 });
