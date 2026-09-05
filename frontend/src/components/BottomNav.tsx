@@ -24,6 +24,17 @@ const stroke = (active: boolean) => ({
   strokeLinejoin: "round" as const,
 });
 
+/** Дописывает `focus=search` к маршруту, каким бы он ни был — включая уже
+ *  готовый `?query=...`. Строковая конкатенация `${route}?focus=search`
+ *  ломается ровно в день, когда catalogSearchRoute() начнёт возвращать
+ *  собственный `?`; URLSearchParams этого не боится. */
+function withSearchFocus(route: string): string {
+  const [path, search] = route.split("?");
+  const qs = new URLSearchParams(search);
+  qs.set("focus", "search");
+  return `${path}?${qs.toString()}`;
+}
+
 /** Четыре вкладки плюс отдельный круг поиска — раскладка Telegram iOS 26.
  *
  *  Заявок здесь больше нет: они переехали в профиль выделенной кнопкой с
@@ -177,6 +188,9 @@ export default function BottomNav() {
     // js-bottom-nav: при открытой клавиатуре скрывается через html.kb-open (index.css)
     <nav
       ref={setNav}
+      // Стартуем сплошными и отдаём атрибут useGlassFill: React ставит его
+      // один раз, дальше им управляет покадровый мотор. Держать значение в
+      // JSX нельзя — рендер перебивал бы кадр анимации.
       data-glass="off"
       className="js-bottom-nav nav-row fixed z-40 flex items-center gap-2 lg:hidden">
       {/* Фильтр преломления кромки. Лежит здесь, а не в index.css: SVG-фильтр
@@ -220,9 +234,16 @@ export default function BottomNav() {
           доступен с КАЖДОГО экрана, а не только с главной и каталога, и
           оказывается под большим пальцем. Маршрут берётся из searchRoutes.ts:
           строка всегда ищет по каталогу, и второго обработчика здесь не
-          заводится. */}
+          заводится.
+
+          Метка focus=search дописывается через URLSearchParams, а не
+          строковой конкатенацией: catalogSearchRoute() существует именно
+          затем, чтобы решать, какие параметры уйдут в URL (сегодня — только
+          `query`), и наращивать её результат через "?" вручную означало бы
+          держать здесь предположение о её форме, которое переживёт хелпер
+          на день его изменения и тихо соберёт битый адрес. */}
       <Link
-        to={`${catalogSearchRoute("")}?focus=search`}
+        to={withSearchFocus(catalogSearchRoute(""))}
         onPointerDown={() => preloadRoute("/catalog")}
         aria-label="Поиск"
         className="nav-surface nav-circle tap flex h-14 w-14 shrink-0 items-center justify-center text-muted"
