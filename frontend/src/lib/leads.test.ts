@@ -84,3 +84,83 @@ describe("leadMetadataRows", () => {
     expect(leadMetadataRows({})).toEqual([]);
   });
 });
+
+import { seenMarkFor, unseenLeadCount } from "./leads";
+
+describe("unseenLeadCount", () => {
+  const lead = (created: string, updated: string) => ({ created_at: created, updated_at: updated });
+
+  it("считает заявку, которую менеджер тронул после последнего просмотра", () => {
+    const leads = [lead("2026-09-01T10:00:00Z", "2026-09-03T12:00:00Z")];
+    expect(unseenLeadCount(leads, "2026-09-02T00:00:00Z")).toBe(1);
+  });
+
+  it("НЕ считает только что созданную заявку: человек сам её и отправил", () => {
+    const leads = [lead("2026-09-03T12:00:00Z", "2026-09-03T12:00:00Z")];
+    expect(unseenLeadCount(leads, "2026-09-02T00:00:00Z")).toBe(0);
+  });
+
+  it("не считает изменения, которые уже видели", () => {
+    const leads = [lead("2026-09-01T10:00:00Z", "2026-09-02T12:00:00Z")];
+    expect(unseenLeadCount(leads, "2026-09-03T00:00:00Z")).toBe(0);
+  });
+
+  it("без отметки о просмотре бейдж не зажигается на всю историю", () => {
+    const leads = [
+      lead("2026-09-01T10:00:00Z", "2026-09-02T12:00:00Z"),
+      lead("2026-08-01T10:00:00Z", "2026-08-05T12:00:00Z"),
+    ];
+    expect(unseenLeadCount(leads, null)).toBe(0);
+  });
+
+  it("пустой список даёт ноль", () => {
+    expect(unseenLeadCount([], "2026-09-02T00:00:00Z")).toBe(0);
+  });
+
+  it("битые и отсутствующие даты не считаются изменениями", () => {
+    const leads = [
+      { created_at: null, updated_at: null },
+      { created_at: "2026-09-01T10:00:00Z", updated_at: "не дата" },
+    ];
+    expect(unseenLeadCount(leads, "2026-09-02T00:00:00Z")).toBe(0);
+  });
+});
+
+describe("seenMarkFor", () => {
+  // Часы устройства всегда "выключены" здесь — если бы функция хоть раз
+  // ушла в запасной путь без причины, тест бы это поймал.
+  const now = () => "2099-01-01T00:00:00.000Z";
+
+  it("пустой список — штампуем запасным временем (часы устройства)", () => {
+    expect(seenMarkFor([], now)).toBe(now());
+  });
+
+  it("одна заявка — штампуем её updated_at, а не текущее время", () => {
+    const leads = [{ updated_at: "2026-09-01T10:00:00Z" }];
+    expect(seenMarkFor(leads, now)).toBe(new Date("2026-09-01T10:00:00Z").toISOString());
+  });
+
+  it("несколько заявок — берём САМЫЙ ПОЗДНИЙ updated_at, а не первый/последний в массиве", () => {
+    const leads = [
+      { updated_at: "2026-09-01T10:00:00Z" },
+      { updated_at: "2026-09-05T08:00:00Z" },
+      { updated_at: "2026-09-03T12:00:00Z" },
+    ];
+    expect(seenMarkFor(leads, now)).toBe(new Date("2026-09-05T08:00:00Z").toISOString());
+  });
+
+  it("битые/отсутствующие даты игнорируются, среди годных всё равно берём максимум", () => {
+    const leads = [
+      { updated_at: "не дата" },
+      { updated_at: null },
+      { updated_at: undefined },
+      { updated_at: "2026-09-02T00:00:00Z" },
+    ];
+    expect(seenMarkFor(leads, now)).toBe(new Date("2026-09-02T00:00:00Z").toISOString());
+  });
+
+  it("все даты битые — запасной путь, как и для пустого списка", () => {
+    const leads = [{ updated_at: "не дата" }, { updated_at: null }];
+    expect(seenMarkFor(leads, now)).toBe(now());
+  });
+});

@@ -18,7 +18,7 @@ describe("resolveRouteMotion", () => {
   });
 
   it("соседняя вкладка справа приезжает справа", () => {
-    // Порядок вкладок: / → /catalog → /ai → /requests → /profile
+    // Порядок вкладок: / → /catalog → /ai → /profile (/requests — вложенный экран, не вкладка)
     expect(resolveRouteMotion("/", "/catalog", "PUSH")).toEqual({ kind: "tab", enterFrom: "right" });
     expect(resolveRouteMotion("/catalog", "/profile", "PUSH")).toEqual({ kind: "tab", enterFrom: "right" });
   });
@@ -55,6 +55,8 @@ describe("resolveRouteMotion", () => {
       // /favorites, /history, /cart — глубина, хотя путь короткий.
       expect(resolveRouteMotion("/", "/favorites", "PUSH")).toEqual({ kind: "none" });
       expect(resolveRouteMotion("/catalog", "/cart", "PUSH")).toEqual({ kind: "none" });
+      // /requests переехал в профиль и тоже стал глубиной, а не плоскостью.
+      expect(resolveRouteMotion("/profile", "/requests", "PUSH")).toEqual({ kind: "none" });
     });
   });
 });

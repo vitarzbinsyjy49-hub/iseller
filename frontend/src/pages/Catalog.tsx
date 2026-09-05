@@ -48,6 +48,7 @@ export default function Catalog() {
   const [cardsError, setCardsError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const catalogRequest = useRef<AbortController | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [category, setCategory] = useState(params.get("category") ?? "");
   // Единое состояние поиска — URL-параметр `query` (тот же, что использует
   // шапка на desktop и живые подсказки на главной). Локальный `q` нужен только
@@ -90,6 +91,23 @@ export default function Catalog() {
   useEffect(() => {
     api<{ brands: string[] }>("/catalog/brands").then((d) => setBrands(d.brands)).catch(() => {});
   }, []);
+  // Круг поиска в нижней навигации ведёт сюда с меткой focus=search: своей
+  // страницы у поиска нет, и заводить её ради одной строки означало бы вторую
+  // реализацию того, что уже работает в каталоге. Метка снимается сразу после
+  // фокуса, чтобы возврат назад по истории не фокусировал строку повторно.
+  //
+  // Поднимет ли этот фокус клавиатуру — не проверено. Фокус ставится вне
+  // пользовательского жеста (внутри useEffect после навигации), а не по
+  // прямому тапу в поле, и в Telegram WebView на iOS такие «программные»
+  // фокусы нередко НЕ поднимают клавиатуру сами по себе. Проверять на живом
+  // телефоне, а не по факту прохождения тестов.
+  useEffect(() => {
+    if (params.get("focus") !== "search") return;
+    searchRef.current?.focus();
+    const next = new URLSearchParams(params);
+    next.delete("focus");
+    setParams(next, { replace: true });
+  }, [params, setParams]);
 
   // Ряд категорий описывает то, что человек сейчас смотрит: с выбранным брендом
   // это категории ВНУТРИ бренда. Раньше ряд был глобальным, и тап по
@@ -290,6 +308,7 @@ export default function Catalog() {
             <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
           </svg>
           <input
+            ref={searchRef}
             value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по каталогу"
             aria-label="Поиск по каталогу"
             onFocus={() => {

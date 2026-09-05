@@ -23,7 +23,6 @@ import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
 import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
-import { BrandWordmark } from "../components/BrandMark";
 import { FxRateChip } from "../components/FxRateChip";
 import LaunchCountdown from "../components/LaunchCountdown";
 
@@ -118,6 +117,14 @@ function curatedPromo(banner: HomeBanner): CuratedPromo | null {
  *  переходов (--motion-standard, 190мс): здесь движение не отвечает на действие
  *  человека, а само привлекает внимание, и резкий рывок читался бы как сбой. */
 const BANNER_SLIDE_MS = 620;
+
+/** Заголовок экрана — живёт в одной константе, а не в двух местах разметки.
+ *  Мелкий заголовок в шапке (data-collapsing-smalltitle) и крупный <h1>
+ *  ниже (data-collapsing-title) показывают ОДИН И ТОТ ЖЕ текст: один
+ *  проявляется по мере таяния другого при скролле, оба видимы одновременно
+ *  на части пути прокрутки. Раздельные строковые литералы разъехались бы
+ *  при правке одного из двух мест незаметно для автора правки. */
+const HOME_HEADLINE = "Техника, которую легко найти";
 
 function useBannerAutoplay(count: number, intervalMs = 6_000) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -358,11 +365,25 @@ export default function Home() {
           она возвращает уже внутри себя. */}
       <header data-collapsing-nav className="app-navbar -mx-4 -mt-3 px-4 pb-2 pt-2 lg:hidden">
         <div className="flex items-center justify-between gap-3">
-          {/* Логотип крупнее кнопок справа намеренно: это единственная точка
-              бренда на экране. Белой плашки под ним больше нет — слово набрано
-              вёрсткой и берёт белый прямо у hero, а плашка читалась наклейкой. */}
+          {/* Знак бренда уехал в полосу плавающих кнопок Telegram (Layout,
+              .hero-top-inset). Освободившийся слот занимает мелкий заголовок:
+              он проявляется ровно по мере таяния крупного (data-collapsing-title
+              ниже), и шапка не остаётся с дырой на месте логотипа.
+              opacity: 0 в разметке — стартовое состояние; дальше значение
+              покадрово пишет lib/useCollapsingHeader.ts.
+              aria-hidden: тот же текст уже есть в <h1> ниже (HOME_HEADLINE),
+              и opacity: 0 его из дерева доступности не убирает — оба узла
+              видны скринридеру одновременно, и без aria-hidden фраза
+              звучала бы дважды подряд. */}
           <div className="min-w-0">
-            <BrandWordmark size={30} />
+            <span
+              data-collapsing-smalltitle
+              aria-hidden="true"
+              style={{ opacity: 0 }}
+              className="block truncate text-[15px] font-semibold tracking-tight"
+            >
+              {HOME_HEADLINE}
+            </span>
           </div>
           <HeroActions
             cartCount={cart.items_count}
@@ -394,7 +415,7 @@ export default function Home() {
           data-collapsing-title
           className="mt-1 text-h1 font-bold tracking-tight [text-wrap:balance]"
         >
-          Техника, которую легко найти
+          {HOME_HEADLINE}
         </h1>
 
         {/* Крупный поиск — главный элемент верха (relative: под ним панель подсказок).

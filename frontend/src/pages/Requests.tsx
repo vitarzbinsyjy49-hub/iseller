@@ -8,12 +8,13 @@ import { ErrorState } from "../components/StateViews";
 import { leadTitle, leadTypeLabel, leadMetadataRows } from "../lib/leads";
 import { Icon } from "../components/icons";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
+import { useLeadsBadge } from "../store/leadsBadge";
 
 type Lead = {
   id: number; product_id: number | null; product_title: string | null; product_price: number | null;
   message: string | null; status: string; source: string; delivery_method: string | null;
   lead_type: string; metadata: Record<string, unknown> | null;
-  manager_comment: string | null; created_at: string;
+  manager_comment: string | null; created_at: string; updated_at: string;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -62,7 +63,15 @@ export default function Requests() {
   const load = () => {
     setLeads(null);
     setError(false);
-    api<{ leads: Lead[] }>("/leads/my").then((d) => setLeads(d.leads)).catch(() => setError(true));
+    api<{ leads: Lead[] }>("/leads/my")
+      .then((d) => {
+        setLeads(d.leads);
+        // Раздел открыт — изменения по заявкам считаются увиденными. Штампуем
+        // ПОСЛЕ успешной загрузки: погасить бейдж на экране, который не смог
+        // показать заявки, значит потерять уведомление молча.
+        useLeadsBadge.getState().markSeen(d.leads);
+      })
+      .catch(() => setError(true));
   };
 
   async function cancelLead(id: number) {

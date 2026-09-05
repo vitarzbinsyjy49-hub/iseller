@@ -92,6 +92,10 @@ export function useCollapsingHeader() {
 
     const nav = el.querySelector<HTMLElement>("[data-collapsing-nav]");
     const title = el.querySelector<HTMLElement>("[data-collapsing-title]");
+    // Мелкий заголовок в слоте, освободившемся от логотипа. Ищется здесь же и
+    // тем же способом: у вызывающей стороны остаётся один ref, а участие узла
+    // в схлопывании по-прежнему видно по атрибуту прямо в JSX.
+    const small = el.querySelector<HTMLElement>("[data-collapsing-smalltitle]");
     if (!nav && !title) return;
 
     // Подъём заголовка — единственное здесь, что является ДВИЖЕНИЕМ, а не
@@ -121,6 +125,12 @@ export function useCollapsingHeader() {
         title.style.opacity = (1 - p).toFixed(3);
         title.style.transform = p && lift ? `translate3d(0, ${(-lift * p).toFixed(2)}px, 0)` : "";
       }
+      // Появляется во ВТОРОЙ половине таяния крупного. Если вести мелкий тем же
+      // обратным прогрессом от нуля, обе фразы половину пути видны
+      // одновременно и читаются как дублирование, а не как передача эстафеты.
+      // Только opacity: движение здесь уже есть у крупного заголовка, второе
+      // на тех же 72 пикселях превратило бы передачу в суету.
+      if (small) small.style.opacity = Math.max(0, (p - 0.5) * 2).toFixed(3);
     };
 
     // Первый расчёт синхронно: возврат на главную из карточки товара
@@ -146,6 +156,9 @@ export function useCollapsingHeader() {
       if (title) {
         title.style.opacity = "";
         title.style.transform = "";
+      }
+      if (small) {
+        small.style.opacity = "";
       }
     };
   }, []);

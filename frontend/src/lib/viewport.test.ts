@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bottomNavStack,
+  brandMarkVisible,
   computeSafeArea,
   formatCssVars,
   dropdownMaxHeightPx,
@@ -143,25 +144,34 @@ describe("bottomNavStack (нижний стек CTA/навбар, v5.2.7)", () =
     expect(notched.ctaBottomOffset - flat.ctaBottomOffset).toBe(26);
   });
 
-  it("iPhone Pro Max (safe=34): CTA стоит выше навбара, не за ним", () => {
+  it("плавающая пилюля добавляет зазор ОДИН раз, поверх safe-area", () => {
+    // 64 контент + max(8, safe) + 10 зазора
+    expect(bottomNavStack(0).navHeight).toBe(64 + 8 + 10);
+    expect(bottomNavStack(-5).navHeight).toBe(64 + 8 + 10);
+    expect(bottomNavStack(NaN).navHeight).toBe(64 + 8 + 10);
+  });
+
+  it("на устройстве с вырезом safe-area прибавляется вместо минимума, а не к нему", () => {
     const s = bottomNavStack(34);
-    expect(s.navHeight).toBe(64 + 34); // 98
-    expect(s.ctaBottomOffset).toBe(64 + 34 + 16); // 114 — выше верхней кромки навбара
+    expect(s.navHeight).toBe(64 + 34 + 10); // 108, а не 64+8+34+10
+  });
+
+  it("разница между вырезом и плоским низом равна разнице safe-area", () => {
+    const notched = bottomNavStack(34);
+    const flat = bottomNavStack(8);
+    expect(notched.navHeight - flat.navHeight).toBe(26);
+  });
+
+  it("кнопка дока по-прежнему стоит выше навигации", () => {
+    const s = bottomNavStack(34);
     expect(s.ctaBottomOffset).toBeGreaterThan(s.navHeight);
+    expect(s.clearance).toBe(16);
   });
 
-  it("минимум навбара 8px (max(0.5rem,…)) при нулевой/некорректной safe-area", () => {
-    expect(bottomNavStack(0).navHeight).toBe(64 + 8);
-    expect(bottomNavStack(-5).navHeight).toBe(64 + 8);
-    expect(bottomNavStack(NaN).navHeight).toBe(64 + 8);
-  });
-
-  it("контент не уходит под панель: pb > низ кнопки + высота бара над кнопкой (~64px)", () => {
-    const BAR_ABOVE_BUTTON = 64;
-    for (const safe of [0, 34]) {
-      const s = bottomNavStack(safe);
-      expect(s.contentPadBottom).toBeGreaterThan(s.ctaBottomOffset + BAR_ABOVE_BUTTON);
-    }
+  it("отступ контента под навигацией считает safe-area один раз", () => {
+    // 64 контент + 34 safe + 10 зазор + 12 запас = 120, а не 128 (с двойным safe)
+    expect(bottomNavStack(34).navContentPadBottom).toBe(64 + 34 + 10 + 12);
+    expect(bottomNavStack(0).navContentPadBottom).toBe(64 + 8 + 10 + 12);
   });
 });
 
@@ -208,5 +218,28 @@ describe("imagePaddingClass (режим изображения ProductCard)", ()
     // Отношение ступеней важнее их абсолютных значений: вытянутый кадр и так
     // занимает меньше квадрата, и одинаковый отступ сделал бы товар мельче.
     expect(imagePaddingClass(600, 1200)).not.toBe(imagePaddingClass(1000, 1000));
+  });
+});
+
+describe("brandMarkVisible", () => {
+  it("вне Telegram знака нет: полосы кнопок не существует", () => {
+    expect(brandMarkVisible({ insideTelegram: false, isFullscreen: true, contentSafeTop: 46 })).toBe(false);
+  });
+
+  it("в Telegram без fullscreen знака нет: шапка Telegram вне webview", () => {
+    expect(brandMarkVisible({ insideTelegram: true, isFullscreen: false, contentSafeTop: 46 })).toBe(false);
+  });
+
+  it("fullscreen с нулевой полосой не показывает знак: рисовать его негде", () => {
+    expect(brandMarkVisible({ insideTelegram: true, isFullscreen: true, contentSafeTop: 0 })).toBe(false);
+  });
+
+  it("fullscreen с ненулевой полосой показывает знак", () => {
+    expect(brandMarkVisible({ insideTelegram: true, isFullscreen: true, contentSafeTop: 46 })).toBe(true);
+  });
+
+  it("отсутствующая величина полосы читается как ноль, а не как истина", () => {
+    expect(brandMarkVisible({ insideTelegram: true, isFullscreen: true, contentSafeTop: null })).toBe(false);
+    expect(brandMarkVisible({ insideTelegram: true, isFullscreen: true, contentSafeTop: NaN })).toBe(false);
   });
 });
