@@ -9,6 +9,7 @@ import {
   isKeyboardOpen,
   pickViewportHeight,
   sheetMaxHeightPx,
+  shouldLockOrientation,
 } from "./viewport";
 
 describe("pickViewportHeight", () => {
@@ -241,5 +242,25 @@ describe("brandMarkVisible", () => {
   it("отсутствующая величина полосы читается как ноль, а не как истина", () => {
     expect(brandMarkVisible({ insideTelegram: true, isFullscreen: true, contentSafeTop: null })).toBe(false);
     expect(brandMarkVisible({ insideTelegram: true, isFullscreen: true, contentSafeTop: NaN })).toBe(false);
+  });
+});
+
+describe("shouldLockOrientation", () => {
+  const base = { supported: true, alreadyLocked: false, portrait: true };
+
+  it("закрепляет портрет, когда клиент умеет и ещё не закреплено", () => {
+    expect(shouldLockOrientation(base)).toBe(true);
+  });
+
+  it("НЕ закрепляет альбомную: lockOrientation фиксирует текущую ориентацию, и мы заморозили бы сломанную раскладку", () => {
+    expect(shouldLockOrientation({ ...base, portrait: false })).toBe(false);
+  });
+
+  it("не повторяет вызов, если уже закреплено", () => {
+    expect(shouldLockOrientation({ ...base, alreadyLocked: true })).toBe(false);
+  });
+
+  it("не трогает старый клиент без метода", () => {
+    expect(shouldLockOrientation({ ...base, supported: false })).toBe(false);
   });
 });

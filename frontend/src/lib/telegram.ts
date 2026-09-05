@@ -7,6 +7,7 @@ import {
   formatCssVars,
   isKeyboardOpen,
   pickViewportHeight,
+  shouldLockOrientation,
 } from "./viewport";
 
 type SafeAreaInset = { top: number; bottom: number; left: number; right: number };
@@ -28,6 +29,11 @@ type TelegramWebApp = {
   openLink?: (url: string) => void;
   // Bot API 8.0: ярлык Mini App на домашнем экране телефона.
   addToHomeScreen?: () => void;
+  // Bot API 8.0: фиксация ориентации. lockOrientation() закрепляет ТЕКУЩУЮ
+  // ориентацию, задать желаемую нельзя — отсюда осторожность в lockPortrait().
+  lockOrientation?: () => void;
+  unlockOrientation?: () => void;
+  isOrientationLocked?: boolean;
   checkHomeScreenStatus?: (cb: (status: string) => void) => void;
   HapticFeedback?: { impactOccurred: (style: string) => void };
   BackButton?: {
@@ -212,6 +218,62 @@ export function enterFullscreen(): void {
     const supported = !tg.isVersionAtLeast || tg.isVersionAtLeast("8.0");
     if (supported) tg.requestFullscreen?.();
   } catch {}
+}
+
+/** Закрепляет портретную ориентацию, когда это уместно.
+ *
+ *  Решение принимает shouldLockOrientation (lib/viewport.ts, покрыто тестами);
+ *  здесь только чтение состояния и вызов. Портрет определяем по фактическим
+ *  размерам окна, а не по `screen.orientation`: последний в вебвью Telegram
+ *  сообщает ориентацию УСТРОЙСТВА, которая с областью показа расходится.
+ *
+ *  Возвращает true, если закрепили, — по этому признаку подписка на поворот
+ *  снимает саму себя.
+ */
+export function lockPortrait(): boolean {
+  const tg = getTelegram();
+  if (!tg) return false;
+  try {
+    const supported =
+      typeof tg.lockOrientation === "function" &&
+      (!tg.isVersionAtLeast || tg.isVersionAtLeast("8.0"));
+    if (
+      !shouldLockOrientation({
+        supported,
+        alreadyLocked: !!tg.isOrientationLocked,
+        portrait: window.innerHeight >= window.innerWidth,
+      })
+    ) {
+      return false;
+    }
+    tg.lockOrientation?.();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Подписка «дождаться портрета и закрепить».
+ *
+ *  Нужна для случая, когда приложение открыли с уже повёрнутым телефоном:
+ *  закреплять альбомную нельзя (см. shouldLockOrientation), а другого шанса,
+ *  кроме первого поворота в портрет, у нас нет. Подписка снимает себя сама,
+ *  как только закрепление состоялось, — висеть на resize всю сессию ради
+ *  одного разового действия незачем.
+ */
+export function watchForPortraitLock(): () => void {
+  if (typeof window === "undefined") return () => {};
+  if (lockPortrait()) return () => {};
+  const onChange = () => {
+    if (lockPortrait()) stop();
+  };
+  const stop = () => {
+    window.removeEventListener("resize", onChange);
+    window.removeEventListener("orientationchange", onChange);
+  };
+  window.addEventListener("resize", onChange);
+  window.addEventListener("orientationchange", onChange);
+  return stop;
 }
 
 /* ============================================================
@@ -415,8 +477,15 @@ export function initTelegramUi(): () => void {
   window.addEventListener("orientationchange", requestSync);
   window.visualViewport?.addEventListener("resize", requestSync);
 
+  // Портретная ориентация закрепляется здесь, а не в enterFullscreen: если
+  // приложение открыли уже повёрнутым, закреплять нечего — надо дождаться
+  // первого поворота в портрет. Подписка снимает себя сама, как только
+  // закрепление состоялось (см. watchForPortraitLock).
+  const stopOrientationWatch = watchForPortraitLock();
+
   return () => {
     uiInitialized = false;
+    stopOrientationWatch();
     if (raf) cancelAnimationFrame(raf);
     for (const e of tgEvents) { try { tg?.offEvent?.(e, requestSync); } catch {} }
     try { tg?.offEvent?.("themeChanged", onTheme); } catch {}

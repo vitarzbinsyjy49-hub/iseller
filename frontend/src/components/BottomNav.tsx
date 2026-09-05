@@ -220,13 +220,11 @@ export default function BottomNav() {
               onPointerDown={() => preloadRoute(item.to)}
               onPointerEnter={() => preloadRoute(item.to)}
               aria-current={isActive ? "page" : undefined}
-              className={`tap flex w-16 flex-col items-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-medium transition-colors ${
-                isActive ? "text-accent" : "text-muted"
+              className={`nav-tab tap flex w-16 flex-col items-center gap-0.5 px-1 py-1 text-[11px] font-medium transition-colors ${
+                isActive ? "nav-tab-active text-accent" : "text-muted"
               }`}
             >
-              <span className={`nav-icon relative flex h-7 min-w-10 items-center justify-center rounded-full ${
-                isActive ? "nav-icon-active" : ""
-              }`}>
+              <span className="nav-icon relative flex h-7 min-w-10 items-center justify-center rounded-full">
                 {item.icon(isActive)}
                 {/* Точка, а не цифра: в ряду вкладок число нечитаемо мелким, а
                     сообщить надо ровно одно — «там что-то изменилось».
