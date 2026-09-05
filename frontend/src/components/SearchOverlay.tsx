@@ -22,6 +22,7 @@ import { useNavigate } from "react-router-dom";
 import SearchPanel from "./SearchPanel";
 import { Icon } from "./icons";
 import { track } from "../lib/analytics";
+import { setBackButton } from "../lib/telegram";
 import { searchAppSections } from "../lib/appSections";
 import { loadCachedCategories } from "../lib/categoryCache";
 import { navTiles } from "../lib/navTiles";
@@ -61,14 +62,28 @@ export default function SearchOverlay({ open, onClose }: { open: boolean; onClos
     return () => cancelAnimationFrame(id);
   }, [open]);
 
-  // Открытая панель забирает Escape и системную кнопку «назад»: закрыть поиск
-  // человек ожидает раньше, чем уйти с экрана, поверх которого он открыт.
+  // Escape и кнопка «назад» Telegram закрывают панель, а не уводят с экрана
+  // под ней: закрыть поиск человек ожидает раньше, чем уйти со страницы,
+  // поверх которой он его открыл.
+  //
+  // setBackButton перевешивается на время жизни панели и возвращается назад
+  // при закрытии: Layout вешает на неё goBack для нелистовых маршрутов, и без
+  // перехвата «назад» увёл бы нижний экран, оставив панель висеть — со стороны
+  // она выглядела бы зависшей.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const restoreBack = setBackButton(onClose);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      restoreBack();
+    };
   }, [open, onClose]);
+
+  // Открытие панели — отдельное событие. Без него нечем измерить, стали ли
+  // поиском пользоваться после того, как круг перестал уводить в каталог.
+  useEffect(() => { if (open) track("search_focused", { source: "overlay" }); }, [open]);
 
   // Запрос сбрасываем на закрытии, а не на открытии: иначе он мигает старым
   // текстом в первом кадре появления.
@@ -94,7 +109,10 @@ export default function SearchOverlay({ open, onClose }: { open: boolean; onClos
       role="dialog"
       aria-modal="true"
       aria-label="Поиск"
-      style={{ paddingTop: "var(--app-content-top-offset, 0px)" }}
+      // Фолбэк на env() обязателен: --app-content-top-offset ставится ТОЛЬКО
+      // внутри Telegram, а панель — fixed inset-0 и из общего padding у #root
+      // выпадает. Без фолбэка строка ввода уезжает под чёлку в обычном браузере.
+      style={{ paddingTop: "var(--app-content-top-offset, env(safe-area-inset-top, 0px))" }}
     >
       <div className="flex items-center gap-2 px-4 pb-2 pt-3">
         <div className="relative flex-1">
@@ -117,7 +135,18 @@ export default function SearchOverlay({ open, onClose }: { open: boolean; onClos
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pb-6">
+      {/* Прокрутка здесь ОДНА — внутренняя у SearchPanel отключена (prop fill).
+          Вложенные области дали бы список внутри списка: панель считает себе
+          высоту по формуле для выпадающего меню, а из полноэкранного оверлея
+          её опоры (`<main>`, резерв под навигацию) не видно вовсе.
+          overscroll-contain — чтобы протяжка за край не уводила страницу ПОД
+          панелью: фон непрозрачен, и человек не увидел бы, что уехал.
+          Нижний отступ — safe-area, иначе последняя строка списка попадает под
+          домашний индикатор. */}
+      <div
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        style={{ paddingBottom: "calc(1.5rem + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)))" }}
+      >
         {/* Разделы идут ВЫШЕ товаров и намеренно.
             Их мало и они точные: человек, набравший «заявки», ищет именно
             раздел, и прятать его под ленту карточек значит отвечать не на тот
@@ -164,6 +193,7 @@ export default function SearchOverlay({ open, onClose }: { open: boolean; onClos
         <SearchPanel
           query={query}
           chips={chips}
+          fill
           onNavigate={go}
           onPickQuery={(q) => {
             setQuery(q);

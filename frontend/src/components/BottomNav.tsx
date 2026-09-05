@@ -166,7 +166,7 @@ function useGlassFill(el: HTMLElement | null, surface: "glass" | "solid") {
   }, [el, surface]);
 }
 
-export default function BottomNav({ onOpenSearch }: { onOpenSearch: () => void }) {
+export default function BottomNav({ onOpenSearch, searchOpen = false }: { onOpenSearch: () => void; searchOpen?: boolean }) {
   const { pathname } = useLocation();
   const surface = useNavSurface(pathname);
   const [nav, setNav] = useState<HTMLElement | null>(null);
@@ -251,6 +251,11 @@ export default function BottomNav({ onOpenSearch }: { onOpenSearch: () => void }
         onClick={onOpenSearch}
         onPointerDown={() => preloadRoute("/catalog")}
         aria-label="Поиск"
+        // Кнопка открывает панель, а не переходит куда-то: без этих двух
+        // атрибутов экранный читалка объявляет её обычной кнопкой, и человек
+        // не знает, что произойдёт по нажатию.
+        aria-haspopup="dialog"
+        aria-expanded={searchOpen}
         className="nav-surface nav-circle tap flex h-14 w-14 shrink-0 items-center justify-center text-muted"
       >
         <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor"

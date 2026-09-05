@@ -46,16 +46,26 @@ const SCENARIO_CHIPS: { label: string; route: string }[] = [
  *  клавиатуре, а часть не сообщает вовсе. Поэтому главное действие панели
  *  («Спросить AI») стоит в её НАЧАЛЕ: место в начале списка не зависит ни от
  *  какого замера. */
-function PanelScroll({ deps, className = "", children, ...rest }: {
+function PanelScroll({ deps, className = "", fill = false, children, ...rest }: {
   deps: unknown[];
   className?: string;
+  /** Панель занимает всю доступную высоту, а прокруткой управляет родитель.
+   *
+   *  Нужен полноэкранному оверлею поиска (components/SearchOverlay): расчёт
+   *  ниже — про ВЫПАДАЮЩУЮ панель, он меряет расстояние до низа экрана и
+   *  резерв под навигацию через `closest("main")`. Из оверлея этих опор нет
+   *  вовсе: он сосед `<main>`, а не его потомок, резерв читается нулём, и
+   *  панель получала бы собственный max-height внутри уже прокручиваемого
+   *  контейнера — список внутри списка. Здесь ограничивать нечего: высоту
+   *  задаёт сам оверлей. */
+  fill?: boolean;
   children: ReactNode;
 } & Record<string, unknown>) {
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || fill) return;
     const apply = () => {
       const vv = window.visualViewport;
       const offset = vv?.offsetTop ?? 0;
@@ -95,7 +105,11 @@ function PanelScroll({ deps, className = "", children, ...rest }: {
   }, deps);
 
   return (
-    <div ref={ref} className={`overflow-y-auto overscroll-contain ${className}`} {...rest}>
+    <div
+      ref={ref}
+      className={fill ? className : `overflow-y-auto overscroll-contain ${className}`}
+      {...rest}
+    >
       {children}
     </div>
   );
@@ -114,6 +128,8 @@ type Props = {
   recentlyViewed?: TCard[] | null;
   /** Показывать ли live-результаты (на desktop-шапке результаты рисует каталог). */
   withResults?: boolean;
+  /** Высотой и прокруткой распоряжается родитель (полноэкранный оверлей). */
+  fill?: boolean;
 };
 
 /** Содержимое умной поисковой панели. Родитель решает, КОГДА и ГДЕ её показать
@@ -125,7 +141,7 @@ type Props = {
  *    «ничего не нашлось» с выходами в AI и каталог.
  *  Обычный поиск — детерминированный каталог; сложные запросы уходят в AI. */
 export default function SearchPanel({
-  query, onNavigate, onPickQuery, chips = [], recentlyViewed, withResults = true,
+  query, onNavigate, onPickQuery, chips = [], recentlyViewed, withResults = true, fill = false,
 }: Props) {
   const trimmed = query.trim();
   const typing = withResults && trimmed.length >= MIN_QUERY_LEN;
@@ -146,7 +162,7 @@ export default function SearchPanel({
 
   if (typing) {
     return (
-      <PanelScroll deps={[typing, searching, results?.length ?? -1]} role="listbox" aria-label="Результаты поиска">
+      <PanelScroll fill={fill} deps={[typing, searching, results?.length ?? -1]} role="listbox" aria-label="Результаты поиска">
         {searching && results === null ? (
           <p className="px-4 py-3.5 text-sm text-muted">Ищем…</p>
         ) : results && results.length > 0 ? (
@@ -208,7 +224,7 @@ export default function SearchPanel({
 
   // ===== Пустой запрос: полезное состояние вместо пустого дропдауна =====
   return (
-    <PanelScroll deps={[typing, history.length, chips.length, recentlyViewed?.length ?? -1]} className="p-3">
+    <PanelScroll fill={fill} deps={[typing, history.length, chips.length, recentlyViewed?.length ?? -1]} className="p-3">
       {/* «Спросить AI» стоит ПЕРВЫМ, а не последним.
           Внизу панели эта кнопка оказывалась недостижимой: снизу её закрывает
           то клавиатура, то нижняя навигация, и добраться прокруткой нельзя —

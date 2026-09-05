@@ -48,7 +48,7 @@ export const APP_SECTIONS: AppSection[] = [
   {
     key: "favorites", label: "Избранное", hint: "Сохранённые товары",
     route: "/favorites", icon: "heart",
-    synonyms: ["избранное", "сохранённые", "сохраненные", "закладки", "нравится", "wishlist"],
+    synonyms: ["избранное", "сохранённые", "закладки", "нравится", "wishlist"],
   },
   {
     key: "history", label: "История просмотров", hint: "Товары, которые вы открывали",
@@ -119,10 +119,25 @@ export function toRuLayout(q: string): string {
  *  Совпадение по ПРЕФИКСУ слова, а не по вхождению подстроки: «ка» должно
  *  находить «Каталог», но «лог» находить его не должно — иначе выдача
  *  наполняется случайными попаданиями в середину слов и перестаёт читаться.
+ *
+ *  Запрос сопоставляется ПОСЛОВНО: каждое слово запроса обязано быть префиксом
+ *  какого-то слова кандидата. Здесь сначала стояло `word.startsWith(q)` с целым
+ *  запросом — и любой запрос с пробелом не находил ничего вовсе, включая
+ *  точное имя раздела: ни одно слово не может начинаться со строки, внутри
+ *  которой есть пробел. «Мои заявки» не находили по «мои заявки», а четыре
+ *  составных синонима в реестре были мертвы как фразы.
+ *
+ *  Порядок слов не требуется: «заявки мои» — тот же запрос, что «мои заявки»,
+ *  и требовать от человека попасть в наш порядок незачем.
  */
 function sectionMatches(section: AppSection, q: string): boolean {
+  const words = q.split(" ").filter(Boolean);
+  if (words.length === 0) return false;
   const haystacks = [section.label, ...section.synonyms].map(normalizeQuery);
-  return haystacks.some((h) => h.split(" ").some((word) => word.startsWith(q)));
+  return haystacks.some((h) => {
+    const hw = h.split(" ");
+    return words.every((qw) => hw.some((w) => w.startsWith(qw)));
+  });
 }
 
 /** Минимальная длина запроса, с которой ищем разделы.

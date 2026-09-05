@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   APP_SECTIONS,
-  MIN_SECTION_QUERY_LEN,
   normalizeQuery,
   searchAppSections,
   toRuLayout,
@@ -49,7 +48,21 @@ describe("searchAppSections", () => {
 
   it("слишком короткий запрос не даёт разделов: одна буква — это шум над товарами", () => {
     expect(searchAppSections("к")).toEqual([]);
-    expect(MIN_SECTION_QUERY_LEN).toBe(2);
+  });
+
+  it("находит по точному имени раздела из двух слов", () => {
+    // Здесь жила ошибка: запрос сравнивался целиком со словом кандидата, и
+    // ЛЮБОЙ запрос с пробелом не находил ничего — включая надпись на кнопке.
+    expect(searchAppSections("мои заявки").map((s) => s.key)).toContain("requests");
+    expect(searchAppSections("о магазине").map((s) => s.key)).toContain("info");
+  });
+
+  it("не требует угадывать порядок слов", () => {
+    expect(searchAppSections("заявки мои").map((s) => s.key)).toContain("requests");
+  });
+
+  it("каждое слово запроса должно найтись: лишнее слово отсекает раздел", () => {
+    expect(searchAppSections("мои котики").map((s) => s.key)).not.toContain("requests");
   });
 
   it("пустой запрос не даёт разделов", () => {
@@ -62,8 +75,15 @@ describe("searchAppSections", () => {
   });
 
   it("уважает предел выдачи", () => {
-    // «о» — префикс многих синонимов; предел не даёт выдаче разрастись
-    expect(searchAppSections("оп", 2).length).toBeLessThanOrEqual(2);
+    // Запрос обязан давать БОЛЬШЕ совпадений, чем предел, иначе тест зелёный
+    // при любом лимите и откат предела он не поймает.
+    const wide = searchAppSections("к", 99);
+    const all = APP_SECTIONS.filter((s) =>
+      [s.label, ...s.synonyms].some((h) => h.toLowerCase().includes("к")),
+    );
+    expect(all.length).toBeGreaterThan(2);
+    expect(searchAppSections("ка", 2).length).toBeLessThanOrEqual(2);
+    expect(wide).toEqual([]); // одна буква по-прежнему не ищет
   });
 });
 
