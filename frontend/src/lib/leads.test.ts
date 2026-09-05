@@ -84,3 +84,44 @@ describe("leadMetadataRows", () => {
     expect(leadMetadataRows({})).toEqual([]);
   });
 });
+
+import { unseenLeadCount } from "./leads";
+
+describe("unseenLeadCount", () => {
+  const lead = (created: string, updated: string) => ({ created_at: created, updated_at: updated });
+
+  it("считает заявку, которую менеджер тронул после последнего просмотра", () => {
+    const leads = [lead("2026-09-01T10:00:00Z", "2026-09-03T12:00:00Z")];
+    expect(unseenLeadCount(leads, "2026-09-02T00:00:00Z")).toBe(1);
+  });
+
+  it("НЕ считает только что созданную заявку: человек сам её и отправил", () => {
+    const leads = [lead("2026-09-03T12:00:00Z", "2026-09-03T12:00:00Z")];
+    expect(unseenLeadCount(leads, "2026-09-02T00:00:00Z")).toBe(0);
+  });
+
+  it("не считает изменения, которые уже видели", () => {
+    const leads = [lead("2026-09-01T10:00:00Z", "2026-09-02T12:00:00Z")];
+    expect(unseenLeadCount(leads, "2026-09-03T00:00:00Z")).toBe(0);
+  });
+
+  it("без отметки о просмотре бейдж не зажигается на всю историю", () => {
+    const leads = [
+      lead("2026-09-01T10:00:00Z", "2026-09-02T12:00:00Z"),
+      lead("2026-08-01T10:00:00Z", "2026-08-05T12:00:00Z"),
+    ];
+    expect(unseenLeadCount(leads, null)).toBe(0);
+  });
+
+  it("пустой список даёт ноль", () => {
+    expect(unseenLeadCount([], "2026-09-02T00:00:00Z")).toBe(0);
+  });
+
+  it("битые и отсутствующие даты не считаются изменениями", () => {
+    const leads = [
+      { created_at: null, updated_at: null },
+      { created_at: "2026-09-01T10:00:00Z", updated_at: "не дата" },
+    ];
+    expect(unseenLeadCount(leads, "2026-09-02T00:00:00Z")).toBe(0);
+  });
+});

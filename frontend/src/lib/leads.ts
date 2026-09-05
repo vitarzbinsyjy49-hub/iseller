@@ -141,3 +141,47 @@ export function leadTitle(lead: LeadLike): string {
       return lead.product_title || "Консультация";
   }
 }
+
+export type LeadSeenLike = {
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+/** Миллисекунды из ISO-строки; null для пустого и для мусора. */
+function ms(iso?: string | null): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : null;
+}
+
+/** Сколько заявок изменилось с последнего захода человека в «Мои заявки».
+ *
+ *  Условий ДВА, и второе не менее важно первого:
+ *
+ *  - `updated_at > lastSeen` — с последнего просмотра что-то происходило;
+ *  - `updated_at > created_at` — происходившее сделал МЕНЕДЖЕР. Без этого
+ *    условия заявка, которую человек только что отправил сам, немедленно
+ *    зажигала бы ему бейдж о его собственном действии — то есть бейдж
+ *    сообщал бы «у вас новости» ровно в тот момент, когда новостей нет.
+ *
+ *  `lastSeen === null` (первый запуск, очищенное хранилище) даёт ноль
+ *  намеренно. Иначе человек, впервые открывший приложение после обновления,
+ *  получил бы бейдж на всю свою историю заявок — цифру, которая ничего не
+ *  сообщает и гасится только заходом в раздел.
+ *
+ *  Даты сравниваются как миллисекунды, а не строками: строковое сравнение ISO
+ *  верно лишь пока у всех значений одинаковая зона и одинаковая точность, а
+ *  это условие держится ровно до первой смены сериализатора.
+ */
+export function unseenLeadCount(leads: LeadSeenLike[], lastSeen: string | null): number {
+  const seen = ms(lastSeen);
+  if (seen === null) return 0;
+  let n = 0;
+  for (const l of leads) {
+    const updated = ms(l.updated_at);
+    const created = ms(l.created_at);
+    if (updated === null || created === null) continue;
+    if (updated > seen && updated > created) n += 1;
+  }
+  return n;
+}
