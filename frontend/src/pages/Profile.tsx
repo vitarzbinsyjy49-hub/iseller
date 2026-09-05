@@ -183,6 +183,9 @@ export default function Profile() {
         </span>
         {leadUnseen > 0 && (
           <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold text-white">
+            {/* Число само по себе — не текст: без контекста скринридер
+                проговорил бы голую цифру. */}
+            <span className="sr-only">Непросмотренных изменений: </span>
             {leadUnseen}
           </span>
         )}
