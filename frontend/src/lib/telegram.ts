@@ -2,6 +2,7 @@
 
 import { safeExternalUrl } from "./route";
 import {
+  brandMarkVisible,
   computeSafeArea,
   formatCssVars,
   isKeyboardOpen,
@@ -344,6 +345,16 @@ function syncViewportVars(tg: TelegramWebApp | null): void {
   }
 
   root.classList.toggle("tg-fullscreen", !!tg?.isFullscreen);
+  // Знак бренда в полосе плавающих кнопок Telegram. Решение принимает
+  // brandMarkVisible (lib/viewport.ts, покрыта тестами), а не CSS: класса
+  // tg-fullscreen для этого мало — он ничего не знает о том, пришла ли уже
+  // высота полосы. Telegram может сообщить fullscreen РАНЬШЕ, чем
+  // contentSafeAreaInset, и знак успел бы мигнуть в полосе высотой 0.
+  root.classList.toggle("brand-mark-on", brandMarkVisible({
+    insideTelegram: !!tg,
+    isFullscreen: !!tg?.isFullscreen,
+    contentSafeTop: tg?.contentSafeAreaInset?.top ?? null,
+  }));
   root.classList.toggle(
     "kb-open",
     isKeyboardOpen(

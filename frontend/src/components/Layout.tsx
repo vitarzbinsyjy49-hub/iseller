@@ -118,11 +118,13 @@ export default function Layout() {
           прибитый к экрану слой не должен зависеть от того, какая страница в
           нём сейчас смонтирована. */}
       <AuroraBackground />
-      {/* Знак бренда в полосе плавающих кнопок Telegram. Виден только в
-          fullscreen: вне него полоса имеет нулевую высоту и рисовать негде
-          (решение — brandMarkVisible в lib/viewport.ts, покрыто тестами).
-          Здесь читаем его дешёвый признак: класс tg-fullscreen на <html>,
-          который уже проставляет lib/telegram.ts. */}
+      {/* Знак бренда в полосе плавающих кнопок Telegram. Решение принимает
+          brandMarkVisible (lib/viewport.ts, покрыта тестами), которую вызывает
+          lib/telegram.ts в syncViewportVars и выставляет класс brand-mark-on на
+          <html>. Здесь разметка просто читает его через CSS (.brand-slot скрыт
+          вне этого класса). Сам знак не может решать, потому что Telegram может
+          сообщить fullscreen раньше, чем contentSafeAreaInset, и знак мигнул бы
+          в полосе нулевой высоты. */}
       <div aria-hidden className="hero-top-inset lg:hidden">
         <span className="brand-slot">
           <BrandWordmark size={26} />

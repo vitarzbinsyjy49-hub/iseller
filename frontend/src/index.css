@@ -127,6 +127,9 @@ body {
      класть ничего. Знак центрируется в НИЖНЕМ поясе, где Telegram держит свои
      плавающие кнопки. Отсюда padding сверху ровно на высоту статус-бара. */
   padding-top: var(--tg-safe-area-top, 0px);
+  /* Страховка на случай рассинхрона: если brandMarkVisible выставился раньше,
+     чем пришла высота полосы, содержимое не должно протекать поверх страницы. */
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -145,10 +148,10 @@ body {
   color: #fff;
 }
 
-/* Вне fullscreen полоса имеет нулевую высоту, но её содержимое всё равно
-   участвовало бы в раскладке flex-контейнера и могло бы вылезть за границы.
-   Класс tg-fullscreen ставит lib/telegram.ts. */
-html:not(.tg-fullscreen) .hero-top-inset > .brand-slot { display: none; }
+/* Гейт держит класс brand-mark-on, который ставит lib/telegram.ts по
+   решению brandMarkVisible. Класса tg-fullscreen здесь мало: он не знает,
+   пришла ли уже высота полосы, и знак мигал бы в полосе нулевой высоты. */
+html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
 
 .app-hero { background: var(--app-hero-bg); }
 
