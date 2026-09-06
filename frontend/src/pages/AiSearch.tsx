@@ -18,6 +18,8 @@ import AnswerBody from "../components/AnswerBody";
 import { parseAnswer, plainText } from "../lib/answerFormat";
 import { Icon } from "../components/icons";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
+import ScreenHeader from "../components/ScreenHeader";
+import { useCollapsingHeader } from "../lib/useCollapsingHeader";
 
 /** Намерения для товара, с карточки которого пришли. Формулировки короткие и
  *  от лица покупателя — они уходят в чат как его реплика. Товар в тексте не
@@ -59,6 +61,7 @@ type ChatItem =
  *  вернёт fallback/mock — пользователь никогда не видит ошибку AI. */
 export default function AiSearch() {
   const [params, setParams] = useSearchParams();
+  const collapsing = useCollapsingHeader();
   const config = usePublicConfig();
   const [value, setValue] = useState("");
   const [chat, setChat] = useState<ChatItem[]>([]);
@@ -320,7 +323,7 @@ export default function AiSearch() {
     // pb-cta (mobile) — тот же вычисляемый отступ под фиксированной строкой ввода,
     // что и у CTA товара (index.css): позиция над навбаром (safe-area) + высота бара.
     // Desktop: строка ввода sticky внутри pane, поэтому lg:pb-0.
-    <div className="mx-auto max-w-md pb-cta lg:max-w-none lg:pb-0">
+    <div ref={collapsing} className="mx-auto max-w-md pb-cta lg:max-w-none lg:pb-0">
       <div className="lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start lg:gap-8">
       {/* Desktop-sidebar: те же сценарии, что и на mobile, + постоянная история */}
       <AiSidebar
@@ -332,26 +335,27 @@ export default function AiSearch() {
       />
 
       <div className="flex min-w-0 flex-col lg:mx-auto lg:w-full lg:max-w-[860px]">
-      {/* Заголовок и вход в корзину в одной строке. Кнопка нужна именно здесь:
-          плавающая панель корзины на этом экране скрыта (она перекрывала строку
-          ввода), и без неё корзина стала бы недостижима с экрана AI — а человек
-          приходит сюда как раз выбирать, что в неё положить. */}
-      <div className="flex items-start justify-between gap-3">
-        <h1 className="text-2xl font-bold">AI-подбор техники</h1>
-        {cart.items_count > 0 && (
+      {/* Кнопка корзины живёт в actions липкого бара: плавающая панель корзины на
+          этом экране скрыта (она перекрывала строку ввода), и без своего входа
+          корзина была бы недостижима с экрана AI — а человек приходит сюда как
+          раз выбирать, что в неё положить. В липком баре она не теряется при
+          прокрутке, в отличие от прежнего места в строке с заголовком. */}
+      <ScreenHeader
+        title="AI-подбор техники"
+        subtitle="Опишите, что вам нужно — подберём варианты из наличия"
+        actions={cart.items_count > 0 ? (
           <button
             onClick={() => { track("cart_open", { source: "ai_header" }); navigate("/cart"); }}
             aria-label={`Корзина: ${cart.items_count}`}
-            className="tap relative mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface shadow-soft lg:hidden"
+            className="tap relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface shadow-soft"
           >
             <CartGlyph className="h-[18px] w-[18px]" />
             <span className="absolute -right-0.5 -top-0.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
               {cart.items_count}
             </span>
           </button>
-        )}
-      </div>
-      <p className="mt-1 text-sm text-muted">Опишите, что вам нужно — подберём варианты из наличия</p>
+        ) : undefined}
+      />
 
       {/* Бейдж движка. Показывается ТОЛЬКО когда backend подтвердил, что
           отвечает действительно Claude (config.ai_vendor): на стенде с

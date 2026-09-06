@@ -8,11 +8,14 @@ import { useFavoriteIds } from "../lib/favorites";
 import { track } from "../lib/analytics";
 import { Icon } from "../components/icons";
 import { enterRefCallback } from "../lib/useEnter";
+import ScreenHeader from "../components/ScreenHeader";
+import { useCollapsingHeader } from "../lib/useCollapsingHeader";
 
 /** Экран «Избранное»: карточки серверного избранного. Удаление сердечком —
  *  карточка исчезает сразу (фильтр по актуальным id), без перезагрузки. */
 export default function Favorites() {
   const navigate = useNavigate();
+  const collapsing = useCollapsingHeader();
   const favIds = useFavoriteIds();
   const [cards, setCards] = useState<TCard[] | null>(null);
   const [error, setError] = useState(false);
@@ -30,13 +33,13 @@ export default function Favorites() {
   const visible = cards?.filter((c) => favIds.includes(c.id)) ?? null;
 
   return (
-    <div className="mx-auto max-w-md lg:max-w-none">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">Избранное</h1>
-        {visible && visible.length > 0 && (
+    <div ref={collapsing} className="mx-auto max-w-md lg:max-w-none">
+      <ScreenHeader
+        title="Избранное"
+        actions={visible && visible.length > 0 ? (
           <span className="text-sm text-muted">{visible.length}</span>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {error ? (
         <div className="mt-6"><ErrorState message="Не удалось загрузить избранное" onRetry={load} /></div>

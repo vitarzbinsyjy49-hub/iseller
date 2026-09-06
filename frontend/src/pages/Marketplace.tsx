@@ -12,9 +12,12 @@ import { api } from "../lib/api";
 import ProductCard from "../components/ProductCard";
 import { ProductCard as TCard } from "../components/ai/types";
 import { ErrorState, EmptyState } from "../components/StateViews";
+import ScreenHeader from "../components/ScreenHeader";
+import { useCollapsingHeader } from "../lib/useCollapsingHeader";
 
 export default function Marketplace() {
   const navigate = useNavigate();
+  const collapsing = useCollapsingHeader();
   const [cards, setCards] = useState<TCard[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -28,9 +31,8 @@ export default function Marketplace() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="mx-auto max-w-md p-4 pb-28">
-      <h1 className="text-xl font-bold">Маркетплейс</h1>
-      <p className="mt-1 text-sm text-muted">Б/у техника от пользователей, проверенная магазином.</p>
+    <div ref={collapsing} className="mx-auto max-w-md pb-28">
+      <ScreenHeader title="Маркетплейс" subtitle="Б/у техника от пользователей, проверенная магазином." />
 
       <button
         type="button"

@@ -36,6 +36,8 @@ import {
 import { FormError, TextAreaField, TextField } from "../components/Field";
 import { Icon, type IconName } from "../components/icons";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
+import ScreenHeader from "../components/ScreenHeader";
+import { useCollapsingHeader } from "../lib/useCollapsingHeader";
 
 type Fulfillment = "pickup" | "delivery" | "consult";
 type LoadState = "loading" | "ready" | "error";
@@ -49,6 +51,7 @@ type Success = { number: string; itemsCount: number; total: number | null };
 export default function Cart() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const collapsing = useCollapsingHeader();
   const cart = useCart();
   const user = useAuthStore((s) => s.user);
   const config = usePublicConfig();
@@ -108,8 +111,8 @@ export default function Cart() {
 
   if (load === "error" && cart.items.length === 0) {
     return (
-      <div className="mx-auto max-w-md lg:max-w-3xl">
-        <h1 className="text-2xl font-bold">Корзина</h1>
+      <div ref={collapsing} className="mx-auto max-w-md lg:max-w-3xl">
+        <ScreenHeader title="Корзина" />
         <div className="mt-6"><ErrorState message="Не удалось загрузить корзину" onRetry={refresh} /></div>
       </div>
     );
@@ -117,8 +120,8 @@ export default function Cart() {
 
   if (load === "loading" && cart.items.length === 0) {
     return (
-      <div className="mx-auto max-w-md lg:max-w-3xl">
-        <h1 className="text-2xl font-bold">Корзина</h1>
+      <div ref={collapsing} className="mx-auto max-w-md lg:max-w-3xl">
+        <ScreenHeader title="Корзина" />
         <div className="mt-4 space-y-3">
           {[0, 1, 2].map((i) => <div key={i} className="skeleton h-24 rounded-xl2" />)}
         </div>
@@ -129,15 +132,25 @@ export default function Cart() {
   if (cart.items.length === 0) return <EmptyCart />;
 
   return (
-    <div className="mx-auto max-w-md lg:max-w-3xl">
-      <div className="flex items-baseline justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Корзина</h1>
-          <p className="mt-0.5 text-[13px] text-muted">
-            {pluralItems(cart.items_count)}
-            {cart.positions_count !== cart.items_count && ` · ${cart.positions_count} позиц.`}
-          </p>
-        </div>
+    <div ref={collapsing} className="mx-auto max-w-md lg:max-w-3xl">
+      <ScreenHeader
+        title="Корзина"
+        subtitle={`${pluralItems(cart.items_count)}${
+          cart.positions_count !== cart.items_count ? ` · ${cart.positions_count} позиц.` : ""
+        }`}
+        actions={(
+          <button
+            onClick={onClear}
+            className="tap shrink-0 text-xs font-medium text-muted transition-colors hover:text-danger"
+          >
+            Очистить
+          </button>
+        )}
+      />
+      {/* ScreenHeader целиком скрыт на lg (там нет липкого бара), а «Очистить» —
+          не название экрана, а действие: на desktop его не должно не стать
+          вместе с заголовком. Дубль показываем только там. */}
+      <div className="hidden justify-end lg:flex">
         <button
           onClick={onClear}
           className="tap shrink-0 text-xs font-medium text-muted transition-colors hover:text-danger"
@@ -544,6 +557,7 @@ function SuccessView({ result, managerUrl }: { result: Success; managerUrl?: str
 /* ------------------------------------------------------------ пустой экран --- */
 function EmptyCart() {
   const navigate = useNavigate();
+  const collapsing = useCollapsingHeader();
   const [recent, setRecent] = useState<TCard[] | null>(null);
   const [hits, setHits] = useState<TCard[] | null>(null);
   const [hitsTitle, setHitsTitle] = useState("Хиты продаж");
@@ -564,8 +578,8 @@ function EmptyCart() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-md lg:max-w-5xl">
-      <h1 className="text-2xl font-bold">Корзина</h1>
+    <div ref={collapsing} className="mx-auto max-w-md lg:max-w-5xl">
+      <ScreenHeader title="Корзина" />
 
       <div ref={enterRefCallback("fade")} className="mt-8 text-center">
         <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-mutedbg text-muted">

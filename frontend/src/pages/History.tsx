@@ -7,12 +7,15 @@ import ProductCard from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
 import { Icon } from "../components/icons";
 import { enterRefCallback } from "../lib/useEnter";
+import ScreenHeader from "../components/ScreenHeader";
+import { useCollapsingHeader } from "../lib/useCollapsingHeader";
 
 /** История просмотров (/history): существующий /catalog/recently-viewed,
  *  никакой новой таблицы. Карточки с избранным и переходом в ProductDetails.
  *  Пункт «История просмотров» в профиле раньше был заглушкой «Скоро». */
 export default function History() {
   const navigate = useNavigate();
+  const collapsing = useCollapsingHeader();
   const [cards, setCards] = useState<TCard[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -31,11 +34,11 @@ export default function History() {
   }, [load]);
 
   return (
-    <div className="mx-auto max-w-md lg:max-w-none">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">История просмотров</h1>
-        {cards && cards.length > 0 && <span className="text-sm text-muted">{cards.length}</span>}
-      </div>
+    <div ref={collapsing} className="mx-auto max-w-md lg:max-w-none">
+      <ScreenHeader
+        title="История просмотров"
+        actions={cards && cards.length > 0 ? <span className="text-sm text-muted">{cards.length}</span> : undefined}
+      />
 
       {error ? (
         <div className="mt-6"><ErrorState message="Не удалось загрузить историю" onRetry={load} /></div>

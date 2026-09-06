@@ -11,6 +11,8 @@ import {
   type LoyaltyAccount, type LoyaltyLevel,
 } from "../lib/loyalty";
 import { Icon } from "../components/icons";
+import ScreenHeader from "../components/ScreenHeader";
+import { useCollapsingHeader } from "../lib/useCollapsingHeader";
 
 const LoyaltyRoadmapSheet = lazy(() => import("../components/LoyaltyRoadmapSheet"));
 
@@ -46,6 +48,7 @@ function LevelRow({ level, index, current, reached }: {
 }
 
 export default function Loyalty() {
+  const collapsing = useCollapsingHeader();
   const [account, setAccount] = useState<LoyaltyAccount | null>(null);
   const [failed, setFailed] = useState(false);
   const [roadmap, setRoadmap] = useState(false);
@@ -62,8 +65,8 @@ export default function Loyalty() {
 
   if (failed) {
     return (
-      <div className="mx-auto max-w-md lg:max-w-3xl">
-        <h1 className="text-2xl font-bold">Баллы</h1>
+      <div ref={collapsing} className="mx-auto max-w-md lg:max-w-3xl">
+        <ScreenHeader title="Баллы" />
         <p className="mt-4 text-sm text-muted">
           Не удалось загрузить счёт. Откройте экран ещё раз — данные никуда не делись.
         </p>
@@ -73,8 +76,8 @@ export default function Loyalty() {
 
   if (!account) {
     return (
-      <div className="mx-auto max-w-md lg:max-w-3xl">
-        <h1 className="text-2xl font-bold">Баллы</h1>
+      <div ref={collapsing} className="mx-auto max-w-md lg:max-w-3xl">
+        <ScreenHeader title="Баллы" />
         <div className="mt-4 h-32 animate-pulse rounded-xl2 bg-mutedbg" />
       </div>
     );
@@ -83,8 +86,8 @@ export default function Loyalty() {
   const { level, next_level: next } = account;
 
   return (
-    <div className="mx-auto max-w-md pb-6 lg:max-w-3xl">
-      <h1 className="text-2xl font-bold">Баллы</h1>
+    <div ref={collapsing} className="mx-auto max-w-md pb-6 lg:max-w-3xl">
+      <ScreenHeader title="Баллы" />
 
       {/* ---- Счёт ---- */}
       <div className="mt-4 rounded-xl2 bg-gradient-to-r from-[#e3f2fd] to-[#e8eaf6] p-5">

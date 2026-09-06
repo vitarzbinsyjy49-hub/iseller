@@ -20,6 +20,8 @@ import { haptic, openExternalLink } from "../lib/telegram";
 import { toast } from "../lib/toast";
 import { Icon, type IconName } from "../components/icons";
 import { enterGridRefCallback } from "../lib/useEnter";
+import ScreenHeader from "../components/ScreenHeader";
+import { useCollapsingHeader } from "../lib/useCollapsingHeader";
 
 type Section = {
   id: string;
@@ -114,6 +116,7 @@ const SECTIONS: Section[] = [
 export default function Info() {
   const config = usePublicConfig();
   const { hash } = useLocation();
+  const collapsing = useCollapsingHeader();
 
   // Якорь из поста канала (/info#delivery) должен попасть в нужную секцию.
   // Скроллим после отрисовки: до неё элемента ещё нет.
@@ -129,11 +132,8 @@ export default function Info() {
   const phoneLabel = phone.replace(/^(\+7)(\d{3})(\d{3})(\d{2})(\d{2})$/, "$1 $2 $3-$4-$5");
 
   return (
-    <div className="mx-auto max-w-md lg:max-w-3xl">
-      <h1 className="text-2xl font-bold">Информация</h1>
-      <p className="mt-1 text-[13px] text-muted">
-        Условия магазина: получение, оплата, гарантия и связь с нами.
-      </p>
+    <div ref={collapsing} className="mx-auto max-w-md lg:max-w-3xl">
+      <ScreenHeader title="Информация" subtitle="Условия магазина: получение, оплата, гарантия и связь с нами." />
 
       <div className="stagger mt-4 space-y-3">
         {SECTIONS.map((section) => (
