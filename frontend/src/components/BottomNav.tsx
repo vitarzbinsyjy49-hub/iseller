@@ -197,6 +197,20 @@ function useGlassFill(el: HTMLElement | null, surface: "glass" | "solid") {
  *  самостоятельное движение. */
 const ROW_SWAP_DX_PX = CART_SWAP_DX_PX;
 
+/** Обмен НИЖНЕГО РЯДА идёт дольше и дальше, чем обмен кнопки корзины.
+ *
+ *  Сначала он переиспользовал тайминги кнопки как есть — 190мс на приход,
+ *  150мс на уход, сдвиг 14px. На кнопке шириной в половину плитки это ровно
+ *  столько, сколько надо; на полосе во всю ширину экрана то же движение
+ *  читается рывком: слои успевают смениться раньше, чем глаз проследит за
+ *  превращением, и вместо «лупа стала строкой» видно «одно моргнуло другим».
+ *
+ *  Путь тоже длиннее: ход в 14px на 300-пиксельной полосе — это 5% её ширины,
+ *  то есть почти незаметное дрожание, а не уступка места. */
+const ROW_MORPH_DX_PX = 26;
+const ROW_MORPH_IN_MS = 300;
+const ROW_MORPH_OUT_MS = 210;
+
 /** Сколько категорий показываем чипами. Тот же предел, что был у прежнего
  *  SearchOverlay и у hero главной: ряд должен помещаться в две строки. */
 const CHIP_LIMIT = 6;
@@ -241,10 +255,10 @@ export default function BottomNav() {
   // вкладок (он никогда не размонтируется) и играет анимацию, когда
   // searchOpen меняется. Слой строки ввода — наоборот, монтируется заново на
   // каждое открытие и играет свой enterRefCallback("slide", ...).
-  const tabsLayerRef = useCartSwapOut<HTMLDivElement>(searchOpen);
+  const tabsLayerRef = useCartSwapOut<HTMLDivElement>(searchOpen, { dxPx: ROW_MORPH_DX_PX, inMs: ROW_MORPH_IN_MS, outMs: ROW_MORPH_OUT_MS });
   // Тот же приём для круга: иконка лупы — постоянный слой, «Отмена» —
   // монтируется только пока поиск открыт.
-  const circleIconLayerRef = useCartSwapOut<HTMLDivElement>(searchOpen);
+  const circleIconLayerRef = useCartSwapOut<HTMLDivElement>(searchOpen, { dxPx: ROW_MORPH_DX_PX, inMs: ROW_MORPH_IN_MS, outMs: ROW_MORPH_OUT_MS });
 
   const chips = useMemo(() => {
     if (!searchOpen) return [];
@@ -568,11 +582,11 @@ export default function BottomNav() {
                   onPointerDown={() => preloadRoute(item.to)}
                   onPointerEnter={() => preloadRoute(item.to)}
                   aria-current={isActive ? "page" : undefined}
-                  className={`nav-tab tap flex w-16 flex-col items-center gap-0.5 px-1 py-1 text-[11px] font-medium transition-colors ${
+                  className={`nav-tab tap flex w-16 flex-col items-center justify-center gap-1 px-1 text-[11px] font-medium leading-none transition-colors ${
                     isActive ? "nav-tab-active text-accent" : "text-muted"
                   }`}
                 >
-                  <span className="nav-icon relative flex h-7 min-w-10 items-center justify-center rounded-full">
+                  <span className="nav-icon relative flex h-6 min-w-10 items-center justify-center rounded-full">
                     {item.icon(isActive)}
                     {/* Точка, а не цифра: в ряду вкладок число нечитаемо мелким, а
                         сообщить надо ровно одно — «там что-то изменилось».
@@ -596,7 +610,7 @@ export default function BottomNav() {
               справа (slide), как степпер корзины. */}
           {searchOpen && (
             <div
-              ref={enterRefCallback("slide", 0, ROW_SWAP_DX_PX)}
+              ref={enterRefCallback("slide", 0, ROW_MORPH_DX_PX, ROW_MORPH_IN_MS)}
               className="morph-layer flex items-center gap-2 px-4"
             >
               <Icon name="search" className="h-5 w-5 shrink-0 text-muted" />
@@ -645,7 +659,7 @@ export default function BottomNav() {
           </div>
           {searchOpen && (
             <div
-              ref={enterRefCallback("slide", 0, ROW_SWAP_DX_PX)}
+              ref={enterRefCallback("slide", 0, ROW_MORPH_DX_PX, ROW_MORPH_IN_MS)}
               className="morph-layer flex items-center justify-center text-[13px] font-semibold text-accent"
             >
               Отмена

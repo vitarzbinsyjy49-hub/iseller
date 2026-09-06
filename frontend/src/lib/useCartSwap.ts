@@ -28,7 +28,15 @@ import { animateEnter, animateSwapOut } from "./motion";
  *  на плитке шириной в половину экрана выглядит суетой. */
 export const CART_SWAP_DX_PX = 14;
 
-export function useCartSwapOut<T extends HTMLElement>(added: boolean) {
+export function useCartSwapOut<T extends HTMLElement>(
+  added: boolean,
+  /** Переопределение хода и длительности. По умолчанию — язык кнопки корзины:
+   *  короткий сдвиг на 14px за пресетные 190/150мс. Нижнему ряду, который
+   *  меняется целиком, этого мало: на полосе во всю ширину такой ход читается
+   *  рывком, а не превращением, — ему передают и путь длиннее, и время больше. */
+  opts?: { dxPx?: number; inMs?: number; outMs?: number },
+) {
+  const dx = opts?.dxPx ?? CART_SWAP_DX_PX;
   const ref = useRef<T>(null);
   const prevAdded = useRef(added);
 
@@ -44,8 +52,8 @@ export function useCartSwapOut<T extends HTMLElement>(added: boolean) {
     // возвращать её справа, обратный ход выглядит не отменой действия, а новым
     // событием — и человек, нажавший «−» до нуля, видит не то, что отменил.
     const cancel = added
-      ? animateSwapOut(el, undefined, -CART_SWAP_DX_PX)
-      : animateEnter(el, "slide", undefined, 0, -CART_SWAP_DX_PX);
+      ? animateSwapOut(el, undefined, -dx, opts?.outMs)
+      : animateEnter(el, "slide", undefined, 0, -dx, opts?.inMs);
 
     // Отмена, возвращаемая lib/motion.ts, НАМЕРЕННО не доводит значение до
     // конца — это верно для прерванного ЖЕСТА (протяжку отпустили на

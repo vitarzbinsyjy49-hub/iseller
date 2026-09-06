@@ -24,11 +24,11 @@ import { animateEnter, staggerDelayMs, type EnterPreset } from "./motion";
  *
  *  delayMs — замена `.stagger` (index.css) для случаев, где индекс уже под
  *  рукой; для списков карточек обычно проще enterGridRefCallback ниже. */
-export function enterRefCallback(preset: EnterPreset, delayMs = 0, dxPx = 0) {
+export function enterRefCallback(preset: EnterPreset, delayMs = 0, dxPx = 0, durationMs?: number) {
   return (el: HTMLElement | null) => {
     if (!el || el.dataset.entered) return;
     el.dataset.entered = "1";
-    animateEnter(el, preset, undefined, delayMs, dxPx);
+    animateEnter(el, preset, undefined, delayMs, dxPx, durationMs);
   };
 }
 

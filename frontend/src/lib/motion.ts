@@ -310,6 +310,11 @@ export function animateEnter(
    *  Другими пресетами игнорируется. При «уменьшить движение» обнуляется вместе
    *  со всеми смещениями — остаётся чистое проявление. */
   dxPx = 0,
+  /** Переопределение длительности. Нужно там, где движется НЕ отдельный
+   *  элемент, а целая полоса интерфейса: пресетные 190мс рассчитаны на кнопку,
+   *  и на обмене всего нижнего ряда та же цифра читается рывком, а не
+   *  превращением. При «уменьшить движение» игнорируется — там своя, короткая. */
+  durationMs?: number,
 ): () => void {
   if (preset === "fade") {
     const duration = reducedMotion ? FADE_MS : ENTER_FADE_MS;
@@ -321,7 +326,7 @@ export function animateEnter(
   const fromScale = preset === "pop" && !reducedMotion ? ENTER_POP_FROM_SCALE : 1;
   const duration = reducedMotion
     ? FADE_MS
-    : (preset === "pop" || preset === "slide" ? ENTER_POP_MS : ENTER_FADEUP_MS);
+    : (durationMs ?? (preset === "pop" || preset === "slide" ? ENTER_POP_MS : ENTER_FADEUP_MS));
   const apply = (t: number) => {
     el.style.opacity = String(t);
     el.style.transform = transformString(offset * (1 - t), fromScale + (1 - fromScale) * t, offsetX * (1 - t));
@@ -347,10 +352,12 @@ export function animateSwapOut(
    *  Ненулевое значение выключает масштаб: сжатие вместе со сдвигом читается
    *  как два разных события, а уступка — одно. */
   dxPx = 0,
+  /** Переопределение длительности — см. тот же параметр у animateEnter. */
+  durationMs?: number,
 ): () => void {
   const lateral = !reducedMotion && dxPx !== 0;
   const toScale = reducedMotion || lateral ? 1 : SWAP_OUT_TO_SCALE;
-  const duration = reducedMotion ? FADE_MS : SWAP_OUT_MS;
+  const duration = reducedMotion ? FADE_MS : (durationMs ?? SWAP_OUT_MS);
   return animateNumber(0, 1, duration, (t) => {
     el.style.opacity = String(1 - t);
     el.style.transform = transformString(0, 1 + (toScale - 1) * t, lateral ? dxPx * t : 0);
