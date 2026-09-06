@@ -6,6 +6,7 @@ import { animateNumber, prefersReducedMotion } from "../lib/motion";
 import { useLeadsBadge } from "../store/leadsBadge";
 import { useCartSwapOut, CART_SWAP_DX_PX } from "../lib/useCartSwap";
 import { enterRefCallback } from "../lib/useEnter";
+import { useIconFill } from "../lib/useIconFill";
 import { Icon } from "./icons";
 import SearchPanel from "./SearchPanel";
 import { track } from "../lib/analytics";
@@ -39,15 +40,26 @@ const GLASS_FILL_MS = 220;
  *  active-state без NavLinkWithRef (у NavLink были крэши hasValidRef при
  *  расхождении версий react-router-dom/React в чужих окружениях). */
 
-type Item = { to: string; label: string; icon: (active: boolean) => ReactElement };
+/** Вкладка держит ДВА рисунка одного знака: контур и силуэт.
+ *
+ *  Активной вкладке силуэт проступает поверх контура — это второй признак
+ *  состояния помимо цвета. Не украшение: вкладку, отличающуюся только цветом,
+ *  не найдёт человек с нарушением цветовосприятия. Наполнение играет покадрово
+ *  (lib/useIconFill.ts), потому что этот webview гасит CSS-переходы целиком.
+ */
+type Item = { to: string; label: string; outline: ReactElement; fill: ReactElement };
 
-const stroke = (active: boolean) => ({
+/** Контур — 1.5, как во всём наборе (components/icons.tsx). Толщина больше НЕ
+ *  зависит от активности: раньше активная вкладка утолщалась до 2.2, и это был
+ *  третий способ сказать одно и то же после цвета и капсулы. Теперь состояние
+ *  несёт силуэт, а линия остаётся одной на все вкладки. */
+const OUTLINE = {
   fill: "none" as const,
   stroke: "currentColor",
-  strokeWidth: active ? 2.2 : 1.8,
+  strokeWidth: 1.5,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
-});
+};
 
 /** Четыре вкладки плюс отдельный круг поиска — раскладка Telegram iOS 26.
  *
@@ -59,39 +71,89 @@ const stroke = (active: boolean) => ({
 const items: Item[] = [
   {
     to: "/", label: "Главная",
-    icon: (a) => (
-      <svg viewBox="0 0 24 24" className="h-6 w-6" {...stroke(a)}>
-        <path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" />
+    outline: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" {...OUTLINE}>
+        <path d="M3.5 10.5 12 4l8.5 6.5" />
+        <path d="M5.8 9.6v9.6a1.9 1.9 0 0 0 1.9 1.9h8.6a1.9 1.9 0 0 0 1.9-1.9V9.6" />
+      </svg>
+    ),
+    fill: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+        <path d="M12 4 3.5 10.5v8.7A1.9 1.9 0 0 0 5.4 21h13.2a1.9 1.9 0 0 0 1.9-1.8v-8.7z" />
       </svg>
     ),
   },
   {
     to: "/catalog", label: "Каталог",
-    icon: (a) => (
-      <svg viewBox="0 0 24 24" className="h-6 w-6" {...stroke(a)}>
-        <rect x="3.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.6" />
-        <rect x="3.5" y="13.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.6" />
+    outline: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" {...OUTLINE}>
+        <rect x="4.2" y="4" width="6.4" height="6.4" rx="1.8" />
+        <rect x="13.4" y="4" width="6.4" height="6.4" rx="1.8" />
+        <rect x="4.2" y="13.6" width="6.4" height="6.4" rx="1.8" />
+        <rect x="13.4" y="13.6" width="6.4" height="6.4" rx="1.8" />
+      </svg>
+    ),
+    fill: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+        <rect x="4.2" y="4" width="6.4" height="6.4" rx="1.8" />
+        <rect x="13.4" y="4" width="6.4" height="6.4" rx="1.8" />
+        <rect x="4.2" y="13.6" width="6.4" height="6.4" rx="1.8" />
+        <rect x="13.4" y="13.6" width="6.4" height="6.4" rx="1.8" />
       </svg>
     ),
   },
   {
     to: "/ai", label: "AI",
-    icon: (a) => (
-      <svg viewBox="0 0 24 24" className="h-6 w-6" {...stroke(a)}>
-        <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4" />
-        <circle cx="12" cy="12" r="4" />
+    outline: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" {...OUTLINE}>
+        <path d="M12 4.2 13.6 9l4.8 1.6-4.8 1.6L12 17l-1.6-4.8L5.6 10.6 10.4 9z" />
+        <path d="M18.4 15.4l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
+      </svg>
+    ),
+    fill: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+        <path d="M12 4.2 13.6 9l4.8 1.6-4.8 1.6L12 17l-1.6-4.8L5.6 10.6 10.4 9zM18.4 15.4l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
       </svg>
     ),
   },
   {
     to: "/profile", label: "Профиль",
-    icon: (a) => (
-      <svg viewBox="0 0 24 24" className="h-6 w-6" {...stroke(a)}>
-        <circle cx="12" cy="8" r="3.6" /><path d="M4.8 20c1.3-3.2 4-4.8 7.2-4.8s5.9 1.6 7.2 4.8" />
+    outline: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" {...OUTLINE}>
+        <circle cx="12" cy="8.4" r="3.6" />
+        <path d="M5.2 19.8c1.1-3.3 3.7-5 6.8-5s5.7 1.7 6.8 5" />
+      </svg>
+    ),
+    fill: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+        <path d="M12 4.8a3.6 3.6 0 1 1 0 7.2 3.6 3.6 0 0 1 0-7.2zM12 14.8c3.1 0 5.7 1.7 6.8 5H5.2c1.1-3.3 3.7-5 6.8-5z" />
       </svg>
     ),
   },
 ];
+
+/** Знак вкладки: контур и силуэт друг на друге.
+ *
+ *  Прозрачность в покое задаёт CSS по data-атрибутам, а НЕ inline-стиль из JSX.
+ *  Это не вкусовщина: React перерисовывает вкладку в тот же момент, когда
+ *  меняется активность, и inline-стиль с конечным значением затирал бы кадры
+ *  мотора — наполнение не игралось бы вовсе, оставаясь мгновенной подменой.
+ *  Мотор пишет свой inline-стиль поверх на время анимации и оставляет его
+ *  равным конечному значению; CSS-правило и результат анимации совпадают.
+ */
+function TabIcon({ item, active }: { item: Item; active: boolean }) {
+  const { outlineRef, fillRef } = useIconFill<HTMLSpanElement>(active);
+  return (
+    <span className="relative block h-6 w-6">
+      <span ref={outlineRef} data-ico-layer="outline" data-ico-active={active} className="ico-layer">
+        {item.outline}
+      </span>
+      <span ref={fillRef} data-ico-layer="fill" data-ico-active={active} className="ico-layer">
+        {item.fill}
+      </span>
+    </span>
+  );
+}
 
 /** Чем залита панель на ТЕКУЩЕМ экране.
  *
@@ -587,7 +649,7 @@ export default function BottomNav() {
                   }`}
                 >
                   <span className="nav-icon relative flex h-6 min-w-10 items-center justify-center rounded-full">
-                    {item.icon(isActive)}
+                    <TabIcon item={item} active={isActive} />
                     {/* Точка, а не цифра: в ряду вкладок число нечитаемо мелким, а
                         сообщить надо ровно одно — «там что-то изменилось».
                         Цифра есть в самом профиле, на кнопке заявок. */}

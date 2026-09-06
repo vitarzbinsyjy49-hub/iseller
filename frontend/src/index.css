@@ -683,6 +683,21 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
 }
 .nav-tab-active { background: rgb(var(--app-accent) / .11); }
 
+/* Слои знака вкладки: контур и силуэт лежат друг на друге.
+   Покой задаётся ЗДЕСЬ, а не inline-стилем из JSX: React перерисовывает
+   вкладку тем же кадром, каким меняется активность, и inline с конечным
+   значением затирал бы кадры покадрового мотора (lib/useIconFill.ts) —
+   наполнение не игралось бы вовсе. Мотор пишет свой inline поверх на время
+   анимации и оставляет его равным конечному значению, так что правило ниже и
+   результат анимации совпадают. */
+.ico-layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.ico-layer[data-ico-layer="outline"][data-ico-active="true"] { opacity: 0; }
+.ico-layer[data-ico-layer="fill"][data-ico-active="false"] { opacity: 0; }
+
 /* Ряд стал ниже: 56 -> 52. Пилюля и круг обязаны совпадать по высоте, иначе
    ряд перестаёт читаться одним элементом. */
 .nav-pill, .nav-circle { height: 52px; }
