@@ -24,6 +24,7 @@ import { Icon } from "./icons";
 import { track } from "../lib/analytics";
 import { setBackButton } from "../lib/telegram";
 import { searchAppSections } from "../lib/appSections";
+import { overlayViewportBox } from "../lib/viewport";
 import { loadCachedCategories } from "../lib/categoryCache";
 import { navTiles } from "../lib/navTiles";
 import { pushSearchQuery } from "../lib/searchHistory";
@@ -51,6 +52,43 @@ export default function SearchOverlay({ open, onClose }: { open: boolean; onClos
   }, [open]);
 
   const sections = useMemo(() => searchAppSections(query), [query]);
+
+  // Коробка панели считается по ВИДИМОЙ области, а не по окну.
+  //
+  // На iOS клавиатура не сжимает вебвью — она накрывает его. Панель на весь
+  // экран занимала бы и ту его часть, что скрыта клавишами, а строка ввода,
+  // прижатая к её низу, уезжала бы под клавиатуру ровно в момент набора.
+  // Решение в чистом виде — overlayViewportBox (lib/viewport.ts, под тестами);
+  // здесь только подписка и запись.
+  //
+  // Пишем прямо в стиль узла, а не через состояние: visualViewport стреляет
+  // событиями пачками во время подъёма клавиатуры, и ре-рендер панели с живым
+  // поиском на каждое из них — это подтормаживание ровно в момент движения.
+  const boxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const el = boxRef.current;
+    if (!el) return;
+    const vv = window.visualViewport;
+    const apply = () => {
+      const box = overlayViewportBox({
+        vvHeight: vv?.height ?? null,
+        vvOffsetTop: vv?.offsetTop ?? null,
+        windowHeight: window.innerHeight,
+      });
+      el.style.top = `${box.top}px`;
+      el.style.height = `${box.height}px`;
+    };
+    apply();
+    vv?.addEventListener("resize", apply);
+    vv?.addEventListener("scroll", apply);
+    window.addEventListener("resize", apply);
+    return () => {
+      vv?.removeEventListener("resize", apply);
+      vv?.removeEventListener("scroll", apply);
+      window.removeEventListener("resize", apply);
+    };
+  }, [open]);
 
   // Фокус ставим на следующем кадре после появления узла: на смонтированном в
   // этом же кадре элементе focus() на iOS не срабатывает — узла ещё нет в
@@ -105,48 +143,35 @@ export default function SearchOverlay({ open, onClose }: { open: boolean; onClos
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-bg lg:hidden"
+      ref={boxRef}
+      className="fixed inset-x-0 top-0 z-50 flex flex-col bg-bg lg:hidden"
       role="dialog"
       aria-modal="true"
       aria-label="Поиск"
       // Фолбэк на env() обязателен: --app-content-top-offset ставится ТОЛЬКО
-      // внутри Telegram, а панель — fixed inset-0 и из общего padding у #root
-      // выпадает. Без фолбэка строка ввода уезжает под чёлку в обычном браузере.
+      // внутри Telegram, а панель позиционируется сама и из общего padding у
+      // #root выпадает. Без фолбэка верх списка уезжает под чёлку в браузере.
       style={{ paddingTop: "var(--app-content-top-offset, env(safe-area-inset-top, 0px))" }}
     >
-      <div className="flex items-center gap-2 px-4 pb-2 pt-3">
-        <div className="relative flex-1">
-          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted">
-            <Icon name="search" className="h-5 w-5" />
-          </span>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-            placeholder="Товары и разделы"
-            aria-label="Поиск по товарам и разделам"
-            enterKeyHint="search"
-            className="w-full rounded-full border border-border bg-surface py-3 pl-11 pr-4 text-base outline-none focus:border-accent"
-          />
-        </div>
-        <button onClick={onClose} className="tap shrink-0 px-1 text-sm font-semibold text-accent">
-          Отмена
-        </button>
-      </div>
-
       {/* Прокрутка здесь ОДНА — внутренняя у SearchPanel отключена (prop fill).
           Вложенные области дали бы список внутри списка: панель считает себе
           высоту по формуле для выпадающего меню, а из полноэкранного оверлея
           её опоры (`<main>`, резерв под навигацию) не видно вовсе.
           overscroll-contain — чтобы протяжка за край не уводила страницу ПОД
           панелью: фон непрозрачен, и человек не увидел бы, что уехал.
-          Нижний отступ — safe-area, иначе последняя строка списка попадает под
-          домашний индикатор. */}
-      <div
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
-        style={{ paddingBottom: "calc(1.5rem + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)))" }}
-      >
+          safe-area отсюда УБРАНА: у нижней кромки теперь стоит бар со строкой
+          ввода, а не конец списка, и отступ принадлежит ему. Держать его в
+          обоих местах значило бы посчитать вырез дважды. */}
+      {/* Содержимое прижато к НИЗУ (mt-auto ниже), а не к верху. Строка ввода
+          стоит у нижней кромки, и выдача, выровненная по верху, оставляла над
+          ней экран пустоты — результаты оказывались дальше от пальца, чем до
+          переноса строки. Прижатые, они растут вверх от строки, как в поиске
+          Telegram.
+          Именно mt-auto, а не justify-end: в прокручиваемом контейнере
+          justify-content обрезает ВЕРХ содержимого при переполнении, и до
+          первых результатов становится не добраться прокруткой вовсе. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-2">
+        <div className="mt-auto">
         {/* Разделы идут ВЫШЕ товаров и намеренно.
             Их мало и они точные: человек, набравший «заявки», ищет именно
             раздел, и прятать его под ленту карточек значит отвечать не на тот
@@ -200,7 +225,37 @@ export default function SearchOverlay({ open, onClose }: { open: boolean; onClos
             inputRef.current?.focus();
           }}
         />
+        </div>
       </div>
+      {/* Строка ввода — ВНИЗУ, вплотную над клавиатурой, как в поиске самого
+          Telegram. Наверху она требовала тянуться через весь экран пальцем,
+          который в этот момент уже лежит на клавишах. Высоту коробки под
+          клавиатуру считает эффект выше; здесь бар просто последний в колонке.
+          border-t — граница появляется только когда над баром что-то есть. */}
+      <div
+        className="flex shrink-0 items-center gap-2 border-t border-border px-4 pt-2"
+        style={{ paddingBottom: "calc(0.5rem + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)))" }}
+      >
+        <div className="relative flex-1">
+          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted">
+            <Icon name="search" className="h-5 w-5" />
+          </span>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+            placeholder="Товары и разделы"
+            aria-label="Поиск по товарам и разделам"
+            enterKeyHint="search"
+            className="w-full rounded-full border border-border bg-surface py-3 pl-11 pr-4 text-base outline-none focus:border-accent"
+          />
+        </div>
+        <button onClick={onClose} className="tap shrink-0 px-1 text-sm font-semibold text-accent">
+          Отмена
+        </button>
+      </div>
+
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   pickViewportHeight,
   sheetMaxHeightPx,
   shouldLockOrientation,
+  overlayViewportBox,
 } from "./viewport";
 
 describe("pickViewportHeight", () => {
@@ -262,5 +263,33 @@ describe("shouldLockOrientation", () => {
 
   it("не трогает старый клиент без метода", () => {
     expect(shouldLockOrientation({ ...base, supported: false })).toBe(false);
+  });
+});
+
+describe("overlayViewportBox", () => {
+  it("без visualViewport занимает всё окно — поведение как до правки", () => {
+    expect(overlayViewportBox({ windowHeight: 812 })).toEqual({ top: 0, height: 812 });
+    expect(overlayViewportBox({ vvHeight: null, windowHeight: 812 })).toEqual({ top: 0, height: 812 });
+    expect(overlayViewportBox({ vvHeight: NaN, windowHeight: 812 })).toEqual({ top: 0, height: 812 });
+    expect(overlayViewportBox({ vvHeight: 0, windowHeight: 812 })).toEqual({ top: 0, height: 812 });
+  });
+
+  it("с открытой клавиатурой берёт высоту ВИДИМОЙ области, а не окна", () => {
+    // 812 окно, ~336 занято клавиатурой
+    expect(overlayViewportBox({ vvHeight: 476, windowHeight: 812 })).toEqual({ top: 0, height: 476 });
+  });
+
+  it("учитывает подскролл страницы под клавиатуру", () => {
+    expect(overlayViewportBox({ vvHeight: 476, vvOffsetTop: 60, windowHeight: 812 }))
+      .toEqual({ top: 60, height: 476 });
+  });
+
+  it("отрицательный и битый offsetTop читается как ноль, а не сдвигает панель вверх", () => {
+    expect(overlayViewportBox({ vvHeight: 476, vvOffsetTop: -20, windowHeight: 812 }).top).toBe(0);
+    expect(overlayViewportBox({ vvHeight: 476, vvOffsetTop: NaN, windowHeight: 812 }).top).toBe(0);
+  });
+
+  it("дробную высоту округляет: iOS отдаёт нецелые значения", () => {
+    expect(overlayViewportBox({ vvHeight: 475.6, windowHeight: 812 }).height).toBe(476);
   });
 });

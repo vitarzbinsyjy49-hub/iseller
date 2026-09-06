@@ -216,6 +216,48 @@ export function brandMarkVisible(s: BrandMarkSources): boolean {
   return typeof top === "number" && Number.isFinite(top) && top > 0;
 }
 
+export type OverlayViewportSources = {
+  /** window.visualViewport.height — высота ВИДИМОЙ области. */
+  vvHeight?: number | null;
+  /** window.visualViewport.offsetTop — насколько видимая область смещена вниз
+   *  (страница проскроллена под клавиатуру). */
+  vvOffsetTop?: number | null;
+  /** window.innerHeight — запасная высота, когда visualViewport недоступен. */
+  windowHeight: number;
+};
+
+/** Коробка полноэкранной панели поверх приложения: где её верх и какой высоты.
+ *
+ *  Зачем не `inset-0`. На iOS клавиатура НЕ сжимает вебвью — она накрывает его
+ *  сверху. Панель, растянутая на весь экран, честно занимает и ту его часть,
+ *  которая скрыта под клавиатурой; строка ввода, прижатая к её низу, уезжает
+ *  под клавиши и становится недоступна ровно в тот момент, когда в неё пишут.
+ *  Это же и причина, по которой строку вообще имеет смысл держать внизу: там,
+ *  где Telegram — вплотную над клавишами, под большим пальцем.
+ *
+ *  `visualViewport` — единственный источник, который про клавиатуру знает.
+ *  `--app-height` для этого не годится: он берётся из СТАБИЛЬНОЙ высоты, чтобы
+ *  не дёргались шторки, и с открытой клавиатурой не меняется вовсе.
+ *
+ *  `offsetTop` учитывается, потому что iOS при фокусе может подскроллить всю
+ *  страницу под клавиатуру: тогда видимая область начинается не с нуля, и
+ *  панель, прижатая к верху окна, уезжает за экран целиком.
+ *
+ *  Нет visualViewport (старый webview, node-тесты) — панель занимает всё окно,
+ *  то есть ведёт себя ровно как до этой правки.
+ */
+export function overlayViewportBox(s: OverlayViewportSources): { top: number; height: number } {
+  const h = s.vvHeight;
+  if (typeof h !== "number" || !Number.isFinite(h) || h <= 0) {
+    return { top: 0, height: s.windowHeight };
+  }
+  const top = s.vvOffsetTop;
+  return {
+    top: typeof top === "number" && Number.isFinite(top) && top > 0 ? top : 0,
+    height: Math.round(h),
+  };
+}
+
 export type OrientationLockSources = {
   /** Клиент умеет lockOrientation (Bot API 8.0+). */
   supported: boolean;
