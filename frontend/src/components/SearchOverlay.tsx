@@ -144,15 +144,28 @@ export default function SearchOverlay({ open, onClose }: { open: boolean; onClos
   return (
     <div
       ref={boxRef}
-      className="fixed inset-x-0 top-0 z-50 flex flex-col bg-bg lg:hidden"
+      className="fixed inset-x-0 top-0 z-50 flex flex-col lg:hidden"
       role="dialog"
       aria-modal="true"
       aria-label="Поиск"
-      // Фолбэк на env() обязателен: --app-content-top-offset ставится ТОЛЬКО
-      // внутри Telegram, а панель позиционируется сама и из общего padding у
-      // #root выпадает. Без фолбэка верх списка уезжает под чёлку в браузере.
-      style={{ paddingTop: "var(--app-content-top-offset, env(safe-area-inset-top, 0px))" }}
     >
+      {/* Экран под поиском ОСТАЁТСЯ виден. Раньше корень заливался сплошным
+          bg-bg на всю коробку, то есть поиск буквально закрывал собой
+          приложение: человек нажимал лупу и оказывался на пустой белой
+          странице вместо того, чтобы искать НА том экране, где он был.
+          В референсе (поиск Telegram) список чатов никуда не девается — снизу
+          лишь появляются строка и подсказки.
+
+          Затемнение слабое: его задача не спрятать страницу, а показать, что
+          она сейчас неактивна, и дать куда нажать для выхода. Тап по нему
+          закрывает поиск — это самый ожидаемый жест для панели, выехавшей
+          снизу. */}
+      <button
+        type="button"
+        aria-label="Закрыть поиск"
+        onClick={onClose}
+        className="min-h-0 flex-1 cursor-default bg-black/20"
+      />
       {/* Прокрутка здесь ОДНА — внутренняя у SearchPanel отключена (prop fill).
           Вложенные области дали бы список внутри списка: панель считает себе
           высоту по формуле для выпадающего меню, а из полноэкранного оверлея
@@ -162,16 +175,18 @@ export default function SearchOverlay({ open, onClose }: { open: boolean; onClos
           safe-area отсюда УБРАНА: у нижней кромки теперь стоит бар со строкой
           ввода, а не конец списка, и отступ принадлежит ему. Держать его в
           обоих местах значило бы посчитать вырез дважды. */}
-      {/* Содержимое прижато к НИЗУ (mt-auto ниже), а не к верху. Строка ввода
-          стоит у нижней кромки, и выдача, выровненная по верху, оставляла над
-          ней экран пустоты — результаты оказывались дальше от пальца, чем до
-          переноса строки. Прижатые, они растут вверх от строки, как в поиске
-          Telegram.
-          Именно mt-auto, а не justify-end: в прокручиваемом контейнере
-          justify-content обрезает ВЕРХ содержимого при переполнении, и до
-          первых результатов становится не добраться прокруткой вовсе. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-2">
-        <div className="mt-auto">
+      {/* Выдача — панель, выехавшая снизу, а не страница. Растёт вверх от
+          строки ровно настолько, насколько есть результатов, и упирается в
+          потолок: выше него она снова закрыла бы собой весь экран, ради чего
+          всё и переделывалось. 62% видимой области — примерно столько же
+          оставляет под собой поиск Telegram.
+          Скруглены только верхние углы: снизу панель прижата к кромке экрана,
+          и скругление там читалось бы как оторванная плашка. */}
+      <div
+        className="flex min-h-0 shrink-0 flex-col overflow-y-auto overscroll-contain rounded-t-2xl bg-bg pb-2 shadow-[0_-12px_32px_rgba(17,24,39,.14)]"
+        style={{ maxHeight: "62%" }}
+      >
+        <div className="mt-auto pt-1">
         {/* Разделы идут ВЫШЕ товаров и намеренно.
             Их мало и они точные: человек, набравший «заявки», ищет именно
             раздел, и прятать его под ленту карточек значит отвечать не на тот
@@ -233,7 +248,7 @@ export default function SearchOverlay({ open, onClose }: { open: boolean; onClos
           клавиатуру считает эффект выше; здесь бар просто последний в колонке.
           border-t — граница появляется только когда над баром что-то есть. */}
       <div
-        className="flex shrink-0 items-center gap-2 border-t border-border px-4 pt-2"
+        className="flex shrink-0 items-center gap-2 border-t border-border bg-bg px-4 pt-2"
         style={{ paddingBottom: "calc(0.5rem + var(--app-safe-bottom, env(safe-area-inset-bottom, 0px)))" }}
       >
         <div className="relative flex-1">

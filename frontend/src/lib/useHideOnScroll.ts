@@ -35,6 +35,26 @@ export const MOVE_EPS_PX = 6;
  *  идёт от верха экрана без шва. Отмеряется в пикселях от нуля, а не строгим
  *  нулём: iOS отдаёт дробные позиции. */
 export const ATOP_PX = 4;
+
+/** На каком пути прокрутки панель НАЛИВАЕТСЯ стеклом.
+ *
+ *  Раньше фон включался по бинарному порогу ATOP_PX: прокрутил на пять пикселей
+ *  — и поперёк живого градиента страницы вставала плоская сплошная плита. Со
+ *  стороны это выглядело как «сверху появилось белое перекрытие», причём
+ *  появлялось оно от почти незаметного движения пальца.
+ *
+ *  72px — примерно высота одной карточки: к моменту, когда под панель заехало
+ *  что-то, что надо от неё отделить, стекло уже налито полностью. Та же логика
+ *  и та же величина порядка, что у шапки главной (lib/useCollapsingHeader.ts).
+ */
+export const TOOLBAR_GLASS_PX = 72;
+
+/** Насколько налито стекло панели: 0 у кромки, 1 после TOOLBAR_GLASS_PX.
+ *  Чистая функция — её проверяют тесты, а не глаз. */
+export function toolbarGlassProgress(scrollTop: number): number {
+  if (!Number.isFinite(scrollTop) || scrollTop <= 0) return 0;
+  return Math.min(1, scrollTop / TOOLBAR_GLASS_PX);
+}
 /** Отрицательный sticky-сдвиг панели (-top-3 у неё в разметке Catalog.tsx).
  *  Совпадает с padding-top скролл-контейнера; меняется вместе с ним. */
 export const STICKY_OFFSET_PX = 12;
@@ -121,6 +141,11 @@ export function useHideOnScroll(enabled = true) {
       // Прозрачность панели считается ОТДЕЛЬНО от её ухода: у кромки она видна
       // и прозрачна одновременно, и это не одно состояние, а два.
       setAtop(top <= ATOP_PX);
+      // Стекло наливается покадрово, отдельной величиной от data-atop: атрибут
+      // отвечает на вопрос «панель у самой кромки?», а переменная — «насколько
+      // она уже стала фоном». Это два разных вопроса, и склеивать их в один
+      // порог значит возвращать ту самую плиту.
+      el.style.setProperty("--toolbar-glass", toolbarGlassProgress(top).toFixed(3));
       const next = nextToolbarHidden(hidden, top, top - lastTop);
       if (Math.abs(top - lastTop) >= MOVE_EPS_PX) lastTop = top;
       if (next === hidden) return;
@@ -151,6 +176,7 @@ export function useHideOnScroll(enabled = true) {
       if (raf) cancelAnimationFrame(raf);
       delete el.dataset.hidden;
       delete el.dataset.atop;
+      el.style.removeProperty("--toolbar-glass");
       el.style.transform = "";
     };
   }, [enabled]);

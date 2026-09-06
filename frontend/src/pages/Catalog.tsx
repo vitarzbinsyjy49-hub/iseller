@@ -286,7 +286,7 @@ export default function Catalog() {
           прыгают. */}
       <div
         ref={hideToolbarRef}
-        className="seam-guard toolbar-hide sticky -top-3 z-20 -mx-4 space-y-2 border-b border-border bg-bg px-4 pb-2.5 pt-2 lg:static lg:top-auto lg:mx-0 lg:border-0 lg:px-0 lg:pb-0 lg:pt-0"
+        className="seam-guard toolbar-hide sticky -top-3 z-20 -mx-4 space-y-2 border-b border-border px-4 pb-2.5 pt-2 lg:static lg:top-auto lg:mx-0 lg:border-0 lg:px-0 lg:pb-0 lg:pt-0"
       >
         <div className="flex items-center gap-2">
         {/* Поиск каталога — ТОЛЬКО mobile/tablet. На desktop единственный поиск —

@@ -270,21 +270,42 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
    lib/motion.ts). Атрибут data-hidden остаётся как отметка состояния: по нему
    видно в отладке и в тестах, что панель считает себя спрятанной.
 
-   data-atop — второе состояние: список ещё не прокручен, прятать под собой
-   панели нечего, и сплошной фон ей не нужен. Тогда она его отдаёт, и живой фон
-   страницы идёт от верха экрана без шва. Раньше панель ВСЕГДА была сплошной, и
-   на каталоге фон обрывался ровно на строке поиска — цвет был виден только над
-   ней, у заголовка. Прокрутили — фон возвращается: под панелью поехали
-   карточки, и просвечивать им нельзя. */
-.toolbar-hide[data-atop="true"] {
-  background-color: transparent;
-  border-bottom-color: transparent;
+   Фон панели НАЛИВАЕТСЯ, а не включается порогом. Раньше здесь стояло бинарное
+   правило: у кромки прозрачно, дальше — сплошной bg-bg. Прокрутка на пять
+   пикселей ставила поперёк живого градиента страницы плоскую плиту, и это
+   читалось как «сверху появилось белое перекрытие». Теперь величину
+   --toolbar-glass покадрово пишет lib/useHideOnScroll.ts (toolbarGlassProgress),
+   и панель переходит от прозрачной к матовой на пути одной карточки.
+
+   Стекло, а не заливка: под панель заезжают карточки, и отделить их от неё надо
+   так же, как это делает шапка главной, — размытием, а не глухим листом поверх
+   фона. Без backdrop-filter (старый webview) честнее быть почти сплошной:
+   полупрозрачность без размытия — это мутное стекло, сквозь которое читаются
+   едущие карточки. */
+.toolbar-hide {
+  --toolbar-glass: 0;
+  background-color: rgb(var(--app-bg) / calc(var(--toolbar-glass) * .82));
+  border-bottom-color: rgb(var(--app-border) / var(--toolbar-glass));
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .toolbar-hide {
+    -webkit-backdrop-filter: blur(calc(var(--toolbar-glass) * 18px));
+    backdrop-filter: blur(calc(var(--toolbar-glass) * 18px));
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .toolbar-hide { background-color: rgb(var(--app-bg) / calc(var(--toolbar-glass) * .97)); }
 }
 @media (max-width: 1023.98px) {
   /* Полоска, закрывающая субпиксельную щель под панелью (.seam-guard::after),
-     у кромки тоже лишняя: закрывать нечего, а видна она как черта поперёк
-     фона. */
-  .toolbar-hide[data-atop="true"]::after { background: transparent; }
+     наливается вместе с фоном: у кромки закрывать нечего, а видна она была бы
+     как черта поперёк градиента. */
+  .toolbar-hide::after { opacity: var(--toolbar-glass); }
+}
+/* На desktop панель не липкая и живёт в колонке контента: наливать ей стекло
+   нечем и незачем — под ней ничего не проезжает. */
+@media (min-width: 1024px) {
+  .toolbar-hide { --toolbar-glass: 0; backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 
 /* ================= Кнопка корзины переходит в степпер =================
