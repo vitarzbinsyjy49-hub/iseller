@@ -23,7 +23,7 @@ import { specChips } from "../lib/specChips";
 import LegendaryProduct from "../components/LegendaryProduct";
 import PriceOfferBlock from "../components/PriceOfferBlock";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
-import { useCartSwapOut } from "../lib/useCartSwap";
+import { CART_SWAP_DX_PX, useCartSwapOut } from "../lib/useCartSwap";
 
 type Tab = "desc" | "specs" | "delivery";
 type LoadState = "loading" | "ready" | "not_found" | "error";
@@ -607,7 +607,7 @@ function ProductCta({ product, onNotify, tone = "app" }: {
     <div>
       <div className="cart-morph h-11">
         {item && (
-          <div ref={enterRefCallback("pop")} className="cart-morph-layer flex items-center gap-2.5">
+          <div ref={enterRefCallback("slide", 0, CART_SWAP_DX_PX)} className="cart-morph-layer flex items-center gap-2.5">
             <div className="w-32 shrink-0">
               <QuantityStepper
                 quantity={item.quantity} max={item.max_quantity} busy={busy}

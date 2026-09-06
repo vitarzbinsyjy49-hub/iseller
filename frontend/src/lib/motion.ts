@@ -242,14 +242,20 @@ export function animateSheetOut(
  *  тождественные слагаемые — иначе рраз при каждом кадре ставился бы
  *  `translate3d(0, 0px, 0) scale(1)`, а не пустая строка, что мешает
  *  сравнивать «анимация закончилась» с «стиль вообще не трогали». */
-function transformString(yPx: number, scale: number): string {
+function transformString(yPx: number, scale: number, xPx = 0): string {
   const parts: string[] = [];
-  if (yPx) parts.push(`translate3d(0, ${yPx}px, 0)`);
+  if (xPx || yPx) parts.push(`translate3d(${xPx}px, ${yPx}px, 0)`);
   if (scale !== 1) parts.push(`scale(${scale})`);
   return parts.join(" ");
 }
 
-export type EnterPreset = "fadeUp" | "fade" | "pop";
+/** `slide` — приход СБОКУ, без масштаба. Заведён для обмена «Добавить» ↔
+ *  степпер на плитке товара: `pop` играл это как всплытие поверх, то есть как
+ *  появление второго элемента, а происходит здесь другое — один орган управления
+ *  уступает место другому. Боковое движение читается как уступка, всплытие — как
+ *  прибавление. Сторона задаётся знаком dxPx у вызывающего: степпер въезжает
+ *  справа, кнопка возвращается слева. */
+export type EnterPreset = "fadeUp" | "fade" | "pop" | "slide";
 
 // Те же числа и кейфреймы, что раньше жили в index.css у .card-appear/
 // .fade-in/.pop-in — только теперь на rAF-моторе, а не CSS animation:.
@@ -295,18 +301,30 @@ function afterDelay(delayMs: number, start: () => () => void): () => void {
  *  delayMs — замена `.stagger` (index.css): исходный кадр применяется сразу
  *  (иначе элемент был бы виден все delayMs мс задержки), само проявление
  *  стартует позже. */
-export function animateEnter(el: HTMLElement, preset: EnterPreset, reducedMotion = prefersReducedMotion(), delayMs = 0): () => void {
+export function animateEnter(
+  el: HTMLElement,
+  preset: EnterPreset,
+  reducedMotion = prefersReducedMotion(),
+  delayMs = 0,
+  /** Откуда приезжает `slide`: отрицательное — слева, положительное — справа.
+   *  Другими пресетами игнорируется. При «уменьшить движение» обнуляется вместе
+   *  со всеми смещениями — остаётся чистое проявление. */
+  dxPx = 0,
+): () => void {
   if (preset === "fade") {
     const duration = reducedMotion ? FADE_MS : ENTER_FADE_MS;
     el.style.opacity = String(ENTER_FADE_FROM_OPACITY);
     return afterDelay(delayMs, () => animateOpacity(el, ENTER_FADE_FROM_OPACITY, 1, duration));
   }
   const offset = preset === "fadeUp" && !reducedMotion ? ENTER_FADEUP_OFFSET_PX : 0;
+  const offsetX = preset === "slide" && !reducedMotion ? dxPx : 0;
   const fromScale = preset === "pop" && !reducedMotion ? ENTER_POP_FROM_SCALE : 1;
-  const duration = reducedMotion ? FADE_MS : (preset === "pop" ? ENTER_POP_MS : ENTER_FADEUP_MS);
+  const duration = reducedMotion
+    ? FADE_MS
+    : (preset === "pop" || preset === "slide" ? ENTER_POP_MS : ENTER_FADEUP_MS);
   const apply = (t: number) => {
     el.style.opacity = String(t);
-    el.style.transform = transformString(offset * (1 - t), fromScale + (1 - fromScale) * t);
+    el.style.transform = transformString(offset * (1 - t), fromScale + (1 - fromScale) * t, offsetX * (1 - t));
   };
   apply(0);
   return afterDelay(delayMs, () => animateNumber(0, 1, duration, apply, () => { el.style.transform = ""; }));
@@ -322,12 +340,20 @@ export function animateEnter(el: HTMLElement, preset: EnterPreset, reducedMotion
 export const SWAP_OUT_MS = 150;
 const SWAP_OUT_TO_SCALE = 0.94;
 
-export function animateSwapOut(el: HTMLElement, reducedMotion = prefersReducedMotion()): () => void {
-  const toScale = reducedMotion ? 1 : SWAP_OUT_TO_SCALE;
+export function animateSwapOut(
+  el: HTMLElement,
+  reducedMotion = prefersReducedMotion(),
+  /** Куда уступает уходящий слой. 0 — прежнее поведение (только масштаб).
+   *  Ненулевое значение выключает масштаб: сжатие вместе со сдвигом читается
+   *  как два разных события, а уступка — одно. */
+  dxPx = 0,
+): () => void {
+  const lateral = !reducedMotion && dxPx !== 0;
+  const toScale = reducedMotion || lateral ? 1 : SWAP_OUT_TO_SCALE;
   const duration = reducedMotion ? FADE_MS : SWAP_OUT_MS;
   return animateNumber(0, 1, duration, (t) => {
     el.style.opacity = String(1 - t);
-    el.style.transform = transformString(0, 1 + (toScale - 1) * t);
+    el.style.transform = transformString(0, 1 + (toScale - 1) * t, lateral ? dxPx * t : 0);
   });
 }
 

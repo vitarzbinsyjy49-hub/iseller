@@ -19,6 +19,7 @@ import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib
 import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMath";
 import { cardBadges } from "../lib/cardBadges";
 import { QuantityStepper } from "./QuantityStepper";
+import { CART_SWAP_DX_PX } from "../lib/useCartSwap";
 import { preloadRoute } from "../lib/routePreload";
 import { Icon } from "./icons";
 
@@ -431,7 +432,7 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
   return (
     <div className="cart-morph h-11">
     {item && (
-      <div ref={enterRefCallback("pop")} className="cart-morph-layer">
+      <div ref={enterRefCallback("slide", 0, CART_SWAP_DX_PX)} className="cart-morph-layer">
         <QuantityStepper
           quantity={item.quantity}
           max={item.max_quantity}
