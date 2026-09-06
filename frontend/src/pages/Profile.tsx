@@ -86,7 +86,10 @@ export default function Profile() {
 
   return (
     <div className="mx-auto max-w-md lg:max-w-5xl">
-      <h1 className="text-2xl font-bold">Профиль</h1>
+      {/* Заголовка «Профиль» здесь нет намеренно: экран назван подсвеченной
+          вкладкой внизу, и надпись повторяла её, попутно уезжая под полосу
+          шапки и обрубаясь её кромкой. Первым идёт карточка пользователя —
+          она и есть заголовок этого экрана. */}
 
       {/* Карточка пользователя — профильный header на всю ширину */}
       <div className="mt-4 flex items-center gap-4 rounded-xl2 bg-surface p-4 shadow-soft lg:p-6">
