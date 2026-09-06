@@ -14,7 +14,9 @@ import { createPortal } from "react-dom";
 import { haptic } from "../lib/telegram";
 import { SHEET_OUT_MS, SHEET_SETTLE_MS, animateNumber, animateSheetIn, animateSheetOut } from "../lib/motion";
 import {
+  HANDLE_ZONE_PX,
   isVerticalDrag,
+  scrollerWithin,
   sheetBackdropOpacity,
   sheetDragOffset,
   shouldDismissSheet,
@@ -44,27 +46,6 @@ export type SheetClose = (afterClose?: () => void) => void;
  *  Центрованная desktop-модалка (sm+) остаётся на коротком сдвиге: ехать ей
  *  неоткуда, снизу экрана она не появляется. Там `undefined` возвращает
  *  animateSheet* к их собственным значениям по умолчанию. */
-/** Зона у верхней кромки, откуда шторку можно тянуть ВСЕГДА — независимо от
- *  того, прокручено ли её содержимое. Ровно здесь нарисована ручка, и жест за
- *  ручку обязан работать даже посреди прокрученного списка: она за тем и
- *  нарисована. 44px — та же минимальная цель касания, что у всего остального. */
-const HANDLE_ZONE_PX = 44;
-
-/** Ближайший прокручиваемый предок внутри панели — или null, если такого нет.
- *  Нужен, чтобы отличить «тянут шторку» от «прокручивают её содержимое»: пока
- *  списку есть куда прокручиваться вверх, жест вниз адресован ему. */
-function scrollerWithin(target: EventTarget | null, panel: HTMLElement): HTMLElement | null {
-  let el = target instanceof HTMLElement ? target : null;
-  while (el && el !== panel.parentElement) {
-    if (el.scrollHeight > el.clientHeight + 1) {
-      const overflowY = getComputedStyle(el).overflowY;
-      if (overflowY === "auto" || overflowY === "scroll") return el;
-    }
-    if (el === panel) break;
-    el = el.parentElement;
-  }
-  return null;
-}
 
 function sheetTravelPx(panel: HTMLElement, centered: boolean): number | undefined {
   if (centered) return undefined;

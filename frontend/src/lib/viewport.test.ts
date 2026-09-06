@@ -11,6 +11,8 @@ import {
   sheetMaxHeightPx,
   shouldLockOrientation,
   overlayViewportBox,
+  searchPanelMaxHeightPx,
+  navRowKeyboardBottomPx,
 } from "./viewport";
 
 describe("pickViewportHeight", () => {
@@ -291,5 +293,38 @@ describe("overlayViewportBox", () => {
 
   it("дробную высоту округляет: iOS отдаёт нецелые значения", () => {
     expect(overlayViewportBox({ vvHeight: 475.6, windowHeight: 812 }).height).toBe(476);
+  });
+});
+
+describe("searchPanelMaxHeightPx", () => {
+  it("62% от видимой высоты по умолчанию", () => {
+    expect(searchPanelMaxHeightPx(800)).toBe(496);
+  });
+
+  it("другую долю можно задать явно", () => {
+    expect(searchPanelMaxHeightPx(800, 0.5)).toBe(400);
+  });
+
+  it("отрицательная высота не даёт отрицательный результат", () => {
+    expect(searchPanelMaxHeightPx(-100)).toBe(0);
+  });
+});
+
+describe("navRowKeyboardBottomPx", () => {
+  it("клавиатура закрыта — видимая область во всё окно, ряду поднимать не над чем", () => {
+    expect(navRowKeyboardBottomPx({ top: 0, height: 812 }, 812)).toBe(0);
+  });
+
+  it("клавиатура открыла зазор снизу — ряд обязан подняться на его высоту", () => {
+    // 812 окно, видимая область 476 — клавиатура забрала 336px снизу.
+    expect(navRowKeyboardBottomPx({ top: 0, height: 476 }, 812)).toBe(336);
+  });
+
+  it("учитывает подскролл страницы (offsetTop) видимой области", () => {
+    expect(navRowKeyboardBottomPx({ top: 60, height: 476 }, 812)).toBe(276);
+  });
+
+  it("не уходит в отрицательные значения при некорректном вводе", () => {
+    expect(navRowKeyboardBottomPx({ top: 0, height: 900 }, 812)).toBe(0);
   });
 });

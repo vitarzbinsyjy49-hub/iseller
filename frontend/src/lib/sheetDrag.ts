@@ -91,3 +91,32 @@ export const DRAG_START_PX = 6;
 export function isVerticalDrag(dx: number, dy: number): boolean {
   return Math.abs(dy) >= DRAG_START_PX && Math.abs(dy) > Math.abs(dx);
 }
+
+/** Зона у верхней кромки, откуда шторку можно тянуть ВСЕГДА — независимо от
+ *  того, прокручено ли её содержимое. Ровно здесь нарисована ручка, и жест за
+ *  ручку обязан работать даже посреди прокрученного списка: она за тем и
+ *  нарисована. 44px — та же минимальная цель касания, что у всего остального.
+ *  Вынесена сюда вместе со scrollerWithin — обе используются только парой. */
+export const HANDLE_ZONE_PX = 44;
+
+/** Ближайший прокручиваемый предок внутри панели — или null, если такого нет.
+ *
+ *  Нужен, чтобы отличить «тянут шторку» от «прокручивают её содержимое»: пока
+ *  списку есть куда прокручиваться вверх, жест вниз адресован ему, а не
+ *  шторке. Раньше жила только в ScenarioSheet.tsx (SheetShell) — вынесена сюда
+ *  при переезде поиска в нижний ряд навигации: у выдачи над рядом та же
+ *  развилка (список результатов внутри панели), а второй копии этой проверки
+ *  заводить незачем — она уже отлажена и её достаточно переиспользовать.
+ */
+export function scrollerWithin(target: EventTarget | null, panel: HTMLElement): HTMLElement | null {
+  let el = target instanceof HTMLElement ? target : null;
+  while (el && el !== panel.parentElement) {
+    if (el.scrollHeight > el.clientHeight + 1) {
+      const overflowY = getComputedStyle(el).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") return el;
+    }
+    if (el === panel) break;
+    el = el.parentElement;
+  }
+  return null;
+}

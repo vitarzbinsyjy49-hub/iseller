@@ -258,6 +258,36 @@ export function overlayViewportBox(s: OverlayViewportSources): { top: number; he
   };
 }
 
+/** Высота выдачи поиска, растущей вверх от нижнего ряда: доля от ВИДИМОЙ
+ *  высоты (см. overlayViewportBox), а не от vh — той же причине, что и у
+ *  dropdownMaxHeightPx: vh не знает про клавиатуру. 62% — предел, оставляющий
+ *  под панелью Telegram-подобный просвет; заведён отдельной функцией, чтобы
+ *  число не разъезжалось между местом, где оно применяется, и тестом. */
+export function searchPanelMaxHeightPx(visibleHeight: number, ratio = 0.62): number {
+  return Math.round(Math.max(0, visibleHeight) * ratio);
+}
+
+/** На сколько нижний ряд навигации обязан подняться над клавиатурой, когда
+ *  строка поиска живёт прямо в нём.
+ *
+ *  Ряд закреплён `bottom: <safe-area + зазор>` от НАСТОЯЩЕГО низа окна. На iOS
+ *  клавиатура не двигает окно — она накрывает его снизу, поэтому визуально
+ *  видимая область (overlayViewportBox) заканчивается ВЫШЕ реального низа
+ *  ровно на высоту клавиатуры. Чтобы ряд остался над клавиатурой, а не под
+ *  ней, `bottom` ряда нужно временно заменить на расстояние от НАСТОЯЩЕГО низа
+ *  окна до низа видимой области — вот это расстояние и считает функция.
+ *
+ *  Вызывать только когда клавиатура действительно открыта (isKeyboardOpen) —
+ *  при закрытой видимая область совпадает с окном, результат был бы 0, и
+ *  подстановка этого нуля вместо safe-area из CSS прижала бы ряд к самому
+ *  краю экрана, под домашний индикатор. */
+export function navRowKeyboardBottomPx(
+  box: { top: number; height: number },
+  windowHeight: number,
+): number {
+  return Math.max(0, Math.round(windowHeight - (box.top + box.height)));
+}
+
 export type OrientationLockSources = {
   /** Клиент умеет lockOrientation (Bot API 8.0+). */
   supported: boolean;

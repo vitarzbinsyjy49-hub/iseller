@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import AuroraBackground from "./AuroraBackground";
 import BottomNav from "./BottomNav";
-import SearchOverlay from "./SearchOverlay";
 import CartBar from "./CartBar";
 import DesktopHeader from "./DesktopHeader";
 import { BrandWordmark } from "./BrandMark";
@@ -50,12 +49,6 @@ function rememberRouteScroll(routeId: string, scrollTop: number) {
  *  — в его docstring. */
 export default function Layout() {
   const location = useLocation();
-  const [searchOpen, setSearchOpen] = useState(false);
-  // Стабильные ссылки: без них подписки внутри панели (Escape, кнопка «назад»
-  // Telegram) переподписывались бы на каждый ре-рендер Layout, а он ре-рендерится
-  // на каждую смену маршрута и на каждое изменение корзины.
-  const openSearch = useCallback(() => setSearchOpen(true), []);
-  const closeSearch = useCallback(() => setSearchOpen(false), []);
   const { isTabRoute, goBack, swipeHandlers } = usePageSwipe();
   const cart = useCart();
   const mainRef = useRef<HTMLElement>(null);
@@ -164,12 +157,10 @@ export default function Layout() {
         </div>
       </main>
       <CartBar />
-      {/* Поиск живёт здесь, а не на страницах: круг доступен с каждого экрана,
-          и панель обязана открываться поверх ТОГО экрана, где её позвали.
-          Состояние держит Layout — он переживает переходы между маршрутами,
-          как и сама навигация. */}
-      <BottomNav onOpenSearch={openSearch} searchOpen={searchOpen} />
-      <SearchOverlay open={searchOpen} onClose={closeSearch} />
+      {/* Поиск живёт внутри самого BottomNav: круг доступен с каждого экрана,
+          а ряд, вызвавший поиск, сам превращается в его строку ввода —
+          отдельного слоя поверх экрана здесь больше нет. */}
+      <BottomNav />
     </div>
   );
 }
