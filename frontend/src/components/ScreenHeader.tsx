@@ -45,7 +45,7 @@
 import type { ReactNode } from "react";
 
 export default function ScreenHeader({
-  title, subtitle, actions,
+  title, subtitle, actions, titleActions,
 }: {
   title: string;
   /** Строка под заголовком: счётчик, пояснение. Именно она снимает у заголовка
@@ -56,8 +56,16 @@ export default function ScreenHeader({
   /** Правый край липкого бара: кнопки экрана, если они у него есть.
    *  Бар целиком `lg:hidden`, поэтому это место для действий, которые можно
    *  потерять на desktop без вреда (или у которых там есть другой вход) —
-   *  для остального нужен отдельный, видимый на `lg` элемент. */
+   *  для остального нужен `titleActions`. */
   actions?: ReactNode;
+  /** Правый край строки КРУПНОГО заголовка. В отличие от `actions`, виден на
+   *  всех ширинах, потому что крупный заголовок на `lg` не прячется.
+   *
+   *  Заведён после регресса: «Очистить» в корзине жила только в `actions`, и
+   *  на desktop экран остался вовсе без массового удаления — там бар скрыт.
+   *  Правило простое: действие, у которого нет другого входа, идёт СЮДА;
+   *  в `actions` — только то, что на desktop доступно иначе. */
+  titleActions?: ReactNode;
 }) {
   return (
     <>
@@ -95,11 +103,14 @@ export default function ScreenHeader({
           (data-collapsing-title); на lg держится на месте — см. докстринг
           компонента выше и правило в index.css. БЕЗ lg:hidden: это
           единственный заголовок экрана, и на desktop его прятать нельзя. */}
-      <div data-collapsing-title>
-        <h1 className="text-[22px] font-semibold leading-tight tracking-tight [text-wrap:balance]">
-          {title}
-        </h1>
-        {subtitle && <p className="mt-0.5 text-[13px] text-muted">{subtitle}</p>}
+      <div data-collapsing-title className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-semibold leading-tight tracking-tight [text-wrap:balance]">
+            {title}
+          </h1>
+          {subtitle && <p className="mt-0.5 text-[13px] text-muted">{subtitle}</p>}
+        </div>
+        {titleActions && <div className="mt-1 shrink-0">{titleActions}</div>}
       </div>
     </>
   );

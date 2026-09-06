@@ -138,7 +138,10 @@ export default function Cart() {
         subtitle={`${pluralItems(cart.items_count)}${
           cart.positions_count !== cart.items_count ? ` · ${cart.positions_count} позиц.` : ""
         }`}
-        actions={(
+        /* titleActions, а не actions: у «Очистить» нет второго входа, а бар
+           скрыт на desktop — из actions кнопка исчезла бы там совсем, оставив
+           только поштучное удаление. */
+        titleActions={(
           <button
             onClick={onClear}
             className="tap shrink-0 text-xs font-medium text-muted transition-colors hover:text-danger"
