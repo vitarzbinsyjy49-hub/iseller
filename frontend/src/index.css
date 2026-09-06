@@ -242,6 +242,21 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
   .app-navbar { background-color: rgb(var(--app-bg) / calc(var(--nav-glass) * 0.96)); }
 }
 
+/* Крупный заголовок ScreenHeader (components/ScreenHeader.tsx) на lg держится
+   на месте, а не тает при прокрутке. На mobile/tablet это единственный
+   заголовок экрана без объяснения "чем он заменится" на lg: там нет ни
+   .hero-top-inset, ни липкого бара (сам .app-navbar выше — lg:hidden), так что
+   таять заголовку не подо что и не на что переключаться. Мотор
+   (lib/useCollapsingHeader.ts) не знает про breakpoint и продолжает писать
+   opacity/transform инлайном при каждом кадре прокрутки — !important здесь
+   перебивает именно инлайн-стиль, а не убирает сам JS. */
+@media (min-width: 1024px) {
+  [data-collapsing-title] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 /* ================= Панель каталога уходит с дороги =================
    Sticky-панель каталога — это три ряда: поиск, категории, сортировка с
    фильтрами. Пока человек листает товар, она занимает четверть экрана, на

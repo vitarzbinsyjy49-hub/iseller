@@ -141,8 +141,13 @@ export default function Info() {
             key={section.id}
             id={section.id}
             ref={enterGridRefCallback("fadeUp")}
-            // scroll-mt: под липкой шапкой якорь иначе встаёт под неё.
-            className="scroll-mt-4 rounded-xl2 bg-surface p-4 shadow-soft"
+            // scroll-mt-14 (56px) — запас под липкий бар ScreenHeader (нав + его
+            // паддинги дают ~38px, а не 16px, как было при scroll-mt-4 до него):
+            // без запаса ровно этого размера scrollIntoView ставит шапку секции
+            // ПОД бар, и заголовок ("О магазине" и т.п.) читается наполовину
+            // закрытым стеклом. Якоря сюда ведут кнопки уже опубликованных
+            // постов канала (/info#delivery и т.п.).
+            className="scroll-mt-14 rounded-xl2 bg-surface p-4 shadow-soft"
           >
             <div className="flex items-center gap-2.5">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
@@ -172,7 +177,8 @@ export default function Info() {
 
         {/* Контакты — отдельной секцией с действиями, а не текстом: телефон
             должен набираться тапом, а не выделяться и копироваться вручную. */}
-        <section id="contacts" ref={enterGridRefCallback("fadeUp")} className="scroll-mt-4 rounded-xl2 bg-surface p-4 shadow-soft">
+        {/* scroll-mt-14 — тот же запас под липкий бар, что и у секций выше. */}
+        <section id="contacts" ref={enterGridRefCallback("fadeUp")} className="scroll-mt-14 rounded-xl2 bg-surface p-4 shadow-soft">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
               <Icon name="chat" className="h-5 w-5" />

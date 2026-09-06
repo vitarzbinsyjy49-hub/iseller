@@ -324,22 +324,15 @@ export default function AiSearch() {
     // что и у CTA товара (index.css): позиция над навбаром (safe-area) + высота бара.
     // Desktop: строка ввода sticky внутри pane, поэтому lg:pb-0.
     <div ref={collapsing} className="mx-auto max-w-md pb-cta lg:max-w-none lg:pb-0">
-      <div className="lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start lg:gap-8">
-      {/* Desktop-sidebar: те же сценарии, что и на mobile, + постоянная история */}
-      <AiSidebar
-        history={aiHistory}
-        onQuick={handleQuick}
-        onPick={(q) => submit(q)}
-        onClearHistory={() => { clearAiHistory(); setAiHistory([]); }}
-        disabled={loading}
-      />
-
-      <div className="flex min-w-0 flex-col lg:mx-auto lg:w-full lg:max-w-[860px]">
-      {/* Кнопка корзины живёт в actions липкого бара: плавающая панель корзины на
-          этом экране скрыта (она перекрывала строку ввода), и без своего входа
-          корзина была бы недостижима с экрана AI — а человек приходит сюда как
-          раз выбирать, что в неё положить. В липком баре она не теряется при
-          прокрутке, в отличие от прежнего места в строке с заголовком. */}
+      {/* ScreenHeader — ПРЯМОЙ ребёнок узла с ref: мотор ищет data-collapsing-*
+          через querySelector и нашёл бы их и глубже, но pb-cta (отступ под
+          фиксированной строкой ввода) висит именно на этом корне. Если убрать
+          ScreenHeader внутрь grid/flex-обёрток ниже, коробка их родителя
+          кончается раньше конца страницы, и в конце длинного чата липкий бар
+          отклеивается от низа своего (более короткого) родителя и уезжает
+          вверх вместе с контентом — вместо того чтобы остаться прижатым к
+          верху экрана. Сетки на mobile нет (lg:grid), поэтому вынос сюда
+          ничего не сдвигает визуально. */}
       <ScreenHeader
         title="AI-подбор техники"
         subtitle="Опишите, что вам нужно — подберём варианты из наличия"
@@ -357,6 +350,17 @@ export default function AiSearch() {
         ) : undefined}
       />
 
+      <div className="lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start lg:gap-8">
+      {/* Desktop-sidebar: те же сценарии, что и на mobile, + постоянная история */}
+      <AiSidebar
+        history={aiHistory}
+        onQuick={handleQuick}
+        onPick={(q) => submit(q)}
+        onClearHistory={() => { clearAiHistory(); setAiHistory([]); }}
+        disabled={loading}
+      />
+
+      <div className="flex min-w-0 flex-col lg:mx-auto lg:w-full lg:max-w-[860px]">
       {/* Бейдж движка. Показывается ТОЛЬКО когда backend подтвердил, что
           отвечает действительно Claude (config.ai_vendor): на стенде с
           AI_PROVIDER=fallback ответ собирается из каталога без модели, и

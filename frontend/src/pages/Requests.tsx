@@ -9,6 +9,8 @@ import { leadTitle, leadTypeLabel, leadMetadataRows } from "../lib/leads";
 import { Icon } from "../components/icons";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 import { useLeadsBadge } from "../store/leadsBadge";
+import ScreenHeader from "../components/ScreenHeader";
+import { useCollapsingHeader } from "../lib/useCollapsingHeader";
 
 type Lead = {
   id: number; product_id: number | null; product_title: string | null; product_price: number | null;
@@ -50,6 +52,7 @@ const FILTERS = [
 
 export default function Requests() {
   const navigate = useNavigate();
+  const collapsing = useCollapsingHeader();
   const [leads, setLeads] = useState<Lead[] | null>(null);
   // Ошибка сети/сервера — НЕ то же самое, что «заявок нет»: раньше catch
   // подменял её пустым списком, и пользователь видел ложное «пусто».
@@ -102,8 +105,8 @@ export default function Requests() {
   }, [leads, filter]);
 
   return (
-    <div className="mx-auto max-w-md lg:max-w-5xl">
-      <h1 className="text-2xl font-bold">Мои заявки</h1>
+    <div ref={collapsing} className="mx-auto max-w-md lg:max-w-5xl">
+      <ScreenHeader title="Мои заявки" />
 
       <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
         {FILTERS.map((f) => (

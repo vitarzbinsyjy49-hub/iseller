@@ -7,6 +7,7 @@ import ProductCard from "../components/ProductCard";
 import { ErrorState } from "../components/StateViews";
 import { Icon } from "../components/icons";
 import { enterRefCallback } from "../lib/useEnter";
+import { pluralItems } from "../lib/cartMath";
 import ScreenHeader from "../components/ScreenHeader";
 import { useCollapsingHeader } from "../lib/useCollapsingHeader";
 
@@ -35,9 +36,12 @@ export default function History() {
 
   return (
     <div ref={collapsing} className="mx-auto max-w-md lg:max-w-none">
+      {/* Счётчик — в subtitle, не в actions: это информация о содержимом
+          экрана, а не действие, и actions живёт только в липком баре
+          (lg:hidden), где на desktop счётчик пропал бы вместе с баром. */}
       <ScreenHeader
         title="История просмотров"
-        actions={cards && cards.length > 0 ? <span className="text-sm text-muted">{cards.length}</span> : undefined}
+        subtitle={cards && cards.length > 0 ? pluralItems(cards.length) : undefined}
       />
 
       {error ? (

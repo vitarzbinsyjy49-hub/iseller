@@ -8,6 +8,7 @@ import { useFavoriteIds } from "../lib/favorites";
 import { track } from "../lib/analytics";
 import { Icon } from "../components/icons";
 import { enterRefCallback } from "../lib/useEnter";
+import { pluralItems } from "../lib/cartMath";
 import ScreenHeader from "../components/ScreenHeader";
 import { useCollapsingHeader } from "../lib/useCollapsingHeader";
 
@@ -34,11 +35,12 @@ export default function Favorites() {
 
   return (
     <div ref={collapsing} className="mx-auto max-w-md lg:max-w-none">
+      {/* Счётчик — в subtitle, не в actions: это информация о содержимом
+          экрана, а не действие, и actions живёт только в липком баре
+          (lg:hidden), где на desktop счётчик пропал бы вместе с баром. */}
       <ScreenHeader
         title="Избранное"
-        actions={visible && visible.length > 0 ? (
-          <span className="text-sm text-muted">{visible.length}</span>
-        ) : undefined}
+        subtitle={visible && visible.length > 0 ? pluralItems(visible.length) : undefined}
       />
 
       {error ? (

@@ -147,17 +147,6 @@ export default function Cart() {
           </button>
         )}
       />
-      {/* ScreenHeader целиком скрыт на lg (там нет липкого бара), а «Очистить» —
-          не название экрана, а действие: на desktop его не должно не стать
-          вместе с заголовком. Дубль показываем только там. */}
-      <div className="hidden justify-end lg:flex">
-        <button
-          onClick={onClear}
-          className="tap shrink-0 text-xs font-medium text-muted transition-colors hover:text-danger"
-        >
-          Очистить
-        </button>
-      </div>
 
       {/* Изменения цены и недоступные позиции — предупреждения, а не молчание:
           иначе пользователь узнаёт о них уже от менеджера. */}
