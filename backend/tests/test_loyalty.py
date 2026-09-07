@@ -167,6 +167,33 @@ def test_spend_and_correction_require_comment(ctx):
         loyalty.record(db, user_id=user.id, kind="spend", points=-10, comment="  ")
 
 
+def test_referral_kind_keeps_rate_snapshot(ctx):
+    """Ставка выплаты настраивается и со временем меняется — в операции
+    остаётся та, по которой заплатили на самом деле."""
+    _client, db, user, _other = ctx
+    row = loyalty.record(
+        db, user_id=user.id, kind="referral", points=1000, rate_bps=100,
+        comment="1% с покупки друга",
+    )
+    db.commit()
+    assert row.kind == "referral"
+    assert row.rate_bps == 100
+    assert row.amount is None
+
+
+def test_referral_does_not_move_turnover(ctx):
+    """Реферальный доход не поднимает уровень: иначе уровень перестанет
+    означать «сколько человек у нас купил»."""
+    _client, db, user, _other = ctx
+    loyalty.record(
+        db, user_id=user.id, kind="referral", points=200_000, rate_bps=100,
+        comment="процент",
+    )
+    db.commit()
+    assert loyalty.summary(db, user.id)["lifetime_spent"] == 0
+    assert loyalty.summary(db, user.id)["level"]["key"] == "start"
+
+
 def test_only_purchase_moves_turnover(ctx):
     """Подарочный бонус, поднимающий уровень, означал бы, что уровень больше
     не про покупки."""

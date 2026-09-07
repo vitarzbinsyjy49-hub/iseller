@@ -226,6 +226,7 @@ def record(
     comment: str | None = None,
     created_by: str | None = None,
     idempotency_key: str | None = None,
+    rate_bps: int | None = None,
 ) -> LoyaltyTransaction:
     """Провести операцию. Единственный способ изменить счёт.
 
@@ -240,7 +241,13 @@ def record(
 
     money = Decimal(str(amount)) if amount is not None else None
     current = summary(db, user_id)
-    rate_bps = current["level"]["rate_bps"] if kind == "purchase" else None
+    # Ставка покупки берётся из уровня, и перебить её нельзя: она следствие
+    # оборота. Для реферальной выплаты ставку задаёт настройка, поэтому она
+    # приходит снаружи — но снапшотится точно так же.
+    if kind == "purchase":
+        rate_bps = current["level"]["rate_bps"]
+    elif kind != "referral":
+        rate_bps = None
     if points is None:
         # Расчёт предлагается, а не навязывается: менеджер может перебить его
         # руками, передав points явно.
