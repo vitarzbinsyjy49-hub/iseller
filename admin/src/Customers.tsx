@@ -42,6 +42,7 @@ const KIND_RU: Record<string, string> = {
   spend: "Списание",
   bonus: "Бонус",
   correction: "Корректировка",
+  referral: "За приглашение",
 };
 
 const LEVEL_COLOR: Record<string, { bg: string; fg: string }> = {

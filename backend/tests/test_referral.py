@@ -364,3 +364,37 @@ def test_referral_me_issues_code_on_first_open(db, monkeypatch):
     assert first == second
     db.refresh(user)
     assert user.referral_code == first
+
+
+# ------------------------------------------------- наблюдаемость
+
+def test_admin_sees_referral_pairs_sorted_by_payout(admin_client, db):
+    """Сортировка по сумме выплат: накрутка всплывает наверх сама, без
+    отдельного детектора."""
+    small_inviter, small_invited = _pair(db, 950, 951)
+    big_inviter, big_invited = _pair(db, 952, 953)
+
+    _complete(admin_client, db, small_invited, 100_000)      # 1000 баллов
+    _complete(admin_client, db, big_invited, 500_000)        # 5000 баллов
+
+    rows = admin_client.get("/api/admin/referrals").json()["items"]
+    assert len(rows) == 2
+    assert rows[0]["inviter"]["id"] == big_inviter.id
+    assert rows[0]["paid_points"] == 5000
+    assert rows[0]["completed_leads"] == 1
+    assert rows[0]["invited"]["id"] == big_invited.id
+    assert rows[1]["inviter"]["id"] == small_inviter.id
+    assert rows[1]["paid_points"] == 1000
+    assert rows[0]["registered_at"] is not None
+
+
+def test_pair_without_payouts_is_still_visible(admin_client, db):
+    """Приглашённый, который ещё ничего не купил, из списка не исчезает:
+    «пришли, но не покупают» — это тоже сигнал."""
+    inviter, _invited = _pair(db, 954, 955)
+
+    rows = admin_client.get("/api/admin/referrals").json()["items"]
+    assert len(rows) == 1
+    assert rows[0]["inviter"]["id"] == inviter.id
+    assert rows[0]["completed_leads"] == 0
+    assert rows[0]["paid_points"] == 0
