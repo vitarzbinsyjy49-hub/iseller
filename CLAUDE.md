@@ -33,6 +33,7 @@ Telegram Mini App магазин техники (Apple, Dyson, PlayStation) + б
 | AI-подбор, провайдеры, промпт, гейтвей Anthropic | `services/ai_*.py` | `docs/context/ai.md` |
 | Вопрос к AI с карточки товара, формат ответа в чате | `ai_orchestrator.py`, `lib/answerFormat.ts` | `docs/context/ai.md` |
 | Корзина, checkout, заявки, баллы и уровни | `services/cart.py`, `loyalty.py` | `docs/context/cart-and-loyalty.md` |
+| Факт покупки, автоначисление, рефералы | `services/purchase.py`, `referral.py` | `docs/context/cart-and-loyalty.md` |
 | Уведомления в Telegram, напоминания, избранное | `services/notifications.py` | `docs/context/notifications.md` |
 | Поделиться, ярлык на экран, бейджи спроса, события аналитики | `lib/share.ts`, `social_proof.py` | `docs/context/sharing-and-social-proof.md` |
 | Сверка цен с BSA (конкурент), новая выгрузка канала | `services/bsa_parser.py`, `scripts/import_bsa.py` | `docs/context/bsa-price-sync.md` |
