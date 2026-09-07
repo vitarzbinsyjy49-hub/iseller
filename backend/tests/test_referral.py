@@ -82,3 +82,89 @@ def test_code_resolves_back_to_user(db):
     assert referral.user_by_code(db, code).id == user.id
     assert referral.user_by_code(db, "zzzzzzzz") is None
     assert referral.user_by_code(db, "") is None
+
+
+# ------------------------------------------------- захват связи при регистрации
+
+def _login(db, telegram_id: int, start_param: str | None = None) -> User:
+    """Логин Mini App — тем же приёмом, что в test_ad_attribution.py."""
+    from starlette.requests import Request
+
+    from app.api.auth import _get_or_create_user
+
+    request = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/telegram",
+        "headers": [], "client": ("127.0.0.1", 1234),
+    })
+    tg_user = {"id": telegram_id, "username": "olya", "first_name": "Оля", "last_name": None}
+    return _get_or_create_user(db, tg_user, request, start_param=start_param)
+
+
+def test_referral_link_binds_new_user(db):
+    """Связь ставится при СОЗДАНИИ пользователя и пишется в источник тем же
+    форматом, что рекламные метки, — чтобы фильтр админки работал без правок."""
+    from app.services import referral
+
+    inviter = User(telegram_id=910)
+    db.add(inviter)
+    db.commit()
+    db.refresh(inviter)
+    code = referral.code_for(db, inviter)
+
+    invited = _login(db, telegram_id=911, start_param=f"ref_{code}")
+
+    assert invited.referred_by_user_id == inviter.id
+    assert invited.acquisition_source == f"ref_{code}"
+
+
+def test_existing_user_is_not_rebound(db):
+    """Повторный заход по чужой ссылке не имеет права присвоить себе человека —
+    то же правило, что у рекламной метки."""
+    from app.services import referral
+
+    inviter = User(telegram_id=912)
+    db.add(inviter)
+    db.commit()
+    db.refresh(inviter)
+    code = referral.code_for(db, inviter)
+
+    _login(db, telegram_id=913)
+    again = _login(db, telegram_id=913, start_param=f"ref_{code}")
+    assert again.referred_by_user_id is None
+
+
+def test_self_referral_is_refused(db):
+    """Дешёвая проверка, на которую нельзя полагаться «этого не может быть»:
+    речь о деньгах."""
+    from app.services import referral
+
+    user = _login(db, telegram_id=914)
+    code = referral.code_for(db, user)
+
+    again = _login(db, telegram_id=914, start_param=f"ref_{code}")
+    assert again.referred_by_user_id is None
+
+
+def test_unknown_code_is_not_an_error(db):
+    invited = _login(db, telegram_id=915, start_param="ref_zzzzzzzz")
+    assert invited.referred_by_user_id is None
+    assert invited.acquisition_source is None
+
+
+def test_ref_touch_in_chat_binds_on_first_login(db):
+    """Telegram не прокидывает start_param в Mini App, открытый из чата, —
+    метка доходит только первым касанием, и вид у него «ref», а не «ad»."""
+    from app.services import ad_touch, referral
+
+    inviter = User(telegram_id=916)
+    db.add(inviter)
+    db.commit()
+    db.refresh(inviter)
+    code = referral.code_for(db, inviter)
+
+    ad_touch.remember(db, 917, code, kind="ref")
+    invited = _login(db, telegram_id=917)
+
+    assert invited.referred_by_user_id == inviter.id
+    # Реферальное касание не имеет права стать рекламным источником.
+    assert invited.acquisition_source == f"ref_{code}"

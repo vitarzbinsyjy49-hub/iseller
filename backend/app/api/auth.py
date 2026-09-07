@@ -17,7 +17,8 @@ from app.core.security import (
 )
 from app.services.token_revocation import is_refresh_token_revoked, revoke_refresh_token
 from app.services import ad_touch
-from app.services.telegram_bot import parse_ad_payload
+from app.services import referral
+from app.services.telegram_bot import parse_ad_payload, parse_ref_payload
 from app.db.audit import audit
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
@@ -58,6 +59,23 @@ def _get_or_create_user(
         ad_slug = ad_touch.slug_for(db, tg_user["id"])
     if ad_slug is not None:
         user.acquisition_source = f"ad_{ad_slug}"
+    # Реферальная связь — та же логика, что у рекламной метки, и по тем же
+    # причинам: только при создании, приоритет у start_param, иначе первое
+    # касание в чате. Отличие одно: метка превращается не в строку источника, а
+    # в связь между двумя пользователями, по которой годами идут выплаты.
+    ref_code = parse_ref_payload(start_param) if (created and start_param) else None
+    if created and ref_code is None:
+        ref_code = ad_touch.slug_for(db, tg_user["id"], kind="ref")
+    if ref_code is not None:
+        inviter = referral.user_by_code(db, ref_code)
+        # Самоприглашение отсекается явно. Новый пользователь своего кода ещё
+        # не имеет, но полагаться на «этого не может случиться» в денежной
+        # механике нельзя.
+        if inviter is not None and inviter.id != user.id:
+            user.referred_by_user_id = inviter.id
+            user.acquisition_source = f"ref_{ref_code}"
+        else:
+            ref_code = None
     db.commit()
     db.refresh(user)
     audit(db, f"tg:{user.telegram_id}", "register" if created else "login", ip=client_ip(request))
@@ -66,6 +84,12 @@ def _get_or_create_user(
         # app/api/events.py), но пишет бэкенд сам: это первый вход пользователя,
         # клиенту ещё нечем было бы его отправить.
         db.add(AnalyticsEvent(user_id=user.id, event="ad_signup", payload={"source": ad_slug}))
+        db.commit()
+    if ref_code is not None:
+        db.add(AnalyticsEvent(
+            user_id=user.id, event="referral_signup",
+            payload={"code": ref_code, "inviter_id": user.referred_by_user_id},
+        ))
         db.commit()
     return user
 

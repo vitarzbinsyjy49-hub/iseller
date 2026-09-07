@@ -18,22 +18,42 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.ad_touch import AdTouch
-from app.services.telegram_bot import parse_ad_payload, parse_start_payload
+from app.services.telegram_bot import parse_ad_payload, parse_ref_payload, parse_start_payload
 
 logger = logging.getLogger("techshop.ad_touch")
 
 
-def slug_for(db, telegram_id: int) -> str | None:
-    """Метка первого касания для этого telegram_id, или None."""
+def slug_for(db, telegram_id: int, kind: str = "ad") -> str | None:
+    """Метка первого касания этого вида для этого telegram_id, или None.
+
+    Вид спрашивается явно: строка одна на человека, и реферальное касание не
+    имеет права прочитаться как рекламный источник — иначе чужой код осел бы в
+    отчёте по каналам как кампания.
+    """
     try:
         return db.execute(
-            select(AdTouch.slug).where(AdTouch.telegram_id == int(telegram_id))
+            select(AdTouch.slug).where(
+                AdTouch.telegram_id == int(telegram_id),
+                AdTouch.kind == kind,
+            )
         ).scalar_one_or_none()
     except (TypeError, ValueError):
         return None
 
 
-def remember(db, telegram_id: int, slug: str) -> bool:
+def _has_touch(db, telegram_id: int) -> bool:
+    """Есть ли у человека касание ЛЮБОГО вида.
+
+    Проверка нарочно без вида: строка одна на telegram_id (unique index), и
+    первое касание есть первое касание — реферальная ссылка не перебивает
+    рекламную, как и наоборот.
+    """
+    return db.execute(
+        select(AdTouch.id).where(AdTouch.telegram_id == int(telegram_id))
+    ).scalar_one_or_none() is not None
+
+
+def remember(db, telegram_id: int, slug: str, kind: str = "ad") -> bool:
     """Записать первое касание. True — если строка появилась именно сейчас.
 
     Первое касание НЕ перезаписывается: если строка уже есть, вторая рекламная
@@ -49,9 +69,9 @@ def remember(db, telegram_id: int, slug: str) -> bool:
         telegram_id = int(telegram_id)
     except (TypeError, ValueError):
         return False
-    if slug_for(db, telegram_id) is not None:
+    if _has_touch(db, telegram_id):
         return False
-    db.add(AdTouch(telegram_id=telegram_id, slug=slug))
+    db.add(AdTouch(telegram_id=telegram_id, slug=slug, kind=kind))
     try:
         db.commit()
     except SQLAlchemyError:
@@ -83,7 +103,13 @@ def remember_from_update(db, update: dict) -> str | None:
         payload = parse_start_payload(message.get("text"))
         if not payload:
             return None
+        # Реферальная ссылка идёт тем же конвейером: касание одно, различается
+        # только вид — во что метка превратится при логине.
+        kind = "ad"
         slug = parse_ad_payload(payload)
+        if slug is None:
+            slug = parse_ref_payload(payload)
+            kind = "ref"
         if slug is None:
             return None
         # id пользователя, а не чата: в личке они совпадают, но from — это тот,
@@ -94,7 +120,7 @@ def remember_from_update(db, update: dict) -> str | None:
             telegram_id = (message.get("chat") or {}).get("id")
         if telegram_id is None:
             return None
-        return slug if remember(db, telegram_id, slug) else None
+        return slug if remember(db, telegram_id, slug, kind=kind) else None
     except Exception:  # noqa: BLE001 — атрибуция не роняет ответ бота
         logger.exception("не удалось записать первое касание рекламы")
         return None
