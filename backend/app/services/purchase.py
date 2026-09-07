@@ -12,7 +12,7 @@
 from sqlalchemy.orm import Session
 
 from app.models.lead import Lead
-from app.services import loyalty
+from app.services import loyalty, settings
 
 
 def purchase_key(lead_id: int, seq: int) -> str:
@@ -25,6 +25,11 @@ def accrue_for_lead(db: Session, lead: Lead, actor: str) -> None:
     Молча ничего не делает, если покупателя нет в системе: заявку мог завести
     менеджер вручную, и это норма.
     """
+    # Рубильник гасит ВСЮ автоматику, включая кэшбек покупателю. Ручное
+    # начисление из карточки клиента продолжает работать — это путь отхода,
+    # если механика поведёт себя не так, как ожидалось.
+    if not settings.loyalty(db).auto_accrual_enabled:
+        return
     if lead.user_id is None or lead.final_total is None:
         return
     loyalty.record(

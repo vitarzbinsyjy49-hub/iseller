@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, admin_promo, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, scenario_chat, telegram, users
+from app.api import admin, admin_crm, admin_promo, admin_settings, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, scenario_chat, telegram, users
 from app.api import fx as fx_router
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
@@ -99,6 +99,9 @@ app.include_router(loyalty.router, prefix="/api")
 app.include_router(admin_users.router, prefix="/api")
 # Промокоды: акция на первые заказы, купон списывается только оформлением
 app.include_router(admin_promo.router, prefix="/api")
+# Настройки программы лояльности: ставка выплаты, приветственный бонус,
+# рубильник автоначисления
+app.include_router(admin_settings.router, prefix="/api")
 # v4: управляемая главная + Import Center + публичная конфигурация
 app.include_router(home.router, prefix="/api")
 app.include_router(home.admin_router, prefix="/api")
