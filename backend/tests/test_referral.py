@@ -4,7 +4,11 @@
 самоприглашение невозможно, выплата не удваивается и не двигает оборот.
 """
 import pytest
+from starlette.requests import Request
 
+# Импорт наверху, а не внутри теста: он регистрирует таблицы (в том числе
+# audit_logs), а create_all в фикстуре db выполняется раньше тела теста.
+from app.api.auth import _get_or_create_user
 from app.models.user import User
 
 
@@ -88,10 +92,6 @@ def test_code_resolves_back_to_user(db):
 
 def _login(db, telegram_id: int, start_param: str | None = None) -> User:
     """Логин Mini App — тем же приёмом, что в test_ad_attribution.py."""
-    from starlette.requests import Request
-
-    from app.api.auth import _get_or_create_user
-
     request = Request({
         "type": "http", "method": "POST", "path": "/api/auth/telegram",
         "headers": [], "client": ("127.0.0.1", 1234),
@@ -168,3 +168,19 @@ def test_ref_touch_in_chat_binds_on_first_login(db):
     assert invited.referred_by_user_id == inviter.id
     # Реферальное касание не имеет права стать рекламным источником.
     assert invited.acquisition_source == f"ref_{code}"
+
+
+# ------------------------------------------------- расчёт выплат
+
+def test_payout_points_rounds_down():
+    from app.services import referral
+
+    assert referral.payout_points(100_000, 100) == 1000   # 1%
+    assert referral.payout_points(100_000, 250) == 2500   # 2,5%
+    # Округление ВНИЗ: вверх дарило бы по баллу на каждой операции, и на
+    # длинной истории это заметные деньги. Тот же приём, что в points_for.
+    assert referral.payout_points(999, 100) == 9
+    # С покупки дешевле 100 рублей при ставке 1% платить нечего.
+    assert referral.payout_points(99, 100) == 0
+    assert referral.payout_points(100_000, 0) == 0
+    assert referral.payout_points(None, 100) == 0

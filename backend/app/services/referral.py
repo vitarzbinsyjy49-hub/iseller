@@ -9,10 +9,12 @@ kind='purchase', а сама выплата имеет kind='referral'.
 покупки C получает только B. Многоуровневость — это пирамида.
 """
 import secrets
+from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.loyalty import LoyaltyTransaction
 from app.models.user import User
 from app.services.telegram_bot import AD_SLUG_ALPHABET, REF_CODE_LENGTH
 
@@ -51,3 +53,31 @@ def user_by_code(db: Session, code: str) -> User | None:
     return db.execute(
         select(User).where(User.referral_code == code)
     ).scalar_one_or_none()
+
+
+# ---------------------------------------------------------------- расчёт
+
+
+def payout_points(amount: float | Decimal | None, rate_bps: int) -> int:
+    """Процент с покупки, округлённый ВНИЗ.
+
+    Ровно тот же расчёт, что у кэшбека (loyalty.points_for), и по той же
+    причине вниз: округление вверх дарило бы по баллу на каждой операции.
+    """
+    if amount is None or amount <= 0 or rate_bps <= 0:
+        return 0
+    return int(Decimal(str(amount)) * rate_bps // 10_000)
+
+
+def is_first_purchase(db: Session, user_id: int) -> bool:
+    """Первая покупка — ровно одна проведённая операция вида «покупка».
+
+    Считается ПОСЛЕ проведения текущей, поэтому единица, а не ноль.
+    """
+    count = db.execute(
+        select(func.count()).select_from(LoyaltyTransaction).where(
+            LoyaltyTransaction.user_id == user_id,
+            LoyaltyTransaction.kind == "purchase",
+        )
+    ).scalar_one()
+    return count == 1
