@@ -275,6 +275,32 @@ def parse_ad_product_id(payload: str) -> int | None:
     return split_ad_payload(payload)[1]
 
 
+#: Реферальный payload: ref_<код>. Работает тем же конвейером атрибуции, что
+#: рекламный (см. AD_PAYLOAD_PREFIX), но ведём мы ТОЛЬКО в чат: вход по
+#: ?startapp= не даёт боту права писать человеку, и приглашённый навсегда
+#: остался бы без напоминаний о корзине и статусов заявки.
+REF_PAYLOAD_PREFIX = "ref_"
+
+#: Длина кода. Фиксирована, а не «до N»: строка чужого формата нужной длины
+#: кодом не является, и проверка длины отсекает мусор до похода в базу.
+REF_CODE_LENGTH = 8
+
+
+def parse_ref_payload(payload: str) -> str | None:
+    """«ref_A1b2C3d4» -> «A1b2C3d4»; всё остальное -> None.
+
+    Allowlist перечислен явно, а не через isalnum(): последний пропускает
+    юникод («ref_абвгдежз»), а Telegram в start-параметре отдаёт только эти
+    символы — всё прочее приходит к нам мимо реальной ссылки.
+    """
+    if not payload or not payload.startswith(REF_PAYLOAD_PREFIX):
+        return None
+    code = payload[len(REF_PAYLOAD_PREFIX):]
+    if len(code) != REF_CODE_LENGTH or not all(c in AD_SLUG_ALPHABET for c in code):
+        return None
+    return code
+
+
 #: Статические payload'ы диплинков -> экран Mini App. Словарь, а не цепочка
 #: if'ов: по нему проходит тест, который требует от бота web_app-кнопки на тот
 #: же путь для КАЖДОГО payload'а. Новый диплинк, добавленный только сюда и

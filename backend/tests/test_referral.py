@@ -33,3 +33,25 @@ def test_required_schema_covers_ad_touches():
     from app.scripts import bot_polling as bp
 
     assert "kind" in bp.REQUIRED_SCHEMA["ad_touches"]
+
+
+def test_parse_ref_payload():
+    from app.services.telegram_bot import parse_ref_payload
+
+    assert parse_ref_payload("ref_A1b2C3d4") == "A1b2C3d4"
+    assert parse_ref_payload("ad_direct") is None
+    assert parse_ref_payload("product_42") is None
+    assert parse_ref_payload("ref_") is None
+    # Юникод-символы приходят мимо реальной ссылки: Telegram в start отдаёт
+    # только ASCII-буквы, цифры, дефис и подчёркивание.
+    assert parse_ref_payload("ref_абвгдежз") is None
+    # Длина фиксирована: чужая строка нужной формы кодом не является.
+    assert parse_ref_payload("ref_A1b2C3d4e5") is None
+
+
+def test_ref_payload_fits_telegram_limit():
+    """Лимит Telegram на start-параметр — 64 символа. У рекламных ссылок он
+    выбран под ноль; реферальные обязаны остаться далеко внутри."""
+    from app.services.telegram_bot import REF_CODE_LENGTH, REF_PAYLOAD_PREFIX
+
+    assert len(REF_PAYLOAD_PREFIX) + REF_CODE_LENGTH <= 64
