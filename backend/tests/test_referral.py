@@ -282,3 +282,28 @@ def test_revert_takes_back_referral_payouts(admin_client, db):
 
     assert loyalty.summary(db, inviter.id)["balance"] == 0
     assert loyalty.summary(db, invited.id)["balance"] == 0
+
+
+def test_inviter_is_notified_once(admin_client, db, monkeypatch):
+    """Двойное сохранение статуса не должно слать второе сообщение —
+    dedupe_key привязан к заявке и попытке, как у статусов заявки."""
+    from sqlalchemy import select
+
+    from app.models.notification import Notification
+
+    # Без токена бота уведомления намеренно не ставятся в очередь вовсе
+    # (см. notifications_enabled) — тот же приём, что в test_notifications.py.
+    monkeypatch.setattr("app.core.config.settings.TELEGRAM_BOT_TOKEN", "test-token")
+
+    inviter, invited = _pair(db, 930, 931)
+    lead, _resp = _complete(admin_client, db, invited, 100_000)
+    admin_client.patch(
+        f"/api/admin/leads/{lead.id}",
+        json={"status": "completed", "final_total": 100_000},
+    )
+
+    rows = db.execute(
+        select(Notification).where(Notification.chat_id == inviter.telegram_id)
+    ).scalars().all()
+    assert len(rows) == 1, "двойное сохранение не должно слать второе сообщение"
+    assert "1000" in rows[0].text

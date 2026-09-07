@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session
 from app.models.loyalty import LoyaltyTransaction
 from app.models.user import User
 from app.services import loyalty, settings
+from app.services.notification_templates import referral_payout_message
+from app.services.notifications import enqueue, notifications_enabled
 from app.services.telegram_bot import AD_SLUG_ALPHABET, REF_CODE_LENGTH
 
 _ALPHABET = "".join(sorted(AD_SLUG_ALPHABET))
@@ -120,6 +122,7 @@ def payout_for_lead(db: Session, lead, actor: str) -> None:
             created_by=actor,
             idempotency_key=referral_key(lead.id, seq),
         )
+        _notify_inviter(db, lead, seq, points)
 
     if conf.welcome_bonus_points > 0 and is_first_purchase(db, buyer.id):
         loyalty.record(
@@ -149,3 +152,24 @@ def revert_for_lead(db: Session, lead, actor: str) -> None:
             created_by=actor,
             idempotency_key=f"{key}_revert",
         )
+
+
+def _notify_inviter(db: Session, lead, seq: int, points: int) -> None:
+    """Сообщить пригласившему о начислении.
+
+    Сети здесь нет: строка уходит в outbox той же транзакцией, что и сама
+    выплата, — та же схема, что у статусов заявки. dedupe_key привязан к заявке
+    И попытке завершения: повторное сохранение статуса второго сообщения не
+    породит, а начисление заново после отката — породит.
+    """
+    if not notifications_enabled():
+        return
+    inviter = db.get(User, lead.user_id).referred_by_user_id if lead.user_id else None
+    chat = db.get(User, inviter).telegram_id if inviter else None
+    enqueue(
+        db,
+        chat_id=chat,
+        kind="referral_payout",
+        message=referral_payout_message(points=points),
+        dedupe_key=f"referral:{lead.id}:{seq}",
+    )

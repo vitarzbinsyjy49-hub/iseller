@@ -42,6 +42,19 @@ def format_money(value: float | None, currency: str = "RUB") -> str:
     return f"{amount} {suffix}"
 
 
+def plural_points(count: int) -> str:
+    """«1 балл», «2 балла», «5 баллов» — та же таблица, что у позиций."""
+    tail = abs(int(count)) % 100
+    if 11 <= tail <= 14:
+        return "баллов"
+    tail %= 10
+    if tail == 1:
+        return "балл"
+    if 2 <= tail <= 4:
+        return "балла"
+    return "баллов"
+
+
 def plural_items(count: int) -> str:
     """«1 товар / 2 товара / 5 товаров»."""
     tail = count % 100
@@ -162,6 +175,30 @@ def lead_status_message(
         _keyboard(
             _row(_web_app_button("📦 Мои заявки", "/requests")),
             _row(_url_button("💬 Менеджер", settings.MANAGER_RETAIL_URL)),
+        ),
+    )
+
+
+# ================== Реферальная выплата — пригласившему ==================
+def referral_payout_message(*, points: int) -> Message:
+    """Пригласившему: друг забрал покупку, начислены баллы.
+
+    Приглашённому отдельного сообщения не шлём: он и так получает уведомление о
+    статусе заявки, и второе письмо про ту же сделку читалось бы как сбой.
+
+    Имени друга здесь нет намеренно: кто именно и что купил — не наше дело
+    рассказывать третьему человеку.
+    """
+    return Message(
+        "\n".join([
+            "<b>Друг забрал покупку</b>",
+            "",
+            f"Вам начислено {points} " + plural_points(points),
+            "",
+            "Процент приходит с каждой покупки приглашённых — без срока.",
+        ]),
+        _keyboard(
+            _row(_web_app_button("💎 Мои баллы", "/loyalty")),
         ),
     )
 
