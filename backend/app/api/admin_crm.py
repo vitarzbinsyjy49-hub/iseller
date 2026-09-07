@@ -27,6 +27,7 @@ from app.models.product import Product
 from app.models.user import User
 from app.schemas.ai import LeadStatusIn
 from app.services.availability import EXPLICIT_MODES
+from app.services import purchase
 from app.services.notification_templates import lead_status_message
 from app.services.notifications import enqueue, notifications_enabled
 
@@ -214,6 +215,8 @@ def update_lead(
                 detail=f"lead={lead_id};from={previous};to={body.status}",
             ))
             _notify_status_change(db, lead, body.status)
+            if body.status == "completed":
+                purchase.accrue_for_lead(db, lead, actor=f"admin:{admin}")
     # Правка суммы у уже завершённой заявки без смены статуса: менеджер
     # ошибся в цифре. Начислений это не трогает — они уже проведены.
     if body.final_total is not None and body.status is None:

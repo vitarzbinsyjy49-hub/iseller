@@ -95,3 +95,51 @@ def test_final_total_must_be_positive(admin_client, db):
         json={"status": "completed", "final_total": 0},
     )
     assert resp.status_code == 400
+
+
+def test_completed_lead_accrues_cashback(admin_client, db, ctx):
+    """Кэшбек начисляется по подтверждённой сумме, а не по оценочной."""
+    user = ctx["user"]
+    lead = Lead(status="confirmed", user_id=user.id, estimated_total=200_000)
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    admin_client.patch(
+        f"/api/admin/leads/{lead.id}",
+        json={"status": "completed", "final_total": 100_000},
+    )
+    # «Старт» — 0,25%: 100 000 * 25 // 10000 = 250
+    assert loyalty.summary(db, user.id)["balance"] == 250
+    assert loyalty.summary(db, user.id)["lifetime_spent"] == 100_000
+
+
+def test_saving_completed_lead_twice_does_not_double_cashback(admin_client, db, ctx):
+    """Двойное сохранение статуса не имеет права дать двойной кэшбек."""
+    user = ctx["user"]
+    lead = Lead(status="confirmed", user_id=user.id)
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    for _ in range(2):
+        admin_client.patch(
+            f"/api/admin/leads/{lead.id}",
+            json={"status": "completed", "final_total": 100_000},
+        )
+    assert loyalty.summary(db, user.id)["balance"] == 250
+
+
+def test_lead_without_user_accrues_nothing(admin_client, db):
+    """Заявку мог завести менеджер вручную — покупателя в системе нет.
+    Это норма, а не ошибка."""
+    lead = Lead(status="confirmed", user_id=None)
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    resp = admin_client.patch(
+        f"/api/admin/leads/{lead.id}",
+        json={"status": "completed", "final_total": 100_000},
+    )
+    assert resp.status_code == 200
