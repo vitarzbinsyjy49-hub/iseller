@@ -126,6 +126,39 @@ def test_balance_cannot_go_negative(ctx):
         loyalty.record(db, user_id=user.id, kind="spend", points=-101, comment="перебор")
 
 
+def test_correction_may_drive_balance_negative(ctx):
+    """Откат несостоявшейся сделки обязан пройти, даже если баллы потрачены.
+
+    Иначе накрутка защищена собственной защитой магазина: потратил начисленное
+    — и отнять уже нельзя. Отрицательный баланс честнее молчания: он виден и
+    гасится из будущих начислений.
+    """
+    _client, db, user, _other = ctx
+    loyalty.record(db, user_id=user.id, kind="bonus", points=1000)
+    loyalty.record(db, user_id=user.id, kind="spend", points=-900, comment="потратил")
+    db.commit()
+    assert loyalty.summary(db, user.id)["balance"] == 100
+
+    loyalty.record(
+        db, user_id=user.id, kind="correction", points=-1000,
+        comment="заявка 42 вышла из статуса «завершена»",
+    )
+    db.commit()
+    assert loyalty.summary(db, user.id)["balance"] == -900
+
+
+def test_spend_still_cannot_drive_balance_negative(ctx):
+    """Послабление касается ТОЛЬКО корректировок: потратить больше, чем есть,
+    по-прежнему нельзя."""
+    _client, db, user, _other = ctx
+    loyalty.record(db, user_id=user.id, kind="bonus", points=100)
+    db.commit()
+    with pytest.raises(loyalty.LoyaltyError):
+        loyalty.record(
+            db, user_id=user.id, kind="spend", points=-500, comment="слишком много",
+        )
+
+
 def test_spend_and_correction_require_comment(ctx):
     _client, db, user, _other = ctx
     loyalty.record(db, user_id=user.id, kind="bonus", points=500)
