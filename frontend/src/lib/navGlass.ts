@@ -89,8 +89,9 @@ export type NavSurfaceInput = {
  *  пересборки и деплоя — ровно того же, что правка одной строки CSS, только с
  *  лишним механизмом и типами, которых в этом фронтенде больше нигде нет.
  *  Если стекло окажется дорогим на живых телефонах, откат — снять data-glass
- *  в BottomNav.tsx или убрать @supports-блок .nav-surface[data-glass] в
- *  index.css; прежнее сплошное состояние при этом остаётся нетронутым.
+ *  в BottomNav.tsx или убрать @supports-блок .nav-row[data-glass="on"]
+ *  .nav-surface в index.css; прежнее сплошное состояние при этом остаётся
+ *  нетронутым.
  */
 export function navSurface({ supported, dockBehind }: NavSurfaceInput): NavSurface {
   if (!supported) return "solid";
