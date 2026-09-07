@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { animateNumber, prefersReducedMotion } from "../../lib/motion";
+import { PICKUP_ADDRESS, PICKUP_HOURS } from "../../lib/pickup";
 import { Icon } from "../icons";
 import { Appear, staggerDelayMs } from "./Appear";
 
@@ -92,7 +93,7 @@ export function SceneTrust() {
       <div className="mt-8 flex w-full flex-col gap-2.5">
         <Appear delayMs={staggerDelayMs(0)} className="flex items-center gap-2.5 rounded-card bg-white/[0.13] px-4 py-3 text-left text-[13px] text-white/90">
           <Icon name="pin" className="h-4 w-4 shrink-0 text-[#8fd4ff]" />
-          Самовывоз — Горбушка, Москва · 10:00–21:00
+          Самовывоз — {PICKUP_ADDRESS} · {PICKUP_HOURS}
         </Appear>
         <Appear delayMs={staggerDelayMs(1)} className="flex items-center gap-2.5 rounded-card bg-white/[0.13] px-4 py-3 text-left text-[13px] text-white/90">
           <Icon name="truck" className="h-4 w-4 shrink-0 text-[#8fd4ff]" />

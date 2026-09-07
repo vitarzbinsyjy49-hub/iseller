@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
+import { PICKUP_ADDRESS } from "../lib/pickup";
 import { formatPrice } from "../lib/format";
 import { SheetShell } from "./ScenarioSheet";
 import { FormError, TextAreaField, TextField } from "./Field";
@@ -131,7 +132,7 @@ export default function LeadForm({
             <div className="mt-2 grid grid-cols-2 gap-2">
               <DeliveryOption
                 active={delivery === "pickup"} onClick={() => setDelivery("pickup")}
-                icon="store" title="Самовывоз" subtitle="Горбушка, Москва"
+                icon="store" title="Самовывоз" subtitle={PICKUP_ADDRESS}
               />
               <DeliveryOption
                 active={delivery === "delivery"} onClick={() => setDelivery("delivery")}

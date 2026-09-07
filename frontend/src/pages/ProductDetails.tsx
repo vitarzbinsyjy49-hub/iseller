@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { indexFromScroll } from "../lib/carousel";
 import { animateScrollTo, transitionDuration } from "../lib/motion";
+import { PICKUP_ADDRESS, PICKUP_HOURS } from "../lib/pickup";
 import { track, trackProduct } from "../lib/analytics";
 import { ProductCard as TCard, ProductDetail } from "../components/ai/types";
 import ProductCardView from "../components/ProductCard";
@@ -360,7 +361,7 @@ export default function ProductDetails() {
         <InfoTile icon={p.in_stock ? "check" : "clock"} title={p.in_stock ? "В наличии" : "Под заказ"}
           subtitle={p.in_stock ? (p.is_available_today ? "Забрать сегодня" : "1–2 дня") : "Уточнит менеджер"} />
         <InfoTile icon="shield" title="Гарантия" subtitle={`${p.warranty_months} мес.`} />
-        <InfoTile icon="store" title="Самовывоз" subtitle="Горбушка, Москва" />
+        <InfoTile icon="store" title="Самовывоз" subtitle={PICKUP_ADDRESS} />
         <InfoTile icon="truck" title="Доставка" subtitle="По Москве" />
       </div>
 
@@ -433,8 +434,8 @@ export default function ProductDetails() {
           <section>
             <SubHead>Доставка и получение</SubHead>
             <div className="space-y-2">
-              <DeliveryRow icon="store" title="Самовывоз — Горбушка, Москва"
-                subtitle={p.in_stock && p.is_available_today ? "Можно забрать сегодня, 10:00–21:00" : "Обычно на следующий день, 10:00–21:00"} />
+              <DeliveryRow icon="store" title={`Самовывоз — ${PICKUP_ADDRESS}`}
+                subtitle={p.in_stock && p.is_available_today ? `Можно забрать сегодня, ${PICKUP_HOURS}` : `Обычно на следующий день, ${PICKUP_HOURS}`} />
               <DeliveryRow icon="truck" title="Доставка по Москве" subtitle="1–2 дня, сроки и стоимость уточнит менеджер" />
               <DeliveryRow icon="globe" title="В другие города" subtitle="Отправка транспортной компанией — способ зависит от адреса" />
             </div>

@@ -7,6 +7,7 @@ import { bundleItems } from "../lib/bundle";
 import { indexFromScroll } from "../lib/carousel";
 import { openExternalLink } from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
+import { PICKUP_ADDRESS, PICKUP_HOURS } from "../lib/pickup";
 import { Icon } from "./icons";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 
@@ -191,8 +192,8 @@ export default function LegendaryProduct({
             <section className="mt-9">
               <h2 className="text-lg font-bold">Как получить</h2>
               <div className="mt-3">
-                <Term title="Самовывоз — Горбушка, Москва"
-                  note={product.is_available_today ? "Сегодня, 10:00–21:00" : "Обычно на следующий день, 10:00–21:00"} />
+                <Term title={`Самовывоз — ${PICKUP_ADDRESS}`}
+                  note={product.is_available_today ? `Сегодня, ${PICKUP_HOURS}` : `Обычно на следующий день, ${PICKUP_HOURS}`} />
                 <Term title="Доставка по Москве" note="1–2 дня, стоимость уточнит менеджер" />
                 <Term title="В другие города" note="Транспортной компанией, способ зависит от адреса" />
                 <Term title={product.warranty_months > 0 ? `Гарантия ${product.warranty_months} мес.` : "Гарантия магазина"}

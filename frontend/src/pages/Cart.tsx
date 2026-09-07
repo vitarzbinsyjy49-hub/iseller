@@ -14,6 +14,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { track } from "../lib/analytics";
 import { formatPrice } from "../lib/format";
+import { PICKUP_PLACE } from "../lib/pickup";
 import { haptic, openExternalLink } from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
 import { useAuthStore } from "../store/auth";
@@ -436,7 +437,7 @@ function CheckoutBlock({
       <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">Способ получения</p>
       <div className="mt-2 grid grid-cols-3 gap-2">
         <FulfillmentOption active={fulfillment === "pickup"} onClick={() => setFulfillment("pickup")}
-          icon="store" title="Самовывоз" subtitle="Горбушка" />
+          icon="store" title="Самовывоз" subtitle={PICKUP_PLACE} />
         <FulfillmentOption active={fulfillment === "delivery"} onClick={() => setFulfillment("delivery")}
           icon="truck" title="Доставка" subtitle="По Москве" />
         <FulfillmentOption active={fulfillment === "consult"} onClick={() => setFulfillment("consult")}

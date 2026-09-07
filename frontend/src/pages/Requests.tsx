@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { track } from "../lib/analytics";
 import { toast } from "../lib/toast";
+import { PICKUP_PLACE } from "../lib/pickup";
 import { formatPrice } from "../lib/format";
 import { ErrorState } from "../components/StateViews";
 import { leadTitle, leadTypeLabel, leadMetadataRows } from "../lib/leads";
@@ -33,7 +34,7 @@ const STATUS_STYLE: Record<string, string> = {
 /** Подписи без emoji: это обычная строка текста в карточке заявки, и значок
  *  здесь ничего не добавлял, кроме системного шрифта посреди нашего. */
 const DELIVERY_LABEL: Record<string, string> = {
-  pickup: "Самовывоз · Горбушка",
+  pickup: `Самовывоз · ${PICKUP_PLACE}`,
   delivery: "Доставка по Москве",
 };
 

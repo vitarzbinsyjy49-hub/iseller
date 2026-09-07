@@ -9,6 +9,7 @@ import {
   type HomeScreenStatus,
 } from "../lib/telegram";
 import { usePublicConfig } from "../lib/appConfig";
+import { PICKUP_ADDRESS, PICKUP_HOURS } from "../lib/pickup";
 import { useFavoriteIds } from "../lib/favorites";
 import { Icon, type IconName } from "../components/icons";
 import type { ScenarioKey } from "../lib/scenario";
@@ -206,7 +207,7 @@ export default function Profile() {
           onClick={() => navigate("/favorites")} />
         <MenuRow icon="clock" title="История просмотров" subtitle="Товары, которые вы открывали"
           onClick={() => navigate("/history")} />
-        <MenuRow icon="pin" title="Точка выдачи" subtitle="Горбушка, Москва — ежедневно 10:00–21:00"
+        <MenuRow icon="pin" title="Точка выдачи" subtitle={`${PICKUP_ADDRESS} — ежедневно ${PICKUP_HOURS}`}
           onClick={() => navigate("/info#contacts")} />
         <MenuRow icon="info" title="О магазине" subtitle="Доставка, оплата, гарантия и контакты"
           onClick={() => navigate("/info")} />

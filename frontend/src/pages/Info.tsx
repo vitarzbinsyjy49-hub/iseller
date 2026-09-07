@@ -16,6 +16,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { usePublicConfig } from "../lib/appConfig";
+import { PICKUP_ADDRESS, PICKUP_HOURS } from "../lib/pickup";
 import { haptic, openExternalLink } from "../lib/telegram";
 import { toast } from "../lib/toast";
 import { Icon, type IconName } from "../components/icons";
@@ -56,7 +57,7 @@ const SECTIONS: Section[] = [
     icon: "truck",
     title: "Получение и доставка",
     blocks: [
-      "Самовывоз — Горбушка, Москва. Ежедневно 10:00–21:00. " +
+      `Самовывоз — ${PICKUP_ADDRESS}. Ежедневно ${PICKUP_HOURS}. ` +
         "Технику проверяем вместе, оплата после проверки.",
       "Доставка по Москве — курьером.",
       "Доставка по России — СДЭК.",
@@ -244,7 +245,7 @@ export default function Info() {
           </div>
 
           <p className="mt-3 text-[12px] leading-4 text-muted">
-            Самовывоз — Горбушка, Москва, ежедневно 10:00–21:00. О приезде
+            Самовывоз — {PICKUP_ADDRESS}, ежедневно {PICKUP_HOURS}. О приезде
             договоритесь с менеджером заранее.
           </p>
         </section>
