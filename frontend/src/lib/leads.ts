@@ -213,3 +213,66 @@ export function seenMarkFor(leads: LeadSeenLike[], now: () => string = () => new
   }
   return latest === null ? now() : new Date(latest).toISOString();
 }
+
+/** Подписи статусов заявки. Единственный источник: раньше словарь жил внутри
+ *  pages/Requests.tsx, и второе место, которому эти подписи понадобились
+ *  (строка в шапке главной), завело бы вторую копию — а расходятся такие копии
+ *  ровно тогда, когда статусов становится больше. */
+export const LEAD_STATUS_LABEL: Record<string, string> = {
+  new: "Новая", in_progress: "В работе", reserved: "Бронь",
+  completed: "Завершена", cancelled: "Отменена",
+};
+
+/** Статусы, на которых заявка ещё живёт: по ней чего-то ждут. */
+const ACTIVE_STATUSES = new Set(["new", "in_progress", "reserved"]);
+
+export type LeadSummaryLike = LeadSeenLike & {
+  id?: number | null;
+  public_number?: string | null;
+  status?: string | null;
+};
+
+export type LeadSummary = {
+  /** Номер для человека: «№128». */
+  number: string;
+  status: string;
+  /** Подпись статуса: «В работе». */
+  label: string;
+};
+
+/** Самая свежая ЖИВАЯ заявка — то, что показывает слот в шапке главной.
+ *
+ *  Живая — значит не завершённая и не отменённая: по остальным человек чего-то
+ *  ждёт, и именно за этим он и открывает приложение снова. Завершённая заявка
+ *  новостью не является, и держать её в самом заметном месте экрана значит
+ *  занимать его прошлым.
+ *
+ *  Свежесть считается по `created_at`, а не по `updated_at`: показать надо
+ *  ПОСЛЕДНЮЮ поданную, а не ту, которую последней тронул менеджер — иначе
+ *  человек, оформивший заявку минуту назад, увидел бы в шапке чужую по времени
+ *  старую, просто потому что по ней был комментарий.
+ *
+ *  Пустой список, отсутствие живых заявок, битые даты — везде null: слот тогда
+ *  показывает точку выдачи, а не пустое место.
+ */
+export function activeLeadSummary(leads: LeadSummaryLike[]): LeadSummary | null {
+  let best: LeadSummaryLike | null = null;
+  let bestMs = -Infinity;
+  for (const l of leads) {
+    const status = l.status ?? "";
+    if (!ACTIVE_STATUSES.has(status)) continue;
+    const created = ms(l.created_at);
+    // Заявка без разбираемой даты не выбывает: она может быть единственной.
+    // Но проигрывает любой, у которой дата есть.
+    const key = created ?? -Infinity;
+    if (best === null || key > bestMs) {
+      best = l;
+      bestMs = key;
+    }
+  }
+  if (!best) return null;
+  const status = best.status ?? "";
+  const number = best.public_number ?? (best.id != null ? `№${best.id}` : "");
+  if (!number) return null;
+  return { number, status, label: LEAD_STATUS_LABEL[status] ?? status };
+}

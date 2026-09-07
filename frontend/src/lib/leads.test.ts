@@ -85,7 +85,7 @@ describe("leadMetadataRows", () => {
   });
 });
 
-import { seenMarkFor, unseenLeadCount } from "./leads";
+import { activeLeadSummary, seenMarkFor, unseenLeadCount } from "./leads";
 
 describe("unseenLeadCount", () => {
   const lead = (created: string, updated: string) => ({ created_at: created, updated_at: updated });

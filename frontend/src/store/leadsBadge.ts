@@ -38,7 +38,7 @@
 import { create } from "zustand";
 
 import { api } from "../lib/api";
-import { seenMarkFor, unseenLeadCount, type LeadSeenLike } from "../lib/leads";
+import { activeLeadSummary, seenMarkFor, unseenLeadCount, type LeadSeenLike, type LeadSummary, type LeadSummaryLike } from "../lib/leads";
 
 const SEEN_KEY = "leads_seen_at";
 
@@ -70,6 +70,10 @@ function writeSeen(iso: string): void {
 type LeadsBadgeState = {
   /** Всего заявок. null — ещё не спрашивали. */
   total: number | null;
+  /** Самая свежая ЖИВАЯ заявка — её показывает слот в шапке главной.
+   *  Берётся из ТОГО ЖЕ ответа, что и счётчики: новый запрос ради строки в
+   *  шапке был бы платой за то, что уже загружено. */
+  latest: LeadSummary | null;
   /** Изменившихся с последнего просмотра. */
   unseen: number;
   refresh: (force?: boolean) => Promise<void>;
@@ -83,6 +87,7 @@ let lastFetchedAt = 0;
 
 export const useLeadsBadge = create<LeadsBadgeState>((set) => ({
   total: null,
+  latest: null,
   unseen: 0,
   refresh: (force = false) => {
     if (!force && Date.now() - lastFetchedAt < FRESH_MS) return Promise.resolve();
@@ -90,15 +95,15 @@ export const useLeadsBadge = create<LeadsBadgeState>((set) => ({
 
     inFlight = (async () => {
       try {
-        const d = await api<{ leads: LeadSeenLike[] }>("/leads/my");
-        set({ total: d.leads.length, unseen: unseenLeadCount(d.leads, readSeen()) });
+        const d = await api<{ leads: LeadSummaryLike[] }>("/leads/my");
+        set({ total: d.leads.length, latest: activeLeadSummary(d.leads), unseen: unseenLeadCount(d.leads, readSeen()) });
         lastFetchedAt = Date.now();
       } catch {
         // Сбой запроса оставляет счётчик нейтральным. Ошибка в бейдже пугает
         // сильнее, чем отсутствие цифры, — то же правило, что у блока лояльности.
         // lastFetchedAt не трогаем: неудачная попытка не должна «застолбить»
         // окно свежести — следующий refresh() должен попробовать снова.
-        set({ total: 0, unseen: 0 });
+        set({ total: 0, latest: null, unseen: 0 });
       } finally {
         inFlight = null;
       }

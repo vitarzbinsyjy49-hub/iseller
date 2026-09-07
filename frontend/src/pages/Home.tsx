@@ -13,6 +13,7 @@ import { openExternalLink } from "../lib/telegram";
 import { ProfileChip } from "../components/ProfileChip";
 import { ErrorState } from "../components/StateViews";
 import SearchPanel from "../components/SearchPanel";
+import HeroSlot from "../components/HeroSlot";
 import { pushSearchQuery } from "../lib/searchHistory";
 import { actionRoute, safeExternalUrl, safeInternalRoute } from "../lib/route";
 import { loadCachedCategories, saveCachedCategories } from "../lib/categoryCache";
@@ -366,16 +367,26 @@ export default function Home() {
       <header data-collapsing-nav className="app-navbar -mx-4 -mt-3 px-4 pb-2 pt-2 lg:hidden">
         <div className="flex items-center justify-between gap-3">
           {/* Знак бренда уехал в полосу плавающих кнопок Telegram (Layout,
-              .hero-top-inset). Освободившийся слот занимает мелкий заголовок:
-              он проявляется ровно по мере таяния крупного (data-collapsing-title
-              ниже), и шапка не остаётся с дырой на месте логотипа.
-              opacity: 0 в разметке — стартовое состояние; дальше значение
-              покадрово пишет lib/useCollapsingHeader.ts.
+              .hero-top-inset), и слот делят ДВА узла, лежащих друг на друге.
+
+              В покое — HeroSlot: живая заявка, а если её нет, точка выдачи.
+              При прокрутке — мелкий заголовок экрана, проявляющийся по мере
+              таяния крупного. Прозрачности ведёт мотор в противофазе
+              (lib/useCollapsingHeader.ts), их сумма всегда равна единице.
+
+              Стопка, а не два соседних места: показывать их одновременно
+              незачем — человек читает то одно, то другое, а шапка от второго
+              места выросла бы вдвое. grid с одной ячейкой держит оба узла в
+              одной коробке, и высота считается по большему из них.
+
+              opacity: 0 у заголовка в разметке — стартовое состояние; дальше
+              значение покадрово пишет мотор.
               aria-hidden: тот же текст уже есть в <h1> ниже (HOME_HEADLINE),
               и opacity: 0 его из дерева доступности не убирает — оба узла
               видны скринридеру одновременно, и без aria-hidden фраза
               звучала бы дважды подряд. */}
-          <div className="min-w-0">
+          <div className="grid min-w-0 flex-1 [grid-template-areas:'slot'] [&>*]:[grid-area:slot] [&>*]:self-center">
+            <HeroSlot />
             <span
               data-collapsing-smalltitle
               aria-hidden="true"
