@@ -143,3 +143,63 @@ def test_lead_without_user_accrues_nothing(admin_client, db):
         json={"status": "completed", "final_total": 100_000},
     )
     assert resp.status_code == 200
+
+
+def test_leaving_completed_reverts_cashback(admin_client, db, ctx):
+    user = ctx["user"]
+    lead = Lead(status="confirmed", user_id=user.id)
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    admin_client.patch(
+        f"/api/admin/leads/{lead.id}",
+        json={"status": "completed", "final_total": 100_000},
+    )
+    assert loyalty.summary(db, user.id)["balance"] == 250
+
+    admin_client.patch(f"/api/admin/leads/{lead.id}", json={"status": "cancelled"})
+    assert loyalty.summary(db, user.id)["balance"] == 0
+    assert loyalty.summary(db, user.id)["lifetime_spent"] == 0
+
+
+def test_revert_works_even_when_points_already_spent(admin_client, db, ctx):
+    """Главный сценарий накрутки: начислили, потратили, отменили. Откат обязан
+    пройти и увести баланс в минус — иначе защита магазина защищает накрутку."""
+    user = ctx["user"]
+    lead = Lead(status="confirmed", user_id=user.id)
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    admin_client.patch(
+        f"/api/admin/leads/{lead.id}",
+        json={"status": "completed", "final_total": 100_000},
+    )
+    loyalty.record(db, user_id=user.id, kind="spend", points=-250, comment="потратил")
+    db.commit()
+    assert loyalty.summary(db, user.id)["balance"] == 0
+
+    admin_client.patch(f"/api/admin/leads/{lead.id}", json={"status": "cancelled"})
+    assert loyalty.summary(db, user.id)["balance"] == -250
+
+
+def test_completing_again_after_revert_accrues_anew(admin_client, db, ctx):
+    """Ключ идемпотентности включает номер попытки: иначе второе завершение
+    молча вернуло бы старую операцию и не начислило ничего."""
+    user = ctx["user"]
+    lead = Lead(status="confirmed", user_id=user.id)
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    admin_client.patch(
+        f"/api/admin/leads/{lead.id}",
+        json={"status": "completed", "final_total": 100_000},
+    )
+    admin_client.patch(f"/api/admin/leads/{lead.id}", json={"status": "cancelled"})
+    admin_client.patch(
+        f"/api/admin/leads/{lead.id}",
+        json={"status": "completed", "final_total": 100_000},
+    )
+    assert loyalty.summary(db, user.id)["balance"] == 250

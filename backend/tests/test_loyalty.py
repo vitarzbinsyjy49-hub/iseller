@@ -167,6 +167,34 @@ def test_spend_and_correction_require_comment(ctx):
         loyalty.record(db, user_id=user.id, kind="spend", points=-10, comment="  ")
 
 
+def test_correction_takes_back_turnover_too(ctx):
+    """Откат отменённой сделки снимает и оборот. Иначе уровень, поднятый
+    сделкой, которой не было, остался бы навсегда — вместе со ставкой."""
+    _client, db, user, _other = ctx
+    loyalty.record(db, user_id=user.id, kind="purchase", amount=500_000)
+    db.commit()
+    assert loyalty.summary(db, user.id)["level"]["key"] == "gold"
+
+    loyalty.record(
+        db, user_id=user.id, kind="correction", points=-1250, amount=-500_000,
+        comment="заявка 42 вышла из статуса «завершена»",
+    )
+    db.commit()
+    after = loyalty.summary(db, user.id)
+    assert after["lifetime_spent"] == 0
+    assert after["level"]["key"] == "start"
+
+
+def test_correction_cannot_raise_turnover(ctx):
+    """Наращивать оборот корректировкой значит выдавать уровень руками."""
+    _client, db, user, _other = ctx
+    with pytest.raises(loyalty.LoyaltyError):
+        loyalty.record(
+            db, user_id=user.id, kind="correction", points=-10, amount=500_000,
+            comment="попытка выдать уровень",
+        )
+
+
 def test_referral_kind_keeps_rate_snapshot(ctx):
     """Ставка выплаты настраивается и со временем меняется — в операции
     остаётся та, по которой заплатили на самом деле."""

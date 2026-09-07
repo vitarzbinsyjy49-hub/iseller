@@ -36,3 +36,28 @@ def accrue_for_lead(db: Session, lead: Lead, actor: str) -> None:
         created_by=actor,
         idempotency_key=purchase_key(lead.id, lead.completion_seq or 0),
     )
+
+
+def revert_for_lead(db: Session, lead: Lead, actor: str) -> None:
+    """Откатить всё, что начислено по заявке на текущей попытке завершения.
+
+    Корректировке разрешён минус (см. loyalty.record): если баллы успели
+    потратить, запрет сделал бы откат невозможным ровно тогда, когда он нужен.
+    """
+    seq = lead.completion_seq or 0
+    key = purchase_key(lead.id, seq)
+    original = loyalty.transaction_by_key(db, key)
+    if original is None:
+        return
+    loyalty.record(
+        db,
+        user_id=original.user_id,
+        kind="correction",
+        points=-original.points,
+        # Вместе с баллами снимается и оборот: уровень не имеет права остаться
+        # купленным сделкой, которая не состоялась.
+        amount=-original.amount if original.amount is not None else None,
+        comment=f"Заявка {lead.id} вышла из статуса «завершена»",
+        created_by=actor,
+        idempotency_key=f"{key}_revert",
+    )

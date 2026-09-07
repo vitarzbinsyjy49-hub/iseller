@@ -217,6 +217,8 @@ def update_lead(
             _notify_status_change(db, lead, body.status)
             if body.status == "completed":
                 purchase.accrue_for_lead(db, lead, actor=f"admin:{admin}")
+            elif previous == "completed":
+                purchase.revert_for_lead(db, lead, actor=f"admin:{admin}")
     # Правка суммы у уже завершённой заявки без смены статуса: менеджер
     # ошибся в цифре. Начислений это не трогает — они уже проведены.
     if body.final_total is not None and body.status is None:

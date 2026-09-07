@@ -133,7 +133,15 @@ def totals(db: Session, user_ids: list[int]) -> dict[int, dict]:
             func.coalesce(
                 func.sum(
                     case(
-                        (LoyaltyTransaction.kind == "purchase", LoyaltyTransaction.amount),
+                        (
+                            # Оборот двигают покупки — и корректировки, которыми
+                            # покупку отменяют. Иначе уровень, поднятый
+                            # несостоявшейся сделкой, оставался бы навсегда, а
+                            # вместе с ним и ставка кэшбека: откат вернул бы
+                            # баллы, но не то, что они означают.
+                            LoyaltyTransaction.kind.in_(("purchase", "correction")),
+                            LoyaltyTransaction.amount,
+                        ),
                         else_=0,
                     )
                 ),
@@ -193,6 +201,19 @@ def _existing(db: Session, user_id: int, key: str | None) -> LoyaltyTransaction 
     ).scalar_one_or_none()
 
 
+def transaction_by_key(db: Session, key: str) -> LoyaltyTransaction | None:
+    """Операция по ключу идемпотентности.
+
+    Ключ уникален В ПРЕДЕЛАХ пользователя, и приватный ``_existing`` требует
+    ``user_id``. Откату он заранее неизвестен: заявка знает номер, а не того,
+    кому по ней заплатили. Наши ключи содержат id заявки и номер попытки,
+    поэтому глобально они тоже не повторяются.
+    """
+    return db.execute(
+        select(LoyaltyTransaction).where(LoyaltyTransaction.idempotency_key == key)
+    ).scalars().first()
+
+
 def _validate(kind: str, points: int, amount: Decimal | None, comment: str | None) -> None:
     if kind not in LOYALTY_KINDS:
         raise LoyaltyError(f"Неизвестный вид операции: {kind}")
@@ -205,6 +226,13 @@ def _validate(kind: str, points: int, amount: Decimal | None, comment: str | Non
             raise LoyaltyError("У покупки должна быть сумма больше нуля")
         if points < 0:
             raise LoyaltyError("Покупка не может списывать баллы")
+    elif kind == "correction":
+        # Корректировка — единственный способ отменить покупку, и вместе с
+        # баллами она обязана снять оборот: иначе уровень остался бы куплен
+        # сделкой, которой не было. Только в минус: наращивать оборот
+        # корректировкой значит выдавать уровень руками.
+        if amount is not None and amount >= 0:
+            raise LoyaltyError("Корректировка может только уменьшать оборот")
     else:
         # Оборот двигают ТОЛЬКО покупки: подарочный бонус, поднимающий уровень,
         # означал бы, что уровень больше не про покупки.
