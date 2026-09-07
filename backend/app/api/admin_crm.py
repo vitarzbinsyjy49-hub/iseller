@@ -193,6 +193,18 @@ def update_lead(
         if body.status not in LEAD_STATUSES:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, f"status must be one of {LEAD_STATUSES}")
         previous = lead.status
+        if body.status == "completed" and previous != "completed":
+            total = body.final_total if body.final_total is not None else lead.final_total
+            if total is None or float(total) <= 0:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Для завершения заявки укажите итоговую сумму сделки больше нуля",
+                )
+            lead.final_total = total
+            # Счётчик растёт на КАЖДОМ входе в «завершена»: он участвует в ключе
+            # идемпотентности начислений, и без него повторное завершение после
+            # отката молча вернуло бы старую операцию вместо новой.
+            lead.completion_seq = (lead.completion_seq or 0) + 1
         lead.status = body.status
         if previous != body.status:
             # Журналируем ДО commit: смена статуса и её запись — одно изменение.
@@ -202,6 +214,10 @@ def update_lead(
                 detail=f"lead={lead_id};from={previous};to={body.status}",
             ))
             _notify_status_change(db, lead, body.status)
+    # Правка суммы у уже завершённой заявки без смены статуса: менеджер
+    # ошибся в цифре. Начислений это не трогает — они уже проведены.
+    if body.final_total is not None and body.status is None:
+        lead.final_total = body.final_total
     if body.assigned_to is not None:
         lead.assigned_to = body.assigned_to
     if body.manager_comment is not None:

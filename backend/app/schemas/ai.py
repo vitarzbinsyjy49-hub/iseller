@@ -233,5 +233,9 @@ class LeadIn(BaseModel):
 
 class LeadStatusIn(BaseModel):
     status: str | None = Field(default=None, max_length=32)
+    # Итоговая сумма сделки. Обязательна при переходе в «завершена»: именно она
+    # превращает заявку в покупку. Оценочный estimated_total для начислений не
+    # используется нигде.
+    final_total: float | None = None
     assigned_to: str | None = Field(default=None, max_length=200)
     manager_comment: str | None = Field(default=None, max_length=2000)

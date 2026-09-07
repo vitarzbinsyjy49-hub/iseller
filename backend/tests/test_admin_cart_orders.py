@@ -125,7 +125,12 @@ def test_manager_changes_status_including_new_cart_statuses(ctx):
     p = make_product(db)
     lead = submit_cart(client, db, [(p, 1)])
     for status_value in ("contacted", "confirming", "confirmed", "completed"):
-        r = client.patch(f"/api/admin/leads/{lead['id']}", json={"status": status_value})
+        body = {"status": status_value}
+        # «Завершена» — единственный статус, требующий подтверждённую сумму:
+        # именно она превращает заявку в покупку (services/purchase.py).
+        if status_value == "completed":
+            body["final_total"] = 100_000
+        r = client.patch(f"/api/admin/leads/{lead['id']}", json=body)
         assert r.status_code == 200 and r.json()["status"] == status_value
 
 
