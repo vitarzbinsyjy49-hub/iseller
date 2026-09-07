@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, String, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -36,6 +36,15 @@ class User(Base):
     # рекламный источник, и отчёт по каналам стал бы врать в первый же день.
     # NULL — пришёл не по рекламной ссылке (или до того, как эта колонка появилась).
     acquisition_source: Mapped[str | None] = mapped_column(String(64))
+    #: Личный код приглашения. Выдаётся лениво — при первом открытии экрана
+    #: приглашений, а не всем существующим пользователям разом.
+    referral_code: Mapped[str | None] = mapped_column(String(12), unique=True, index=True)
+    #: Кто привёл. Ставится ОДИН раз при создании и никогда не переписывается —
+    #: то же правило, что у acquisition_source: первое касание есть первое
+    #: касание, и второй заход по чужой ссылке его не присваивает.
+    referred_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

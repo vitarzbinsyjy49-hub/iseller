@@ -240,6 +240,10 @@ def _apply_demo_migrations() -> None:
         # пишется один раз при создании user — см. app/api/auth.py и
         # app/services/telegram_bot.py (parse_ad_payload).
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS acquisition_source VARCHAR(64)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(12)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id INTEGER",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_referral_code ON users (referral_code)",
+        "ALTER TABLE ad_touches ADD COLUMN IF NOT EXISTS kind VARCHAR(8) NOT NULL DEFAULT 'ad'",
     ]
     for stmt in statements:
         try:

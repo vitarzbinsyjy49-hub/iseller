@@ -75,7 +75,14 @@ REQUIRED_SCHEMA: dict[str, tuple[str, ...]] = {
         "last_bot_message_id",
         "onboarding_seen_at",
         "acquisition_source",
+        "referral_code",
+        "referred_by_user_id",
     ),
+    # Бот пишет сюда при /start, а мини-миграции выполняет API-контейнер: бот
+    # может подняться раньше и упасть на колонке, которой ещё нет. Тест
+    # синхронизации таблицу без этой строки не видит — он проверяет только уже
+    # перечисленные здесь.
+    "ad_touches": ("kind",),
     "fx_rate_history": (),
 }
 

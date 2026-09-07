@@ -39,6 +39,10 @@ class AdTouch(Base):
     # (`ad_<slug>`, VARCHAR(64)) остался прежним для точного `==` фильтра
     # админки.
     slug: Mapped[str] = mapped_column(String(64))
+    #: Что за метка: «ad» — рекламная кампания, «ref» — приглашение от
+    #: пользователя. Разбор и приоритеты у них общие, различается только то,
+    #: во что метка превращается при логине.
+    kind: Mapped[str] = mapped_column(String(8), default="ad", server_default="ad")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(),
     )
