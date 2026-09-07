@@ -12,6 +12,7 @@ import { PricePosts } from "./PricePosts";
 import { ChannelPosts } from "./ChannelPosts";
 import { Customers } from "./Customers";
 import PromoCodes from "./PromoCodes";
+import Settings from "./Settings";
 
 export default function App() {
   const [token, setToken] = useState<string | null>(() => loadStoredAccessToken());
@@ -116,7 +117,7 @@ function Login({ onToken }: { onToken: (t: string) => void }) {
 }
 
 // ---------- Shell with tabs ----------
-type Tab = "dashboard" | "leads" | "customers" | "promo" | "products" | "posts" | "price" | "channel" | "import" | "home" | "media" | "analytics" | "ai";
+type Tab = "dashboard" | "leads" | "customers" | "promo" | "products" | "posts" | "price" | "channel" | "import" | "home" | "media" | "analytics" | "ai" | "settings";
 const TABS: { key: Tab; label: string }[] = [
   { key: "dashboard", label: "Дашборд" },
   { key: "leads", label: "Заявки" },
@@ -131,6 +132,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "media", label: "Медиа" },
   { key: "analytics", label: "Аналитика" },
   { key: "ai", label: "AI-логи" },
+  { key: "settings", label: "Настройки" },
 ];
 
 function Shell({ token, onLogout }: { token: string; onLogout: () => void }) {
@@ -176,6 +178,7 @@ function Shell({ token, onLogout }: { token: string; onLogout: () => void }) {
         {tab === "media" && <MediaTab token={token} />}
         {tab === "analytics" && <Analytics token={token} />}
         {tab === "ai" && <AiLogs token={token} />}
+        {tab === "settings" && <Settings token={token} />}
       </main>
     </div>
   );
