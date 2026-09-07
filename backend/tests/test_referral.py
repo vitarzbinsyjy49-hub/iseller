@@ -55,3 +55,30 @@ def test_ref_payload_fits_telegram_limit():
     from app.services.telegram_bot import REF_CODE_LENGTH, REF_PAYLOAD_PREFIX
 
     assert len(REF_PAYLOAD_PREFIX) + REF_CODE_LENGTH <= 64
+
+
+def test_code_is_issued_once_and_is_stable(db):
+    from app.services import referral
+
+    user = User(telegram_id=901)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    first = referral.code_for(db, user)
+    assert len(first) == 8
+    assert referral.code_for(db, user) == first, "код обязан быть постоянным"
+
+
+def test_code_resolves_back_to_user(db):
+    from app.services import referral
+
+    user = User(telegram_id=902)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    code = referral.code_for(db, user)
+    assert referral.user_by_code(db, code).id == user.id
+    assert referral.user_by_code(db, "zzzzzzzz") is None
+    assert referral.user_by_code(db, "") is None
