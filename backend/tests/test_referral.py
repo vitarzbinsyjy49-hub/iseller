@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from app.api.deps import get_current_admin
+from app.api.deps import get_current_admin, get_current_user
 from app.db.session import get_db
 from app.main import app
 
@@ -307,3 +307,60 @@ def test_inviter_is_notified_once(admin_client, db, monkeypatch):
     ).scalars().all()
     assert len(rows) == 1, "двойное сохранение не должно слать второе сообщение"
     assert "1000" in rows[0].text
+
+
+# ------------------------------------------------- экран приглашений
+
+def _user_client(db, user: User) -> TestClient:
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = lambda: db.get(User, user.id)
+    return TestClient(app)
+
+
+def test_referral_me_returns_link_and_totals(admin_client, db, monkeypatch):
+    """Условия отдаются вместе со счётом: экран обязан назвать их полностью и
+    заранее — роудмап обещает «без условий, которые видно только в конце»."""
+    monkeypatch.setattr("app.core.config.settings.BOT_USERNAME", "@iseller_bot")
+
+    inviter, invited = _pair(db, 940, 941)
+    _complete(admin_client, db, invited, 100_000)
+
+    client = _user_client(db, inviter)
+    try:
+        data = client.get("/api/referral/me").json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert len(data["code"]) == 8
+    assert data["link"] == f"https://t.me/iseller_bot?start=ref_{data['code']}"
+    assert data["invited_count"] == 1
+    # 1000 баллов процента. Приветственный бонус приглашённого сюда не входит:
+    # он про друга, а не про пригласившего.
+    assert data["earned_points"] == 1000
+    assert data["rate_percent"] == 1
+    assert data["welcome_bonus_points"] == 1000
+
+
+def test_referral_me_issues_code_on_first_open(db, monkeypatch):
+    """Код выдаётся лениво — при первом открытии экрана, а не всем разом."""
+    monkeypatch.setattr("app.core.config.settings.BOT_USERNAME", "iseller_bot")
+
+    user = User(telegram_id=942)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    assert user.referral_code is None
+
+    client = _user_client(db, user)
+    try:
+        first = client.get("/api/referral/me").json()["code"]
+        second = client.get("/api/referral/me").json()["code"]
+    finally:
+        app.dependency_overrides.clear()
+
+    assert first == second
+    db.refresh(user)
+    assert user.referral_code == first

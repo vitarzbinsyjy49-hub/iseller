@@ -15,6 +15,8 @@ import { Icon, type IconName } from "../components/icons";
 import type { ScenarioKey } from "../lib/scenario";
 import { track } from "../lib/analytics";
 import { fetchLoyalty, formatRate, type LoyaltyAccount } from "../lib/loyalty";
+import { fetchReferral, termsLines, type ReferralAccount } from "../lib/referral";
+import { telegramShareUrl } from "../lib/share";
 import { useOnboardingReplayStore } from "../store/onboardingReplay";
 import { enterRefCallback } from "../lib/useEnter";
 import { useLeadsBadge } from "../store/leadsBadge";
@@ -62,6 +64,38 @@ export default function Profile() {
   // с ошибкой в профиле пугает сильнее, чем отсутствие цифры.
   const [loyalty, setLoyalty] = useState<LoyaltyAccount | null>(null);
   useEffect(() => { fetchLoyalty().then(setLoyalty).catch(() => setLoyalty(null)); }, []);
+  // Счёт приглашений. Первый заход на этот экран выдаёт человеку код — лениво,
+  // а не всем существующим пользователям разом.
+  const [referral, setReferral] = useState<ReferralAccount | null>(null);
+  const [refCopied, setRefCopied] = useState(false);
+  useEffect(() => { fetchReferral().then(setReferral).catch(() => setReferral(null)); }, []);
+
+  /** Поделиться личной ссылкой.
+   *
+   *  Делимся ТОЛЬКО deep link'ом бота (его собирает сервер): внутренний адрес
+   *  Mini App приводит получателя в браузер без Telegram-авторизации, то есть
+   *  в тупик. По той же причине, что и шеринг товара — см. lib/share.ts.
+   */
+  async function shareReferral() {
+    const link = referral?.link;
+    if (!link) return;
+    const text = "Магазин техники: держи мою ссылку — за первую покупку начислят баллы";
+    if (isInsideTelegram()) {
+      openExternalLink(telegramShareUrl(link, text));
+      return;
+    }
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ text, url: link });
+        return;
+      }
+      await navigator.clipboard.writeText(link);
+      setRefCopied(true);
+      setTimeout(() => setRefCopied(false), 1500);
+    } catch {
+      /* пользователь отменил — это не ошибка */
+    }
+  }
 
   // Ярлык на домашнем экране (Bot API 8.0). Спрашиваем Telegram, а не гадаем:
   // на desktop и старых клиентах метода нет, и кнопка, которая ничего не
@@ -138,6 +172,44 @@ export default function Profile() {
           <Icon name="sparkles" className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
         </span>
       </button>
+
+      {/* Приглашения. Блока нет вовсе, пока сервер не дал ссылку: без
+          настроенного бота приглашать нечем, и звать к этому нельзя.
+          Условия названы полностью и здесь же — роудмап обещает «без условий,
+          которые видно только в конце», и прятать их в самой фиче было бы
+          прямым нарушением обещания. Числа приходят с сервера: они
+          настраиваются в админке, и текст с «1%» разъехался бы молча. */}
+      {referral?.link && (
+        <div ref={enterRefCallback("pop")} className="mt-3 rounded-xl2 bg-surface p-4 shadow-soft">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
+              <Icon name="sparkles" className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold">Приглашайте друзей</p>
+              <ul className="mt-1 space-y-0.5">
+                {termsLines(referral).map((line) => (
+                  <li key={line} className="text-xs leading-4 text-muted">{line}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {referral.invited_count > 0 && (
+            <p className="mt-3 text-xs text-muted">
+              Пришли по вашей ссылке: <span className="font-semibold text-text">{referral.invited_count}</span>
+              {" · "}начислено: <span className="font-semibold text-text">{referral.earned_points.toLocaleString("ru-RU")}</span>
+            </p>
+          )}
+
+          <button
+            onClick={shareReferral}
+            className="tap mt-3 min-h-11 w-full rounded-field bg-accent px-4 text-[15px] font-semibold text-white"
+          >
+            {refCopied ? "Ссылка скопирована" : "Поделиться ссылкой"}
+          </button>
+        </div>
+      )}
 
       {/* Ярлык на домашний экран. Появляется только когда Telegram подтвердил,
           что ярлыка нет и добавить его можно — иначе блока нет вовсе, а не

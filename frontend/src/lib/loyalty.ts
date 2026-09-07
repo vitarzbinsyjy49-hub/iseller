@@ -18,7 +18,7 @@ export type LoyaltyLevel = {
 
 export type LoyaltyTx = {
   id: number;
-  kind: "purchase" | "spend" | "bonus" | "correction";
+  kind: "purchase" | "spend" | "bonus" | "correction" | "referral";
   points: number;
   amount: number | null;
   rate_bps: number | null;
@@ -92,4 +92,5 @@ export const KIND_LABEL: Record<LoyaltyTx["kind"], string> = {
   spend: "Списание баллов",
   bonus: "Бонус от магазина",
   correction: "Корректировка",
+  referral: "За приглашение",
 };
