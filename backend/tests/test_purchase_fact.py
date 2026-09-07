@@ -203,3 +203,28 @@ def test_completing_again_after_revert_accrues_anew(admin_client, db, ctx):
         json={"status": "completed", "final_total": 100_000},
     )
     assert loyalty.summary(db, user.id)["balance"] == 250
+
+
+def test_cheap_purchase_completes_and_reverts(admin_client, db, ctx):
+    """Сделка, с которой кэшбек округляется в ноль, — всё равно покупка.
+
+    Менеджер обязан уметь и закрыть её, и отменить: смысл строки покупки —
+    сумма, а не баллы.
+    """
+    user = ctx["user"]
+    lead = Lead(status="confirmed", user_id=user.id)
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    resp = admin_client.patch(
+        f"/api/admin/leads/{lead.id}",
+        json={"status": "completed", "final_total": 200},
+    )
+    assert resp.status_code == 200
+    assert loyalty.summary(db, user.id)["balance"] == 0
+    assert loyalty.summary(db, user.id)["lifetime_spent"] == 200
+
+    resp = admin_client.patch(f"/api/admin/leads/{lead.id}", json={"status": "cancelled"})
+    assert resp.status_code == 200
+    assert loyalty.summary(db, user.id)["lifetime_spent"] == 0

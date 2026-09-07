@@ -217,7 +217,13 @@ def transaction_by_key(db: Session, key: str) -> LoyaltyTransaction | None:
 def _validate(kind: str, points: int, amount: Decimal | None, comment: str | None) -> None:
     if kind not in LOYALTY_KINDS:
         raise LoyaltyError(f"Неизвестный вид операции: {kind}")
-    if points == 0:
+    # Исключение ровно одно и симметричное: покупка, с которой кэшбек
+    # округлился в ноль, и корректировка, которая такую покупку отменяет.
+    # Смысл этих строк — сумма, а не баллы: сделка на 200 ₽ состоялась, и ни
+    # оборот, ни история покупок не имеют права о ней умолчать, а отмена — тем
+    # более. Для остальных видов операция на ноль баллов бессмысленна.
+    moves_turnover = kind in ("purchase", "correction") and amount is not None and amount != 0
+    if points == 0 and not moves_turnover:
         raise LoyaltyError("Операция на ноль баллов не имеет смысла")
     if kind in COMMENT_REQUIRED and not (comment or "").strip():
         raise LoyaltyError("Для списания и корректировки комментарий обязателен")

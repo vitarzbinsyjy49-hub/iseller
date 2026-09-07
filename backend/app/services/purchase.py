@@ -12,7 +12,7 @@
 from sqlalchemy.orm import Session
 
 from app.models.lead import Lead
-from app.services import loyalty, settings
+from app.services import loyalty, referral, settings
 
 
 def purchase_key(lead_id: int, seq: int) -> str:
@@ -41,6 +41,9 @@ def accrue_for_lead(db: Session, lead: Lead, actor: str) -> None:
         created_by=actor,
         idempotency_key=purchase_key(lead.id, lead.completion_seq or 0),
     )
+    # Выплаты идут ПОСЛЕ покупки: признак первой покупки считается по журналу,
+    # в котором она уже есть.
+    referral.payout_for_lead(db, lead, actor=actor)
 
 
 def revert_for_lead(db: Session, lead: Lead, actor: str) -> None:
@@ -52,8 +55,15 @@ def revert_for_lead(db: Session, lead: Lead, actor: str) -> None:
     seq = lead.completion_seq or 0
     key = purchase_key(lead.id, seq)
     original = loyalty.transaction_by_key(db, key)
-    if original is None:
-        return
+    # Раннего выхода здесь нет намеренно: реферальные выплаты откатываются
+    # независимо от кэшбека. Покупателя могло не быть в системе вовсе, а другу
+    # его пригласивший уже получил процент.
+    if original is not None:
+        _revert_purchase(db, lead, original, key, actor)
+    referral.revert_for_lead(db, lead, actor=actor)
+
+
+def _revert_purchase(db: Session, lead: Lead, original, key: str, actor: str) -> None:
     loyalty.record(
         db,
         user_id=original.user_id,

@@ -4,12 +4,59 @@
 самоприглашение невозможно, выплата не удваивается и не двигает оборот.
 """
 import pytest
+from fastapi.testclient import TestClient
 from starlette.requests import Request
+
+from app.api.deps import get_current_admin
+from app.db.session import get_db
+from app.main import app
 
 # Импорт наверху, а не внутри теста: он регистрирует таблицы (в том числе
 # audit_logs), а create_all в фикстуре db выполняется раньше тела теста.
 from app.api.auth import _get_or_create_user
 from app.models.user import User
+
+
+@pytest.fixture()
+def admin_client(db):
+    """Менеджер, завершающий заявки: выплаты идут из PATCH /admin/leads."""
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_admin] = lambda: "admin@test.local"
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def _pair(db, inviter_tid: int, invited_tid: int) -> tuple[User, User]:
+    """Пара «пригласивший — приглашённый» со связью."""
+    inviter = User(telegram_id=inviter_tid)
+    invited = User(telegram_id=invited_tid)
+    db.add_all([inviter, invited])
+    db.commit()
+    db.refresh(inviter)
+    db.refresh(invited)
+    invited.referred_by_user_id = inviter.id
+    db.commit()
+    return inviter, invited
+
+
+def _complete(admin_client, db, buyer: User, total: float):
+    """Завести заявку покупателя и завершить её итоговой суммой."""
+    from app.models.lead import Lead
+
+    lead = Lead(status="confirmed", user_id=buyer.id)
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+    resp = admin_client.patch(
+        f"/api/admin/leads/{lead.id}",
+        json={"status": "completed", "final_total": total},
+    )
+    return lead, resp
 
 
 def test_user_has_referral_columns(db):
@@ -184,3 +231,54 @@ def test_payout_points_rounds_down():
     assert referral.payout_points(99, 100) == 0
     assert referral.payout_points(100_000, 0) == 0
     assert referral.payout_points(None, 100) == 0
+
+
+# ------------------------------------------------- проведение выплат
+
+def test_inviter_gets_percent_and_invited_gets_welcome(admin_client, db):
+    from app.services import loyalty
+
+    inviter, invited = _pair(db, 920, 921)
+    _complete(admin_client, db, invited, 100_000)
+
+    assert loyalty.summary(db, inviter.id)["balance"] == 1000       # 1%
+    # 250 собственного кэшбека «Старта» + 1000 приветственных
+    assert loyalty.summary(db, invited.id)["balance"] == 1250
+    # Реферальный доход не двигает оборот: уровень так не поднять.
+    assert loyalty.summary(db, inviter.id)["lifetime_spent"] == 0
+
+
+def test_second_purchase_pays_percent_but_not_welcome(admin_client, db):
+    from app.services import loyalty
+
+    inviter, invited = _pair(db, 922, 923)
+    for _ in range(2):
+        _complete(admin_client, db, invited, 100_000)
+
+    assert loyalty.summary(db, inviter.id)["balance"] == 2000       # 1% дважды
+    # 250 + 250 кэшбека и ОДИН приветственный бонус
+    assert loyalty.summary(db, invited.id)["balance"] == 1500
+
+
+def test_zero_percent_creates_no_transaction(admin_client, db):
+    """С покупки дешевле 100 рублей платить нечего, и это не ошибка:
+    record() запрещает операции на ноль баллов."""
+    from app.services import loyalty
+
+    inviter, invited = _pair(db, 924, 925)
+    _lead, resp = _complete(admin_client, db, invited, 50)
+
+    assert resp.status_code == 200
+    assert loyalty.summary(db, inviter.id)["balance"] == 0
+
+
+def test_revert_takes_back_referral_payouts(admin_client, db):
+    from app.services import loyalty
+
+    inviter, invited = _pair(db, 926, 927)
+    lead, _resp = _complete(admin_client, db, invited, 100_000)
+
+    admin_client.patch(f"/api/admin/leads/{lead.id}", json={"status": "cancelled"})
+
+    assert loyalty.summary(db, inviter.id)["balance"] == 0
+    assert loyalty.summary(db, invited.id)["balance"] == 0

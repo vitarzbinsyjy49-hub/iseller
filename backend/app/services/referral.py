@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models.loyalty import LoyaltyTransaction
 from app.models.user import User
+from app.services import loyalty, settings
 from app.services.telegram_bot import AD_SLUG_ALPHABET, REF_CODE_LENGTH
 
 _ALPHABET = "".join(sorted(AD_SLUG_ALPHABET))
@@ -81,3 +82,70 @@ def is_first_purchase(db: Session, user_id: int) -> bool:
         )
     ).scalar_one()
     return count == 1
+
+
+# ---------------------------------------------------------------- выплаты
+
+
+def referral_key(lead_id: int, seq: int) -> str:
+    return f"lead_{lead_id}_{seq}_referral"
+
+
+def welcome_key(lead_id: int, seq: int) -> str:
+    return f"lead_{lead_id}_{seq}_welcome"
+
+
+def payout_for_lead(db: Session, lead, actor: str) -> None:
+    """Выплаты по завершённой сделке приглашённого.
+
+    Вызывается ПОСЛЕ проведения покупки: признак первой покупки считается по
+    журналу, в котором она уже есть.
+    """
+    buyer = db.get(User, lead.user_id) if lead.user_id else None
+    if buyer is None or buyer.referred_by_user_id is None:
+        return
+
+    conf = settings.loyalty(db)
+    seq = lead.completion_seq or 0
+
+    points = payout_points(lead.final_total, conf.referral_rate_bps)
+    if points > 0:
+        loyalty.record(
+            db,
+            user_id=buyer.referred_by_user_id,
+            kind="referral",
+            points=points,
+            rate_bps=conf.referral_rate_bps,
+            comment=f"{conf.referral_rate_bps / 100:g}% с покупки приглашённого (заявка {lead.id})",
+            created_by=actor,
+            idempotency_key=referral_key(lead.id, seq),
+        )
+
+    if conf.welcome_bonus_points > 0 and is_first_purchase(db, buyer.id):
+        loyalty.record(
+            db,
+            user_id=buyer.id,
+            kind="referral",
+            points=conf.welcome_bonus_points,
+            comment="Приветственные баллы за первую покупку по приглашению",
+            created_by=actor,
+            idempotency_key=welcome_key(lead.id, seq),
+        )
+
+
+def revert_for_lead(db: Session, lead, actor: str) -> None:
+    """Отменить выплаты по заявке, вышедшей из статуса «завершена»."""
+    seq = lead.completion_seq or 0
+    for key in (referral_key(lead.id, seq), welcome_key(lead.id, seq)):
+        original = loyalty.transaction_by_key(db, key)
+        if original is None:
+            continue
+        loyalty.record(
+            db,
+            user_id=original.user_id,
+            kind="correction",
+            points=-original.points,
+            comment=f"Заявка {lead.id} вышла из статуса «завершена»",
+            created_by=actor,
+            idempotency_key=f"{key}_revert",
+        )
