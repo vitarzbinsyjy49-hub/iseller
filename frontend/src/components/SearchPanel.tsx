@@ -46,8 +46,18 @@ const SCENARIO_CHIPS: { label: string; route: string }[] = [
  *  клавиатуре, а часть не сообщает вовсе. Поэтому главное действие панели
  *  («Спросить AI») стоит в её НАЧАЛЕ: место в начале списка не зависит ни от
  *  какого замера. */
-function PanelScroll({ deps, className = "", fill = false, children, ...rest }: {
-  deps: unknown[];
+function PanelScroll({ depsKey, className = "", fill = false, children, ...rest }: {
+  /** Всё, от чего зависит пересчёт высоты, — ОДНОЙ строкой.
+   *
+   *  Раньше сюда приходил `unknown[]`, который уходил прямо в массив
+   *  зависимостей useLayoutEffect. Панель рендерится из двух веток (набранный
+   *  запрос и пустой), в каждой свой набор зависимостей — и разной длины. Для
+   *  React это один и тот же эффект в одной позиции дерева, которому между
+   *  рендерами меняют РАЗМЕР массива зависимостей: поведение не определено, в
+   *  консоли — «The final argument passed to useLayoutEffect changed size
+   *  between renders». Строковый ключ делает арность постоянной по построению:
+   *  сколько бы значений ветка ни складывала в ключ, зависимость всегда одна. */
+  depsKey: string;
   className?: string;
   /** Панель занимает всю доступную высоту, а прокруткой управляет родитель.
    *
@@ -101,8 +111,7 @@ function PanelScroll({ deps, className = "", fill = false, children, ...rest }: 
       vv?.removeEventListener("scroll", apply);
       window.removeEventListener("resize", apply);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [depsKey, fill]);
 
   return (
     <div
@@ -162,7 +171,7 @@ export default function SearchPanel({
 
   if (typing) {
     return (
-      <PanelScroll fill={fill} deps={[typing, searching, results?.length ?? -1]} role="listbox" aria-label="Результаты поиска">
+      <PanelScroll fill={fill} depsKey={`typing:${searching}:${results?.length ?? -1}`} role="listbox" aria-label="Результаты поиска">
         {searching && results === null ? (
           <p className="px-4 py-3.5 text-sm text-muted">Ищем…</p>
         ) : results && results.length > 0 ? (
@@ -224,7 +233,7 @@ export default function SearchPanel({
 
   // ===== Пустой запрос: полезное состояние вместо пустого дропдауна =====
   return (
-    <PanelScroll fill={fill} deps={[typing, history.length, chips.length, recentlyViewed?.length ?? -1]} className="p-3">
+    <PanelScroll fill={fill} depsKey={`empty:${history.length}:${chips.length}:${recentlyViewed?.length ?? -1}`} className="p-3">
       {/* «Спросить AI» стоит ПЕРВЫМ, а не последним.
           Внизу панели эта кнопка оказывалась недостижимой: снизу её закрывает
           то клавиатура, то нижняя навигация, и добраться прокруткой нельзя —
