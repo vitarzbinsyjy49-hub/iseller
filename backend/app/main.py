@@ -143,6 +143,8 @@ def _apply_demo_migrations() -> None:
         # создаёт create_all; здесь только доводка leads и products.
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS items_count INTEGER DEFAULT 0",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS estimated_total NUMERIC(12, 2)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS final_total NUMERIC(12, 2)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS completion_seq INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS currency VARCHAR(8) DEFAULT 'RUB'",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(64)",
         "UPDATE leads SET items_count = 0 WHERE items_count IS NULL",

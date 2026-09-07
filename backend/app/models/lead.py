@@ -81,6 +81,15 @@ class Lead(Base):
     # items_count=0, estimated_total=NULL, позиций в lead_items нет.
     items_count: Mapped[int] = mapped_column(Integer, default=0)
     estimated_total: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    # Фактическая сумма сделки — то, что менеджер подтвердил при завершении.
+    # НЕ значение по умолчанию от estimated_total: админка подставляет оценку
+    # в форму подсказкой, но в базу попадает подтверждённое. Совпадение полей
+    # тогда означает «менеджер согласился», а не «никто не смотрел».
+    final_total: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    # Сколько раз заявка входила в статус «завершена». Участвует в ключе
+    # идемпотентности начислений: без него повторное завершение после отката
+    # вернуло бы старую операцию вместо новой и не начислило бы ничего — молча.
+    completion_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     currency: Mapped[str | None] = mapped_column(String(8), default="RUB")
     # Ключ идемпотентности checkout: повторная отправка той же корзины (двойной
     # тап, ретрай после таймаута) обязана вернуть ТУ ЖЕ заявку, а не создать
@@ -128,6 +137,8 @@ class Lead(Base):
             "delivery_method": self.delivery_method,
             "items_count": self.items_count or 0,
             "estimated_total": float(self.estimated_total) if self.estimated_total is not None else None,
+            "final_total": float(self.final_total) if self.final_total is not None else None,
+            "completion_seq": self.completion_seq or 0,
             "currency": self.currency or "RUB",
             "items": [i.to_dict() for i in (self.items or [])],
             "status": self.status,
