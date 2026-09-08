@@ -14,11 +14,12 @@ POST /api/reviews/lead/{id}           — оставить/поправить о
 """
 import logging
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core.uploads import MAX_BYTES, is_allowed, save_image
 from app.db.session import get_db
 from app.models.lead import Lead
 from app.models.review import Review
@@ -98,3 +99,27 @@ def submit_review(
     db.refresh(row)
     logger.info("отзыв по заявке %s принят на модерацию", lead.id)
     return row.to_admin()
+
+
+#: Сколько фото принимаем в одном отзыве. Столько же, сколько у товара —
+#: больше не помещается ни в блок карточки, ни во внимание читателя.
+MAX_REVIEW_PHOTOS = 10
+
+
+@router.post("/photo", status_code=status.HTTP_201_CREATED)
+async def upload_review_photo(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    """Фото к отзыву. Кладём туда же, куда фото товаров.
+
+    Эндпоинт отдельный от админского: тот под get_current_admin, а сюда
+    загружает покупатель. Проверки те же, что у админского, и они здесь не
+    формальность — файл приходит с чужого устройства.
+    """
+    if not is_allowed(file.content_type):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Только изображения: jpg, png, webp, gif")
+    data = await file.read()
+    if len(data) > MAX_BYTES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Файл больше 8 МБ")
+    return {"url": save_image(file.content_type, data)}

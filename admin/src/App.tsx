@@ -7,6 +7,7 @@ import {
 import { Products } from "./Products";
 import { Analytics, AiLogs } from "./Analytics";
 import { ImportCenter, HomeContent, MediaTab } from "./HomeAdmin";
+import Reviews from "./Reviews";
 import { Posts } from "./Posts";
 import { PricePosts } from "./PricePosts";
 import { ChannelPosts } from "./ChannelPosts";
@@ -118,10 +119,11 @@ function Login({ onToken }: { onToken: (t: string) => void }) {
 }
 
 // ---------- Shell with tabs ----------
-type Tab = "dashboard" | "leads" | "customers" | "promo" | "products" | "posts" | "price" | "channel" | "import" | "home" | "media" | "analytics" | "ai" | "referrals" | "settings";
+type Tab = "dashboard" | "leads" | "reviews" | "customers" | "promo" | "products" | "posts" | "price" | "channel" | "import" | "home" | "media" | "analytics" | "ai" | "referrals" | "settings";
 const TABS: { key: Tab; label: string }[] = [
   { key: "dashboard", label: "Дашборд" },
   { key: "leads", label: "Заявки" },
+  { key: "reviews", label: "Отзывы" },
   { key: "customers", label: "Клиенты" },
   { key: "referrals", label: "Приглашения" },
   { key: "promo", label: "Промокоды" },
@@ -180,6 +182,7 @@ function Shell({ token, onLogout }: { token: string; onLogout: () => void }) {
         {tab === "media" && <MediaTab token={token} />}
         {tab === "analytics" && <Analytics token={token} />}
         {tab === "ai" && <AiLogs token={token} />}
+        {tab === "reviews" && <Reviews token={token} />}
         {tab === "referrals" && <Referrals token={token} />}
         {tab === "settings" && <Settings token={token} />}
       </main>
@@ -303,6 +306,11 @@ type Lead = {
   manager_comment: string | null; assigned_to?: string | null;
   created_at: string; updated_at?: string | null;
   items_count?: number; estimated_total?: number | null; currency?: string;
+  product_id?: number | null;
+  // Что купили ПО ФАКТУ, если человек передумал в разговоре с менеджером.
+  // Снапшот product_id при этом остаётся как был.
+  purchased_product_id?: number | null;
+  final_total?: number | null;
   // Рекламная кампания, приведшая АВТОРА заявки (users.acquisition_source).
   // Это не source: тот — экран происхождения заявки внутри приложения.
   acquisition_source?: string | null;
@@ -474,10 +482,20 @@ function LeadDetail({
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
+  // Что купили по факту и за сколько — оба поля правятся менеджером и потому
+  // живут в состоянии формы, а не читаются из lead на каждый рендер.
+  const [boughtId, setBoughtId] = useState("");
+  const [total, setTotal] = useState("");
 
   const reload = () => {
     apiGet<Lead>(`/admin/leads/${leadId}`, token)
-      .then((d) => { setLead(d); setNote(d.manager_comment ?? ""); setAssignee(d.assigned_to ?? ""); })
+      .then((d) => {
+        setLead(d);
+        setNote(d.manager_comment ?? "");
+        setAssignee(d.assigned_to ?? "");
+        setBoughtId(d.purchased_product_id ? String(d.purchased_product_id) : "");
+        setTotal(d.final_total != null ? String(d.final_total) : "");
+      })
       .catch((e) => setError(String(e)));
   };
   useEffect(reload, [leadId, token]);
@@ -734,6 +752,34 @@ function LeadDetail({
                 <input value={assignee} onChange={(e) => setAssignee(e.target.value)}
                   placeholder="Кто ведёт заявку" style={{ ...input, marginTop: 0, flex: 1 }} />
                 <button style={btnGhost} onClick={() => patch({ assigned_to: assignee })}>Сохранить</button>
+              </div>
+
+              {/* Что купили ПО ФАКТУ. Человек приходит за одним, а в разговоре
+                  берёт другое — и отзыв должен прикрепиться к тому, что он
+                  реально унёс. Снапшот заявки при этом не переписывается: он
+                  показывает, с чего человек начал, и расхождение «сравнил не
+                  то» — это сведения о витрине. Пусто = действует снапшот. */}
+              <span style={{ fontSize: 13, color: C.sub }}>Купил по факту</span>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input value={boughtId} onChange={(e) => setBoughtId(e.target.value)}
+                  placeholder={lead.product_id ? `id товара (в заявке ${lead.product_id})` : "id товара"}
+                  inputMode="numeric"
+                  style={{ ...input, marginTop: 0, flex: 1 }} />
+                <button style={btnGhost}
+                  onClick={() => patch({ purchased_product_id: Number(boughtId) || 0 })}>
+                  Сохранить
+                </button>
+              </div>
+
+              <span style={{ fontSize: 13, color: C.sub }}>Сумма сделки</span>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input value={total} onChange={(e) => setTotal(e.target.value)}
+                  placeholder="Итоговая цена продажи" inputMode="decimal"
+                  style={{ ...input, marginTop: 0, flex: 1 }} />
+                <button style={btnGhost}
+                  onClick={() => patch({ final_total: Number(total) })}>
+                  Сохранить
+                </button>
               </div>
 
               <span style={{ fontSize: 13, color: C.sub }}>Заметка</span>

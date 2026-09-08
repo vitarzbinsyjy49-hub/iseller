@@ -12,6 +12,7 @@ import { ProductImage, Badge, FavButton } from "../components/ProductCard";
 import { Icon, type IconName } from "../components/icons";
 import { RegionFlags } from "../components/flags";
 import { ErrorState, ProductSkeleton } from "../components/StateViews";
+import ProductReviews from "../components/ProductReviews";
 import LeadForm from "../components/LeadForm";
 import { haptic, isInsideTelegram, openExternalLink } from "../lib/telegram";
 import { pickShareTarget } from "../lib/share";
@@ -452,6 +453,12 @@ export default function ProductDetails() {
           </section>
         </div>
       )}
+
+      {/* Отзывы — между характеристиками и похожими товарами: человек сначала
+          разбирается, что это за вещь, потом смотрит, что о ней говорят те, кто
+          уже купил, и только после этого ему уместно предлагать альтернативы.
+          Блока нет вовсе, пока нет одобренных отзывов (см. ProductReviews). */}
+      <ProductReviews productId={p.id} />
 
       {/* ===== Похожие варианты: та же категория (существующий каталог), без
           претензии на персональность. Показываем только при ≥3 товарах. ===== */}

@@ -31,7 +31,7 @@ export type IconName =
   | "store" | "truck" | "globe" | "card" | "shield" | "chat"
   | "sparkles" | "flame" | "check" | "close" | "clock" | "chevron-down"
   | "search" | "doc" | "pin" | "info" | "box" | "building" | "refresh"
-  | "heart" | "phone" | "bot" | "alert";
+  | "heart" | "phone" | "bot" | "alert" | "star" | "camera";
 
 const paths: Record<IconName, ReactElement> = {
   store: <><path d="M4 9.5V20h16V9.5" /><path d="M3 9.5 4.8 4.5h14.4L21 9.5z" /><path d="M9.5 20v-5.5h5V20" /></>,
@@ -43,6 +43,8 @@ const paths: Record<IconName, ReactElement> = {
   sparkles: <><path d="M12 3.5 13.6 8 18 9.6 13.6 11.2 12 15.7l-1.6-4.5L6 9.6 10.4 8z" /><path d="M18.2 15.4l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z" /></>,
   flame: <><path d="M12.5 3c.4 2.6-.9 3.9-2.2 5.2C8.9 9.6 7.5 11 7.5 13.5a4.5 4.5 0 0 0 9 0c0-1.7-.6-2.9-1.4-4" /><path d="M12 20a2.6 2.6 0 0 0 2.6-2.6c0-1.4-1.3-2.2-2.6-3.9-1.3 1.7-2.6 2.5-2.6 3.9A2.6 2.6 0 0 0 12 20z" /></>,
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  star: <path d="m12 3.8 2.6 5.3 5.9.9-4.2 4.1 1 5.8-5.3-2.8-5.3 2.8 1-5.8-4.2-4.1 5.9-.9z" />,
+  camera: <><path d="M3 8.5h3.5L8 6h8l1.5 2.5H21v10H3z" /><circle cx="12" cy="13" r="3.4" /></>,
   close: <path d="M6 6l12 12M18 6 6 18" />,
   clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5.3l3.4 2" /></>,
   "chevron-down": <path d="m6 9.5 6 6 6-6" />,

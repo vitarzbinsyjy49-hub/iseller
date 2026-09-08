@@ -19,6 +19,7 @@ export const routeLoaders = {
   cart: withStaleChunkReload(() => import("../pages/Cart")),
   favorites: withStaleChunkReload(() => import("../pages/Favorites")),
   history: withStaleChunkReload(() => import("../pages/History")),
+  reviewForm: withStaleChunkReload(() => import("../pages/ReviewForm")),
   profile: withStaleChunkReload(() => import("../pages/Profile")),
   loyalty: withStaleChunkReload(() => import("../pages/Loyalty")),
   info: withStaleChunkReload(() => import("../pages/Info")),
