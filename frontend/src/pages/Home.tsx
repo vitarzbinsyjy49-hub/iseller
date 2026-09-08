@@ -35,6 +35,7 @@ const FxRateSheet = lazy(() => import("../components/FxRateSheet"));
 import { autoplayReady, nextSlideIndex, snapTargetLeft } from "../lib/carousel";
 import { animateScrollTo } from "../lib/motion";
 import { useCollapsingHeader } from "../lib/useCollapsingHeader";
+import { useMediaQuery } from "../lib/useMediaQuery";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 
 type Category = { key: string; label: string; icon: string; count: number };
@@ -209,6 +210,15 @@ export default function Home() {
   // Крупный заголовок тает под липкой шапкой при прокрутке. Ref на весь верх:
   // внутри хук сам находит обе части по data-атрибутам в разметке ниже.
   const collapsingHeader = useCollapsingHeader();
+  // Desktop-блоки (сайдбар и секции Скидки/Apple/Gaming) на телефоне НЕ
+  // МОНТИРУЮТСЯ, а не прячутся display:none. Прежний `hidden lg:block` скрывал
+  // их от глаз, но не от браузера: три запроса /catalog/list на каждый заход с
+  // телефона, полторы сотни ProductCard со своими подписками и анимацией
+  // появления, и почти две тысячи узлов в невидимом поддереве — они же
+  // попадали в снимок перехода между экранами (замер в lib/useRouteTransition).
+  // Классы hidden lg:block на самих блоках остаются: на desktop ничего не
+  // меняется.
+  const desktop = useMediaQuery("(min-width: 1024px)");
   // v6: Trade-In/бизнес/опт ведут в AI-чат заявки (/apply/:scenario) вместо
   // встроенного bottom-sheet. Меню MacBook (v5.4.0) остаётся как есть — это
   // prefill в /ai, не lead-сценарий.
@@ -281,13 +291,20 @@ export default function Home() {
     api<{ cards?: TCard[] }>("/catalog/recently-viewed?limit=10")
       .then((d) => setRecentlyViewed(d.cards ?? []))
       .catch(() => setRecentlyViewed([]));
-    // Секции desktop-главной; ошибки не критичны — секция просто не показывается
+  }, [loadFeed]);
+
+  // Секции desktop-главной; ошибки не критичны — секция просто не показывается.
+  // Только на desktop: на телефоне эти три ответа кормили невидимый блок.
+  useEffect(() => {
+    if (!desktop) return;
+    let cancelled = false;
     Promise.all([
       api<{ cards?: TCard[] }>("/catalog/list?category=__sale__&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
       api<{ cards?: TCard[] }>("/catalog/list?brand=Apple&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
       api<{ cards?: TCard[] }>(`/catalog/list?category=${encodeURIComponent("консоли")}&sort=popularity`).then((d) => d.cards ?? []).catch(() => []),
-    ]).then(([sale, apple, gaming]) => setExtra({ sale, apple, gaming }));
-  }, [loadFeed]);
+    ]).then(([sale, apple, gaming]) => { if (!cancelled) setExtra({ sale, apple, gaming }); });
+    return () => { cancelled = true; };
+  }, [desktop]);
 
   function goSearch() {
     const q = search.trim();
@@ -605,14 +622,16 @@ export default function Home() {
 
       {/* ===== Desktop: сетка [sidebar 260px | контент] ===== */}
       <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8">
-        <HomeSidebar
-          tiles={navChips}
-          axis={axis}
-          onAxis={hasBrandAxis ? switchAxis : null}
-          onCategory={(route) => navigate(safeInternalRoute(route))}
-          onScenario={openScenario}
-          onManager={() => { if (!openExternalLink(config.manager_retail_url)) navigate("/ai"); }}
-        />
+        {desktop && (
+          <HomeSidebar
+            tiles={navChips}
+            axis={axis}
+            onAxis={hasBrandAxis ? switchAxis : null}
+            onCategory={(route) => navigate(safeInternalRoute(route))}
+            onScenario={openScenario}
+            onManager={() => { if (!openExternalLink(config.manager_retail_url)) navigate("/ai"); }}
+          />
+        )}
 
         <div className="min-w-0">
       {/* ===== Hero-баннеры (управляются из админки): mobile — лента, desktop — сетка 3 ===== */}
@@ -707,7 +726,9 @@ export default function Home() {
         </>
       )}
 
-      {/* Desktop-секции (Скидки/Apple/Gaming) — только lg+, mobile-страницу не удлиняем */}
+      {/* Desktop-секции (Скидки/Apple/Gaming) — только lg+, mobile-страницу не
+          удлиняем. На телефоне не монтируются вовсе (см. `desktop` выше). */}
+      {desktop && (
       <div className="hidden lg:block">
         <Section title="Скидки" cards={extra?.sale}
           onAll={() => navigate("/catalog?category=__sale__")} grid />
@@ -716,6 +737,7 @@ export default function Home() {
         <Section title="Gaming" cards={extra?.gaming}
           onAll={() => navigate(`/catalog?category=${encodeURIComponent("консоли")}`)} grid />
       </div>
+      )}
 
       {!feedError && alsoLike.length >= 3 && (
         <Section title="Вам также может понравиться" cards={alsoLike}

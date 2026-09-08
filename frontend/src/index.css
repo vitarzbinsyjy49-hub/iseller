@@ -295,8 +295,14 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
   background-color: rgb(var(--app-bg) / calc(var(--toolbar-glass) * .82));
   border-bottom-color: rgb(var(--app-border) / var(--toolbar-glass));
 }
+/* У кромки (data-atop="true", ставит lib/useHideOnScroll.ts) свойства НЕТ, а не
+   стоит нулём. blur(0) всё равно заставляет браузер завести слой подложки и
+   пересчитывать его на каждый кадр — это ровно то, от чего проект уже защитил
+   шапку главной и нижнюю навигацию атрибутом data-glass, а панель каталога
+   защиты не получила. Пока атрибута нет (до монтирования, в тестах) правило
+   работает как раньше. */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .toolbar-hide {
+  .toolbar-hide:not([data-atop="true"]) {
     -webkit-backdrop-filter: blur(calc(var(--toolbar-glass) * 18px));
     backdrop-filter: blur(calc(var(--toolbar-glass) * 18px));
   }
@@ -946,10 +952,25 @@ html.kb-open .js-bottom-nav:not([data-search-open="true"]) { display: none; }
      задан цвет этой самой полосы (setTopColor, палитра в AuroraBackground) —
      плашка и страница читаются как одна плоскость. Половина, а не полная сила:
      под кнопками Telegram насыщенное пятно выглядит грязью.
-     -webkit- нужен для WKWebView на iOS: без префикса маска там просто не
-     применяется, и верх станет цветным на полную. */
-  -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / .55) 0, #000 88px);
-  mask-image: linear-gradient(to bottom, rgb(0 0 0 / .55) 0, #000 88px);
+     Приглушение делает НЕ mask-image, а плашка цвета фона поверх (::after
+     ниже). Маска на контейнере, внутри которого четыре пятна движутся
+     бесконечно, заставляла композитор каждый кадр собирать ВЕСЬ экран во
+     внеэкранную поверхность и только потом умножать на маску — постоянная
+     плата размером в экран, даже когда человек ничего не трогает. И, что
+     хуже, меняющаяся подложка заставляла пересчитываться каждый
+     backdrop-filter на экране.
+
+     Пиксели те же, это арифметика, а не «на глаз»: под слоем сплошной body
+     цвета --app-bg. Маска даёт c·α·.55 + bg·(1 − α·.55); плашка поверх даёт
+     (c·α + bg·(1−α))·.55 + bg·.45 — раскрывается в то же самое для любой α,
+     включая зерно. Префикс -webkit- поэтому больше не нужен. */
+}
+.aurora::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgb(var(--app-bg) / .45), rgb(var(--app-bg) / 0) 88px);
 }
 
 

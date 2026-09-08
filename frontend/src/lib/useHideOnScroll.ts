@@ -109,6 +109,11 @@ export function useHideOnScroll(enabled = true) {
     // бы с нуля, то есть с прыжка в уже пройденную точку.
     let shift = 0;
     let cancelShift: (() => void) | null = null;
+    // Последнее записанное стекло. После TOOLBAR_GLASS_PX значение стоит на 1,
+    // и переписывать его в инлайн-стиль на каждом кадре прокрутки незачем:
+    // запись в style дёргает пересчёт стилей панели. Та же защита, что
+    // PROGRESS_EPS у lib/useCollapsingHeader.ts.
+    let lastGlass = "";
     // rAF-коалесценция: сколько бы событий прокрутки ни пришло за кадр, решение
     // принимаем один раз. Тот же приём, что у syncViewportVars в lib/telegram.ts.
     let raf = 0;
@@ -145,7 +150,11 @@ export function useHideOnScroll(enabled = true) {
       // отвечает на вопрос «панель у самой кромки?», а переменная — «насколько
       // она уже стала фоном». Это два разных вопроса, и склеивать их в один
       // порог значит возвращать ту самую плиту.
-      el.style.setProperty("--toolbar-glass", toolbarGlassProgress(top).toFixed(3));
+      const glass = toolbarGlassProgress(top).toFixed(3);
+      if (glass !== lastGlass) {
+        lastGlass = glass;
+        el.style.setProperty("--toolbar-glass", glass);
+      }
       const next = nextToolbarHidden(hidden, top, top - lastTop);
       if (Math.abs(top - lastTop) >= MOVE_EPS_PX) lastTop = top;
       if (next === hidden) return;
