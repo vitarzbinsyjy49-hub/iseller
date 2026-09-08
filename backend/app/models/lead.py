@@ -65,6 +65,15 @@ class Lead(Base):
     phone: Mapped[str | None] = mapped_column(String(64))
     username: Mapped[str | None] = mapped_column(String(200))
     product_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    #: Что человек купил ПО ФАКТУ, если это не то, с чего он начал.
+    #:
+    #: Снапшот выше не трогаем никогда: он показывает, что покупатель реально
+    #: отправил, и «просил наушники с шумоподавлением, а взял обычные» — это
+    #: сведения о том, что витрина сравнила не то. Затерев product_id, мы бы
+    #: стёрли ровно тот факт, который стоит замечать.
+    #:
+    #: Пусто, пока менеджер не сказал иначе; тогда действует снапшот.
+    purchased_product_id: Mapped[int | None] = mapped_column(Integer, index=True)
     product_title: Mapped[str | None] = mapped_column(String(300))
     product_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
     message: Mapped[str | None] = mapped_column(Text)
@@ -128,6 +137,7 @@ class Lead(Base):
             "phone": self.phone,
             "username": self.username,
             "product_id": self.product_id,
+            "purchased_product_id": self.purchased_product_id,
             "product_title": self.product_title,
             "product_price": float(self.product_price) if self.product_price is not None else None,
             "message": self.message,

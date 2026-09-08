@@ -24,10 +24,11 @@ from app.models.analytics_event import AnalyticsEvent
 from app.models.audit import AuditLog
 from app.models.lead import CART_LEAD_TYPE, LEAD_STATUSES, Lead
 from app.models.product import Product
+from app.models.review import Review
 from app.models.user import User
 from app.schemas.ai import LeadStatusIn
 from app.services.availability import EXPLICIT_MODES
-from app.services import purchase
+from app.services import purchase, reviews
 from app.services.notification_templates import lead_status_message
 from app.services.notifications import enqueue, notifications_enabled
 
@@ -217,12 +218,40 @@ def update_lead(
             _notify_status_change(db, lead, body.status)
             if body.status == "completed":
                 purchase.accrue_for_lead(db, lead, actor=f"admin:{admin}")
+                # Просьба оценить заказ — той же транзакцией, что и статус.
+                # Сети здесь нет: строка уходит в outbox, отправляет её сервис
+                # бота. Отзыв просим ровно один раз на попытку завершения, и
+                # только если человек ещё ничего не написал.
+                reviews.request_for_lead(db, lead)
             elif previous == "completed":
                 purchase.revert_for_lead(db, lead, actor=f"admin:{admin}")
     # Правка суммы у уже завершённой заявки без смены статуса: менеджер
     # ошибся в цифре. Начислений это не трогает — они уже проведены.
     if body.final_total is not None and body.status is None:
         lead.final_total = body.final_total
+    # Что купили по факту. Человек приходит за одним, а в разговоре с менеджером
+    # берёт другое — и отзыв обязан прикрепиться к тому, что он реально унёс.
+    # Снапшот заявки при этом НЕ переписывается: он показывает, с чего человек
+    # начал, и расхождение «сравнил не то» — это сведения о витрине, а не мусор.
+    if body.purchased_product_id is not None:
+        if body.purchased_product_id:
+            if db.get(Product, body.purchased_product_id) is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Товар не найден")
+            lead.purchased_product_id = body.purchased_product_id
+        else:
+            # 0 — «ошибся, верните как было»: действует снапшот заявки.
+            lead.purchased_product_id = None
+        # Уже оставленный отзыв переезжает следом: он про покупку, а покупка
+        # теперь другая. Модерацию это не сбрасывает — текст не изменился.
+        review = db.scalar(select(Review).where(Review.lead_id == lead.id))
+        if review is not None:
+            old_product = review.product_id
+            review.product_id = lead.purchased_product_id or lead.product_id
+            db.flush()
+            for pid in {old_product, review.product_id}:
+                if pid:
+                    reviews.recompute_product_rating(db, pid)
+
     if body.assigned_to is not None:
         lead.assigned_to = body.assigned_to
     if body.manager_comment is not None:
@@ -990,3 +1019,79 @@ def admin_import_products(body: list[dict] | dict, db: Session = Depends(get_db)
             errors.append({"index": i, "title": title, "error": str(e)[:200]})
 
     return {"created": created, "updated": updated, "skipped": skipped, "errors": errors}
+
+
+# ==================== Отзывы: модерация ====================
+#
+# Отзыв приходит от покупателя после закрытой заявки и ждёт решения владельца.
+# Публикуется только одобренный — на витрине его сопровождает бейдж «покупка
+# подтверждена», и он обязан значить ровно то, что написано.
+
+@router.get("/reviews")
+def admin_list_reviews(
+    db: Session = Depends(get_db),
+    status_filter: str | None = None,
+    limit: int = 100,
+):
+    """Отзывы для модерации. По умолчанию — все, начиная с новых."""
+    stmt = select(Review).order_by(Review.id.desc())
+    if status_filter:
+        stmt = stmt.where(Review.status == status_filter)
+    rows = db.execute(stmt.limit(min(limit, 500))).scalars().all()
+
+    # Заявка и товар одним запросом на список, а не по строке на отзыв.
+    lead_ids = {r.lead_id for r in rows}
+    product_ids = {r.product_id for r in rows if r.product_id}
+    leads = {
+        l.id: l for l in
+        (db.execute(select(Lead).where(Lead.id.in_(lead_ids))).scalars().all() if lead_ids else [])
+    }
+    products = {
+        p.id: p for p in
+        (db.execute(select(Product).where(Product.id.in_(product_ids))).scalars().all()
+         if product_ids else [])
+    }
+    items = []
+    for row in rows:
+        lead = leads.get(row.lead_id)
+        product = products.get(row.product_id) if row.product_id else None
+        items.append({
+            **row.to_admin(),
+            "lead_number": lead.public_number if lead else None,
+            "lead_total": float(lead.final_total) if lead and lead.final_total is not None else None,
+            "product_title": product.title if product else None,
+        })
+    pending = db.scalar(
+        select(func.count()).select_from(Review).where(Review.status == "pending")) or 0
+    return {"reviews": items, "pending": int(pending)}
+
+
+@router.patch("/reviews/{review_id}")
+def admin_moderate_review(
+    review_id: int,
+    status_value: str = Body(..., embed=True, alias="status"),
+    note: str | None = Body(None, embed=True),
+    db: Session = Depends(get_db),
+    admin: str = Depends(get_current_admin),
+):
+    """Одобрить или отклонить отзыв.
+
+    Отклонённый не удаляется: иначе тот же отзыв прислали бы снова, а мы бы не
+    помнили, что уже решали по нему. Одобрение пересчитывает среднюю оценку
+    товара — поле Product.rating наконец получает источник.
+    """
+    row = db.get(Review, review_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Отзыв не найден")
+    try:
+        reviews.moderate(db, row, status=status_value, note=note)
+    except reviews.ReviewError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    db.add(AuditLog(
+        actor=f"admin:{admin}",
+        action="review_moderated",
+        detail=f"review={review_id};status={status_value}",
+    ))
+    db.commit()
+    db.refresh(row)
+    return row.to_admin()

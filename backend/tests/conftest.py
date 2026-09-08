@@ -34,6 +34,7 @@ from app.models.lead_item import LeadItem  # noqa: F401 — регистраци
 from app.models.loyalty import LoyaltyTransaction  # noqa: F401 — регистрация таблицы (журнал баллов)
 from app.models.notification import Notification  # noqa: F401 — регистрация таблицы (outbox)
 from app.models.product_image_group import ProductImageGroup  # noqa: F401 — регистрация таблицы
+from app.models.review import Review  # noqa: F401 — регистрация таблицы (отзывы)
 from app.models.revoked_token import RevokedRefreshToken  # noqa: F401 — регистрация таблицы
 from app.models.user_product_event import UserProductEvent  # noqa: F401 — регистрация таблицы
 

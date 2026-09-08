@@ -11,6 +11,7 @@ from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
 from app.api import admin, admin_crm, admin_promo, admin_referrals, admin_settings, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, referral as referral_api, scenario_chat, telegram, users
 from app.api import fx as fx_router
+from app.api import reviews as reviews_api
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import ad_touch as _ad_touch  # noqa: F401
@@ -26,6 +27,7 @@ from app.models import notification as _notification  # noqa: F401
 from app.models import product as _product  # noqa: F401
 from app.models import promo as _promo  # noqa: F401
 from app.models import product_image_group as _product_image_group  # noqa: F401
+from app.models import review as _review  # noqa: F401
 from app.models import revoked_token as _revoked_token  # noqa: F401
 from app.models import user_product_event as _user_product_event  # noqa: F401
 from app.models import post as _post  # noqa: F401
@@ -83,6 +85,7 @@ app.include_router(fx_router.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")
+app.include_router(reviews_api.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 # Sprint 1.5: Integration Layer (AI + каталог + аналитика)
 app.include_router(ai.router, prefix="/api")
@@ -138,6 +141,11 @@ def _apply_demo_migrations() -> None:
     statements = [
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS delivery_method VARCHAR(32)",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS product_price NUMERIC(12, 2)",
+        # Что купили ПО ФАКТУ: человек приходит за одним, а в разговоре с
+        # менеджером берёт другое. Снапшот заявки при этом не переписывается —
+        # см. Lead.purchased_product_id.
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS purchased_product_id INTEGER",
+        "CREATE INDEX IF NOT EXISTS ix_leads_purchased_product_id ON leads (purchased_product_id)",
         # v5.4.0: сценарные заявки. Обратносовместимо — у старых заявок lead_type
         # проставится дефолтом 'general', metadata пустым объектом.
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS lead_type VARCHAR(32) DEFAULT 'general'",

@@ -239,3 +239,7 @@ class LeadStatusIn(BaseModel):
     final_total: float | None = None
     assigned_to: str | None = Field(default=None, max_length=200)
     manager_comment: str | None = Field(default=None, max_length=2000)
+    # Что купили по факту, если человек передумал в разговоре с менеджером.
+    # Снапшот заявки при этом остаётся как был — см. Lead.purchased_product_id.
+    # 0 трактуется как «снять отметку и вернуться к снапшоту».
+    purchased_product_id: int | None = None
