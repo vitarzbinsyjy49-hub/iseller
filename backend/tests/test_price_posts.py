@@ -52,11 +52,11 @@ def product(**kw) -> dict:
 # ---------------------------------------------------------------- цена
 
 @pytest.mark.parametrize("value,expected", [
-    (89500, "89 500 ₽"),
-    (9500, "9 500 ₽"),
-    (1380000, "1 380 000 ₽"),
-    (999, "999 ₽"),
-    (89500.4, "89 500 ₽"),
+    (89500, "89.500"),
+    (9500, "9.500"),
+    (1380000, "1.380.000"),
+    (999, "999"),
+    (89500.4, "89.500"),
 ])
 def test_format_price(value, expected):
     assert format_price(value) == expected
@@ -149,7 +149,7 @@ def test_within_one_model_products_are_sorted_by_price():
     products = [product(sku=f"S{p}", title=f"Apple iPhone 17 Pro {p // 1000} ГБ Blue", price=p)
                 for p in (90000, 70000, 80000)]
     text = render_section(products, section, TODAY, MINI_APP)[0].text
-    assert text.index("70 000") < text.index("80 000") < text.index("90 000")
+    assert text.index("70.000") < text.index("80.000") < text.index("90.000")
 
 
 # ---------------------------------------------------------------- текст поста
@@ -158,9 +158,11 @@ def test_post_structure():
     section = SECTIONS_BY_SLUG["price_iphone"]
     post = render_section([product()], section, TODAY, MINI_APP, MANAGER)[0]
     assert "IPHONE — АКТУАЛЬНЫЙ ПРАЙС" in post.text
-    assert "Цены AI Seller." in post.text
+    # «в рублях» здесь не украшение: знака ₽ в строках больше нет, и валюту
+    # называет только эта строка.
+    assert "Цены AI Seller, в рублях." in post.text
     assert "Наличие, регион и комплектацию подтверждает менеджер." in post.text
-    assert "• iPhone 17 Pro 256 Blue — 89 500 ₽" in post.text
+    assert "• iPhone 17 Pro 256 Blue — 89.500" in post.text
     assert "Актуально на: 28.07.2026" in post.text
 
 
@@ -182,7 +184,7 @@ def test_html_is_escaped():
 def test_old_price_shown_only_when_it_is_actually_higher():
     section = SECTIONS_BY_SLUG["price_iphone"]
     higher = render_section([product(price=80000, old_price=90000)], section, TODAY, MINI_APP)[0]
-    assert "<s>90 000 ₽</s>" in higher.text
+    assert "<s>90.000</s>" in higher.text
 
     for bogus in (70000, 80000, None):
         post = render_section([product(price=80000, old_price=bogus)], section, TODAY, MINI_APP)[0]
@@ -207,7 +209,10 @@ def test_long_section_is_split_without_cutting_product_lines():
         # Ни одна строка товара не обрезана: у каждой есть и название, и цена.
         for line in post.text.splitlines():
             if line.startswith("•"):
-                assert "—" in line and "₽" in line
+                # Валюта названа один раз в шапке раздела, а не в каждой
+                # строке, поэтому проверяем не «₽», а что строка кончается
+                # ценой.
+                assert "—" in line and line.rstrip()[-1].isdigit()
     # Ни один товар не потерян и не задвоен.
     total = sum(post.item_count for post in posts)
     assert total == len(products)
@@ -541,15 +546,31 @@ def test_models_are_separated_by_a_blank_line():
     """46 айфонов подряд читаются как стена текста; блоки по модели её ломают."""
     section = SECTIONS_BY_SLUG["price_iphone"]
     products = [
-        product(sku="A", title="Apple iPhone 17 256 ГБ Black (HK)", price=80000),
-        product(sku="B", title="Apple iPhone 17 512 ГБ Black (HK)", price=90000),
-        product(sku="C", title="Apple iPhone 17 Pro 256 ГБ Blue (HK)", price=120000),
-    ]
+        product(sku=f"A{i}", title=f"Apple iPhone 17 {128 * i} ГБ Black (HK)",
+                price=80000 + i)
+        for i in range(1, 10)
+    ] + [product(sku="P", title="Apple iPhone 17 Pro 256 ГБ Blue (HK)", price=120000)]
     text = render_section(products, section, TODAY, MINI_APP)[0].text
     body = text.split("менеджер.")[1]
     # Внутри «iPhone 17» пустых строк нет, перед «iPhone 17 Pro» — есть.
-    assert "17 256 ГБ Black — 80 000 ₽\n🇭🇰 iPhone 17 512" in body
+    assert "128 ГБ Black — 80.001\n🇭🇰 iPhone 17 256" in body
     assert "\n\n🇭🇰 iPhone 17 Pro" in body
+
+
+def test_short_list_is_not_torn_apart_by_blank_lines():
+    """Разбивка по модели придумана против стены текста. Там, где стены нет,
+    она растаскивала три строки на семь — воздух вместо структуры."""
+    section = SECTIONS_BY_SLUG["price_karcher"]
+    products = [
+        product(sku="K1", brand="Karcher", category="бытовая техника",
+                subcategory="Уборка", title="Karcher K3 минимойка", price=26500),
+        product(sku="K2", brand="Karcher", category="бытовая техника",
+                subcategory="Уборка", title="Karcher FC7 электрошвабра", price=44000),
+        product(sku="K3", brand="Karcher", category="бытовая техника",
+                subcategory="Уборка", title="Karcher FC7 Premium", price=54000),
+    ]
+    body = render_section(products, section, TODAY, MINI_APP)[0].text.split("менеджер.")[1]
+    assert "\n\n" not in body.strip().split("Актуально")[0].strip()
 
 
 def test_item_count_survives_the_flag_format():
@@ -599,3 +620,21 @@ def test_dyson_navigation_has_exactly_one_button():
     rows = navigation_keyboard(published, -100123, MINI_APP, MANAGER, BOT)
     dyson_buttons = [b for row in rows for b in row if "Dyson" in b["text"]]
     assert len(dyson_buttons) == 1
+
+
+def test_parse_lines_reads_both_price_formats():
+    """Старый формат в канале обязан читаться и после смены вёрстки.
+
+    Цена печатается как «89.500», но в канале лежат посты, опубликованные
+    прежним форматом — «89 500 ₽». diff сравнивает генерацию с тем, что РЕАЛЬНО
+    в сообщении; понимай парсер только новый вид, каждая старая строка читалась
+    бы как «позиция удалена, добавлена другая», и владелец увидел бы полную
+    пересборку прайса там, где не изменилось ничего.
+    """
+    old = parse_lines("🇭🇰 iPhone 17 Pro 256 Blue — 96 000 ₽")
+    new = parse_lines("🇭🇰 iPhone 17 Pro 256 Blue — 96.000")
+    assert old == new == {"iPhone 17 Pro 256 Blue": 96000.0}
+
+    # Зачёркнутая старая цена не должна попадать в разбор ни в одном формате.
+    assert parse_lines("• Товар — 1.700 <s>2.000</s>") == {"Товар": 1700.0}
+    assert parse_lines("• Товар — 1 700 ₽ <s>2 000 ₽</s>") == {"Товар": 1700.0}
