@@ -1114,3 +1114,27 @@ html.kb-open .js-bottom-nav:not([data-search-open="true"]) { display: none; }
      плывущее изображение — ровно то, от чего человек защищается настройкой. */
   .aurora-blob { animation: none; }
 }
+
+/* Блик по кнопке менеджера в шапке. Полоса света лежит поверх кнопки и ездит
+   по ней; её положение покадрово пишет JS в --sheen-x (HeroSlot.tsx), потому
+   что декларативную CSS-анимацию этот webview гасит целиком — см. lib/motion.
+
+   Базовое значение -120% обязательно и здесь, а не только в JS: до первого
+   пробега переменной иначе не существует, и translateX(var(--sheen-x)) дал бы
+   невалидный transform — блик застыл бы поверх текста вместо того, чтобы
+   ждать за краем кнопки. */
+.hero-manager { --sheen-x: -120%; }
+.hero-manager::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: translateX(var(--sheen-x)) skewX(-18deg);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / .55) 50%,
+    transparent 100%
+  );
+  width: 45%;
+}
