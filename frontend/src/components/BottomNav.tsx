@@ -307,6 +307,11 @@ const CHIP_LIMIT = 6;
  *  константы. */
 const PANEL_SETTLE_MS = 170;
 const PANEL_DISMISS_MS = 180;
+/** Сколько после начала жеста на панели подложка не считает клик «мимо».
+ *  Перекрывает уход клавиатуры (самый долгий сдвиг раскладки, ~250–350мс на
+ *  iOS) с запасом и при этом заметно короче паузы между двумя разными
+ *  касаниями — осознанный тап мимо панели через полсекунды закроет поиск. */
+const BACKDROP_IGNORE_MS = 600;
 
 export default function BottomNav() {
   const { pathname } = useLocation();
@@ -467,7 +472,16 @@ export default function BottomNav() {
   } | null>(null);
   const cancelPanelAnimRef = useRef<() => void>(() => {});
 
+  /** Когда на панели в последний раз начинали жест. Нужен подложке — см.
+   *  комментарий у неё: клик приходит ПОСЛЕ того, как раскладка успела
+   *  сдвинуться, и по координатам попадает уже не в кнопку. */
+  const panelPointerAtRef = useRef(0);
+
   function onPanelPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    // Отметка ставится для ЛЮБОГО указателя, в том числе мыши: ниже стоит
+    // ранний выход для мыши (протяжка мышью не нужна), но подложке отметка
+    // нужна независимо от того, чем нажали.
+    panelPointerAtRef.current = performance.now();
     if (e.pointerType === "mouse") return;
     const panel = panelRef.current;
     if (!panel) return;
@@ -592,7 +606,31 @@ export default function BottomNav() {
           .nav-circle держатся сверху своим .morph { position: relative }.
           Снимешь position у панели — поиск снова станет мёртвым на вид
           рабочим экраном. */}
-      {searchOpen && <div aria-hidden="true" onClick={closeSearch} className="fixed inset-0 lg:hidden" />}
+      {/* Клик засчитывается закрытием, ТОЛЬКО если жест начался не на панели.
+          Без этой проверки кнопки внутри панели были мертвы, и вот почему.
+          При открытии поиска фокус уходит в строку ввода (см. ниже
+          `inputRef.current?.focus()`), на телефоне поднимается клавиатура, и
+          ряд вместе с панелью переставляется по видимой области
+          (navRowKeyboardBottomPx). Нажатие на кнопку в панели уводит фокус из
+          строки — клавиатура начинает закрываться, видимая область растёт,
+          панель уезжает вниз ПРЯМО МЕЖДУ pointerdown и click. Клик браузер
+          досылает по прежним координатам, а там уже не кнопка, а эта подложка:
+          поиск просто закрывался, и снаружи это выглядело как «кнопки не
+          нажимаются, панель сама прячется».
+          Опора — отметка времени, а не сравнение целей события: цель клика
+          после сдвига и есть подложка, сравнивать не с чем. Окно намеренно
+          щедрое (клавиатура уезжает не мгновенно), но короче осмысленной паузы
+          между двумя разными касаниями. */}
+      {searchOpen && (
+        <div
+          aria-hidden="true"
+          onClick={() => {
+            if (performance.now() - panelPointerAtRef.current < BACKDROP_IGNORE_MS) return;
+            closeSearch();
+          }}
+          className="fixed inset-0 lg:hidden"
+        />
+      )}
 
       {/* Выдача — растёт ВВЕРХ от ряда, а не отдельным слоем поверх экрана.
           Потолок — 62% видимой области (searchPanelMaxHeightPx), тот же
@@ -609,6 +647,14 @@ export default function BottomNav() {
           onPointerMove={onPanelPointerMove}
           onPointerUp={onPanelPointerUp}
           onPointerCancel={onPanelPointerCancel}
+          // Нажатие в панели не должно уводить фокус из строки ввода. Это не
+          // про удобство: уход фокуса закрывает клавиатуру, а её уход двигает
+          // раскладку (см. комментарий у подложки) — то есть источник сдвига
+          // устраняется здесь, а подложка выше лишь страхует остальные случаи.
+          // preventDefault именно на mousedown: он отменяет перенос фокуса, но
+          // НЕ отменяет сам click, который и вызывает обработчик кнопки.
+          // Внутри панели нет полей ввода, отбирать у них фокус нечем.
+          onMouseDownCapture={(e) => e.preventDefault()}
           className="nav-search-panel flex min-h-0 flex-col overflow-y-auto overscroll-contain"
         >
           <div aria-hidden className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border" />

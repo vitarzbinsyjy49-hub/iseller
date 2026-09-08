@@ -86,6 +86,14 @@ export function scrollPositionAt(from: number, to: number, elapsedMs: number, du
  *  формально отработал без ошибок. Так и выглядела «доросовка» галочки на
  *  телефоне: результат есть, движения нет. Якорь на первый тик гарантирует
  *  хотя бы один кадр от `from`, сколько бы браузер его ни откладывал. */
+/** Запас сторожевого таймера сверх длительности анимации.
+ *
+ *  Настолько большой намеренно: он должен срабатывать только тогда, когда
+ *  кадров нет совсем, и никогда — на живой, но подтормаживающей анимации.
+ *  Таймер перевзводится каждым кадром, так что эта величина — допустимая
+ *  ПАУЗА МЕЖДУ кадрами, а не общий лимит на анимацию. */
+const STALL_GRACE_MS = 700;
+
 function animateValue(
   from: number, to: number, durationMs: number,
   apply: (value: number) => void,
@@ -99,21 +107,61 @@ function animateValue(
 
   let start: number | null = null;
   let frame = 0;
+  let watchdog: ReturnType<typeof setTimeout> | undefined;
+  let settled = false;
+
+  /** Довести до конца ровно один раз, откуда бы ни пришли — с кадра или со
+   *  сторожевого таймера. */
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    cancelAnimationFrame(frame);
+    clearTimeout(watchdog);
+    apply(to);
+    done?.();
+  };
+
+  // Сторож на случай, когда кадры не приходят ВООБЩЕ.
+  //
+  // Мотор целиком висел на requestAnimationFrame, и `done` выполнялся только
+  // если очередной кадр донёс elapsed >= durationMs. Запасного пути не было, а
+  // rAF замолкает штатно: свёрнутый вебвью, скрытая вкладка, уходящая
+  // клавиатура. Для шторки это означало не «анимация без движения», а
+  // необратимо застрявшее состояние: панель поиска оставалась с инлайновым
+  // transform, уехавшая вниз и полупрозрачная, и `closeSearch` из колбэка не
+  // вызывался уже никогда.
+  //
+  // Таймер ПЕРЕВЗВОДИТСЯ на каждом кадре, а не ставится один раз на всю
+  // длительность. Разница принципиальная: анимация, которая просто идёт
+  // медленно (rAF, отданный с задержкой в сотни мс, — ровно то, ради чего
+  // `start` якорится на первый реальный тик), каждым кадром отодвигает
+  // дедлайн и доигрывается покадрово, как задумано. Обрывается только та, где
+  // кадров нет совсем.
+  const armWatchdog = () => {
+    clearTimeout(watchdog);
+    watchdog = setTimeout(finish, durationMs + STALL_GRACE_MS);
+  };
 
   const step = (now: number) => {
+    if (settled) return;
     if (start === null) start = now;
     const elapsed = now - start;
     if (elapsed >= durationMs) {
-      apply(to);
-      done?.();
+      finish();
       return;
     }
     apply(scrollPositionAt(from, to, elapsed, durationMs));
+    armWatchdog();
     frame = requestAnimationFrame(step);
   };
   frame = requestAnimationFrame(step);
+  armWatchdog();
 
-  return () => cancelAnimationFrame(frame);
+  return () => {
+    settled = true;
+    cancelAnimationFrame(frame);
+    clearTimeout(watchdog);
+  };
 }
 
 /** Прогнать произвольное число от `from` к `to` своими кадрами.

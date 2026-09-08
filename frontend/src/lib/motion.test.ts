@@ -121,6 +121,58 @@ describe("animateNumber", () => {
       globalThis.cancelAnimationFrame = originalCancel;
     }
   });
+
+  it("доводит анимацию до конца, даже если кадров не пришло ни одного", () => {
+    // rAF замолкает штатно: свёрнутый вебвью, скрытая вкладка, уходящая
+    // клавиатура. Мотор висел на нём целиком, и `done` тогда не выполнялся
+    // НИКОГДА. Для шторки это не «анимация без движения», а застрявшее
+    // состояние: панель поиска оставалась сдвинутой и полупрозрачной, а
+    // закрытие, которое живёт в этом колбэке, не наступало.
+    vi.useFakeTimers();
+    const originalRaf = globalThis.requestAnimationFrame;
+    const originalCancel = globalThis.cancelAnimationFrame;
+    // Кадры не приходят вообще: заявку принимаем, вызывать колбэк не будем.
+    globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame;
+
+    try {
+      const calls: number[] = [];
+      let finished = false;
+      animateNumber(0, 100, 180, (v) => calls.push(v), () => { finished = true; });
+
+      expect(finished).toBe(false);
+      vi.advanceTimersByTime(5_000);
+
+      expect(finished).toBe(true);
+      expect(calls[calls.length - 1]).toBe(100);   // конечное значение применено
+    } finally {
+      globalThis.requestAnimationFrame = originalRaf;
+      globalThis.cancelAnimationFrame = originalCancel;
+      vi.useRealTimers();
+    }
+  });
+
+  it("отменённая анимация не доводится сторожем до конца", () => {
+    // Сторож не должен воскрешать то, что уже отменили: у панели отмена
+    // означает «жест перехватили заново», и `done` там закрывает поиск.
+    vi.useFakeTimers();
+    const originalRaf = globalThis.requestAnimationFrame;
+    const originalCancel = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame;
+
+    try {
+      let finished = false;
+      const cancel = animateNumber(0, 100, 180, () => {}, () => { finished = true; });
+      cancel();
+      vi.advanceTimersByTime(5_000);
+      expect(finished).toBe(false);
+    } finally {
+      globalThis.requestAnimationFrame = originalRaf;
+      globalThis.cancelAnimationFrame = originalCancel;
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("animateAppear", () => {
