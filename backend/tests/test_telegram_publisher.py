@@ -418,3 +418,54 @@ def test_edit_rich_message_uploads_local_image_via_multipart(monkeypatch, tmp_pa
     sent = post.sent[0]
     assert sent["data"]["message_id"] == 7
     assert "files" in sent
+
+
+# ---------------------------------------------------------------- альбом
+
+def test_send_media_group_puts_caption_only_on_first(monkeypatch, tmp_path):
+    """Подпись у альбома одна. Если поставить её каждому элементу, клиент
+    нарисует один и тот же текст под каждой фотографией."""
+    post = fake_post([FakeResponse({"ok": True, "result": [
+        {"message_id": 11}, {"message_id": 12}, {"message_id": 13},
+    ]})])
+    monkeypatch.setattr(tp.httpx, "post", post)
+    monkeypatch.setattr(uploads, "local_path_for_url", lambda url: None)
+
+    ids = tp.send_media_group(
+        photos=["https://cdn/a.jpg", "https://cdn/b.jpg", "https://cdn/c.jpg"],
+        caption="Фото с нашего склада",
+    )
+
+    assert ids == [11, 12, 13]
+    media = post.sent[0]["media"]
+    assert media[0]["caption"] == "Фото с нашего склада"
+    assert "caption" not in media[1] and "caption" not in media[2]
+
+
+def test_send_media_group_uploads_our_files_as_bytes(monkeypatch, tmp_path):
+    """Своя загрузка уходит байтами через attach:// — с нашего домена Telegram
+    медиа сам не забирает (см. docs/context/channel-posts.md)."""
+    photo = tmp_path / "sklad.jpg"
+    photo.write_bytes(b"\xff\xd8\xffmock")
+    post = fake_post([FakeResponse({"ok": True, "result": [
+        {"message_id": 1}, {"message_id": 2},
+    ]})])
+    monkeypatch.setattr(tp.httpx, "post", post)
+    monkeypatch.setattr(uploads, "local_path_for_url",
+                        lambda url: photo if url.startswith("/api/uploads") else None)
+
+    tp.send_media_group(photos=["/api/uploads/sklad.jpg", "https://cdn/b.jpg"])
+
+    call = post.sent[0]
+    assert "photo0" in call["files"]                       # наш файл — вложением
+    media = json.loads(call["data"]["media"])
+    assert media[0]["media"] == "attach://photo0"
+    assert media[1]["media"] == "https://cdn/b.jpg"        # чужой CDN — ссылкой
+
+
+@pytest.mark.parametrize("count", [0, 1, 11])
+def test_send_media_group_rejects_impossible_sizes(monkeypatch, count):
+    """Bot API принимает от 2 до 10 медиа; ловим это до сети, а не отказом."""
+    monkeypatch.setattr(tp.httpx, "post", fake_post([OK]))
+    with pytest.raises(tp.TelegramPublishError):
+        tp.send_media_group(photos=["https://cdn/a.jpg"] * count)

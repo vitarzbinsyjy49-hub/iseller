@@ -55,6 +55,13 @@ SECTIONS: tuple[Section, ...] = (
             route="/catalog?category=планшеты"),
     Section("price_watch", "⌚", "Apple Watch", ((("часы", None),)),
             route="/catalog?category=часы"),
+    Section("price_homepod", "🔊", "HomePod", ((("аудио", None),)),
+            route="/catalog?category=аудио"),
+    # Аксессуары — один раздел на клавиатуры, ремешки и зарядки: по отдельности
+    # это посты на две-три строки, а вместе — осмысленная страница прайса.
+    Section("price_accessories", "🔌", "Аксессуары", ((("аксессуары", None),)),
+            subgroups=("Magic Keyboard", "Ремешки Apple Watch", "Зарядные устройства"),
+            route="/catalog?category=аксессуары"),
     Section("price_playstation", "🎮", "PlayStation", ((("консоли", None),)),
             subgroups=("Консоли", "Аксессуары PlayStation"),
             route="/catalog?category=консоли"),
@@ -69,6 +76,15 @@ SECTIONS: tuple[Section, ...] = (
             subgroups=("Стайлеры", "Фены", "Выпрямители", "Пылесосы",
                        "Климатическая техника"),
             route="/catalog?brand=Dyson"),
+    # Karcher и Jura лежат в той же категории «бытовая техника», что и Dyson, и
+    # разводятся ТОЛЬКО брендом — как и сам Dyson. Без brand= раздел собрал бы
+    # чужие товары: правило отбора здесь не «категория», а «категория И бренд».
+    Section("price_karcher", "🧼", "Karcher", ((("бытовая техника", "Уборка"),)),
+            brand="Karcher",
+            route="/catalog?brand=Karcher"),
+    Section("price_jura", "☕", "Jura", ((("бытовая техника", "Кофемашины"),)),
+            brand="Jura",
+            route="/catalog?brand=Jura"),
 )
 
 SECTIONS_BY_SLUG = {s.slug: s for s in SECTIONS}

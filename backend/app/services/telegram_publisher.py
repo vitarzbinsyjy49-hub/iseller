@@ -206,6 +206,71 @@ def send_photo(
     return int(_dispatch_photo(payload, photo)["message_id"])
 
 
+#: Bot API принимает в одном альбоме от 2 до 10 медиа.
+MEDIA_GROUP_MIN = 2
+MEDIA_GROUP_MAX = 10
+
+
+def send_media_group(
+    *, photos: list[str], caption: str = "",
+    channel_id: str | int | None = None, disable_notification: bool = False,
+) -> list[int]:
+    """Альбом фотографий — листается вбок одним сообщением-группой.
+
+    **Клавиатуры у альбома быть не может.** Telegram не принимает
+    `reply_markup` у `sendMediaGroup` вовсе — это ограничение Bot API, а не
+    наше решение. Поэтому альбом и пост с кнопками — всегда два отдельных
+    сообщения: альбом показывает товар, следом идёт текст с кнопками.
+    Параметра `keyboard` здесь нет намеренно, чтобы это нельзя было забыть.
+
+    Подпись ставится ТОЛЬКО первому элементу: Telegram показывает её как
+    подпись всего альбома. Если поставить её каждому, клиент нарисует один и
+    тот же текст под каждой фотографией.
+
+    Возвращает message_id всех сообщений группы — их несколько, по одному на
+    фотографию, и это отличает альбом от остальных публикаций здесь.
+    """
+    if not (MEDIA_GROUP_MIN <= len(photos) <= MEDIA_GROUP_MAX):
+        raise TelegramPublishError(
+            f"В альбоме должно быть от {MEDIA_GROUP_MIN} до {MEDIA_GROUP_MAX} "
+            f"фотографий (сейчас {len(photos)})."
+        )
+    if len(caption) > MAX_CAPTION_LENGTH:
+        raise TelegramContentTooLong(
+            f"Подпись к альбому ограничена {MAX_CAPTION_LENGTH} символами "
+            f"(сейчас {len(caption)})."
+        )
+
+    media: list[dict] = []
+    files: dict = {}
+    for index, photo in enumerate(photos):
+        item: dict = {"type": "photo"}
+        if index == 0 and caption:
+            item["caption"] = caption
+            item["parse_mode"] = "HTML"
+        local_path = uploads.local_path_for_url(photo)
+        if local_path is None:
+            # Внешний URL Telegram скачивает сам — с чужим CDN это работает.
+            item["media"] = photo
+        else:
+            # Своя загрузка уходит байтами: с нашего домена Telegram медиа не
+            # забирает (см. docs/context/channel-posts.md). Имя поля должно
+            # совпадать с ключом в files — так медиа связывается с файлом.
+            key = f"photo{index}"
+            item["media"] = f"attach://{key}"
+            files[key] = (local_path.name, local_path.read_bytes(),
+                          _content_type_for(local_path))
+        media.append(item)
+
+    payload = {
+        "chat_id": _channel(channel_id),
+        "media": media,
+        "disable_notification": disable_notification,
+    }
+    result = call("sendMediaGroup", payload, files=files or None)
+    return [int(m["message_id"]) for m in (result or [])]
+
+
 def edit_message(
     *, message_id: int, text: str, keyboard: list[list[dict]] | None = None,
     channel_id: str | int | None = None,

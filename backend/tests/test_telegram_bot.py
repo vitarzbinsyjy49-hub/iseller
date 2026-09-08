@@ -484,6 +484,49 @@ def test_resolve_payload_path_matches_what_the_bot_itself_opens():
     assert resolve_payload_path("price_iphone") == SECTIONS_BY_SLUG["price_iphone"].route
     assert resolve_payload_path("совсем не существует") is None
     assert resolve_payload_path("product_abc") is None
+    assert resolve_payload_path("q_mac-mini") == "/catalog?query=mac%20mini"
+
+
+# ------------------------------------------------- кнопка-запрос (q_<слаг>)
+
+@pytest.mark.parametrize("payload,expected", [
+    ("q_imac", "imac"),
+    ("q_mac-mini", "mac mini"),
+    ("q_studio-display", "studio display"),
+    ("q_ps5-pro", "ps5 pro"),
+    # Лишние дефисы не должны давать другой запрос: ссылку собирают руками,
+    # и «q_mac--mini-» обязан вести туда же, куда «q_mac-mini».
+    ("q_mac--mini-", "mac mini"),
+])
+def test_parse_query_payload_accepts_slugs(payload, expected):
+    assert telegram_bot.parse_query_payload(payload) == expected
+
+
+@pytest.mark.parametrize("payload", [
+    "q_",                    # пусто
+    "q_" + "a" * 60,         # длиннее предела
+    "q_мак-мини",            # кириллица
+    "q_mac_mini",            # подчёркивание не разделитель
+    "q_mac mini",            # пробел в payload невозможен
+    "q_<b>",                 # разметка
+    "mac-mini",              # без префикса
+    "product_42",            # чужой payload не перехватываем
+])
+def test_parse_query_payload_rejects_junk(payload):
+    """Значение уходит в URL кнопки, а ссылку мог собрать кто угодно — всё,
+    что не строчная латиница с цифрами и дефисом, обязано отсеиваться."""
+    assert telegram_bot.parse_query_payload(payload) is None
+
+
+def test_query_payload_reply_matches_startapp_route():
+    """Через чат бота и по прямой ссылке — один и тот же экран."""
+    from app.services.telegram_bot import reply_for_payload, resolve_payload_path
+
+    reply = reply_for_payload("q_mac-mini")
+    assert reply is not None
+    route = resolve_payload_path("q_mac-mini")
+    urls = [b.get("web_app", {}).get("url", "") for row in reply.keyboard for b in row]
+    assert any(u.endswith(route) for u in urls), urls
 
 
 # ------------------------------------------------- deep link на товар (патч 1.1)

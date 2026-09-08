@@ -19,6 +19,7 @@ from __future__ import annotations
 import string
 from dataclasses import dataclass, field
 from html import escape
+from urllib.parse import quote
 
 import httpx
 
@@ -193,6 +194,41 @@ def parse_product_payload(payload: str) -> int | None:
     return value if value > 0 else None
 
 
+#: Кнопка-запрос: `q_mac-mini` -> каталог, отфильтрованный по «mac mini».
+#:
+#: Нужна там, где заводить раздел прайса ради одной модели избыточно. Mac mini,
+#: iMac, Mac Studio и мониторы лежат внутри широких категорий «компьютеры» и
+#: «мониторы»; человеку нужен не новый раздел канала, а сразу суженная выдача.
+#: Раздел пришлось бы заводить в коде, публиковать отдельным постом и потом
+#: поддерживать — кнопка-запрос даёт то же самое одной ссылкой.
+_QUERY_PREFIX = "q_"
+#: Свой предел длины, а не «сколько пропустит Telegram»: payload приходит из
+#: ссылки, которую мог собрать кто угодно.
+_QUERY_PAYLOAD_MAX = 48
+_QUERY_ALLOWED = set(string.ascii_lowercase + string.digits + "-")
+
+
+def parse_query_payload(payload: str) -> str | None:
+    """«q_mac-mini» -> «mac mini». Всё остальное -> None.
+
+    Проверка строгая по той же причине, что и у `parse_product_payload`:
+    значение подставляется в URL кнопки. Разрешены только строчная латиница,
+    цифры и дефис — дефис работает разделителем слов. Кириллица не нужна:
+    запрос уходит в поиск по названиям товаров, а они латиницей.
+    """
+    if not payload.startswith(_QUERY_PREFIX):
+        return None
+    raw = payload[len(_QUERY_PREFIX):]
+    if not raw or len(raw) > _QUERY_PAYLOAD_MAX:
+        return None
+    if not set(raw) <= _QUERY_ALLOWED:
+        return None
+    # Несколько дефисов подряд и по краям не должны давать пустых слов:
+    # «q_mac--mini-» и «q_mac-mini» обязаны вести в одно и то же место.
+    query = " ".join(word for word in raw.split("-") if word)
+    return query or None
+
+
 #: Префикс рекламных payload'ов: ad_<кампания>. Работает по обеим ссылкам:
 #: t.me/<bot>/<app>?startapp=ad_<кампания> (прямой вход в Mini App — Telegram
 #: кладёт метку в initDataUnsafe.start_param, фронт отдаёт её в /auth/telegram)
@@ -332,6 +368,9 @@ def resolve_payload_path(payload: str) -> str | None:
     product_id = parse_product_payload(payload)
     if product_id is not None:
         return f"/product/{product_id}"
+    query = parse_query_payload(payload)
+    if query is not None:
+        return f"/catalog?query={quote(query)}"
     # Рекламный payload. С товаром — сразу карточка: человек кликнул объявление
     # «PS5 Slim за 42 900» и обязан увидеть именно её, а не витрину, на которой
     # эту PS5 ещё надо найти. Без товара метка сама по себе не экран — открываем
@@ -416,6 +455,27 @@ def reply_for_payload(payload: str) -> Reply | None:
                 _row(button),
                 _row(
                     _web_app_button("🛍 Весь каталог", "/catalog"),
+                    _url_button("💬 Менеджер", settings.MANAGER_RETAIL_URL),
+                ),
+            ),
+        )
+
+    # Кнопка-запрос из канала. Ответ обязан вести туда же, куда resolve_payload_path
+    # ведёт тот же payload по ?startapp=, иначе человек с двух ссылок на одну
+    # кнопку попадёт на разные экраны.
+    query = parse_query_payload(payload)
+    if query is not None:
+        button = _web_app_button(f"🛍 Показать «{query}»", f"/catalog?query={quote(query)}")
+        if button is None:
+            return Reply(WELCOME, main_keyboard())
+        return Reply(
+            # escape: текст уходит с parse_mode=HTML, а запрос пришёл из ссылки.
+            # Символы разметки в нём Telegram отклонил бы вместе со всем ответом.
+            f"Вот что нашлось по запросу «{escape(query)}».",
+            _keyboard(
+                _row(button),
+                _row(
+                    _web_app_button("✨ Подобрать с AI", "/ai"),
                     _url_button("💬 Менеджер", settings.MANAGER_RETAIL_URL),
                 ),
             ),
