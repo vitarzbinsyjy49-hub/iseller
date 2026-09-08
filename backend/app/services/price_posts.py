@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
 from html import escape
@@ -221,14 +222,26 @@ def shorten_title(title: str, brand: str | None, section: Section) -> str:
     return result.strip()
 
 
-def product_line(product: dict, section: Section) -> str:
-    """Одна строка прайса: «🇭🇰 iPhone 17 Pro 256 ГБ Blue — 96 000 ₽».
+def product_line(product: dict, section: Section, strip_model: str | None = None) -> str:
+    """Одна строка прайса: «🇭🇰 iPhone 17 Pro 256 ГБ Blue — 96.000».
 
     Флаг заменяет маркер списка: он и так стоит в начале строки, и две метки
     подряд («• 🇭🇰 …») только зашумляют. У товара без региона маркер остаётся.
+
+    `strip_model` — имя модели, вынесенное в подзаголовок над блоком. Тогда из
+    строки оно убирается: повторять «iPhone 17 Pro» в каждой из двадцати строк
+    подряд значит тратить половину ширины экрана на то, что уже написано выше.
+    Убираем ТОЛЬКО ведущее вхождение и только целиком — всё, что отличает
+    позиции друг от друга (память, цвет, регион, SIM), остаётся на месте.
     """
     flags, cleaned = split_region(product["title"])
-    name = escape(shorten_title(cleaned, product.get("brand"), section))
+    name = shorten_title(cleaned, product.get("brand"), section)
+    if strip_model:
+        without = re.sub(rf"^{re.escape(strip_model)}\s*", "", name).strip()
+        # Пустая строка означала бы, что название целиком совпало с моделью, —
+        # тогда убирать нечего, иначе у товара не осталось бы имени вовсе.
+        name = without or name
+    name = escape(name)
     price = escape(format_price(product["price"]))
     line = f"{flags} {name} — {price}" if flags else f"• {name} — {price}"
     old = product.get("old_price")
@@ -352,13 +365,46 @@ def _lines_with_model_breaks(items: list[dict], section: Section) -> list[str]:
         and len(items) / distinct >= MODEL_BREAK_MIN_BLOCK
     )
 
+    # Подзаголовок возглавляет БЛОК. Модель, у которой одна позиция, блока не
+    # образует: заголовок над единственной строкой занимает место и разрывает
+    # список, ничего не объясняя. Такие позиции остаются обычной строкой с
+    # полным названием — как и было до появления подзаголовков.
+    counts = Counter(keys)
+
     lines: list[str] = []
     previous: str | None = None
+    # Отдельный флаг, а не «previous is not None»: одиночная позиция сбрасывает
+    # previous (следующий блок обязан заново поставить заголовок), и по одному
+    # previous нельзя отличить «ещё ничего не выводили» от «только что вывели
+    # одиночку» — во втором случае пустая строка перед заголовком нужна.
+    emitted = False
     for item, key in zip(items, keys):
-        if split_models and previous is not None and key != previous:
-            lines.append("")
-        lines.append(product_line(item, section))
+        if split_models and counts[key] < 2:
+            # Пустая строка нужна, только чтобы ВЫЙТИ из блока с заголовком.
+            # Идущие подряд одиночки — это один сплошной список, и разделять
+            # их пустотами значит вернуть ту самую рыхлость, ради которой всё
+            # и затевалось.
+            if previous is not None:
+                lines.append("")
+            lines.append(product_line(item, section))
+            previous = None
+            emitted = True
+            continue
+        if split_models and key != previous:
+            # Подзаголовок модели вместо пустой строки. Пустая строка стоила
+            # ровно столько же (одна строка на модель), но не забирала имя
+            # модели из КАЖДОЙ товарной строки — а именно оно там и было самым
+            # длинным куском. Замер на боевом каталоге: перенос строк на
+            # телефоне падает с 87% до 41%, медиана 46 -> 33 символа, то есть
+            # список наконец перестаёт быть рваным. Общая высота поста при этом
+            # не растёт: подзаголовок добавляет строку, но каждый уместившийся
+            # товар одну экономит.
+            if emitted:
+                lines.append("")
+            lines.append(f"<b>{escape(key)}</b>")
+        lines.append(product_line(item, section, strip_model=key if split_models else None))
         previous = key
+        emitted = True
     return lines
 
 

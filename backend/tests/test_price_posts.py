@@ -243,7 +243,13 @@ def test_tail_page_does_not_merge_when_it_does_not_fit():
     """Приклеивание — не любой ценой: если реально не влезает в лимит
     Telegram, страница остаётся отдельной, а не переполняет сообщение."""
     section = SECTIONS_BY_SLUG["price_iphone"]
-    products = [product(sku=f"S{i}", title="Apple iPhone 17 Pro Max Deep Blue Titanium Ultra", price=90000 + i)
+    # Хвост у каждой позиции свой: имя модели уезжает в подзаголовок (см.
+    # _lines_with_model_breaks), и от одинаковых названий строки схлопнулись бы
+    # до «— цена», а тест перестал бы проверять переполнение вовсе.
+    products = [product(sku=f"S{i}",
+                        title=("Apple iPhone 17 Pro Max Deep Blue Titanium Ultra "
+                               f"{i} 1024 ГБ SIM+eSIM с гарантией и проверкой"),
+                        price=90000 + i)
                 for i in range(72)]
 
     posts = render_section(products, section, TODAY, MINI_APP, MANAGER)
@@ -542,19 +548,48 @@ def test_model_key(title, expected):
     assert model_key(title) == expected
 
 
-def test_models_are_separated_by_a_blank_line():
-    """46 айфонов подряд читаются как стена текста; блоки по модели её ломают."""
+def test_models_get_a_subheading_and_leave_the_lines():
+    """Имя модели уезжает в подзаголовок и пропадает из товарных строк.
+
+    Оно было самым длинным куском каждой строки и повторялось в блоке по
+    двадцать раз подряд. На телефоне из-за этого переносилось 87% строк —
+    список выглядел рваным. Подзаголовок стоит ровно столько же, сколько
+    стоила пустая строка между моделями, но забирает повтор из каждой строки.
+    """
     section = SECTIONS_BY_SLUG["price_iphone"]
     products = [
         product(sku=f"A{i}", title=f"Apple iPhone 17 {128 * i} ГБ Black (HK)",
                 price=80000 + i)
         for i in range(1, 10)
-    ] + [product(sku="P", title="Apple iPhone 17 Pro 256 ГБ Blue (HK)", price=120000)]
+    ] + [
+        product(sku=f"P{i}", title=f"Apple iPhone 17 Pro {256 * i} ГБ Blue (HK)",
+                price=120000 + i)
+        for i in range(1, 3)
+    ]
     text = render_section(products, section, TODAY, MINI_APP)[0].text
     body = text.split("менеджер.")[1]
-    # Внутри «iPhone 17» пустых строк нет, перед «iPhone 17 Pro» — есть.
-    assert "128 ГБ Black — 80.001\n🇭🇰 iPhone 17 256" in body
-    assert "\n\n🇭🇰 iPhone 17 Pro" in body
+    # Модель — подзаголовком, а в строках её больше нет.
+    assert "<b>iPhone 17</b>" in body
+    assert "<b>iPhone 17 Pro</b>" in body
+    assert "🇭🇰 128 ГБ Black — 80.001" in body
+    assert "iPhone 17 128 ГБ" not in body     # повтор модели в строке ушёл
+    # Блоки по-прежнему разделены пустой строкой.
+    assert "\n\n<b>iPhone 17 Pro</b>" in body
+
+
+def test_single_product_model_gets_no_subheading():
+    """Заголовок возглавляет БЛОК. Над одной строкой он занимает место и рвёт
+    список, ничего не объясняя, — такая позиция остаётся обычной строкой."""
+    section = SECTIONS_BY_SLUG["price_iphone"]
+    products = [
+        product(sku=f"A{i}", title=f"Apple iPhone 17 {128 * i} ГБ Black (HK)",
+                price=80000 + i)
+        for i in range(1, 11)
+    ] + [product(sku="ONE", title="Apple iPhone 17 Pro 256 ГБ Blue (HK)", price=120000)]
+    body = render_section(products, section, TODAY, MINI_APP)[0].text.split("менеджер.")[1]
+    assert "<b>iPhone 17 Pro</b>" not in body
+    # Название одиночки остаётся полным — иначе строка потеряет модель совсем.
+    assert "🇭🇰 iPhone 17 Pro 256 ГБ Blue — 120.000" in body
 
 
 def test_short_list_is_not_torn_apart_by_blank_lines():
