@@ -36,6 +36,9 @@ CATEGORY_ICONS: dict[str, str] = {
     "красота": "💇",
     "бытовая техника": "🏠",
     "аксессуары": "🔌",
+    "аудио": "🔊",
+    "компьютеры": "🖥️",
+    "мониторы": "🖥️",
 }
 FALLBACK_ICON = "🛍️"
 SALE_ICON = "🏷️"
@@ -48,6 +51,8 @@ BRAND_ICONS: dict[str, str] = {
     "apple": "🍏",
     "dyson": "🌀",
     "sony": "🎮",
+    "karcher": "🧼",
+    "jura": "☕",
 }
 
 
