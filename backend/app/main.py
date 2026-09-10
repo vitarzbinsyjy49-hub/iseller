@@ -256,6 +256,10 @@ def _apply_demo_migrations() -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(12)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id INTEGER",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_referral_code ON users (referral_code)",
+        # Факт блокировки бота (my_chat_member). NULL у всех существующих строк —
+        # ничего не меняется, пока человек не заблокирует бота. Пишет бот;
+        # синхронно добавлено в REQUIRED_SCHEMA (bot_polling.py).
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_blocked_at TIMESTAMPTZ",
         "ALTER TABLE ad_touches ADD COLUMN IF NOT EXISTS kind VARCHAR(8) NOT NULL DEFAULT 'ad'",
     ]
     for stmt in statements:

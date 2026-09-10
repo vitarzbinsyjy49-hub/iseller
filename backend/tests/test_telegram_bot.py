@@ -839,6 +839,121 @@ def test_recognized_start_payload_does_not_warn(caplog):
     assert not any("не распознан" in rec.message for rec in caplog.records)
 
 
+# --------------------------------------------- my_chat_member: блокировка бота
+
+def _membership_update(old: str, new: str, chat_id: int = 555) -> dict:
+    return {
+        "update_id": 1,
+        "my_chat_member": {
+            "chat": {"id": chat_id, "type": "private"},
+            "from": {"id": chat_id},
+            "old_chat_member": {"status": old},
+            "new_chat_member": {"status": new},
+        },
+    }
+
+
+@pytest.mark.parametrize("old, new, expected", [
+    ("member", "kicked", "blocked"),
+    ("member", "left", "blocked"),
+    ("kicked", "member", "unblocked"),
+    ("left", "member", "unblocked"),
+    ("member", "member", None),
+    ("kicked", "kicked", None),
+    ("administrator", "member", None),
+])
+def test_membership_change_reads_the_transition(old, new, expected):
+    assert telegram_bot.membership_change(_membership_update(old, new)) == expected
+
+
+def test_membership_change_ignores_group_chats():
+    upd = _membership_update("member", "kicked")
+    upd["my_chat_member"]["chat"]["type"] = "supergroup"
+    assert telegram_bot.membership_change(upd) is None
+
+
+def test_membership_change_ignores_plain_messages():
+    assert telegram_bot.membership_change(private_message("/start")) is None
+
+
+def test_record_membership_change_sets_and_clears_bot_blocked_at(db):
+    from app.models.user import User
+
+    user = User(telegram_id=555, first_name="Тест")
+    db.add(user)
+    db.commit()
+
+    got = telegram_bot.record_membership_change(db, _membership_update("member", "kicked"))
+    assert got == "blocked"
+    db.refresh(user)
+    assert user.bot_blocked_at is not None
+
+    got = telegram_bot.record_membership_change(db, _membership_update("kicked", "member"))
+    assert got == "unblocked"
+    db.refresh(user)
+    assert user.bot_blocked_at is None
+
+
+def test_record_membership_change_without_a_known_user_is_quiet(db):
+    """Заблокировал бота, ни разу не открыв Mini App — строки в users нет.
+    Факт возвращается (вызывающий его залогирует), но писать некуда."""
+    got = telegram_bot.record_membership_change(
+        db, _membership_update("member", "kicked", chat_id=424242)
+    )
+    assert got == "blocked"
+
+
+def test_record_membership_change_passes_through_ordinary_updates(db):
+    assert telegram_bot.record_membership_change(db, private_message("/catalog")) is None
+
+
+# ------------------------------------------- outcome_label: одна метка на апдейт
+
+@pytest.mark.parametrize("text, label", [
+    ("/start", "cmd:start"),
+    ("/menu", "cmd:menu"),
+    ("/catalog", "cmd:catalog"),
+    ("/ai", "cmd:ai"),
+    ("/orders", "cmd:orders"),
+    ("/manager", "cmd:manager"),
+    ("/prices", "cmd:prices"),
+    ("/kataloq", "cmd:unknown"),
+    ("просто текст", "text"),
+    ("/start product_42", "deeplink:product"),
+    ("/start q_mac-mini", "deeplink:query"),
+    ("/start ad_moskvatoday", "deeplink:ad"),
+    ("/start ad_direct_product_7", "deeplink:ad"),
+    ("/start ref_A1b2C3d4", "deeplink:ref"),
+    ("/start catalog", "deeplink:static"),
+    ("/start roadmap", "deeplink:static"),
+    ("/start davno_udalyonny_razdel", "deeplink:unknown"),
+])
+def test_outcome_label_covers_every_branch(text, label):
+    assert telegram_bot.outcome_label(private_message(text)) == label
+
+
+def test_outcome_label_is_none_when_the_bot_would_not_answer():
+    assert telegram_bot.outcome_label({"edited_message": {}}) is None
+    assert telegram_bot.outcome_label(_membership_update("member", "kicked")) is None
+    non_private = private_message("привет")
+    non_private["message"]["chat"]["type"] = "group"
+    assert telegram_bot.outcome_label(non_private) is None
+
+
+def test_outcome_label_section_matches_build_reply(monkeypatch):
+    """deeplink:section появляется ровно тогда, когда бот реально ведёт в раздел."""
+    from app.services import price_posts
+
+    class FakeSection:
+        emoji = "📱"
+        title = "Тест"
+        route = "/catalog?category=x"
+
+    monkeypatch.setitem(price_posts.SECTIONS_BY_SLUG, "testslug", FakeSection())
+    assert telegram_bot.outcome_label(private_message("/start testslug")) == "deeplink:section"
+    assert telegram_bot.reply_for_payload("testslug") is not None
+
+
 def test_product_payload_rejects_anything_that_is_not_a_plain_number():
     """payload приходит из ссылки, которую мог собрать кто угодно, а результат
     подставляется в URL кнопки."""

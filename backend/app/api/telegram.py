@@ -22,7 +22,12 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 from app.services import ad_touch
-from app.services.telegram_bot import build_reply, send_reply
+from app.services.telegram_bot import (
+    build_reply,
+    outcome_label,
+    record_membership_change,
+    send_reply,
+)
 
 logger = logging.getLogger("techshop.telegram")
 
@@ -53,6 +58,13 @@ async def telegram_webhook(
         return {"ok": True}
 
     try:
+        # my_chat_member (блокировка/разблокировка бота) ответа не порождает —
+        # ветка до build_reply, общая с long polling.
+        change = record_membership_change(db, update)
+        if change is not None:
+            m_chat = ((update.get("my_chat_member") or {}).get("chat") or {}).get("id")
+            logger.info("membership: %s (чат %s)", change, m_chat)
+            return {"ok": True}
         reply = build_reply(update)
         if reply is None:
             return {"ok": True}
@@ -68,6 +80,7 @@ async def telegram_webhook(
         if slug:
             logger.info("первое касание рекламы: %s (чат %s)", slug, chat_id)
         send_reply(chat_id, reply, incoming_message_id=message.get("message_id"), db=db)
+        logger.info("апдейт: %s (чат %s)", outcome_label(update) or "—", chat_id)
     except Exception:  # noqa: BLE001 — см. пункт 1 в докстринге модуля
         logger.exception(
             "telegram webhook: не удалось обработать апдейт %s",

@@ -45,6 +45,13 @@ class User(Base):
     referred_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True,
     )
+    #: Когда человек заблокировал бота (my_chat_member -> kicked). Снимается в
+    #: NULL при разблокировке. Нужно для трекинга оттока платного трафика:
+    #: сколько из рекламной когорты закрыло чат с ботом. Пишет бот —
+    #: telegram_bot.record_membership_change; поэтому колонка ОБЯЗАНА быть в
+    #: REQUIRED_SCHEMA (bot_polling.py), иначе скан корзин, который джойнит
+    #: users, уронит бота UndefinedColumn на деплое.
+    bot_blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

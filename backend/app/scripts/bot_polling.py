@@ -32,6 +32,7 @@ from app.services import ad_touch
 from app.services.telegram_bot import (
     TELEGRAM_API,
     build_reply,
+    outcome_label,
     send_reply,
     telegram_http_kwargs,
 )
@@ -77,6 +78,7 @@ REQUIRED_SCHEMA: dict[str, tuple[str, ...]] = {
         "acquisition_source",
         "referral_code",
         "referred_by_user_id",
+        "bot_blocked_at",
     ),
     # Бот пишет сюда при /start, а мини-миграции выполняет API-контейнер: бот
     # может подняться раньше и упасть на колонке, которой ещё нет. Тест
@@ -257,6 +259,29 @@ def _api(method: str, client: httpx.Client, **params) -> dict:
     return response.json()
 
 
+def _handle_membership(update: dict) -> str | None:
+    """Блокировка/разблокировка бота (my_chat_member). Ответа не порождает,
+    поэтому идёт отдельной веткой ДО build_reply. Пишет факт в
+    users.bot_blocked_at и одну строку в лог; возвращает 'blocked'/'unblocked',
+    если это был такой апдейт (тогда вызывающий делает continue), иначе None.
+
+    Проверку делаем чистой membership_change ДО открытия сессии: обычных
+    сообщений на порядок больше, и лишний connect на каждое из них не нужен.
+    """
+    from app.services.telegram_bot import membership_change, record_membership_change
+
+    if membership_change(update) is None:
+        return None
+
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        change = record_membership_change(db, update)
+    chat_id = ((update.get("my_chat_member") or {}).get("chat") or {}).get("id")
+    logger.info("membership: %s (чат %s)", change, chat_id)
+    return change
+
+
 def run() -> int:
     if not settings.TELEGRAM_BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN не задан — бот не запускается")
@@ -291,7 +316,12 @@ def run() -> int:
         while _running:
             _tick(tick_state)
             try:
-                params = {"timeout": LONG_POLL_SECONDS, "allowed_updates": '["message"]'}
+                params = {
+                    "timeout": LONG_POLL_SECONDS,
+                    # message — обращения людей; my_chat_member — блокировка и
+                    # разблокировка бота (трекинг оттока платного трафика).
+                    "allowed_updates": '["message", "my_chat_member"]',
+                }
                 if offset is not None:
                     params["offset"] = offset
                 data = _api("getUpdates", client, **params)
@@ -317,6 +347,8 @@ def run() -> int:
                 # падает, не должен возвращаться вечно и блокировать очередь.
                 offset = update["update_id"] + 1
                 try:
+                    if _handle_membership(update) is not None:
+                        continue
                     reply = build_reply(update)
                     if reply is None:
                         continue
@@ -337,7 +369,11 @@ def run() -> int:
                         if slug:
                             logger.info("первое касание рекламы: %s (чат %s)", slug, chat_id)
                         send_reply(chat_id, reply, incoming_message_id=message.get("message_id"), db=db)
-                    logger.info("ответ отправлен в чат %s", chat_id)
+                    # Одна greppable строка на каждое обращение: метка исхода
+                    # (cmd:catalog / deeplink:ad / text / ...). Разбивку даёт
+                    # docker logs bot | grep 'апдейт:' | grep -oP 'апдейт: \S+' | sort | uniq -c
+                    logger.info("апдейт: %s (чат %s)",
+                                outcome_label(update) or "—", chat_id)
                 except Exception:  # noqa: BLE001 — один плохой апдейт не роняет бота
                     logger.exception("не удалось обработать апдейт %s", update.get("update_id"))
 

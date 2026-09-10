@@ -6,9 +6,54 @@
 продолжается. Упавший тик = переставший отвечать бот.
 """
 import inspect as inspect_module
+import logging
+
 import pytest
 
 import app.scripts.bot_polling as bp
+
+
+class _FakeSession:
+    def __enter__(self):
+        return "db"
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_handle_membership_records_and_logs(monkeypatch, caplog):
+    """my_chat_member -> запись факта + одна строка лога, возврат метки перехода
+    (вызывающий по ней делает continue вместо build_reply)."""
+    monkeypatch.setattr("app.db.session.SessionLocal", lambda: _FakeSession())
+    monkeypatch.setattr(
+        "app.services.telegram_bot.record_membership_change",
+        lambda db, update: "blocked",
+    )
+    upd = {"my_chat_member": {
+        "chat": {"id": 999, "type": "private"},
+        "old_chat_member": {"status": "member"},
+        "new_chat_member": {"status": "kicked"},
+    }}
+    with caplog.at_level(logging.INFO, logger="techshop.bot"):
+        assert bp._handle_membership(upd) == "blocked"
+    assert any("membership: blocked" in r.message and "999" in r.message
+               for r in caplog.records)
+
+
+def test_handle_membership_is_none_for_ordinary_updates(monkeypatch):
+    monkeypatch.setattr("app.db.session.SessionLocal", lambda: _FakeSession())
+    monkeypatch.setattr(
+        "app.services.telegram_bot.record_membership_change",
+        lambda db, update: None,
+    )
+    assert bp._handle_membership({"message": {"text": "/start"}}) is None
+
+
+def test_polling_asks_telegram_for_my_chat_member():
+    """allowed_updates getUpdates обязан просить my_chat_member — иначе Telegram
+    блокировки просто не пришлёт, и трекинг оттока молчит."""
+    source = inspect_module.getsource(bp.run)
+    assert "my_chat_member" in source
 
 
 def test_tick_survives_any_background_failure(monkeypatch):

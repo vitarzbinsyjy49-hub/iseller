@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import string
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from html import escape
 from urllib.parse import quote
 
@@ -633,6 +634,112 @@ def build_reply(update: dict) -> Reply | None:
     # Неизвестная команда — тот же ответ, что и на обычный текст: пользователь
     # не должен упереться в молчание, опечатавшись в команде.
     return Reply(FALLBACK_TEXT, main_keyboard())
+
+
+_KNOWN_COMMANDS = ("catalog", "ai", "orders", "manager", "prices")
+
+
+def _payload_label(payload: str) -> str:
+    """Тип deep-link payload'а для лог-метки. Ветки — те же, что у
+    resolve_payload_path, и расходиться им нельзя (держит test_outcome_label)."""
+    if parse_product_payload(payload) is not None:
+        return "deeplink:product"
+    if parse_query_payload(payload) is not None:
+        return "deeplink:query"
+    if split_ad_payload(payload)[0] is not None:
+        return "deeplink:ad"
+    if parse_ref_payload(payload) is not None:
+        return "deeplink:ref"
+    if payload in STATIC_ROUTES:
+        return "deeplink:static"
+    from app.services.price_posts import SECTIONS_BY_SLUG   # локально: избегаем цикла
+
+    if payload in SECTIONS_BY_SLUG:
+        return "deeplink:section"
+    return "deeplink:unknown"
+
+
+def outcome_label(update: dict) -> str | None:
+    """Категория обработанного апдейта — одна greppable строка в логах на
+    каждое обращение к боту.
+
+    Чистая, как build_reply: считается из того же update, без сети и БД. Метки:
+    `cmd:<команда>` / `cmd:unknown` / `text` / `deeplink:<тип>`. Возвращает
+    None для апдейтов, на которые бот не отвечает (не личка, не текст) — по ним
+    строки нет. Ветки повторяют build_reply; тест не даёт им разъехаться.
+    """
+    message = update.get("message") or {}
+    if not isinstance(message, dict):
+        return None
+    if (message.get("chat") or {}).get("type") != "private":
+        return None
+    text = message.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return None
+
+    command = parse_command(text)
+    payload = parse_start_payload(text)
+    if command == "start" and payload:
+        return _payload_label(payload)
+    if command is None:
+        return "text"
+    if command in ("start", "menu") or command in _KNOWN_COMMANDS:
+        return f"cmd:{command}"
+    return "cmd:unknown"
+
+
+#: Переходы статуса в my_chat_member, которые нас интересуют. В личном чате
+#: «заблокировал бота» = статус kicked, «разблокировал» = вернулся в member.
+_BLOCKED_STATUSES = frozenset({"kicked", "left"})
+
+
+def membership_change(update: dict) -> str | None:
+    """Разбор my_chat_member: 'blocked' / 'unblocked' / None.
+
+    Чистая: ни сети, ни БД. None — апдейт не про блокировку бота в личке
+    (группа, первый /start, статус без изменения). Запись факта — в
+    record_membership_change ниже.
+    """
+    member = update.get("my_chat_member")
+    if not isinstance(member, dict):
+        return None
+    if (member.get("chat") or {}).get("type") != "private":
+        return None
+    old_status = (member.get("old_chat_member") or {}).get("status")
+    new_status = (member.get("new_chat_member") or {}).get("status")
+    if new_status in _BLOCKED_STATUSES and old_status not in _BLOCKED_STATUSES:
+        return "blocked"
+    if new_status == "member" and old_status in _BLOCKED_STATUSES:
+        return "unblocked"
+    return None
+
+
+def record_membership_change(db, update: dict) -> str | None:
+    """Записать блокировку/разблокировку бота в users.bot_blocked_at.
+
+    Возвращает 'blocked'/'unblocked' если это был такой апдейт (даже когда
+    строки в users ещё нет — тогда просто нечего писать, но факт логируется
+    вызывающим кодом), иначе None — апдейт идёт дальше обычным путём.
+
+    Строки может не быть: человек написал боту и заблокировал, ни разу не
+    открыв Mini App. Тот же молчаливый no-op, что и в _save_last_bot_message.
+    """
+    change = membership_change(update)
+    if change is None:
+        return None
+
+    from app.models.user import User
+
+    member = update.get("my_chat_member") or {}
+    chat_id = (member.get("chat") or {}).get("id")
+    try:
+        user = db.query(User).filter(User.telegram_id == int(chat_id)).first()
+    except (TypeError, ValueError):
+        return change
+    if user is not None:
+        user.bot_blocked_at = datetime.now(timezone.utc) if change == "blocked" else None
+        db.commit()
+    return change
 
 
 #: message_id последнего ответа бота в чате, для звонков БЕЗ db (тесты,

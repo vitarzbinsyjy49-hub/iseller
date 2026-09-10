@@ -124,9 +124,10 @@ def main() -> int:
     _call("setWebhook", {
         "url": webhook_url(),
         "secret_token": settings.TELEGRAM_WEBHOOK_SECRET,
-        # Просим только то, что бот реально обрабатывает: личные сообщения.
-        # Меньше лишнего трафика и меньше поводов для ошибок в обработчике.
-        "allowed_updates": ["message"],
+        # Ровно то, что бот обрабатывает: личные сообщения и my_chat_member
+        # (блокировка/разблокировка бота). Список сомкнут с getUpdates в
+        # bot_polling.py — расходиться транспортам нельзя.
+        "allowed_updates": ["message", "my_chat_member"],
         "max_connections": 40,
     }, dry_run=args.dry_run)
     print(f"✓ setWebhook: {webhook_url()}")
