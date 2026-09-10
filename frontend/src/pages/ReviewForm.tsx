@@ -175,6 +175,7 @@ export default function ReviewForm() {
               >
                 <Icon
                   name="star"
+                  filled={n <= rating}
                   className={`h-8 w-8 ${n <= rating ? "text-orange" : "text-border"}`}
                 />
               </button>

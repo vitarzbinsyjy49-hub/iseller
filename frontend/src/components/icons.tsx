@@ -64,12 +64,17 @@ const paths: Record<IconName, ReactElement> = {
 /** По умолчанию `aria-hidden`: иконка почти всегда стоит рядом с подписью, и
  *  скринридеру её дублировать незачем. Одиночной иконке подпись даёт кнопка. */
 export function Icon({
-  name, className = "h-5 w-5", strokeWidth = 1.5,
-}: { name: IconName; className?: string; strokeWidth?: number }) {
+  name, className = "h-5 w-5", strokeWidth = 1.5, filled = false,
+}: { name: IconName; className?: string; strokeWidth?: number; filled?: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24" className={className} aria-hidden
-      fill="none" stroke="currentColor" strokeWidth={strokeWidth}
+      // filled — залитая форма вместо контура. Нужна там, где иконка
+      // показывает СОСТОЯНИЕ, а не предмет: закрашенная звезда рейтинга против
+      // пустой читается с одного взгляда, а два контура разного цвета — нет.
+      // Заливка идёт currentColor, как и обводка, поэтому цвет по-прежнему
+      // задаётся классом текста и работает в обеих темах.
+      fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth={strokeWidth}
       strokeLinecap="round" strokeLinejoin="round"
     >
       {paths[name]}

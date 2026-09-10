@@ -35,7 +35,7 @@ export function Stars({ value, className = "" }: { value: number; className?: st
         <Icon
           key={n}
           name="star"
-          aria-hidden
+          filled={n <= Math.round(value)}
           className={`h-3.5 w-3.5 ${n <= Math.round(value) ? "text-orange" : "text-border"}`}
         />
       ))}
