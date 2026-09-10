@@ -310,6 +310,7 @@ type Lead = {
   // Что купили ПО ФАКТУ, если человек передумал в разговоре с менеджером.
   // Снапшот product_id при этом остаётся как был.
   purchased_product_id?: number | null;
+  purchased_product_title?: string | null;
   final_total?: number | null;
   // Рекламная кампания, приведшая АВТОРА заявки (users.acquisition_source).
   // Это не source: тот — экран происхождения заявки внутри приложения.
@@ -484,7 +485,6 @@ function LeadDetail({
   const [published, setPublished] = useState(false);
   // Что купили по факту и за сколько — оба поля правятся менеджером и потому
   // живут в состоянии формы, а не читаются из lead на каждый рендер.
-  const [boughtId, setBoughtId] = useState("");
   const [total, setTotal] = useState("");
 
   const reload = () => {
@@ -493,7 +493,6 @@ function LeadDetail({
         setLead(d);
         setNote(d.manager_comment ?? "");
         setAssignee(d.assigned_to ?? "");
-        setBoughtId(d.purchased_product_id ? String(d.purchased_product_id) : "");
         setTotal(d.final_total != null ? String(d.final_total) : "");
       })
       .catch((e) => setError(String(e)));
@@ -760,16 +759,12 @@ function LeadDetail({
                   показывает, с чего человек начал, и расхождение «сравнил не
                   то» — это сведения о витрине. Пусто = действует снапшот. */}
               <span style={{ fontSize: 13, color: C.sub }}>Купил по факту</span>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input value={boughtId} onChange={(e) => setBoughtId(e.target.value)}
-                  placeholder={lead.product_id ? `id товара (в заявке ${lead.product_id})` : "id товара"}
-                  inputMode="numeric"
-                  style={{ ...input, marginTop: 0, flex: 1 }} />
-                <button style={btnGhost}
-                  onClick={() => patch({ purchased_product_id: Number(boughtId) || 0 })}>
-                  Сохранить
-                </button>
-              </div>
+              <ProductPicker
+                token={token}
+                currentTitle={lead.purchased_product_title ?? null}
+                fallbackTitle={lead.product_title}
+                onPick={(id) => patch({ purchased_product_id: id ?? 0 })}
+              />
 
               <span style={{ fontSize: 13, color: C.sub }}>Сумма сделки</span>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -810,6 +805,85 @@ function LeadDetail({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+
+/** Выбор товара по названию, а не по номеру.
+ *
+ *  Поле для ввода id было ошибкой: самого id в админке нигде не видно, и
+ *  менеджеру пришлось бы искать его в базе. Здесь он пишет то, что и так знает —
+ *  название или артикул, — и выбирает из найденного. Поиск серверный
+ *  (/admin/products?q=), тот же, что в разделе «Товары».
+ */
+function ProductPicker({
+  token, currentTitle, fallbackTitle, onPick,
+}: {
+  token: string;
+  currentTitle: string | null;
+  fallbackTitle: string | null;
+  onPick: (id: number | null) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [items, setItems] = useState<{ id: number; title: string; sku: string | null; price: number }[]>([]);
+  const [open, setOpen] = useState(false);
+
+  // Запрос уходит не на каждую букву: пауза 300 мс гасит промежуточные слова.
+  useEffect(() => {
+    const text = query.trim();
+    if (text.length < 2) { setItems([]); return; }
+    const timer = setTimeout(() => {
+      apiGet<{ products: typeof items }>(
+        `/admin/products?q=${encodeURIComponent(text)}&page_size=8`, token,
+      )
+        .then((r) => { setItems(r.products); setOpen(true); })
+        .catch(() => setItems([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query, token]);
+
+  return (
+    <div>
+      {currentTitle && (
+        <div style={{ fontSize: 13, marginBottom: 6 }}>
+          {currentTitle}{" "}
+          <button style={{ ...btnGhost, padding: "2px 8px", fontSize: 12 }}
+            onClick={() => { onPick(null); setQuery(""); }}>
+            сбросить
+          </button>
+        </div>
+      )}
+      {!currentTitle && fallbackTitle && (
+        <div style={{ fontSize: 12, color: C.sub, marginBottom: 6 }}>
+          Сейчас действует товар заявки: {fallbackTitle}
+        </div>
+      )}
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Начните вводить название или артикул"
+        style={{ ...input, marginTop: 0, width: "100%" }}
+      />
+      {open && items.length > 0 && (
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, marginTop: 4, overflow: "hidden" }}>
+          {items.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => { onPick(p.id); setQuery(""); setItems([]); setOpen(false); }}
+              style={{
+                display: "block", width: "100%", textAlign: "left", padding: "8px 10px",
+                background: "transparent", border: "none", cursor: "pointer", fontSize: 13,
+              }}
+            >
+              {p.title}
+              <span style={{ color: C.sub }}>
+                {p.sku ? ` · ${p.sku}` : ""} · {p.price} ₽ · id {p.id}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

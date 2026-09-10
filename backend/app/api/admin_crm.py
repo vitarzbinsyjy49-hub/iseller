@@ -113,6 +113,13 @@ def lead_detail(lead_id: int, db: Session = Depends(get_db)):
             round(float(product.price) - float(snap), 2)
             if product is not None and snap is not None else None
         )
+    # Название товара, отмеченного как «купленный по факту»: админке нужен
+    # текст, а не номер — иначе менеджеру пришлось бы помнить id наизусть.
+    if lead.purchased_product_id:
+        bought = db.get(Product, lead.purchased_product_id)
+        data["purchased_product_title"] = bought.title if bought else None
+    else:
+        data["purchased_product_title"] = None
     data["status_history"] = _status_history(db, lead_id)
     return data
 
