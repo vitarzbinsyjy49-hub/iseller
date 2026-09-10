@@ -16,6 +16,7 @@ callback_query бот не получает и обработчика для н�
 """
 from __future__ import annotations
 
+import logging
 import string
 from dataclasses import dataclass, field
 from html import escape
@@ -26,6 +27,8 @@ import httpx
 from app.core.config import settings
 
 TELEGRAM_API = "https://api.telegram.org"
+
+logger = logging.getLogger("techshop.telegram")
 
 
 def telegram_http_kwargs() -> dict:
@@ -83,7 +86,10 @@ BOT_COMMANDS: list[tuple[str, str]] = [
     ("prices", "Прайс-листы"),
 ]
 
-MENU_BUTTON_TEXT = "Открыть магазин"
+#: Текст кнопки меню рядом с полем ввода (setChatMenuButton). Держим сомкнутым
+#: с тем, что реально стоит на проде: до этого здесь было «Открыть магазин», а
+#: на боте — «Каталог», и любой прогон setup_bot.py молча менял живую кнопку.
+MENU_BUTTON_TEXT = "Каталог"
 
 
 @dataclass
@@ -581,6 +587,12 @@ def build_reply(update: dict) -> Reply | None:
         reply = reply_for_payload(payload)
         if reply is not None:
             return reply
+        # Payload пришёл, но ни во что не разложился: мёртвая кнопка канала или
+        # протухший диплинк. Дальше человек провалится на общий WELCOME, и это
+        # единственный след такого в наблюдении — без строки не отличить от
+        # обычного /start. Логирование не нарушает чистоту build_reply: ни
+        # сети, ни БД, тест ловит через caplog.
+        logger.info("deep-link payload не распознан: %r", payload)
 
     if command in (None, "start", "menu"):
         if command is None:

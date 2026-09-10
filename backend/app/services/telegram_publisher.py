@@ -417,14 +417,6 @@ def edit_rich_message(
         raise
 
 
-def pin_message(*, message_id: int, channel_id: str | int | None = None) -> None:
-    call("pinChatMessage", {
-        "chat_id": _channel(channel_id),
-        "message_id": message_id,
-        "disable_notification": True,
-    })
-
-
 def public_image_url(image_url: str | None) -> str | None:
     """Абсолютная ссылка на картинку — Telegram скачивает фото по URL сам.
 

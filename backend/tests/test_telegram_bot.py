@@ -8,6 +8,8 @@
 внутренней ошибке. Telegram повторяет доставку, пока не увидит успех, поэтому
 5xx означал бы дубли ответов пользователю, а не «починимся позже».
 """
+import logging
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -276,6 +278,28 @@ def test_webhook_does_not_leak_internals(client, monkeypatch):
                     headers={"X-Telegram-Bot-Api-Secret-Token": SECRET})
     assert r.json() == {"ok": True}
     assert "секрет" not in r.text
+
+
+def test_webhook_logs_first_ad_touch_like_polling(client, monkeypatch, caplog):
+    """Атрибуция у вебхука и long polling общая — и лог тоже. Раньше строку
+    «первое касание рекламы» писал только polling, и по логам нельзя было
+    понять, отработала ли атрибуция на вебхуке."""
+    monkeypatch.setattr("app.api.telegram.send_reply", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "app.api.telegram.ad_touch.remember_from_update",
+        lambda db, update: "moskvatoday",
+    )
+    with caplog.at_level(logging.INFO, logger="techshop.telegram"):
+        r = client.post(
+            "/api/telegram/webhook",
+            json=private_message("/start ad_moskvatoday", chat_id=777),
+            headers={"X-Telegram-Bot-Api-Secret-Token": SECRET},
+        )
+    assert r.status_code == 200
+    assert any(
+        "первое касание рекламы" in rec.message and "moskvatoday" in rec.message
+        for rec in caplog.records
+    ), [rec.message for rec in caplog.records]
 
 
 # ---------------------------------------------------------------- setup-скрипт
@@ -792,6 +816,27 @@ def test_unknown_and_broken_input_never_leaves_the_user_in_silence():
         assert reply is not None, f"бот промолчал на {text[:30]!r}"
         assert reply.text.strip(), f"пустой ответ на {text[:30]!r}"
         assert reply.keyboard, f"ответ без кнопок на {text[:30]!r}"
+
+
+def test_unresolved_start_payload_leaves_a_trace_in_the_log(caplog):
+    """Диплинк, который ни во что не разложился (мёртвая кнопка канала,
+    протухшая ссылка), роняет человека на общий WELCOME. Без строки в логе
+    это не отличить от обычного /start — и мёртвые кнопки канала остаются
+    невидимыми."""
+    with caplog.at_level(logging.INFO, logger="techshop.telegram"):
+        reply = build_reply(private_message("/start davno_udalyonny_razdel"))
+    assert reply.text == telegram_bot.WELCOME
+    assert any(
+        "не распознан" in rec.message and "davno_udalyonny_razdel" in rec.message
+        for rec in caplog.records
+    ), [rec.message for rec in caplog.records]
+
+
+def test_recognized_start_payload_does_not_warn(caplog):
+    """Обратная сторона: у рабочего диплинка строки «не распознан» быть не должно."""
+    with caplog.at_level(logging.INFO, logger="techshop.telegram"):
+        build_reply(private_message("/start catalog"))
+    assert not any("не распознан" in rec.message for rec in caplog.records)
 
 
 def test_product_payload_rejects_anything_that_is_not_a_plain_number():

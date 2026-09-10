@@ -63,7 +63,10 @@ async def telegram_webhook(
         # То же самое, что делает long polling: транспорт разный, атрибуция
         # общая. Разъедься эти две ветки — источник писался бы только при одном
         # способе приёма апдейтов, и это заметили бы после первой же кампании.
-        ad_touch.remember_from_update(db, update)
+        # Лог тоже общий с polling: «первое касание рекламы: <метка>».
+        slug = ad_touch.remember_from_update(db, update)
+        if slug:
+            logger.info("первое касание рекламы: %s (чат %s)", slug, chat_id)
         send_reply(chat_id, reply, incoming_message_id=message.get("message_id"), db=db)
     except Exception:  # noqa: BLE001 — см. пункт 1 в докстринге модуля
         logger.exception(
