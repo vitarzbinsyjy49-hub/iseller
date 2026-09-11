@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../lib/api";
+import { cachedApi, SHOP } from "../lib/apiCache";
 import { track, trackProduct } from "../lib/analytics";
 import { useAuthStore } from "../store/auth";
 import { ProductCard as TCard } from "../components/ai/types";
@@ -278,23 +278,23 @@ export default function Home() {
   const loadFeed = useCallback(() => {
     setFeed(null);
     setFeedError(false);
-    api<Feed>("/catalog/feed").then(setFeed).catch(() => setFeedError(true));
+    cachedApi<Feed>(SHOP.feed).then(setFeed).catch(() => setFeedError(true));
   }, []);
 
   useEffect(() => {
     track("app_opened");
-    api<HomeData>("/home")
+    cachedApi<HomeData>(SHOP.home)
       .then((d) => setHome(d))
       .catch(() => setHome({ banners: FALLBACK_PROMOS, categories: [] }));
-    api<{ categories: Category[] }>("/catalog/categories")
+    cachedApi<{ categories: Category[] }>(SHOP.categories)
       .then((d) => { setCategories(d.categories); saveCachedCategories(d.categories); })
       .catch(() => {});
     loadFeed();
     // Персональные рекомендации и «недавно смотрели» (v5.2.6)
-    api<{ cards?: TCard[]; mode?: string }>("/catalog/recommendations?limit=12")
+    cachedApi<{ cards?: TCard[]; mode?: string }>("/catalog/recommendations?limit=12")
       .then((d) => { setRecs(d.cards ?? []); setRecsMode(d.mode ?? "cold"); })
       .catch(() => setRecs([]));
-    api<{ cards?: TCard[] }>("/catalog/recently-viewed?limit=10")
+    cachedApi<{ cards?: TCard[] }>("/catalog/recently-viewed?limit=10")
       .then((d) => setRecentlyViewed(d.cards ?? []))
       .catch(() => setRecentlyViewed([]));
   }, [loadFeed]);
@@ -305,9 +305,9 @@ export default function Home() {
     if (!desktop) return;
     let cancelled = false;
     Promise.all([
-      api<{ cards?: TCard[] }>("/catalog/list?category=__sale__&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
-      api<{ cards?: TCard[] }>("/catalog/list?brand=Apple&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
-      api<{ cards?: TCard[] }>(`/catalog/list?category=${encodeURIComponent("консоли")}&sort=popularity`).then((d) => d.cards ?? []).catch(() => []),
+      cachedApi<{ cards?: TCard[] }>("/catalog/list?category=__sale__&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
+      cachedApi<{ cards?: TCard[] }>("/catalog/list?brand=Apple&sort=popularity").then((d) => d.cards ?? []).catch(() => []),
+      cachedApi<{ cards?: TCard[] }>(`/catalog/list?category=${encodeURIComponent("консоли")}&sort=popularity`).then((d) => d.cards ?? []).catch(() => []),
     ]).then(([sale, apple, gaming]) => { if (!cancelled) setExtra({ sale, apple, gaming }); });
     return () => { cancelled = true; };
   }, [desktop]);

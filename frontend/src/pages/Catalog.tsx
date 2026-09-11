@@ -1,6 +1,6 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { cachedApi, SHOP } from "../lib/apiCache";
 import { track } from "../lib/analytics";
 import { loadSearchHistory, pushSearchQuery } from "../lib/searchHistory";
 import { loadCachedCategories, saveCachedCategories, sanitizeCategories, NavCategory } from "../lib/categoryCache";
@@ -89,7 +89,7 @@ export default function Catalog() {
 
   useEffect(() => { track("catalog_opened", { category }); }, []);
   useEffect(() => {
-    api<{ brands: string[] }>("/catalog/brands").then((d) => setBrands(d.brands)).catch(() => {});
+    cachedApi<{ brands: string[] }>(SHOP.brands).then((d) => setBrands(d.brands)).catch(() => {});
   }, []);
 
   // Ряд категорий описывает то, что человек сейчас смотрит: с выбранным брендом
@@ -99,7 +99,7 @@ export default function Catalog() {
   // означал бы, что следующий вход в каталог начнётся с чужого набора.
   useEffect(() => {
     const qs = brand ? `?brand=${encodeURIComponent(brand)}` : "";
-    api<{ categories: NavCategory[] }>(`/catalog/categories${qs}`)
+    cachedApi<{ categories: NavCategory[] }>(`${SHOP.categories}${qs}`)
       .then((d) => {
         setCats(sanitizeCategories(d.categories));
         if (!brand) saveCachedCategories(d.categories);
@@ -138,7 +138,7 @@ export default function Catalog() {
     if (condition) qs.set("condition", condition);
     if (collection) qs.set("collection", collection);
     qs.set("sort", sort);
-    api<{ cards?: TCard[] }>(`/catalog/list?${qs.toString()}`, { signal: controller.signal })
+    cachedApi<{ cards?: TCard[] }>(`/catalog/list?${qs.toString()}`, { signal: controller.signal })
       .then((d) => {
         if (controller.signal.aborted) return;
         startTransition(() => setCards(Array.isArray(d.cards) ? d.cards : []));

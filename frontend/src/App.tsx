@@ -14,7 +14,7 @@ import { ProductSkeleton } from "./components/StateViews";
 import Layout from "./components/Layout";
 import { OnboardingStories } from "./components/onboarding/OnboardingStories";
 import Home from "./pages/Home";
-import { routeLoaders } from "./lib/routePreload";
+import { routeLoaders, warmRouteData } from "./lib/routePreload";
 import { useRouteTransition } from "./lib/useRouteTransition";
 
 // Главная остаётся в стартовом chunk: это первый экран почти каждого запуска.
@@ -71,6 +71,17 @@ export default function App() {
           body: JSON.stringify(body),
         });
         setTokens(tokens.access_token, tokens.refresh_token);
+        // Запросы витрины уходят ЗДЕСЬ, а не на экране. Пока идёт вход,
+        // приложение показывает «Загрузка…» и не монтирует ни одной страницы —
+        // значит, и данных никто не просит. Раньше первый запрос витрины
+        // уходил только после ответа /users/me ниже, то есть на четвёртом
+        // круге по сети от старта; замер на Slow 4G давал 1.7с до него. Токен
+        // уже есть строкой выше, больше витрине ничего не нужно.
+        //
+        // Ответ кладётся в тот же кэш, из которого его возьмёт экран
+        // (lib/apiCache), поэтому «прогрели, а человек ушёл на другой экран» —
+        // это не потраченный впустую запрос, а тёплый кэш.
+        warmRouteData(window.location.pathname);
         const me = await api<User>("/users/me");
         setUser(me);
         // Избранное: сливаем локальное (гость/до входа) с серверным и берём

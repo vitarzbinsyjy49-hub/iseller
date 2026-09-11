@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, ApiError } from "../lib/api";
+import { ApiError } from "../lib/api";
+import { cachedApi, invalidateApi } from "../lib/apiCache";
 import { indexFromScroll } from "../lib/carousel";
 import { animateScrollTo, transitionDuration } from "../lib/motion";
 import { PICKUP_ADDRESS, PICKUP_HOURS } from "../lib/pickup";
@@ -46,9 +47,13 @@ export default function ProductDetails() {
   const load = useCallback(() => {
     if (!id) return;
     setState("loading");
-    api<ProductDetail>(`/catalog/product/${id}`)
+    cachedApi<ProductDetail>(`/catalog/product/${id}`)
       .then((d) => {
         setP(d); setState("ready");
+        // Просмотр меняет ленту «Вы недавно смотрели» на главной — её
+        // кэшированный ответ с этой секунды неправда. Остальная витрина от
+        // просмотра не меняется, поэтому гасим ровно этот путь.
+        invalidateApi("/catalog/recently-viewed");
         track("product_viewed", { product_id: d.id });
         trackProduct("product_view", { product_id: d.id, category: d.category ?? undefined });
       })
@@ -67,7 +72,7 @@ export default function ProductDetails() {
     const category = p?.category;
     if (!p || !category) return;
     const controller = new AbortController();
-    api<{ cards?: TCard[] }>(
+    cachedApi<{ cards?: TCard[] }>(
       `/catalog/list?category=${encodeURIComponent(category)}&sort=popularity`,
       { signal: controller.signal },
     )
