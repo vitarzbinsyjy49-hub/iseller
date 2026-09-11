@@ -1,0 +1,86 @@
+{
+  "_readme": [
+    "Фото линейки Apple, показанной 09.09.2026. Собрано 11.09.2026.",
+    "База Scene7: https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/<asset>",
+    "Квадратный запрос: ?wid=1200&hei=1200&fmt=jpeg&qlt=90",
+    "Ассеты finish-select отдаются в 16:9 — к ним ОБЯЗАТЕЛЕН cropN=0.21875,0,0.5625,1,",
+    "иначе Scene7 дорисует белые полосы сверху и снизу (см. docs/context/product-photos.md).",
+    "Соглашения имён РАЗНЫЕ у разных линеек, угадать одно по другому нельзя:",
+    "  iPhone/Duo -> <модель>-gallery-<N>-202609  (дата ПОСЛЕ номера)",
+    "  AirPods    -> airpods-5-202609-gallery-<N> (дата ПЕРЕД словом gallery)",
+    "  Watch      -> галерей нет вовсе; кадр склеивается из слоёв ремешок+корпус+циферблат,",
+    "                разделитель '+', кодировать его нельзя. Строку слоёв берут из og:image",
+    "                страницы комплектации apple.com/shop/buy-watch/...",
+    "ВНЕШНИЕ ССЫЛКИ ВРЕМЕННЫЕ: после сида обязателен",
+    "  python -m app.scripts.internalize_photos --confirm"
+  ],
+  "crop_16x9": "cropN=0.21875,0,0.5625,1",
+  "query": "wid=1200&hei=1200&fmt=jpeg&qlt=90",
+  "products": {
+    "iphone-18-pro": {
+      "title": "iPhone 18 Pro",
+      "accent_color": "#6E2639",
+      "eta": "18 сентября",
+      "assets": [
+        { "file": "iphone18pro-burgundy.jpg", "asset": "iphone-18-pro-finish-select-202609-6-3inch-burgundy", "crop": true },
+        { "file": "iphone18pro-glacier.jpg", "asset": "iphone-18-pro-finish-select-202609-6-3inch-glacier", "crop": true },
+        { "file": "iphone18pro-black.jpg", "asset": "iphone-18-pro-finish-select-202609-6-3inch-black", "crop": true },
+        { "file": "iphone18pro-gallery1.jpg", "asset": "iphone-18-pro-gallery-1-202609", "crop": false }
+      ]
+    },
+    "iphone-18-pro-max": {
+      "title": "iPhone 18 Pro Max",
+      "accent_color": "#6E2639",
+      "eta": "18 сентября",
+      "assets": [
+        { "file": "iphone18promax-burgundy.jpg", "asset": "iphone-18-pro-finish-select-202609-6-9inch-burgundy", "crop": true },
+        { "file": "iphone18promax-glacier.jpg", "asset": "iphone-18-pro-finish-select-202609-6-9inch-glacier", "crop": true },
+        { "file": "iphone18promax-silver.jpg", "asset": "iphone-18-pro-finish-select-202609-6-9inch-silver", "crop": true },
+        { "file": "iphone18promax-gallery2.jpg", "asset": "iphone-18-pro-gallery-2-202609", "crop": false }
+      ]
+    },
+    "iphone-duo": {
+      "title": "iPhone Duo",
+      "accent_color": "#1E2A3A",
+      "eta": "23 октября",
+      "assets": [
+        { "file": "duo-starwhite.jpg", "asset": "iphone-duo-finish-select-202609-starwhite", "crop": true },
+        { "file": "duo-nightsky.jpg", "asset": "iphone-duo-finish-select-202609-nightsky", "crop": true },
+        { "file": "duo-gallery1.jpg", "asset": "iphone-duo-gallery-1-202609", "crop": false },
+        { "file": "duo-gallery2.jpg", "asset": "iphone-duo-gallery-2-202609", "crop": false }
+      ]
+    },
+    "apple-watch-series-12": {
+      "title": "Apple Watch Series 12",
+      "accent_color": "#C8A24A",
+      "eta": "18 сентября",
+      "assets": [
+        { "file": "watch-s12-radiantgold.jpg", "asset": "MK864_VW_34FR_NCE+watch-case-42-titanium-radiantgold-cell-s12_VW_34FR+watch-face-42-titanium-radiantgold-s12_VW_34FR", "crop": false },
+        { "file": "watch-s12-pearlwhite.jpg", "asset": "MKRJ4ref_VW_34FR_CE+watch-case-42-ceramic-pearlwhite-cell-s12_VW_34FR+watch-face-42-ceramic-pearlwhite-cell-s12_VW_34FR", "crop": false },
+        { "file": "watch-s12-spacegray.jpg", "asset": "MJVC4ref_VW_34FR_NCE+watch-case-42-aluminum-spacegray-cell-s12_VW_34FR+watch-face-42-aluminum-spacegray-s12_VW_34FR", "crop": false },
+        { "file": "watch-s12-nightblue.jpg", "asset": "MKJV4ref_VW_34FR_CE+watch-case-42-ceramic-nightblue-cell-s12_VW_34FR+watch-face-42-ceramic-nightblue-cell-s12_VW_34FR", "crop": false }
+      ]
+    },
+    "apple-watch-ultra-4": {
+      "title": "Apple Watch Ultra 4",
+      "accent_color": "#2B2B2B",
+      "eta": "18 сентября",
+      "assets": [
+        { "file": "watch-ultra4-milanese.jpg", "asset": "MK0F4ref_VW_34FR+watch-case-49-titanium-black-ultra4_VW_34FR+watch-face-49-ultra4_VW_34FR_GEO_US", "crop": false },
+        { "file": "watch-ultra4-burgundy.jpg", "asset": "MKF04ref_VW_34FR+watch-case-49-titanium-black-ultra4_VW_34FR+watch-face-49-ultra4_VW_34FR_GEO_US", "crop": false }
+      ],
+      "note": "Пока две комплектации. Остальные берутся так же: со страницы apple.com/shop/buy-watch/apple-watch-ultra/<конфигурация> из og:image."
+    },
+    "airpods-5": {
+      "title": "AirPods 5",
+      "accent_color": "#EFEAE3",
+      "eta": "18 сентября",
+      "assets": [
+        { "file": "airpods5-1.jpg", "asset": "airpods-5-202609-gallery-1", "crop": false },
+        { "file": "airpods5-2.jpg", "asset": "airpods-5-202609-gallery-2", "crop": false },
+        { "file": "airpods5-3.jpg", "asset": "airpods-5-202609-gallery-3", "crop": false },
+        { "file": "airpods5-4.jpg", "asset": "airpods-5-202609-gallery-4", "crop": false }
+      ]
+    }
+  }
+}
