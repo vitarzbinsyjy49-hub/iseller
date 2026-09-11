@@ -44,6 +44,9 @@ export function actionRoute(type: string, value?: string | null): string {
     // sell_item — подать заявку «Предложить товар»; marketplace — витрина
     // уже одобренных пользовательских товаров (два разных места, см.
     // docs/superpowers/specs/2026-08-15-marketplace-used-items-design.md).
+    // preorder: экран события «шесть новых устройств». Значение — ключ группы
+    // (products.preorder_group); сам баннер служит заголовком и афишей экрана.
+    case "preorder": return safeInternalRoute(`/preorder/${encodeURIComponent(v)}`);
     case "sell_item": return "/sell";
     case "marketplace": return "/marketplace";
     default: return "/catalog";

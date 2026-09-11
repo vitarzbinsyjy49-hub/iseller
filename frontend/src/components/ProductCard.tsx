@@ -379,7 +379,12 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
   const addButtonRef = useCartSwapOut<HTMLButtonElement>(!!item);
   // Режим приходит с backend. Старый ответ без него (кэш/AI-фикстура) —
   // ориентируемся на in_stock, как делала витрина до корзины.
-  const orderable = card.availability_mode ? canAddToCart(card.availability_mode) : card.in_stock !== false;
+  // Цены нет — значит и корзины нет. Сумма заявки, собранная из позиций без
+  // цены, была бы ложью, поэтому предзаказ уходит не в корзину, а в заявку
+  // менеджеру. Признак тот же один: непустой price_note.
+  const orderable = card.price_note
+    ? false
+    : card.availability_mode ? canAddToCart(card.availability_mode) : card.in_stock !== false;
 
   async function add(e: MouseEvent) {
     e.stopPropagation();
@@ -413,9 +418,15 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
     return (
       <button
         onClick={(e) => { e.stopPropagation(); onOpen(); }}
-        className="tap h-11 w-full rounded-field bg-mutedbg text-[12px] font-semibold text-muted outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        // Предзаказ получает заливку акцентом устройства, а не серую подложку:
+        // это единственное действие карточки и главное, ради чего человек сюда
+        // пришёл. Текст белый — акценты подобраны тёмными (см. манифест фото).
+        className={`tap h-11 w-full rounded-field text-[12px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+          card.price_note ? "text-white" : "bg-mutedbg text-muted"
+        }`}
+        style={card.price_note ? { background: card.accent_color || "#6E2639" } : undefined}
       >
-        Узнать о поступлении
+        {card.price_note ? "Оформить предзаказ" : "Узнать о поступлении"}
       </button>
     );
   }
@@ -575,13 +586,22 @@ function ProductCard({ card, compact, onOpen }: Props) {
             {productName(card)}
           </p>
         </button>
-        <div className="mt-1.5 flex items-baseline gap-1.5">
-          <span className="text-title font-bold tracking-tight">{formatPrice(card.price)}</span>
-          {/* old_price показываем только когда реально даёт скидку — иначе цифры вводят в заблуждение */}
-          {disc !== null && (
-            <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price!)}</span>
-          )}
-        </div>
+        {/* Цена или её отсутствие. price_note приходит с backend непустым ровно
+            тогда, когда цену называть нельзя (предзаказ): собственной цены у
+            такого товара ещё нет, а любая цифра читается как обещание. Место
+            под цену остаётся занятым — иначе карточка выглядит недоделанной.
+            Набрано мельче самой цены: это не сумма, а объяснение. */}
+        {card.price_note ? (
+          <p className="mt-1.5 text-[14px] font-semibold leading-5">{card.price_note}</p>
+        ) : (
+          <div className="mt-1.5 flex items-baseline gap-1.5">
+            <span className="text-title font-bold tracking-tight">{formatPrice(card.price)}</span>
+            {/* old_price показываем только когда реально даёт скидку — иначе цифры вводят в заблуждение */}
+            {disc !== null && (
+              <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price!)}</span>
+            )}
+          </div>
+        )}
         {/* Подпись наличия читает РЕЖИМ, а не голый in_stock: у предзаказа
             in_stock=true, и карточка писала «В наличии», хотя в корзине тот же
             товар честно помечен предзаказом. Две разные правды об одном товаре
@@ -589,9 +609,20 @@ function ProductCard({ card, compact, onOpen }: Props) {
         {/* 12px, а не 11: наличие — обещание магазина, и набирать его ниже
             читаемого минимума значит прятать самое проверяемое утверждение
             карточки. То же у остатка и социального доказательства ниже. */}
-        <p className={`mt-1 text-[12px] font-medium ${availabilityTone(card)}`}>
-          {availabilityText(card)}
-        </p>
+        {/* У предзаказа подпись наличия заменяется сроком: «Предзаказ» человек
+            и так прочитал вместо цены строкой выше, а вот КОГДА — единственное,
+            чего он на самом деле не знает. Цвет — акцент устройства, если он
+            задан; иначе обычный тон доступности. */}
+        {card.preorder_eta ? (
+          <p className="mt-1 text-[12px] font-semibold"
+             style={card.accent_color ? { color: card.accent_color } : undefined}>
+            Ожидается {card.preorder_eta}
+          </p>
+        ) : (
+          <p className={`mt-1 text-[12px] font-medium ${availabilityTone(card)}`}>
+            {availabilityText(card)}
+          </p>
+        )}
         {/* Остаток — только у лимитированных товаров (флаг из админки), а не у
             всего, где склад меньше пяти штук: иначе срочность ложная. */}
         {card.is_limited && card.in_stock && card.stock != null && card.stock > 0 && (

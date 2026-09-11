@@ -39,7 +39,13 @@ import { useMediaQuery } from "../lib/useMediaQuery";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 
 type Category = { key: string; label: string; icon: string; count: number };
-type Feed = { hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[] };
+type Feed = {
+  // Предзаказ стоит первым намеренно: это единственная секция, которая может
+  // исчезнуть целиком. Пустой массив Section гасит сам — отдельного
+  // выключателя не нужно, тот же инвариант, что у плиток категорий.
+  preorder: TCard[];
+  hot: TCard[]; available_today: TCard[]; new: TCard[]; recommended: TCard[];
+};
 
 /** Управляемая главная (v4): баннеры и кнопки категорий приходят из /api/home. */
 type HomeBanner = {
@@ -717,6 +723,14 @@ export default function Home() {
         <div className="mt-6"><ErrorState message="Не удалось загрузить подборки товаров" onRetry={loadFeed} /></div>
       ) : (
         <>
+          {/* Секции нет, пока нет ни одного товара в предзаказе: привезли всё —
+              раздел пропадает сам, без правки кода и без выключателя. */}
+          <Section title="Предзаказ" subtitle="Показали, но ещё не привезли"
+            cards={feed?.preorder ?? []}
+            onAll={() => {
+              const group = feed?.preorder?.[0]?.preorder_group;
+              navigate(group ? `/preorder/${encodeURIComponent(group)}` : "/catalog");
+            }} />
           <Section title="Хиты продаж" cards={feed?.hot}
             onAll={() => navigate("/catalog")} />
           <Section title="Забрать сегодня" cards={feed?.available_today}

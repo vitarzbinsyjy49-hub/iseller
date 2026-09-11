@@ -89,3 +89,13 @@ describe("actionRoute", () => {
     expect(actionRoute("marketplace")).toBe("/marketplace");
   });
 });
+
+describe("предзаказ", () => {
+  it("ведёт на экран события по ключу группы", () => {
+    expect(actionRoute("preorder", "apple-sept-2026")).toBe("/preorder/apple-sept-2026");
+  });
+
+  it("экранирует ключ: он приходит из админки и может быть каким угодно", () => {
+    expect(actionRoute("preorder", "a b/c")).toBe("/preorder/a%20b%2Fc");
+  });
+});

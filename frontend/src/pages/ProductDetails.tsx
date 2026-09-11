@@ -291,7 +291,20 @@ export default function ProductDetails() {
         </div>
       )}
 
-      {/* Цена + выгода */}
+      {/* Цена + выгода. price_note непуст ровно там, где цену называть нельзя
+          (предзаказ): собственной цены у товара ещё нет, а цифра на витрине
+          читается как обещание. Признак один на ленту, деталку и корзину. */}
+      {p.price_note ? (
+        <div className="mt-2.5">
+          <p className="text-[20px] font-bold leading-7">{p.price_note}</p>
+          {p.preorder_eta && (
+            <p className="mt-1 text-[13px] font-semibold"
+               style={p.accent_color ? { color: p.accent_color } : undefined}>
+              Ожидается {p.preorder_eta}
+            </p>
+          )}
+        </div>
+      ) : (
       <div className="mt-2.5 flex items-center gap-2.5">
         <span className="text-[26px] font-bold leading-8">{formatPrice(p.price)}</span>
         {disc !== null && <span className="text-sm text-muted line-through">{formatPrice(p.old_price!)}</span>}
@@ -301,6 +314,7 @@ export default function ProductDetails() {
           </span>
         )}
       </div>
+      )}
 
       {/* Остаток — только у товаров, помеченных в админке как лимитированные
           (is_limited). Малый складской остаток сам по себе дефицитом не считаем. */}
@@ -335,6 +349,15 @@ export default function ProductDetails() {
             // заново искал товар по этим словам — промахивался и отвечал
             // «такого в каталоге нет» про открытую карточку. По id промахнуться
             // нельзя. Намерение человек выбирает на экране AI.
+            // Предзаказ AI не видит вовсе: он исключён из выгрузки каталога
+            // (services/ai_retrieval), чтобы не советовать то, чего нет в
+            // продаже, и не выдумывать характеристики. Кнопку при этом НЕ
+            // убираем: молча пропавший элемент читается как поломка. Вместо
+            // перехода — честный ответ на месте.
+            if (p.price_note) {
+              toast("Устройство ещё не в продаже — характеристики и цену подтвердит менеджер");
+              return;
+            }
             navigate(`/ai?product=${p.id}`);
           }}
           className="tap flex flex-1 items-center justify-center gap-1.5 rounded-xl2 border border-border bg-surface py-2.5 text-xs font-medium text-muted"
@@ -547,7 +570,11 @@ function ProductCta({ product, onNotify, tone = "app" }: {
   const { item, busy } = useCartEntry(product.id);
   const [pending, setPending] = useState(false);
   const mode = product.availability_mode;
-  const orderable = mode ? canAddToCart(mode) : product.in_stock !== false;
+  // Цены нет — значит и корзины нет: сумма заявки из позиций без цены была бы
+  // ложью. Предзаказ уходит в заявку менеджеру, ветка ниже уже это делает.
+  const orderable = product.price_note
+    ? false
+    : mode ? canAddToCart(mode) : product.in_stock !== false;
   const note = product.availability_note
     || (mode === "preorder" ? "Предзаказ — сроки подтвердит менеджер" : "");
 
@@ -593,8 +620,14 @@ function ProductCta({ product, onNotify, tone = "app" }: {
           onClick={onNotify}
           className={`tap w-full rounded-xl2 py-3 transition-colors ${t.primary}`}
         >
-          <span className="block text-[15px] font-bold leading-5">Узнать о поступлении</span>
-          <span className="block text-[11px] font-medium opacity-80">Сообщим, когда появится</span>
+          <span className="block text-[15px] font-bold leading-5">
+            {product.price_note ? "Оформить предзаказ" : "Узнать о поступлении"}
+          </span>
+          <span className="block text-[11px] font-medium opacity-80">
+            {product.price_note
+              ? "Менеджер подтвердит цену и срок"
+              : "Сообщим, когда появится"}
+          </span>
         </button>
         <p className={`mt-1.5 text-center text-[11px] ${t.note}`}>
           {product.availability_label || "Сейчас нет в наличии"}

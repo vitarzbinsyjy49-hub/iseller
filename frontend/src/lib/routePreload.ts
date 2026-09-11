@@ -26,6 +26,7 @@ export const routeLoaders = {
   scenarioChat: withStaleChunkReload(() => import("../pages/ScenarioChat")),
   sellItem: withStaleChunkReload(() => import("../pages/SellItem")),
   marketplace: withStaleChunkReload(() => import("../pages/Marketplace")),
+  preorder: withStaleChunkReload(() => import("../pages/Preorder")),
 };
 
 const started = new Set<keyof typeof routeLoaders>();
@@ -44,6 +45,7 @@ function routeKey(pathname: string): keyof typeof routeLoaders | null {
   if (pathname.startsWith("/apply/")) return "scenarioChat";
   if (pathname.startsWith("/sell")) return "sellItem";
   if (pathname.startsWith("/marketplace")) return "marketplace";
+  if (pathname.startsWith("/preorder/")) return "preorder";
   return null;
 }
 
