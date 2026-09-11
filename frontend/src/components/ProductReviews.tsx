@@ -10,7 +10,7 @@
  *  вообще работает на доверие.
  */
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { cachedApi } from "../lib/apiCache";
 import { Icon } from "./icons";
 
 type Review = {
@@ -57,7 +57,7 @@ export default function ProductReviews({ productId }: { productId: number }) {
 
   useEffect(() => {
     let cancelled = false;
-    api<Payload>(`/reviews/product/${productId}`)
+    cachedApi<Payload>(`/reviews/product/${productId}`)
       .then((d) => { if (!cancelled) setData(d); })
       // Отзывы — дополнение к карточке, а не её часть: если запрос не удался,
       // товар обязан остаться работоспособным, а блок просто не появится.

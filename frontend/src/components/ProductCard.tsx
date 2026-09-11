@@ -20,7 +20,7 @@ import { availabilityText, availabilityTone, canAddToCart } from "../lib/cartMat
 import { cardBadges } from "../lib/cardBadges";
 import { QuantityStepper } from "./QuantityStepper";
 import { CART_SWAP_DX_PX } from "../lib/useCartSwap";
-import { preloadRoute } from "../lib/routePreload";
+import { preloadProduct } from "../lib/routePreload";
 import { Icon } from "./icons";
 
 const MAX_CARD_IMAGES = 10;
@@ -187,7 +187,7 @@ function CardCarousel({
   }
 
   function onPointerDown(e: ReactPointerEvent) {
-    preloadRoute("/product");
+    preloadProduct(id);
     gestureRef.current = { x: e.clientX, y: e.clientY, scroll: scrollRef.current?.scrollLeft ?? 0 };
     tapRef.current = false;
   }
@@ -577,7 +577,7 @@ function ProductCard({ card, compact, onOpen }: Props) {
             выяснение, за что она. Сначала предмет, затем его цена — и цена
             остаётся самым тяжёлым элементом блока за счёт размера и насыщенности,
             а не за счёт места в очереди. */}
-        <button onClick={open} onPointerDown={() => preloadRoute("/product")} className="block w-full text-left">
+        <button onClick={open} onPointerDown={() => preloadProduct(card.id)} className="block w-full text-left">
           {/* Название на карточке — чистое, без приставки региона: товары
               должны начинаться с модели («iPhone 17 Pro…»), а не с флага
               перед ней. title_clean уже вырезает «(HK-KR, SIM+eSIM)» из

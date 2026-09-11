@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { cachedApi } from "../lib/apiCache";
 import { ErrorState } from "../components/StateViews";
 import PreorderEvent, {
   PreorderSkeleton, type EventBanner, type EventItem,
@@ -22,7 +22,7 @@ export default function Preorder() {
 
   const load = useCallback(() => {
     setFailed(false);
-    api<EventData>(`/preorder/${encodeURIComponent(group)}`)
+    cachedApi<EventData>(`/preorder/${encodeURIComponent(group)}`)
       .then(setData)
       .catch(() => setFailed(true));
   }, [group]);

@@ -4,6 +4,7 @@ import { ProductCard as TCard } from "./ai/types";
 import ProductCard from "./ProductCard";
 import AnswerBody from "./AnswerBody";
 import { enterRefCallback } from "../lib/useEnter";
+import { OVERLAY_HEADER, useOverlayTopColor } from "./AuroraBackground";
 
 /** Шапка события — это баннер, который на него ведёт. Второго набора тех же
  *  полей в отдельной таблице нет намеренно: они бы разошлись. */
@@ -44,6 +45,11 @@ export default function PreorderEvent({
   items: EventItem[];
 }) {
   const navigate = useNavigate();
+
+  // Верх Telegram — цветом этого экрана, а не витрины: экран занимает весь
+  // вьюпорт и доходит до самой кромки, и светлая плашка над ним читалась бы
+  // отдельной деталью. Возврат к цвету маршрута — на уходе (см. хук).
+  useOverlayTopColor(OVERLAY_HEADER.preorder);
 
   return (
     // fixed inset-0 — тот же приём, что у афиши легендарного товара: экран

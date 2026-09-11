@@ -189,7 +189,12 @@ html:not(.brand-mark-on) .hero-top-inset > .brand-slot { display: none; }
   top: 100%;
   left: 0;
   right: 0;
-  height: 14px;
+  /* Юбка не выше самой полосы. Высота стояла жёсткими 14px — и в обычном
+     режиме Telegram, где полоса нулевая и невидима, юбка всё равно клала
+     светлый градиент на первые 14px страницы. Полосы нет, а её тень есть:
+     ровно та же бледная кромка сверху, от которой избавлен .aurora::after
+     выше. min() связывает одно с другим: нет полосы — нет и юбки. */
+  height: min(14px, var(--app-content-top-offset, env(safe-area-inset-top, 0px)));
   background: linear-gradient(to bottom, var(--app-header-color), transparent);
 }
 
@@ -945,13 +950,18 @@ html.kb-open .js-bottom-nav:not([data-search-open="true"]) { display: none; }
   z-index: -10;
   overflow: hidden;
   pointer-events: none;
-  /* Верх приглушён, но НЕ выключен. Раньше маска гасила слой у кромки до нуля,
-     и первые 96px страницы оставались серыми — ровно там, где над ними лежит
-     шапка Telegram с кнопкой «Закрыть». Получался шов: серая плашка, под ней
-     серая полоса, а ещё ниже цвет. Теперь верх открыт наполовину, а шапке
-     задан цвет этой самой полосы (setTopColor, палитра в AuroraBackground) —
-     плашка и страница читаются как одна плоскость. Половина, а не полная сила:
-     под кнопками Telegram насыщенное пятно выглядит грязью.
+  /* Верх приглушён РОВНО ПОД СИСТЕМНОЙ ПОЛОСОЙ Telegram и больше нигде.
+     Приглушение заведено ради fullscreen: под плавающими кнопками Telegram
+     насыщенное пятно выглядит грязью. Но гасило оно первые 88px — число, ни с
+     чем не связанное, и в обычном режиме Telegram, где системной полосы нет
+     вовсе, оно осветляло верх страницы просто так. Получалась бледная полоса
+     поперёк экрана: плашка, под ней выцветшие 88px, и только ниже настоящий
+     цвет — то самое «сверху что-то отделено». Теперь дымка кончается там же,
+     где кончается полоса выреза (--app-content-top-offset), плюс 12px на
+     мягкую кромку: в fullscreen кнопки Telegram по-прежнему лежат на тихом
+     фоне, а в обычном режиме страница цветная с первого пикселя — как на
+     экранах-накладках (LegendaryProduct, PreorderEvent), где фон и так доходит
+     до самого верха.
      Приглушение делает НЕ mask-image, а плашка цвета фона поверх (::after
      ниже). Маска на контейнере, внутри которого четыре пятна движутся
      бесконечно, заставляла композитор каждый кадр собирать ВЕСЬ экран во
@@ -970,7 +980,12 @@ html.kb-open .js-bottom-nav:not([data-search-open="true"]) { display: none; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(to bottom, rgb(var(--app-bg) / .45), rgb(var(--app-bg) / 0) 88px);
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--app-bg) / .45),
+    rgb(var(--app-bg) / 0)
+      calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 12px)
+  );
 }
 
 

@@ -10,6 +10,7 @@ import { usePublicConfig } from "../lib/appConfig";
 import { PICKUP_ADDRESS, PICKUP_HOURS } from "../lib/pickup";
 import { Icon } from "./icons";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
+import { OVERLAY_HEADER, useOverlayTopColor } from "./AuroraBackground";
 
 /** Событийная страница легендарного товара.
  *
@@ -42,6 +43,10 @@ export default function LegendaryProduct({
 }) {
   const navigate = useNavigate();
   const config = usePublicConfig();
+
+  // Верх Telegram — цветом полотна афиши. Маршрут остаётся `/product/:id`, и
+  // без этого над чёрным экраном висела светлая плашка витрины (см. хук).
+  useOverlayTopColor(OVERLAY_HEADER.legendary);
   const items = bundleItems(product.specs);
   const photos = (product.images && product.images.length
     ? product.images
