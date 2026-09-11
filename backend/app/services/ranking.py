@@ -17,6 +17,11 @@
 0. `is_legendary` — закреплённые позиции. Стоят выше ВСЕГО, включая наличие:
    легендарный товар снимают с витрины через `is_active`, а не роняя его вниз
    молча. Работает, пока таких позиций единицы;
+0.5. предзаказ — анонсированное, но не приехавшее. Стоит выше `in_stock`
+   СОЗНАТЕЛЬНО и временно: у предзаказа `in_stock=False` по определению, и без
+   этой ступени шесть свежих устройств оказались бы в самом низу каталога —
+   формально они там есть, практически их никто не увидит. Ступень снимается
+   одной правкой здесь же, когда товары приедут и станут обычными;
 1. `in_stock` — то, что нельзя купить, вниз;
 2. `popularity` — реальный спрос, если он есть. Ноль у всех => шаг не работает,
    и решение переходит дальше;
@@ -32,6 +37,7 @@ from sqlalchemy.orm import Session
 
 from app.models.home import HomeCategory
 from app.models.product import Product
+from app.services.availability import resolve_availability
 from app.models.user_product_event import UserProductEvent
 from app.services.catalog_nav import SALE_KEY
 
@@ -88,6 +94,7 @@ def product_sort_key(product: Product, priority: dict[str, int]) -> tuple:
         price = 0.0
     return (
         0 if product.is_legendary else 1,
+        0 if resolve_availability(product) == "preorder" else 1,
         0 if product.in_stock else 1,
         -float(product.popularity or 0),
         priority.get(product.category, NO_TILE_RANK),
@@ -104,6 +111,10 @@ def order_by_clauses(priority: dict[str, int]):
         rank = case((Product.id.is_(None), NO_TILE_RANK), else_=NO_TILE_RANK)
     return [
         Product.is_legendary.desc(),
+        # Питоновский ключ выводит режим через resolve_availability, а SQL
+        # сравнивает колонку напрямую. Расхождения нет: `preorder` — режим
+        # ЯВНЫЙ, вывести его из флагов нельзя, он бывает только в колонке.
+        case((Product.availability_mode == "preorder", 0), else_=1).asc(),
         Product.in_stock.desc(),
         Product.popularity.desc(),
         rank.asc(),

@@ -172,6 +172,10 @@ def _apply_demo_migrations() -> None:
         # Режим доступности товара. NULL = выводится из in_stock/is_limited,
         # то есть поведение существующих 217 товаров не меняется ни на шаг.
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS availability_mode VARCHAR(20)",
+        # Предзаказ (v6.0): срок строкой, ключ события, акцент карточки.
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS preorder_eta VARCHAR(60)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS preorder_group VARCHAR(60)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS accent_color VARCHAR(20)",
         # v5.8: «легендарный» товар — редкая позиция, закреплённая наверху выдачи
         # и помеченная золотом на карточке. DEFAULT FALSE: у существующих 215
         # товаров ничего не меняется, флаг ставится вручную в админке.

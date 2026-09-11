@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.catalog import _alias, extract_phrase_tokens, search_products  # переиспользуем алиасы live-поиска
 from app.models.product import Product
 from app.services.ai_provider import _extract_price_max, _detect_category
+from app.services.availability import exclude_preorder
 from app.services.marketplace import exclude_marketplace
 
 logger = logging.getLogger("techshop.ai.retrieval")
@@ -255,7 +256,9 @@ def _token_pool(db: Session, tokens: list[str], budget_max: float | None) -> lis
         case((Product.sku.ilike(f"%{words[0]}%"), 2), else_=0),  # артикул весомее
     )
 
-    stmt = exclude_marketplace(select(Product).where(Product.is_active.is_(True), or_(*matches)))
+    stmt = exclude_preorder(
+        exclude_marketplace(select(Product).where(Product.is_active.is_(True), or_(*matches)))
+    )
     if budget_max:
         stmt = stmt.where(Product.price <= budget_max)
     stmt = stmt.order_by(
@@ -289,7 +292,7 @@ def alternatives_for(db: Session, product: Product, limit: int = 8) -> list[Prod
     price_gap = func.abs(Product.price - product.price)
 
     stmt = (
-        exclude_marketplace(select(Product))
+        exclude_preorder(exclude_marketplace(select(Product)))
         .where(
             Product.is_active.is_(True),
             Product.id != product.id,
@@ -310,7 +313,7 @@ def retrieve_candidates(db: Session, message: str, f: ExtractedFilters, limit: i
     by_tokens = _token_pool(db, tokens, f.budget_max)
 
     # 2) структурный запрос по извлечённым фильтрам
-    stmt = exclude_marketplace(select(Product).where(Product.is_active.is_(True)))
+    stmt = exclude_preorder(exclude_marketplace(select(Product).where(Product.is_active.is_(True))))
     if f.category:
         # Мягкое совпадение вместо жёсткого равенства: категория могла быть
         # извлечена как подкатегория («Фены») или как разговорное слово. Раньше
@@ -361,7 +364,9 @@ def retrieve_candidates(db: Session, message: str, f: ExtractedFilters, limit: i
     # держит замену в том же классе техники. Отвергнутые бренды сюда не
     # возвращаются — это был бы прямой спор с просьбой человека.
     if not merged and f.category and (f.brand or f.excluded_brands):
-        alt = exclude_marketplace(select(Product).where(Product.is_active.is_(True))).where(or_(
+        alt = exclude_preorder(
+            exclude_marketplace(select(Product).where(Product.is_active.is_(True)))
+        ).where(or_(
             Product.category == f.category,
             Product.subcategory == f.category,
             Product.category.ilike(f"%{f.category}%"),

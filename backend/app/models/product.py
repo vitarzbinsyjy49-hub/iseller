@@ -81,6 +81,21 @@ class Product(Base):
     # значение нужно только там, где флагами сказать нечем: «нет в наличии»
     # (out_of_stock) и «предзаказ» (preorder). См. services/availability.py.
     availability_mode: Mapped[str | None] = mapped_column(String(20))
+    # Предзаказ: устройство анонсировано, но ещё не приехало.
+    #
+    # Срок — СТРОКА, а не Date: он у нас всегда приблизительный («конец
+    # октября»), а тип Date заставляет выбрать конкретный день, которого мы не
+    # знаем, — и витрина показала бы выдуманную дату как обещание магазина.
+    preorder_eta: Mapped[str | None] = mapped_column(String(60))
+    # Ключ события: все товары с одним ключом собираются на один экран. Отдельной
+    # таблицы событий нет намеренно — событие полностью описывается своими
+    # товарами, а заголовок и афишу даёт баннер, который на него ведёт (те же
+    # соображения, что у категорий в services/catalog_nav).
+    preorder_group: Mapped[str | None] = mapped_column(String(60), index=True)
+    # Акцент карточки — цвет самого устройства (burgundy, night sky…). Одно
+    # значение на товар; вёрстка красит им ровно три места (полоску, активную
+    # точку карусели и кнопку), остальное у всех карточек общее.
+    accent_color: Mapped[str | None] = mapped_column(String(20))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)             # вкл/выкл в каталоге (админка)
     # 1, а не 12: гарантия магазина — один месяц, и это единственный срок,
     # который мы вправе обещать. Значение по умолчанию видно там, где колонки
@@ -167,7 +182,7 @@ class Product(Base):
         # Режим доступности считает ОДИН резолвер (services/availability): фронт
         # не должен второй раз выводить правила из in_stock/is_limited — иначе
         # кнопка «в корзину» и проверка на checkout разойдутся.
-        from app.services.availability import availability_payload
+        from app.services.availability import availability_payload, price_note
         # Регион поставки лежит в скобках названия («… (HK-KR, SIM+eSIM)») и в
         # постах канала давно показывается флагом. На витрине он до сих пор
         # выводился кодом внутри названия: покупатель видел «(HK-KR, SIM+eSIM)»
@@ -218,6 +233,12 @@ class Product(Base):
             # v5.9: бейдж «Б/у» на витрине — то же condition, что и в to_admin()/
             # to_detail(), просто раньше сюда не попадало.
             "condition": self.condition or "new",
+            # Непустая строка => вместо цены витрина рисует её. Признак один на
+            # ленту, деталку и корзину: проверять `price == 0` в каждом
+            # компоненте значит завести три разных правила про одно и то же.
+            "price_note": price_note(self),
+            "preorder_eta": self.preorder_eta,
+            "accent_color": self.accent_color,
             "why": [],
             "buttons": self._buttons(),
             **availability_payload(self),
@@ -315,6 +336,9 @@ class Product(Base):
             "is_hot": self.is_hot, "is_available_today": self.is_available_today,
             "is_limited": self.is_limited, "is_legendary": self.is_legendary,
             "availability_mode": self.availability_mode,  # NULL = «вывести из флагов»
+            "preorder_eta": self.preorder_eta,
+            "preorder_group": self.preorder_group,
+            "accent_color": self.accent_color,
             "popularity": self.popularity, "rating": self.rating,
             # Полные поля для формы редактирования в админке (v2)
             "image": self.image, "images": self.images or [], "poster_url": self.poster_url,
