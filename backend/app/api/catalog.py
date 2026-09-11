@@ -292,7 +292,7 @@ def brands(db: Session = Depends(get_db)):
 
 @router.get("/feed", dependencies=[Depends(get_current_user)])
 def feed(db: Session = Depends(get_db)):
-    """Секции главного экрана: горячее, забрать сегодня, новинки, рекомендуем.
+    """Секции главного экрана: предзаказ, горячее, забрать сегодня, новинки, рекомендуем.
 
     v5.2.6: каждая секция дедуплицируется по группе модель+цвет (варианты одной
     модели, отличающиеся памятью, не превращаются в визуальные дубли — остаётся
@@ -309,19 +309,26 @@ def feed(db: Session = Depends(get_db)):
     base = exclude_marketplace(select(Product).where(Product.is_active.is_(True)))
     order = default_order(db)          # см. services/ranking
     hot_raw = rows(base.where(Product.is_hot.is_(True)).order_by(*order))
+    # Предзаказ (v6.0): секция живёт, только пока такие товары есть. Пустой
+    # список фронт гасит сам (см. Section в Home.tsx) — отдельного выключателя
+    # не нужно, и это тот же инвариант, что у плиток категорий: пустого раздела
+    # не существует.
+    preorder_raw = rows(base.where(Product.availability_mode == "preorder").order_by(*order))
     today_raw = rows(base.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
                      .order_by(*order))
     new_raw = rows(base.where(Product.is_new.is_(True)).order_by(Product.id.desc()))
     recent_raw = rows(base.order_by(Product.id.desc()), n=64)
     pool_raw = rows(base.order_by(*order), n=96)
 
-    all_candidates = list({p.id: p for p in (*hot_raw, *today_raw, *new_raw, *recent_raw, *pool_raw)}.values())
+    all_candidates = list({p.id: p for p in (*hot_raw, *today_raw, *new_raw, *recent_raw, *pool_raw,
+                                            *preorder_raw)}.values())
     resolved = resolve_product_images(db, all_candidates)
 
     def with_photo(items):
         return [p for p in items if has_real_photo(resolved.get(p.id))]
 
     hot = dedupe_by_group(with_photo(hot_raw))[:8]
+    preorder = dedupe_by_group(with_photo(preorder_raw))[:8]
     today = dedupe_by_group(with_photo(today_raw))[:8]
 
     new_items = dedupe_by_group(with_photo(new_raw))
@@ -342,7 +349,7 @@ def feed(db: Session = Depends(get_db)):
                    if p.id not in shown_ids
                    and (not p.image_group_key or p.image_group_key not in shown_keys)][:8] or pool[:8]
 
-    uniq = list({p.id: p for p in (*hot, *today, *new_items, *recommended)}.values())
+    uniq = list({p.id: p for p in (*hot, *today, *new_items, *recommended, *preorder)}.values())
     cards = {p.id: p.to_card() for p in uniq}
     apply_group_images(db, uniq, [cards[p.id] for p in uniq])
 
@@ -350,6 +357,7 @@ def feed(db: Session = Depends(get_db)):
         return [cards[p.id] for p in items]
 
     return {
+        "preorder": section(preorder),
         "hot": section(hot),
         "available_today": section(today),
         "new": section(new_items),

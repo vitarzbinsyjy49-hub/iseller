@@ -12,11 +12,37 @@
 3. **AI его не видит.** Иначе он посоветует «телефон на сегодня» тем, чего нет в
    продаже, и придумает характеристики устройства, которого никто не держал.
 """
+import pytest
+from fastapi.testclient import TestClient
+
+from app.api.deps import get_current_user
+from app.db.session import get_db
+from app.main import app
+from app.models.home import HomeBanner
 from app.models.product import Product
+from app.models.user import User
 from app.services.ai_retrieval import ExtractedFilters, retrieve_candidates
 from app.services.availability import price_note, resolve_availability
 from app.services.ranking import category_priority, product_sort_key
 from tests.conftest import make_product
+
+
+@pytest.fixture()
+def client(db):
+    user = User(telegram_id=778, first_name="Покупатель")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = lambda: db.get(User, user.id)
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
 
 
 def _preorder(db, **kw) -> Product:
@@ -24,14 +50,11 @@ def _preorder(db, **kw) -> Product:
     kw.setdefault("price", 0)
     kw.setdefault("in_stock", False)
     kw.setdefault("stock", 0)
-    return make_product(
-        db,
-        availability_mode="preorder",
-        preorder_eta="18 сентября",
-        preorder_group="apple-sept-2026",
-        accent_color="#6E2639",
-        **kw,
-    )
+    kw.setdefault("availability_mode", "preorder")
+    kw.setdefault("preorder_eta", "18 сентября")
+    kw.setdefault("preorder_group", "apple-sept-2026")
+    kw.setdefault("accent_color", "#6E2639")
+    return make_product(db, **kw)
 
 
 # ---------- цена ----------
@@ -108,3 +131,45 @@ def test_ai_never_retrieves_a_preorder(db):
     real = make_product(db, title="iPhone 16 Pro 256 ГБ")
     found = retrieve_candidates(db, "нужен айфон", ExtractedFilters(), limit=10)
     assert [p.id for p in found] == [real.id]
+
+
+# ---------- экран события ----------
+
+def test_event_returns_only_its_own_group(db, client):
+    db.add(HomeBanner(title="Шесть новых устройств", subtitle="Предзаказ открыт",
+                      action_type="preorder", action_value="apple-sept-2026", position=0))
+    db.commit()
+
+    first = _preorder(db, title="iPhone 18 Pro", sku="A1")
+    second = _preorder(db, title="iPhone Duo", sku="A2", preorder_eta="23 октября")
+    _preorder(db, title="Чужое событие", sku="B1", preorder_group="other")
+    _preorder(db, title="Снят с публикации", sku="B2", is_active=False)
+    make_product(db, title="Обычный товар", sku="C1")
+
+    r = client.get("/api/preorder/apple-sept-2026")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["banner"]["title"] == "Шесть новых устройств"
+    assert [i["id"] for i in body["items"]] == [first.id, second.id]
+    assert body["items"][1]["preorder_eta"] == "23 октября"
+
+
+def test_empty_group_is_not_an_error(db, client):
+    """Группа пустеет сама, когда товары приехали. Это конец жизни события."""
+    r = client.get("/api/preorder/apple-sept-2026")
+    assert r.status_code == 200
+    assert r.json() == {"banner": None, "items": []}
+
+
+# ---------- секция на главной ----------
+
+def test_feed_exposes_a_preorder_section(db, client):
+    pre = _preorder(db, title="iPhone 18 Pro")
+    make_product(db, title="Обычный товар", sku="C1")
+    body = client.get("/api/catalog/feed").json()
+    assert [c["id"] for c in body["preorder"]] == [pre.id]
+
+
+def test_feed_section_is_empty_without_preorders(db, client):
+    make_product(db, title="Обычный товар")
+    assert client.get("/api/catalog/feed").json()["preorder"] == []

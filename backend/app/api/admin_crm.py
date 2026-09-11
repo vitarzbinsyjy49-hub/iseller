@@ -444,6 +444,8 @@ _PRODUCT_EDITABLE = (
     "is_limited",   # v5.5.0: показывать «Осталось N шт» на витрине
     "is_legendary",  # v5.8: закрепить наверху выдачи и пометить золотом
     "availability_mode",  # Cart: пусто = вывести из in_stock/is_limited
+    # v6.0 предзаказ: срок строкой («18 сентября»), ключ события, акцент карточки
+    "preorder_eta", "preorder_group", "accent_color",
     "warranty_months", "condition", "color", "memory", "storage", "screen_size", "cpu", "ram",
     "description", "specs", "tags", "image", "images", "url", "source",
     # source редактируемо намеренно: admin-кнопка «Опубликовать в каталог»

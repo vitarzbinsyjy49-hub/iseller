@@ -120,12 +120,12 @@ def test_specifications_bool_and_list(db):
     assert values["Комплект"] == "кабель, чехол"
 
 
-def test_feed_has_four_sections_recommended_dedup(client, db):
+def test_feed_has_five_sections_recommended_dedup(client, db):
     for i in range(12):
         make_product(db, title=f"Товар {i}", popularity=i, sku=f"SKU{i}",
                      is_hot=(i % 4 == 0), is_new=(i % 5 == 0))
     data = client.get("/api/catalog/feed").json()
-    assert set(data) == {"hot", "available_today", "new", "recommended"}
+    assert set(data) == {"preorder", "hot", "available_today", "new", "recommended"}
     assert len(data["recommended"]) <= 8
     shown = {c["id"] for c in data["hot"]} | {c["id"] for c in data["new"]}
     rec_ids = {c["id"] for c in data["recommended"]}

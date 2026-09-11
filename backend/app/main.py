@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, admin_promo, admin_referrals, admin_settings, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, price_posts, referral as referral_api, scenario_chat, telegram, users
+from app.api import admin, admin_crm, admin_promo, admin_referrals, admin_settings, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, preorder, price_posts, referral as referral_api, scenario_chat, telegram, users
 from app.api import fx as fx_router
 from app.api import reviews as reviews_api
 
@@ -111,6 +111,7 @@ app.include_router(referral_api.router, prefix="/api")
 # «Кто кого привёл»: сортировка по выплатам — накрутка всплывает сама
 app.include_router(admin_referrals.router, prefix="/api")
 # v4: управляемая главная + Import Center + публичная конфигурация
+app.include_router(preorder.router, prefix="/api")
 app.include_router(home.router, prefix="/api")
 app.include_router(home.admin_router, prefix="/api")
 app.include_router(imports.router, prefix="/api")

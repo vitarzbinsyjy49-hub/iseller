@@ -140,7 +140,7 @@ def test_feed_sections_still_populated_when_photos_exist(client, db):
         make_product(db, title=f"Товар {i}", popularity=i, sku=f"OK{i}",
                      is_hot=(i % 4 == 0), is_new=(i % 5 == 0))
     data = client.get("/api/catalog/feed").json()
-    assert set(data) == {"hot", "available_today", "new", "recommended"}
+    assert set(data) == {"preorder", "hot", "available_today", "new", "recommended"}
     assert len(data["recommended"]) >= 1
 
 

@@ -26,8 +26,11 @@ from app.db.session import Base
 # главная), поэтому попасть туда можно ТОЛЬКО по плитке/баннеру, которые
 # заводит модератор. Без этих значений в списке сохранение отбивалось 400 —
 # то есть вход был физически несоздаваем.
+# preorder (v6.0): экран события предзаказа. Значение — ключ группы товаров
+# (`products.preorder_group`); сам баннер служит заголовком и афишей этого
+# экрана, см. api/preorder.py.
 ACTION_TYPES = ("category", "brand", "search", "product", "collection", "ai", "external",
-                "sell_item", "marketplace")
+                "sell_item", "marketplace", "preorder")
 
 
 class HomeBanner(Base):
