@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { auroraFor, DEFAULT_HEADER, hasAurora, headerColorFor } from "./AuroraBackground";
+import { auroraFor, DEFAULT_HEADER, hasAurora, headerColorFor, OVERLAY_HEADER } from "./AuroraBackground";
 
 /** Маршруты, на которых фон включён намеренно. Дублируют карту в компоненте —
  *  в этом и смысл: строка отсюда пропадает только вместе с решением убрать фон
@@ -69,5 +69,34 @@ describe("цвет верхней плашки", () => {
     for (const path of [...WITH_AURORA, "/product/12"]) {
       expect(headerColorFor(path)).not.toBe(DEFAULT_HEADER);
     }
+  });
+});
+
+describe("экраны-накладки красят верх своим фоном", () => {
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+
+  it.each(Object.entries(OVERLAY_HEADER))("%s — валидный hex", (_key, color) => {
+    expect(color).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  /** Тот же запрет, что и у палитры витрины, но с обеих сторон: Telegram
+   *  выбирает цвет значков по яркости плашки, и значение из середины шкалы
+   *  даёт нечитаемые кнопки на части клиентов. Накладкам светлота не
+   *  предписана — они повторяют СВОЙ фон, чёрный у афиши и тёплый у события, —
+   *  предписана только однозначность. */
+  it.each(Object.entries(OVERLAY_HEADER))("%s — не из серой зоны", (_key, color) => {
+    const l = luminance(color);
+    expect(l < 0.3 || l > 0.6).toBe(true);
+  });
+
+  it("накладка не повторяет цвет своего маршрута — иначе её незачем заводить", () => {
+    // Легендарный товар живёт на /product/:id, событие — на /preorder/:group
+    // (у которого своей схемы нет вовсе, то есть цвет страницы).
+    expect(OVERLAY_HEADER.legendary).not.toBe(headerColorFor("/product/12"));
+    expect(OVERLAY_HEADER.preorder).not.toBe(headerColorFor("/preorder/apple-2026"));
+    expect(headerColorFor("/preorder/apple-2026")).toBe(DEFAULT_HEADER);
   });
 });
