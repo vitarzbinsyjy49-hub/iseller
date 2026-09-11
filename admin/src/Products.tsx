@@ -13,6 +13,10 @@ export type Prod = {
   is_limited?: boolean;
   /** Режим доступности для корзины. null = выводится из in_stock/is_limited. */
   availability_mode?: string | null;
+  /** Предзаказ: срок строкой, ключ экрана события, акцент карточки. */
+  preorder_eta?: string | null;
+  preorder_group?: string | null;
+  accent_color?: string | null;
   popularity: number; rating: number;
   // Полные поля (to_admin) — используются модалкой редактирования
   description?: string | null; specs?: Record<string, unknown>; tags?: string[];
@@ -408,7 +412,7 @@ function ProductModal({
 
   useEffect(() => {
     if (!product) {
-      setForm({ title: "", sku: "", brand: "", category: "", price: "", old_price: "", stock: "0", image: "", description: "", warranty_months: "12", condition: "new", availability_mode: "" });
+      setForm({ title: "", sku: "", brand: "", category: "", price: "", old_price: "", stock: "0", image: "", description: "", warranty_months: "12", condition: "new", availability_mode: "", preorder_eta: "", preorder_group: "", accent_color: "" });
       setSpecsText("{}");
       return;
     }
@@ -529,6 +533,12 @@ function ProductModal({
       condition: form.condition || "new",
       // Пустая строка = «автоматически»: backend превратит её в NULL.
       availability_mode: form.availability_mode ?? "",
+      // Пустая строка -> null: очищенное поле должно СНИМАТЬ предзаказ, а не
+      // оставлять пустую строку, которую резолвер трактовал бы как значение.
+      // Это и есть перевод карточки в обычное состояние.
+      preorder_eta: form.preorder_eta?.trim() || null,
+      preorder_group: form.preorder_group?.trim() || null,
+      accent_color: form.accent_color?.trim() || null,
       specs,
     };
     setSaving(true);
@@ -600,6 +610,24 @@ function ProductModal({
               <option value="on_request">Под заказ</option>
               <option value="out_of_stock">Нет в наличии (нельзя заказать)</option>
             </select>
+          </label>
+          {/* Предзаказ. Срок — свободная СТРОКА, а не дата: он у нас всегда
+              приблизительный («конец октября»), и поле-календарь заставило бы
+              выбрать день, которого никто не знает, — витрина показала бы его
+              как обещание магазина. Пустая группа = товар не попадает ни на
+              какой экран события; товар «приехал» — очищаете оба поля и
+              ставите режим «В наличии», карточка становится обычной сама. */}
+          <label style={{ fontSize: 13, color: C.sub }}>
+            Ожидается (строка: «18 сентября»)
+            <input style={input} value={form.preorder_eta ?? ""} onChange={(e) => set("preorder_eta", e.target.value)} />
+          </label>
+          <label style={{ fontSize: 13, color: C.sub }}>
+            Группа предзаказа (ключ экрана события)
+            <input style={input} placeholder="apple-sept-2026" value={form.preorder_group ?? ""} onChange={(e) => set("preorder_group", e.target.value)} />
+          </label>
+          <label style={{ fontSize: 13, color: C.sub }}>
+            Акцент карточки (hex)
+            <input style={input} placeholder="#6E2639" value={form.accent_color ?? ""} onChange={(e) => set("accent_color", e.target.value)} />
           </label>
           <label style={{ fontSize: 13, color: C.sub }}>
             Бренд<input style={input} value={form.brand ?? ""} onChange={(e) => set("brand", e.target.value)} />

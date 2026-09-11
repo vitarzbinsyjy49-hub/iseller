@@ -53,6 +53,12 @@ def get_preorder_event(group: str, db: Session = Depends(get_db)):
 
     cards = [p.to_card() for p in products]
     apply_group_images(db, products, cards)
+    # Описание — единственное, ради чего экран отличается от каталога: человек
+    # читает про аппарат ровно перед тем, как решить. В обычную карточку ленты
+    # оно не входит (там его негде показать), поэтому добавляем здесь, а не
+    # раздуваем to_card() ради одного экрана.
+    for card, product in zip(cards, products):
+        card["description"] = product.description or ""
 
     return {
         "banner": banner.to_dict() if banner else None,

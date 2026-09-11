@@ -238,6 +238,7 @@ class Product(Base):
             # компоненте значит завести три разных правила про одно и то же.
             "price_note": price_note(self),
             "preorder_eta": self.preorder_eta,
+            "preorder_group": self.preorder_group,
             "accent_color": self.accent_color,
             "why": [],
             "buttons": self._buttons(),

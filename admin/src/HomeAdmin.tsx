@@ -393,6 +393,9 @@ const ACTION_LABELS: Record<string, string> = {
   category: "Категория", brand: "Бренд", search: "Поиск", product: "Товар (id)",
   collection: "Подборка (hot/today/sale)", ai: "AI-запрос", external: "Внешняя ссылка",
   sell_item: "Предложить товар (подать заявку)", marketplace: "Маркетплейс (витрина)",
+  // Значение — ключ группы из карточек товаров (поле «Группа предзаказа»).
+  // Сам баннер служит заголовком, вступлением и афишей экрана события.
+  preorder: "Экран предзаказа (ключ группы)",
 };
 
 export function HomeContent({ token }: { token: string }) {

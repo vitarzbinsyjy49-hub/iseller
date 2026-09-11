@@ -16,6 +16,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
+from sqlalchemy import select
+
 from app.db.session import get_db
 from app.main import app
 from app.models.home import HomeBanner
@@ -173,3 +175,40 @@ def test_feed_exposes_a_preorder_section(db, client):
 def test_feed_section_is_empty_without_preorders(db, client):
     make_product(db, title="Обычный товар")
     assert client.get("/api/catalog/feed").json()["preorder"] == []
+
+
+# ---------- сид ----------
+
+def test_seed_is_idempotent_and_keeps_banner_first(db, monkeypatch):
+    """Повторный запуск не плодит товары и не отодвигает ленту всё дальше.
+
+    Позиции баннеров пересчитываются целиком, а не сдвигаются на +1: сдвиг
+    сделал бы каждый следующий запуск хуже предыдущего.
+    """
+    from app.scripts import seed_preorder_apple_2026 as seed
+
+    gta = HomeBanner(title="GTA VI + PS5 Pro", action_type="product",
+                     action_value="1", position=0)
+    db.add(gta)
+    db.commit()
+
+    monkeypatch.setattr(seed, "SessionLocal", lambda: db)
+    monkeypatch.setattr(db, "close", lambda: None)
+
+    seed.main()
+    seed.main()
+
+    items = db.execute(
+        select(Product).where(Product.preorder_group == seed.GROUP)
+    ).scalars().all()
+    assert len(items) == len(seed.DEVICES)
+    assert all(p.availability_mode == "preorder" for p in items)
+    assert all(float(p.price) == 0 for p in items)
+    assert all(len(p.images) >= 2 for p in items)
+
+    banners = db.execute(
+        select(HomeBanner).order_by(HomeBanner.position.asc())
+    ).scalars().all()
+    assert banners[0].action_type == "preorder"
+    assert banners[1].title == "GTA VI + PS5 Pro"
+    assert banners[1].position == 1
