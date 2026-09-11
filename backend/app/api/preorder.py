@@ -59,6 +59,10 @@ def get_preorder_event(group: str, db: Session = Depends(get_db)):
     # раздуваем to_card() ради одного экрана.
     for card, product in zip(cards, products):
         card["description"] = product.description or ""
+        # Три главные характеристики строкой-чипами под заголовком. Берём из
+        # того же нормализованного списка, что и страница товара, — второй
+        # разбор характеристик разъехался бы с первым на первом же товаре.
+        card["chips"] = product._specifications()[:3]
 
     return {
         "banner": banner.to_dict() if banner else None,

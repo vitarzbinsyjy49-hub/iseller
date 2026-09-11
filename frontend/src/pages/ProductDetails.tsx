@@ -18,6 +18,7 @@ import { haptic, isInsideTelegram, openExternalLink } from "../lib/telegram";
 import { pickShareTarget } from "../lib/share";
 import { usePublicConfig } from "../lib/appConfig";
 import { toast } from "../lib/toast";
+import AnswerBody from "../components/AnswerBody";
 import { addToCart, removeCartItem, setItemQuantity, useCartEntry } from "../lib/cart";
 import { canAddToCart } from "../lib/cartMath";
 import { QuantityStepper } from "../components/QuantityStepper";
@@ -423,9 +424,16 @@ export default function ProductDetails() {
               <span className="text-xs font-medium">{p.region_codes.join(", ")}</span>
             </div>
           )}
-          <p className="text-sm leading-relaxed text-muted">
-            {p.description || "Описание уточняется — задайте вопрос менеджеру, ответим быстро."}
-          </p>
+          {/* Описание рисует ТОТ ЖЕ разборщик, что и ответы AI (AnswerBody):
+              абзацы, пункты, выделение жирным. Раньше здесь был один <p>, и
+              любая разметка в тексте вылезала бы сырыми звёздочками. Обычное
+              описание без разметки разбирается в один абзац — для старых
+              товаров ничего не меняется. */}
+          <div className="text-sm text-muted">
+            {p.description
+              ? <AnswerBody text={p.description} revealChars={null} />
+              : <p className="leading-relaxed">Описание уточняется — задайте вопрос менеджеру, ответим быстро.</p>}
+          </div>
           {p.tags && p.tags.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {p.tags.map((t) => (

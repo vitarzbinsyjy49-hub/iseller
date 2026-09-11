@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, type ReactNode } from "react";
 import { ProductCard as TCard } from "./ai/types";
 import ProductCard from "./ProductCard";
+import AnswerBody from "./AnswerBody";
 import { enterRefCallback } from "../lib/useEnter";
 
 /** Шапка события — это баннер, который на него ведёт. Второго набора тех же
@@ -29,7 +30,12 @@ export type EventBanner = {
  */
 /** Карточка события = обычная карточка плюс описание: его показывает только
  *  этот экран, поэтому в общий to_card() оно не входит. */
-export type EventItem = TCard & { description?: string };
+export type EventItem = TCard & {
+  description?: string;
+  /** Три главные характеристики под заголовком. Считает backend из того же
+   *  нормализованного списка, что и страница товара. */
+  chips?: { label: string; value: string }[];
+};
 
 export default function PreorderEvent({
   banner, items,
@@ -123,10 +129,29 @@ function DeviceBlock({ card }: { card: EventItem }) {
     <section className="mt-8 border-t pt-6" style={{ borderColor: "rgba(43,31,46,.12)" }}>
       <span className="mb-3 block h-[3px] w-8 rounded-full" style={{ background: accent }} />
       <h2 className="text-[19px] font-bold leading-tight tracking-[-0.02em]">{card.title}</h2>
+      {/* Чипы характеристик сразу под заголовком: до описания человек уже
+          понимает размер, память и отделку — то, чем модели и отличаются. */}
+      {card.chips && card.chips.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {card.chips.map((c) => (
+            <span key={c.label}
+              className="rounded-full px-2.5 py-1 text-[11.5px] font-medium"
+              style={{ background: "rgba(255,255,255,.55)", color: "#2B1F2E" }}>
+              <span className="opacity-55">{c.label} </span>{c.value}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Описание рисует ТОТ ЖЕ разборщик, что и ответы AI: абзацы, пункты,
+          выделение жирным. Плоский абзац читался как подпись под фотографией,
+          а не как рассказ об устройстве. Второй формат заводить незачем —
+          этот уже есть, уже покрыт тестами и уже знаком по чату. */}
       {card.description && (
-        <p className="mt-2.5 max-w-[62ch] text-[13.5px] leading-6 opacity-78 [text-wrap:pretty]">
-          {card.description}
-        </p>
+        <div className="mt-3 max-w-[62ch] text-[13.5px] leading-6 [text-wrap:pretty]"
+             style={{ color: "rgba(43,31,46,.82)" }}>
+          <AnswerBody text={card.description} revealChars={null} />
+        </div>
       )}
       <div className="mt-4 max-w-[280px]">
         <ProductCard card={card} />

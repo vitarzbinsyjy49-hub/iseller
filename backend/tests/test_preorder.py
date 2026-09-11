@@ -212,3 +212,63 @@ def test_seed_is_idempotent_and_keeps_banner_first(db, monkeypatch):
     assert banners[0].action_type == "preorder"
     assert banners[1].title == "GTA VI + PS5 Pro"
     assert banners[1].position == 1
+
+
+def test_event_descriptions_use_the_message_format(db, monkeypatch):
+    """Описание — не плоский абзац, а разметка формата сообщений.
+
+    Витрина рисует его тем же разборщиком, что и ответы AI (AnswerBody):
+    абзацы, пункты, выделение жирным. Если кто-то схлопнет описание в одну
+    строку, экран события снова станет подписью под фотографией — тест держит
+    от этого.
+    """
+    from app.scripts import seed_preorder_apple_2026 as seed
+
+    monkeypatch.setattr(seed, "SessionLocal", lambda: db)
+    monkeypatch.setattr(db, "close", lambda: None)
+    seed.main()
+
+    items = db.execute(
+        select(Product).where(Product.preorder_group == seed.GROUP)
+    ).scalars().all()
+    for p in items:
+        assert "\n- " in p.description, f"{p.sku}: нет ни одного пункта списка"
+        assert "**" in p.description, f"{p.sku}: нет ни одного выделения"
+
+
+def test_event_payload_carries_description_and_chips(db, client):
+    """Экран события получает описание и три чипа характеристик."""
+    _preorder(db, title="iPhone 18 Pro", specs={"Цвета": "burgundy", "Память": "256 ГБ"},
+              description="Ведущая мысль.\n\n- **Пункт.** Пояснение.")
+    body = client.get("/api/preorder/apple-sept-2026").json()
+    item = body["items"][0]
+    assert item["description"].startswith("Ведущая мысль.")
+    assert [c["label"] for c in item["chips"]][:2] == ["Цвета", "Память"]
+    assert len(item["chips"]) <= 3
+
+
+def test_reseed_does_not_undo_internalised_photos(db, monkeypatch):
+    """Повторный сид не возвращает карточки на чужой CDN.
+
+    internalize_photos переносит фото к нам и переписывает ссылки на
+    /api/uploads/. Если сид слепо проставляет свои внешние URL, каждый его
+    прогон отменяет перенос — и однажды чужой CDN сменит адреса, как уже
+    случилось с прежним источником картинок.
+    """
+    from app.scripts import seed_preorder_apple_2026 as seed
+
+    monkeypatch.setattr(seed, "SessionLocal", lambda: db)
+    monkeypatch.setattr(db, "close", lambda: None)
+    seed.main()
+
+    product = db.execute(
+        select(Product).where(Product.sku == "PREORDER-IP18PRO")
+    ).scalars().one()
+    ours = ["/api/uploads/a.jpg", "/api/uploads/b.jpg"]
+    product.image, product.images = ours[0], ours
+    db.commit()
+
+    seed.main()
+    db.refresh(product)
+    assert product.images == ours
+    assert product.image == ours[0]
