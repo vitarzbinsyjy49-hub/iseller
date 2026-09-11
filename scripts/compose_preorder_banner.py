@@ -23,11 +23,30 @@ OUT = "frontend/public/assets/promos/apple-sept-2026.webp"
 
 W, H = 1800, 1200
 
-# Палитра снята пипеткой с экрана события — кадр и экран обязаны звучать в один
-# тон, иначе баннер выглядит вставленным из чужого проекта.
-TOP = (127, 140, 185)      # барвинок
-MID = (201, 187, 205)      # мов
-BOTTOM = (253, 205, 151)   # абрикос
+# Палитры. Первая версия была линейной заливкой через малонасыщенный серо-
+# сиреневый (#C9BBCD) — он замыливал середину кадра, и свет читался «серым».
+# Лечится двумя вещами сразу: насыщенным средним тоном и СВЕТОВЫМ ОЧАГОМ —
+# тёплым радиальным пятном за аппаратами. Плоская линейная заливка не выглядит
+# освещённой, сколько её ни насыщай: у света должен быть источник.
+PALETTES = {
+    "dawn":   ((76, 58, 140),  (232, 99, 154),  (255, 196, 107)),   # фиолет -> маджента -> золото
+    "azure":  ((45, 106, 214), (103, 200, 232), (255, 214, 150)),   # лазурь -> бирюза -> песок
+    "sunset": ((46, 42, 110),  (255, 107, 91),  (255, 194, 71)),    # индиго -> коралл -> янтарь
+    # Светлые, воздушные. Середина идёт через ТЁПЛЫЙ РОЗОВЫЙ, а не через
+    # серо-мовый: серо-мовый малонасыщен, и на нём вся середина кадра сереет —
+    # это и был исходный дефект.
+    "soft":   ((181, 176, 222), (233, 201, 206), (247, 231, 207)),  # лиловый -> роза -> крем
+    "soft+":  ((163, 157, 219), (238, 191, 199), (250, 228, 199)),  # то же, но насыщеннее
+}
+# Рабочая палитра. Яркие (dawn/sunset) владелец забраковал: винный корпус —
+# герой кадра — садится на маджентовый фон и растворяется. Светлая лиловая с
+# тёплым кремовым низом держит и воздух, и контраст с винным.
+PALETTE = "soft+"
+
+#: Центр светового очага и его сила. Пятно стоит за аппаратами и чуть выше
+#: середины — там, где в студии стоял бы софтбокс.
+GLOW_AT = (0.62, 0.42)
+GLOW_STRENGTH = 0.55
 
 
 def cutout(path: str, tolerance: int = 26) -> Image.Image:
@@ -60,19 +79,29 @@ def cutout(path: str, tolerance: int = 26) -> Image.Image:
     return out.crop(out.getbbox())
 
 
-def gradient() -> Image.Image:
-    """Вертикальная заливка барвинок -> мов -> абрикос."""
+def gradient(palette: str = PALETTE) -> Image.Image:
+    """Вертикальная заливка плюс тёплый световой очаг за аппаратами."""
+    top, mid, bot = (np.array(c, dtype=float) for c in PALETTES[palette])
+
     y = np.linspace(0.0, 1.0, H)[:, None]
-    top, mid, bot = (np.array(c, dtype=float) for c in (TOP, MID, BOTTOM))
     # Две линейные части со стыком на 45 % высоты: ровно там, где у кадра
     # проходит линия аппаратов, и переход не читается полосой.
     k = 0.45
-    lower = y / k
-    upper = (y - k) / (1 - k)
-    a = np.where(y < k, top + (mid - top) * np.clip(lower, 0, 1),
-                 mid + (bot - mid) * np.clip(upper, 0, 1))
-    field = np.repeat(a[:, None, :], W, axis=1).astype(np.uint8)
-    return Image.fromarray(field, mode="RGB").convert("RGBA")
+    a = np.where(y < k, top + (mid - top) * np.clip(y / k, 0, 1),
+                 mid + (bot - mid) * np.clip((y - k) / (1 - k), 0, 1))
+    field = np.repeat(a[:, None, :], W, axis=1)
+
+    # Световой очаг: мягкое осветление к белому по радиусу. Именно он отличает
+    # «освещённый фон» от «залитого цветом» — без него любая палитра выглядит
+    # плоской, а середина кадра сереет.
+    gx, gy = GLOW_AT
+    xs = (np.arange(W) / W - gx) / 0.55
+    ys = (np.arange(H) / H - gy) / 0.60
+    dist = np.sqrt(xs[None, :] ** 2 + ys[:, None] ** 2)
+    glow = np.clip(1.0 - dist, 0.0, 1.0) ** 2 * GLOW_STRENGTH
+    field = field + (255.0 - field) * glow[:, :, None]
+
+    return Image.fromarray(np.clip(field, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
 
 
 def scaled(dev: Image.Image, height: int) -> Image.Image:
@@ -86,8 +115,8 @@ FIELD_LEFT = int(W * 0.355)
 FIELD_RIGHT = int(W * 0.97)
 
 
-def main() -> None:
-    canvas = gradient()
+def main(palette: str = PALETTE, out: str | None = None) -> None:
+    canvas = gradient(palette)
 
     # Кадр finish-select показывает ПАРУ: аппарат спинкой и он же экраном.
     # Это собственная манера Apple, ломать её незачем.
@@ -119,9 +148,12 @@ def main() -> None:
     canvas.alpha_composite(a, (FIELD_LEFT, top))
     canvas.alpha_composite(b, (FIELD_LEFT + a.width + gap, top + (a.height - b.height) // 2))
 
-    canvas.convert("RGB").save(OUT, "WEBP", quality=90, method=6)
-    print(f"{OUT}: {Image.open(OUT).size}, зазор между аппаратами {gap}px")
+    target = out or OUT
+    canvas.convert("RGB").save(target, "WEBP", quality=90, method=6)
+    print(f"{target}: {Image.open(target).size}, зазор {gap}px, палитра {palette}")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(sys.argv[1] if len(sys.argv) > 1 else PALETTE,
+         sys.argv[2] if len(sys.argv) > 2 else None)
