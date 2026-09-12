@@ -94,7 +94,41 @@ def find(db: Session, code: str, *, lock: bool = False) -> PromoCode | None:
     return db.execute(stmt).scalars().first()
 
 
-def validate(db: Session, raw_code: str, *, user_id: int, order_total: float) -> PromoOffer:
+def _has_purchases(db: Session, user_id: int) -> bool:
+    """Покупал ли человек хоть раз. Источник — журнал лояльности: тот же, по
+    которому считается акция первой покупки, чтобы «новичок» означал в двух
+    местах одно и то же."""
+    from app.services import loyalty   # локально: цикл импорта
+
+    return loyalty.purchases_count(db, user_id) > 0
+
+
+def _conditions_met(db: Session, promo: PromoCode, user_id: int, items: list[dict] | None) -> bool:
+    """Все условия кода выполнены? Условия складываются по И.
+
+    Пустое условие не проверяется вовсе: код без условий должен вести себя
+    ровно так, как вёл до появления этого механизма.
+    """
+    if promo.first_purchase_only and _has_purchases(db, user_id):
+        return False
+
+    def matches(field: str, wanted: str) -> bool:
+        # Сравнение без регистра: в базе значение пишется как угодно, а в поле
+        # админки его набирают руками.
+        needle = wanted.strip().casefold()
+        return any((item.get(field) or "").strip().casefold() == needle for item in (items or []))
+
+    if promo.category and not matches("category", promo.category):
+        return False
+    if promo.brand and not matches("brand", promo.brand):
+        return False
+    return True
+
+
+def validate(
+    db: Session, raw_code: str, *, user_id: int, order_total: float,
+    items: list[dict] | None = None,
+) -> PromoOffer:
     """Можно ли применить код к этой корзине. НИЧЕГО не тратит и не пишет.
 
     Причина отказа возвращается текстом для человека: «код не работает» без
@@ -114,6 +148,13 @@ def validate(db: Session, raw_code: str, *, user_id: int, order_total: float) ->
 
     if promo.min_order_amount is not None and order_total < float(promo.min_order_amount):
         raise PromoError(f"Промокод действует от {_money(promo.min_order_amount)}")
+
+    # Невыполненное условие отвечает ТЕМ ЖЕ текстом, что несуществующий код, и
+    # по той же причине: по разнице сообщений подбирается список действующих
+    # акций и их условия. Порог суммы выше — исключение сознательное: его можно
+    # выполнить, добавив товар, и молчать о нём значит мешать покупателю.
+    if not _conditions_met(db, promo, user_id, items):
+        raise PromoError("Такой промокод не найден или больше не действует")
 
     if _already_used(db, promo.id, user_id):
         raise PromoError("Вы уже применяли этот промокод")

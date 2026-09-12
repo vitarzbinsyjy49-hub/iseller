@@ -309,6 +309,18 @@ def _normalize_fulfillment(value: str | None) -> str:
     return v if v in DELIVERY_METHODS else "consult"
 
 
+def _promo_items(rows: list[dict]) -> list[dict]:
+    """Состав корзины для проверки условий промокода.
+
+    Только отправляемые позиции — тот же отбор, по которому считается сумма.
+    Давать скидку за товар, который нельзя заказать, нельзя.
+    """
+    return [
+        {"category": r.get("category"), "brand": r.get("brand")}
+        for r in rows if r.get("orderable")
+    ]
+
+
 def preview_promo(db: Session, user_id: int, raw_code: str) -> dict:
     """Что даст код на текущей корзине. НИЧЕГО не тратит и не пишет.
 
@@ -322,7 +334,10 @@ def preview_promo(db: Session, user_id: int, raw_code: str) -> dict:
         # Скидка «на ничего» — ответ, который потом придётся объяснять человеку.
         raise CartError("empty_cart", "Добавьте товары — тогда применим промокод")
 
-    offer = promo_service.validate(db, raw_code, user_id=user_id, order_total=subtotal)
+    offer = promo_service.validate(
+        db, raw_code, user_id=user_id, order_total=subtotal,
+        items=_promo_items(payload["items"]),
+    )
     return {
         "code": offer.code,
         "discount": offer.discount,
@@ -424,6 +439,13 @@ def checkout(
         promo = promo_service.find(db, promo_service.normalize_code(promo_code), lock=True)
         offer = promo_service.validate(
             db, promo.code if promo else promo_code, user_id=user.id, order_total=subtotal,
+            # Условия проверяются по тем же позициям, из которых сложена сумма:
+            # проверка только в превью означала бы, что скидку можно получить,
+            # подменив корзину между двумя запросами.
+            items=[
+                {"category": l["product"].category, "brand": l["product"].brand}
+                for l in lines
+            ],
         )
 
     discount = offer.discount if offer else 0.0

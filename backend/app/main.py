@@ -282,6 +282,11 @@ def _apply_demo_migrations() -> None:
         # Дефолт колонки меняется только для НОВЫХ строк; существующую строку
         # (если её успели создать) не трогаем: 1000 там мог быть выбран руками.
         "ALTER TABLE loyalty_settings ALTER COLUMN welcome_bonus_points SET DEFAULT 500",
+        # Условия промокодов (этап 2 той же спеки). Все три необязательные —
+        # существующие коды продолжают работать без единого условия.
+        "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS first_purchase_only BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS category VARCHAR(80)",
+        "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS brand VARCHAR(80)",
     ]
     for stmt in statements:
         try:

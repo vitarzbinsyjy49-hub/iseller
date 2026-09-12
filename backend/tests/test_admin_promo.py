@@ -148,3 +148,39 @@ def test_requires_admin(ctx):
     client, _db, _u = ctx
     app.dependency_overrides.pop(get_current_admin)
     assert client.get("/api/admin/promo-codes").status_code in (401, 403)
+
+
+def test_admin_creates_a_code_with_conditions(ctx):
+    admin_client, _db, _u = ctx
+    """Условия заводятся вместе с кодом — отдельного шага правки быть не должно,
+    иначе между созданием и настройкой код успеют раздать."""
+    created = admin_client.post("/api/admin/promo-codes", json={
+        "code": "DYSONNEW", "discount_amount": 1000,
+        "first_purchase_only": True, "category": "красота", "brand": "Dyson",
+    })
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["first_purchase_only"] is True
+    assert body["category"] == "красота"
+    assert body["brand"] == "Dyson"
+
+
+def test_blank_condition_means_no_condition(ctx):
+    admin_client, _db, _u = ctx
+    """Пустая строка из формы — это «условия нет», а не категория с пустым
+    именем: иначе код не совпал бы ни с одним товаром и молча перестал работать."""
+    created = admin_client.post("/api/admin/promo-codes", json={
+        "code": "PLAIN10", "discount_amount": 500, "category": "   ", "brand": "",
+    })
+    assert created.json()["category"] is None
+    assert created.json()["brand"] is None
+
+
+def test_condition_can_be_removed_later(ctx):
+    admin_client, _db, _u = ctx
+    created = admin_client.post("/api/admin/promo-codes", json={
+        "code": "TEMPCOND", "discount_amount": 500, "category": "красота",
+    }).json()
+    patched = admin_client.patch(f"/api/admin/promo-codes/{created['id']}", json={"category": ""})
+    assert patched.status_code == 200
+    assert patched.json()["category"] is None

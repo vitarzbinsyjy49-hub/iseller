@@ -13,6 +13,9 @@ type Promo = {
   discount_amount: number;
   max_redemptions: number | null;
   min_order_amount: number | null;
+  first_purchase_only: boolean;
+  category: string | null;
+  brand: string | null;
   expires_at: string | null;
   is_active: boolean;
   note: string | null;
@@ -37,6 +40,17 @@ const money = (v: number | null | undefined) =>
 
 const dt = (iso: string | null) =>
   !iso ? "—" : new Date(iso).toLocaleString("ru-RU");
+
+/** Условия кода одной строкой. Пустая = «без условий», и это честнее прочерка:
+ *  прочерк читается как «поле не заполнили», а тут его и не требовалось. */
+function conditions(p: Promo): string {
+  const parts: string[] = [];
+  if (p.first_purchase_only) parts.push("первая покупка");
+  if (p.category) parts.push(p.category);
+  if (p.brand) parts.push(p.brand);
+  return parts.length ? parts.join(" + ") : "без условий";
+}
+
 
 export default function PromoCodes({ token }: { token: string }) {
   const [items, setItems] = useState<Promo[]>([]);
@@ -111,6 +125,7 @@ export default function PromoCodes({ token }: { token: string }) {
               <th style={th}>Скидка</th>
               <th style={th}>Использовано</th>
               <th style={th}>От суммы</th>
+              <th style={th}>Условия</th>
               <th style={th}>Действует до</th>
               <th style={th}>Статус</th>
               <th style={th} />
@@ -144,6 +159,7 @@ export default function PromoCodes({ token }: { token: string }) {
                     )}
                   </td>
                   <td style={td}>{p.min_order_amount == null ? "—" : money(p.min_order_amount)}</td>
+                  <td style={{ ...td, fontSize: 12 }}>{conditions(p)}</td>
                   <td style={td}>{p.expires_at ? dt(p.expires_at) : "бессрочно"}</td>
                   <td style={td}>
                     <span style={{ color: p.is_active ? C.green : C.sub }}>
@@ -192,7 +208,24 @@ function CreateForm({ token, onDone, onError }: {
   const [minOrder, setMinOrder] = useState("");
   const [expires, setExpires] = useState("");
   const [note, setNote] = useState("");
+  const [firstOnly, setFirstOnly] = useState(false);
+  const [category, setCategory] = useState("");
+  const [brand, setBrand] = useState("");
+  const [cats, setCats] = useState<string[]>([]);
+  const [brands, setBrands] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+
+  // Категории и бренды берутся ИЗ ДАННЫХ, а не списком в коде: список в коде
+  // разъедется с базой — ровно то, из-за чего плитки главной когда-то вели в
+  // пустой каталог. Страница товаров отдаёт их вместе со списком, поэтому
+  // просим одну строку: нужны не товары, а справочник.
+  useEffect(() => {
+    apiGet<{ categories: string[]; brands: string[] }>(
+      "/admin/products?page=1&page_size=1", token,
+    )
+      .then((d) => { setCats(d.categories ?? []); setBrands(d.brands ?? []); })
+      .catch(() => { /* справочник не критичен: поле останется свободным вводом */ });
+  }, [token]);
 
   async function submit() {
     setBusy(true);
@@ -206,6 +239,10 @@ function CreateForm({ token, onDone, onError }: {
         max_redemptions: limit.trim() ? Number(limit) : null,
         min_order_amount: minOrder.trim() ? Number(minOrder) : null,
         expires_at: expires ? new Date(expires).toISOString() : null,
+        first_purchase_only: firstOnly,
+        // Пустая строка = условия нет. Бэкенд трактует её так же.
+        category: category.trim() || null,
+        brand: brand.trim() || null,
         note: note.trim() || null,
       });
       onDone();
@@ -241,14 +278,39 @@ function CreateForm({ token, onDone, onError }: {
           <input style={input} type="datetime-local" value={expires}
             onChange={(e) => setExpires(e.target.value)} />
         </label>
+        <label style={lbl}>Только категория
+          <select style={input} value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">любая</option>
+            {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <label style={lbl}>Только бренд
+          <select style={input} value={brand} onChange={(e) => setBrand(e.target.value)}>
+            <option value="">любой</option>
+            {brands.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </label>
         <label style={lbl}>Заметка
           <input style={input} value={note} onChange={(e) => setNote(e.target.value)}
             placeholder="для себя, покупатель не увидит" />
         </label>
       </div>
+
+      <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 14, fontSize: 13, minHeight: 44 }}>
+        <input type="checkbox" checked={firstOnly} onChange={(e) => setFirstOnly(e.target.checked)}
+          style={{ marginTop: 3, width: 18, height: 18 }} />
+        <span>
+          Только на первую покупку
+          <span style={{ display: "block", color: C.sub, fontSize: 12, marginTop: 4 }}>
+            «Первая» считается по журналу покупок, а не по дате регистрации.
+          </span>
+        </span>
+      </label>
       <p style={{ color: C.sub, fontSize: 12, margin: "12px 0 0" }}>
         Один аккаунт применяет код один раз. Переименовать код после создания нельзя —
-        его уже унесли в переписку; ненужный код выключают.
+        его уже унесли в переписку; ненужный код выключают. Условия складываются по И:
+        код с категорией и брендом требует товар, у которого совпало и то, и другое.
+        Промокод и списание баллов взаимоисключающи.
       </p>
       <button style={{ ...btn, marginTop: 12 }} disabled={!valid || busy} onClick={submit}>
         {busy ? "Создаём…" : "Создать"}

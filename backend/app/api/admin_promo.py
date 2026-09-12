@@ -33,6 +33,11 @@ class PromoIn(BaseModel):
     max_redemptions: int | None = Field(default=None, ge=1)
     min_order_amount: float | None = Field(default=None, ge=0)
     expires_at: datetime | None = None
+    # Условия применения. Пустое — «не проверяем»; так ведут себя все коды,
+    # заведённые до появления этого механизма.
+    first_purchase_only: bool = False
+    category: str | None = Field(default=None, max_length=80)
+    brand: str | None = Field(default=None, max_length=80)
     note: str | None = Field(default=None, max_length=2000)
 
     @field_validator("code")
@@ -56,6 +61,9 @@ class PromoPatch(BaseModel):
     min_order_amount: float | None = Field(default=None, ge=0)
     expires_at: datetime | None = None
     is_active: bool | None = None
+    first_purchase_only: bool | None = None
+    category: str | None = Field(default=None, max_length=80)
+    brand: str | None = Field(default=None, max_length=80)
     note: str | None = Field(default=None, max_length=2000)
 
 
@@ -89,6 +97,10 @@ def create_code(
         max_redemptions=body.max_redemptions,
         min_order_amount=body.min_order_amount,
         expires_at=body.expires_at,
+        first_purchase_only=body.first_purchase_only,
+        # Пустая строка — это «условия нет», а не категория с пустым именем.
+        category=(body.category or "").strip() or None,
+        brand=(body.brand or "").strip() or None,
         note=(body.note or "").strip() or None,
         is_active=True,
     )
@@ -120,6 +132,10 @@ def update_code(
 
     changed = body.model_dump(exclude_unset=True)
     for field, value in changed.items():
+        # Пустая строка в условии означает «снять условие». Без этого снять
+        # категорию из админки было бы нечем: null через форму не отправить.
+        if field in ("category", "brand") and isinstance(value, str):
+            value = value.strip() or None
         setattr(promo, field, value)
 
     if changed:

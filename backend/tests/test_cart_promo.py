@@ -165,3 +165,38 @@ def test_discount_capped_by_cart_total(ctx):
     lead = r.json()["lead"]
     assert lead["estimated_total"] == 0
     assert lead["metadata"]["promo_discount"] == 3000
+
+
+# ---------------- условия кода на живой корзине ----------------
+
+def test_preview_checks_the_category_of_what_is_in_the_cart(ctx):
+    """Условие проверяется по РЕАЛЬНОМУ составу корзины, а не по словам
+    покупателя: иначе код «на Dyson» сработает на чём угодно."""
+    client, db, product, _u = ctx
+    db.add(PromoCode(code="DYSON1000", discount_amount=1000, category="красота", is_active=True))
+    db.commit()
+
+    _fill_cart(client, product.id)          # в корзине смартфон
+    assert client.post("/api/cart/promo", json={"code": "DYSON1000"}).status_code == 400
+
+    beauty = make_product(db, title="Dyson Airwrap", brand="Dyson",
+                          category="красота", price=50000)
+    _fill_cart(client, beauty.id)
+    ok = client.post("/api/cart/promo", json={"code": "DYSON1000"})
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["discount"] == 1000
+
+
+def test_checkout_enforces_the_condition_too(ctx):
+    """Условие на превью и условие на оформлении — одно и то же правило.
+    Проверка только в превью означала бы, что скидку можно получить, подменив
+    корзину между двумя запросами."""
+    client, db, product, _u = ctx
+    db.add(PromoCode(code="DYSON1000", discount_amount=1000, category="красота", is_active=True))
+    db.commit()
+
+    _fill_cart(client, product.id)
+    resp = _checkout(client, promo_code="DYSON1000")
+    assert resp.status_code == 400
+    assert db.query(Lead).count() == 0
+    assert db.query(PromoRedemption).count() == 0

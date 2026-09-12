@@ -48,6 +48,22 @@ class PromoCode(Base):
     # NULL = бессрочно.
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # ---- Условия применения ----
+    # Короткий список типизованных условий, а не конструктор правил: движок на
+    # этом объёме — способ потратить неделю и получить то, что никто не
+    # настроит. Пустое условие = «не проверяем».
+    #
+    # Только первой покупке. Единственное частое условие, которое нельзя
+    # выразить порогом суммы: «новичок» определяется журналом покупок.
+    first_purchase_only: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false",
+    )
+    # В корзине должен быть товар этой категории / этого бренда. Значения
+    # выбираются в админке ИЗ ДАННЫХ (services/catalog_nav), а не из списка в
+    # коде: списком они разъедутся с базой, как когда-то плитки главной.
+    category: Mapped[str | None] = mapped_column(String(80))
+    brand: Mapped[str | None] = mapped_column(String(80))
+
     # Заметка владельца: зачем этот код. В UI покупателя не показывается.
     note: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
@@ -67,6 +83,9 @@ class PromoCode(Base):
             ),
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "is_active": self.is_active,
+            "first_purchase_only": bool(self.first_purchase_only),
+            "category": self.category,
+            "brand": self.brand,
             "note": self.note,
             "used": used,
             "left": None if self.max_redemptions is None else max(0, self.max_redemptions - used),

@@ -9,6 +9,11 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.models.promo import PromoCode, PromoRedemption
+
+# Импорт наверху, а не внутри теста: он регистрирует таблицу loyalty_settings,
+# а create_all в фикстуре db выполняется раньше тела теста. Промокоды её
+# касаются через проверку «первая покупка», которая ходит в журнал лояльности.
+from app.models.loyalty_settings import LoyaltySettings  # noqa: F401
 from app.models.user import User
 from app.services import promo as promo_service
 from app.services.promo import PromoError
@@ -179,3 +184,75 @@ def test_used_count_counts_only_this_code(db, user, other_user):
     db.commit()
     assert promo_service.used_count(db, a.id) == 1
     assert promo_service.used_count(db, b.id) == 1
+
+
+# ------------------------------------------------- условия применения
+
+def test_first_purchase_only_passes_for_a_newcomer(db, user):
+    """«Только на первую покупку» — самый частый вид акции и единственный,
+    который нельзя выразить порогом суммы."""
+    promo = make_code(db, first_purchase_only=True)
+    offer = promo_service.validate(db, promo.code, user_id=user.id, order_total=10_000)
+    assert offer.discount == 5000
+
+
+def test_first_purchase_only_rejected_for_a_returning_buyer(db, user):
+    from app.services import loyalty
+
+    make_code(db, first_purchase_only=True)
+    loyalty.record(db, user_id=user.id, kind="purchase", amount=10_000,
+                   comment="была покупка", idempotency_key="prev")
+    db.commit()
+    with pytest.raises(PromoError):
+        promo_service.validate(db, "START20", user_id=user.id, order_total=10_000)
+
+
+def test_category_condition_needs_such_an_item_in_the_cart(db, user):
+    make_code(db, category="смартфоны")
+    offer = promo_service.validate(
+        db, "START20", user_id=user.id, order_total=10_000,
+        items=[{"category": "смартфоны", "brand": "Apple"}])
+    assert offer.discount == 5000
+
+    with pytest.raises(PromoError):
+        promo_service.validate(
+            db, "START20", user_id=user.id, order_total=10_000,
+            items=[{"category": "наушники", "brand": "Apple"}])
+
+
+def test_brand_condition_is_case_insensitive(db, user):
+    """Бренд в базе пишется как угодно, а в поле админки его набирают руками."""
+    make_code(db, brand="Dyson")
+    offer = promo_service.validate(
+        db, "START20", user_id=user.id, order_total=10_000,
+        items=[{"category": "красота", "brand": "dyson"}])
+    assert offer.discount == 5000
+
+
+def test_conditions_combine_as_and(db, user):
+    """Два условия — это И, а не ИЛИ: код «на Dyson для новичков» обязан
+    требовать оба, иначе он раздаёт скидку вдвое шире задуманного."""
+    make_code(db, category="красота", brand="Dyson")
+    with pytest.raises(PromoError):
+        promo_service.validate(
+            db, "START20", user_id=user.id, order_total=10_000,
+            items=[{"category": "красота", "brand": "Apple"}])
+
+
+def test_condition_failure_looks_like_an_unknown_code(db, user):
+    """Разные тексты отказа превращают форму в проверялку чужих акций:
+    по разнице сообщений подбирается список действующих кодов."""
+    make_code(db, category="смартфоны")
+    with pytest.raises(PromoError) as bad:
+        promo_service.validate(db, "START20", user_id=user.id, order_total=10_000, items=[])
+    with pytest.raises(PromoError) as missing:
+        promo_service.validate(db, "NOSUCHCODE", user_id=user.id, order_total=10_000)
+    assert str(bad.value) == str(missing.value)
+
+
+def test_code_without_conditions_ignores_the_cart(db, user):
+    """Старые коды продолжают работать без позиций — сигнатура расширена
+    необязательным аргументом именно ради этого."""
+    make_code(db)
+    assert promo_service.validate(
+        db, "START20", user_id=user.id, order_total=10_000).discount == 5000
