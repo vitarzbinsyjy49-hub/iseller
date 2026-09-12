@@ -1,0 +1,135 @@
+# Выгрузка BSA от 12.09.2026, как прислана. НЕ редактировать вручную:
+# это исходник, по которому парсер строит каталог. Правки — в парсер.
+#
+# Источник: сообщения 12968 (17 Pro/Pro Max) и 12966 (17/17E/Air)
+# из экспорта ChatExport_2026-09-12. Оба пришли ТОЛЬКО через
+# rich_message — поле text у них пустое.
+#
+# Блок iPhone Air (19 строк) вырезан НАМЕРЕННО: владелец решил
+# 12.09.2026 его не брать — не ходовой. Держать эти строки в файле
+# значило бы каждый прогон получать 19 позиций в failed и разучиться
+# читать этот список. Понадобится Air — сначала модель в _MODEL_RE.
+
+## iPhone 17 / 17 Pro / 17 Pro Max / 17e
+17 Pro 256 Silver-106.000🇭🇰🇰🇷(1sim+e sim)
+17 Pro 256 Silver-101.000🇺🇸🇯🇵е sim
+17 Pro 256 Silver-99.500🇺🇸е sim актив 🔥
+17 Pro 256 Orange-104.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 256 Orange-99.900🇯🇵е sim
+17 Pro 256 Orange-98.500 🇺🇸 е sim актив 🔥
+17 Pro 256 Blue-105.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro 256 Blue-100.500🇯🇵е sim
+17 Pro 256 Blue-98.500🇺🇸е sim актив 🔥
+17 Pro 512 Silver-130.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 512 Silver-120.000🇰🇷(1sim+e sim) актив, 7 циклов🔥
+17 Pro 512 Silver-119.000🇯🇵e sim
+17 Pro 512 Orange-122.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro 512 Orange-116.500🇯🇵e sim
+17 Pro 512 Blue-129.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 512 Blue-121.000🇯🇵e sim
+🇯🇵 17 Pro 512Gb Blue eSim ASIS — 105500
+🇯🇵 17 Pro 512Gb Orange eSim ASIS — 105500️️
+17 Pro 1TB Silver-144.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 1TB Silver-133.000🇯🇵eSIM
+17 Pro 1TB Orange-139.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 1TB Orange-127.000🇺🇸🇯🇵eSim
+17 Pro 1TB Blue-143.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro 1TB Blue-139.000🇰🇷🇭🇰(1sim+e sim) актив 🔥
+17 Pro 1TB Blue-127.000🇯🇵eSim
+🇯🇵 17 Pro 1Tb Blue eSim ASIS — 115000
+🇯🇵 17 Pro 1Tb Orange eSim ASIS — 114000️️
+17 Pro Max 256 Silver-116.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 256 Silver-109.000🇯🇵e Sim
+17 Pro Max 256 Silver-107.500🇺🇸e Sim актив 🔥
+17 Pro Max 256 Orange-113.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 256 Orange -97.000 (Новый, замена дисплея АСЦ)🇭🇰
+17 Pro Max 256 Orange-109.000🇺🇸🇯🇵е sim
+17 Pro Max 256 Orange-106.000🇺🇸е sim актив 🔥
+17 Pro Max 256 Blue-115.000🇭🇰🇰🇷(1sim+e sim)
+17 Pro Max 256 Blue-108.500🇺🇸🇯🇵е sim
+17 Pro Max 256 Blue-106.000🇺🇸е sim актив 🔥
+17 Pro Max 512 Silver-139.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 512 Silver-126.000🇯🇵e sim
+17 Pro Max 512 Silver-125.500🇺🇸e sim актив🔥
+17 Pro Max 512 Orange-131.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 512 Orange-121.000🇭🇰(1sim+e sim) замена дисплея в СЦ
+17 Pro Max 512 Orange-125.500🇯🇵🇺🇸e sim
+17 Pro Max 512 Orange-119.000🇺🇸e sim актив 🔥
+17 Pro Max 512 Blue-134.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 512 Blue-125.500🇺🇸🇯🇵e sim
+17 Pro Max 512 Blue-119.000🇺🇸e sim актив 🔥
+17 Pro Max 1TB Silver-170.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 1TB Silver-143.500🇯🇵e sim
+17 Pro Max 1TB Orange-165.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 1TB Orange-131.000🇰🇷🇭🇰ASIS
+17 Pro Max 1TB Orange-138.500🇯🇵e sim
+17 Pro Max 1TB Blue-157.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 1TB Blue-153.000🇰🇷🇭🇰(1sim+e sim) (Актив)🔥
+17 Pro Max 1TB Blue-140.500🇯🇵e sim
+17 Pro Max 1TB Blue-138.800🇺🇸e sim актив 🔥
+🇯🇵 17 Pro Max 1Tb Silver eSim ASIS — 123500
+🇯🇵 17 Pro Max 1Tb Blue eSim ASIS — 123000
+🇯🇵 17 Pro Max 1Tb Orange eSim ASIS — 123000️️
+17 Pro Max 2TB Silver-178.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 2TB Silver-168.000🇯🇵е sim
+17 Pro Max 2TB Orange-172.000🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 2TB Orange-156.000🇺🇸🇯🇵е sim
+17 Pro Max 2TB Orange-152.000🇺🇸е sim актив 🔥
+17 Pro Max 2TB Blue-177.500🇰🇷🇭🇰(1sim+e sim)
+17 Pro Max 2TB Blue-158.000🇯🇵e sim
+🇯🇵 17 Pro Max 2Tb Blue eSim ASIS — 133500
+🇯🇵 17 Pro Max 2Tb Orange eSim ASIS — 133500️️
+17e 256 Black -63.500🇮🇳(1Sim + eSim )
+17e 256 Black-62.000🇺🇸eSim
+17e 256 Black-58.500🇺🇸eSim актив 🔥
+17e 256 White -63.500🇮🇳(1Sim + eSim )
+17e 256 White -62.000🇺🇸eSim
+17e 256 Pink -63.000🇮🇳(1Sim + eSim )
+17e 256 Pink -60.000🇺🇸eSim️️ актив 🔥
+17e 512 Black-77.500;🇮🇳(1 Sim + eSim )
+17e 512 Black-72.000🇺🇸e sim
+17e 512 White -77.500🇮🇳(1 Sim + eSim )
+17e 512 White -72.000🇯🇵eSim
+17e 512 Pink -77.500🇮🇳(1 Sim + eSim )
+17e 512 Pink-72.000🇯🇵eSim
+17 256 Black-82.500🇮🇳(1 sim+e sim )
+17 256 Black-79.000🇺🇸eSim актив🔥
+17 256 Blue-82.700🇮🇳(1 sim+e sim )
+17 256 Blue-79.000🇮🇳(1 sim+e sim)актив 🔥
+17 256 Blue-76.000🇺🇸eSim актив 🔥
+17 256 White-83.500🇮🇳 (1 sim+e sim)
+17 256 White-79.000🇮🇳 (1 sim+e sim)актив 🔥
+17 256 White-79.000🇺🇸 eSim ASIS
+17 256 Sage-82.900🇮🇳(1 sim+e sim)
+17 256 Sage-79.500🇮🇳(1 sim+e sim)актив🔥
+17 256 Sage-84.500🇯🇵e sim
+17 256 Lavender-83.500🇮🇳(1 sim+e sim )
+17 256 Lavender-80.000🇮🇳(1 sim+e sim ) актив🔥
+🇺🇸 17 256Gb Black eSim ASIS — 71500
+🇺🇸 17 256Gb White eSim ASIS — 71500
+🇺🇸 17 256Gb Mist Blue eSim ASIS — 71500
+🇺🇸 17 256Gb Sage eSim ASIS — 71500
+🇺🇸 17 256Gb Lavender eSim — 71500
+17 512 White-99.000🇮🇳1 sim+e sim )
+17 512 White-94.000🇮🇳1 sim+e sim ) актив 🔥
+17 512 White -91.000🇯🇵eSim актив 🔥
+17 512 Sage-99.000🇮🇳(1 sim+e sim )
+17 512 Sage-94.000🇮🇳(1 sim+e sim ) актив 🔥
+17 512 Sage-96.000🇺🇸🇯🇵eSim
+17 512 Blue-99.000🇮🇳(1 sim+e sim )
+17 512 Blue-94.500🇮🇳(1 sim+e sim )актив 🔥
+17 512 Blue -94.500🇺🇸🇯🇵eSim
+17 512 Lavender-99.000🇮🇳(1 sim+e sim )
+17 512 Lavender-95.000🇮🇳(1 sim+e sim ) актив🔥
+17 512 Lavender-95.500🇺🇸🇯🇵е sim
+17 512 Black-99.000🇮🇳(1 sim+e sim )
+17 512 Black-92.000🇮🇳(1 sim+e sim ) актив🔥
+17 512 Black -93.500 🇺🇸eSim
+17 512 Black -91.000 🇯🇵🇺🇸eSim актив 🔥
+🇺🇸 17 512Gb Black eSim ASIS — 80000
+🇺🇸 17 512Gb White eSim ASIS — 80000
+🇺🇸 17 512Gb Mist Blue eSim ASIS — 80000
+🇺🇸 17 512Gb Sage eSim ASIS — 80000
+🇭🇰 17 512Gb Black Sim+eSim ASIS — 82500
+🇭🇰 17 512Gb White Sim+eSim ASIS — 82500
+🇭🇰 17 512Gb Mist Blue Sim+eSim ASIS — 82500️️

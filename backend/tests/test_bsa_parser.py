@@ -278,3 +278,44 @@ def test_mac_condition_marks_split_the_sku():
     assert fresh.sku == "MWUU3-RU"
     assert dented.sku == "MWUU3-RU-BOX"
     assert serviced.sku.endswith("-SERVICE")
+
+
+# ------------------------------------------------- формат выгрузки от 12.09.2026
+
+def test_storage_with_gb_suffix_is_parsed():
+    """BSA стал писать объём с суффиксом: «256Gb» вместо «256».
+
+    Флаг в начале строки и длинное тире парсер умел и раньше (флаги срезаются,
+    хвост из «-–—» обрезается), а вот на суффиксе строка разваливалась — и
+    12.09.2026 из-за него выпали 14 позиций 17 и 17 Pro, почти все ASIS.
+    """
+    item = parse_line("🇺🇸 17 256Gb Black eSim ASIS — 71500")
+    assert item is not None
+    assert item.model == "17"
+    assert item.storage == "256 ГБ"
+    assert item.price == 71500
+    assert item.asis is True
+    assert item.regions == ["US"]
+
+
+def test_gb_suffix_on_pro_and_hongkong_sim():
+    item = parse_line("🇭🇰 17 512Gb Mist Blue Sim+eSim ASIS — 82500")
+    assert item is not None and item.model == "17" and item.storage == "512 ГБ"
+    assert item.regions == ["HK"] and item.price == 82500
+
+    pro = parse_line("🇯🇵 17 Pro 512Gb Blue eSim ASIS — 105500")
+    assert pro is not None and pro.model == "17 Pro" and pro.price == 105500
+
+
+def test_terabyte_suffix_keeps_working():
+    """«1Tb» и «1TB» — одно и то же; регистр не должен решать."""
+    for raw in ("17 Pro Max 1TB Orange-136.000🇰🇷", "17 Pro Max 1Tb Orange-136.000🇰🇷"):
+        item = parse_line(raw)
+        assert item is not None, raw
+        assert item.storage == "1 ТБ", raw
+
+
+def test_old_format_still_parses():
+    """Старый формат никуда не делся — он идёт в той же выгрузке рядом."""
+    item = parse_line("17 Pro 256 Silver-102.000🇭🇰🇰🇷(1sim+e sim)")
+    assert item is not None and item.price == 102000 and item.storage == "256 ГБ"
