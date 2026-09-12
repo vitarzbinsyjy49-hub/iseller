@@ -32,6 +32,11 @@ export type RoadmapItem = {
   body: string;
   period: RoadmapPeriod;
   tracks: RoadmapTrack[];
+  /** Пункт уже выехал на прод. Из списка НЕ убирается: обещание, закрытое в
+   *  свой же период, — единственное доказательство, что роудмап живой, а не
+   *  витрина намерений. Убирать стоит позже, когда пункт перестанет быть
+   *  новостью. */
+  done?: boolean;
 };
 
 export const PERIOD_LABEL: Record<RoadmapPeriod, string> = {
@@ -64,6 +69,7 @@ export const ROADMAP: RoadmapItem[] = [
       "видно только в конце.",
     period: "sep",
     tracks: ["app", "loyalty"],
+    done: true,   // выехало на прод 07.09.2026 вместе с фактом покупки
   },
   {
     id: "loyalty-tasks",
@@ -187,10 +193,18 @@ export const ROADMAP: RoadmapItem[] = [
   },
 ];
 
-/** Пункты одного экрана, сгруппированные по периоду; пустые группы отброшены. */
+/** Пункты одного экрана, сгруппированные по периоду; пустые группы отброшены.
+ *
+ *  Внутри группы сделанное идёт первым. Галочка наверху списка читается как
+ *  «обещанное выходит»; та же галочка, закопанная в середину, — как случайность.
+ *  Сортировка устойчивая (Array.sort по спецификации), поэтому порядок
+ *  остальных пунктов остаётся тем, в каком они записаны в ROADMAP.
+ */
 export function roadmapFor(track: RoadmapTrack): { period: RoadmapPeriod; items: RoadmapItem[] }[] {
   return PERIOD_ORDER.map((period) => ({
     period,
-    items: ROADMAP.filter((item) => item.period === period && item.tracks.includes(track)),
+    items: ROADMAP
+      .filter((item) => item.period === period && item.tracks.includes(track))
+      .sort((a, b) => Number(Boolean(b.done)) - Number(Boolean(a.done))),
   })).filter((group) => group.items.length > 0);
 }

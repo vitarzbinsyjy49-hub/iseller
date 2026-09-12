@@ -39,14 +39,50 @@ export default function RoadmapSteps({
           <ul className="mt-2.5 space-y-3">
             {group.items.map((item) => (
               <li key={item.id} className="flex gap-3">
-                <span
-                  className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${
-                    accentColor ? "" : "bg-accent"
-                  }`}
-                  style={accentColor ? { backgroundColor: accentColor } : undefined}
-                />
+                {item.done ? (
+                  // Галочка занимает место точки, а не добавляется к ней: два
+                  // маркера в строке спорят за одну роль.
+                  <svg
+                    viewBox="0 0 12 12"
+                    aria-hidden="true"
+                    className={`mt-[3px] h-3 w-3 shrink-0 ${accentColor ? "" : "text-accent"}`}
+                    style={accentColor ? { color: accentColor } : undefined}
+                  >
+                    <path
+                      d="M1.5 6.5 4.5 9.5 10.5 2.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : (
+                  <span
+                    className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${
+                      accentColor ? "" : "bg-accent"
+                    }`}
+                    style={accentColor ? { backgroundColor: accentColor } : undefined}
+                  />
+                )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-semibold leading-5">{item.title}</p>
+                  <p className="text-[14px] font-semibold leading-5">
+                    {item.title}
+                    {item.done && (
+                      <span
+                        className={`ml-2 inline-flex translate-y-[-1px] rounded-full px-2 py-[2px] align-middle text-[10px] font-bold uppercase tracking-[0.06em] ${
+                          accentColor ? "" : "bg-accent/10 text-accent"
+                        }`}
+                        style={
+                          accentColor
+                            ? { backgroundColor: `${accentColor}1a`, color: accentColor }
+                            : undefined
+                        }
+                      >
+                        Готово
+                      </span>
+                    )}
+                  </p>
                   <p className="mt-1 text-[12.5px] leading-[1.45] text-muted">{item.body}</p>
                 </div>
               </li>

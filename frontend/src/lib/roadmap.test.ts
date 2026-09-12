@@ -55,3 +55,36 @@ describe("roadmapFor", () => {
     }
   });
 });
+
+describe("выполненные пункты", () => {
+  it("рефералка отмечена сделанной — она выехала на прод 07.09.2026", () => {
+    const item = ROADMAP.find((i) => i.id === "referral");
+    expect(item?.done, "пункт про приглашения").toBe(true);
+  });
+
+  it("сделанное идёт первым в своей группе", () => {
+    // Список должен доказывать, что роудмап живой: галочка наверху читается
+    // как «обещанное выходит», а закопанная в середину — как случайность.
+    for (const track of TRACKS) {
+      for (const group of roadmapFor(track)) {
+        const flags = group.items.map((i) => (i.done ? 0 : 1));
+        expect([...flags], `${track}/${group.period}`).toEqual([...flags].sort());
+      }
+    }
+  });
+
+  it("сделанное не выпадает из своего периода", () => {
+    // Соблазн переложить выполненное в отдельную группу «Готово» есть, но
+    // тогда пропадает главное: обещали на сентябрь — и сделали в сентябре.
+    const referral = ROADMAP.find((i) => i.id === "referral");
+    expect(referral?.period).toBe("sep");
+    const groups = roadmapFor("loyalty");
+    expect(groups[0].items.some((i) => i.id === "referral")).toBe(true);
+  });
+
+  it("порядок внутри группы стабилен: сортировка не тасует равные пункты", () => {
+    const first = roadmapFor("app").map((g) => g.items.map((i) => i.id));
+    const second = roadmapFor("app").map((g) => g.items.map((i) => i.id));
+    expect(first).toEqual(second);
+  });
+});
