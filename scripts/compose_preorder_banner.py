@@ -14,6 +14,9 @@
 """
 from __future__ import annotations
 
+import os
+import tempfile
+
 import numpy as np
 from PIL import Image, ImageFilter
 from scipy import ndimage
@@ -76,7 +79,7 @@ def cutout(path: str, tolerance: int = 26) -> Image.Image:
     return out.crop(out.getbbox())
 
 
-def gradient() -> Image.Image:
+def gradient(w: int = W, h: int = H) -> Image.Image:
     """Сетка мягких пятен — покадрово то же, что рисует канва экрана события.
 
     Радиус берётся от МЕНЬШЕЙ стороны кадра. На телефоне канва вертикальная и
@@ -84,22 +87,23 @@ def gradient() -> Image.Image:
     ширины, пятна расплывутся выше кадра и превратятся обратно в полосатую
     заливку. От меньшей стороны пропорции пятна сохраняются в обеих раскладках.
     """
-    field = np.zeros((H, W, 3), dtype=float)
+    field = np.zeros((h, w, 3), dtype=float)
     field[:, :] = BASE
 
-    unit = min(W, H)
-    xs = np.arange(W, dtype=float)
-    ys = np.arange(H, dtype=float)
+    unit = min(w, h)
+    xs = np.arange(w, dtype=float)
+    ys = np.arange(h, dtype=float)
 
     for cx, cy, radius, colour, alpha in BLOBS:
         r = radius * unit
-        dx = (xs - cx * W)[None, :]
-        dy = (ys - cy * H)[:, None]
+        dx = (xs - cx * w)[None, :]
+        dy = (ys - cy * h)[:, None]
         dist = np.sqrt(dx ** 2 + dy ** 2)
         # Канва рисует радиальный градиент с ЛИНЕЙНЫМ спадом альфы от центра к
         # краю — повторяем его же, иначе пятна станут жёстче оригинала.
-        w = np.clip(1.0 - dist / r, 0.0, 1.0) * alpha
-        field = field * (1 - w[:, :, None]) + np.array(colour, dtype=float) * w[:, :, None]
+        weight = np.clip(1.0 - dist / r, 0.0, 1.0) * alpha
+        field = (field * (1 - weight[:, :, None])
+                 + np.array(colour, dtype=float) * weight[:, :, None])
 
     return Image.fromarray(np.clip(field, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
 
@@ -127,10 +131,7 @@ def main(out: str | None = None) -> None:
     # раскрытого — и любой срез оставлял либо осколок соседа, либо плоско
     # обрубленный корпус. Кадр составной (три аппарата столбиком), поэтому
     # вырезаем средний по вертикали.
-    duo_src = Image.open(f"{SRC}/duo-open-standalone.jpg").convert("RGB")
-    dw, dh = duo_src.size
-    duo_src.crop((0, int(dh * 0.34), dw, int(dh * 0.72))).save("_duo_tmp.png")
-    duo = cutout("_duo_tmp.png")
+    duo = _duo_open()
 
     # Высота подобрана так, чтобы два объекта ВЛЕЗЛИ с настоящим зазором.
     # Третий сюда не помещается: при пустой левой трети три пары по 0,83 и 1,54
@@ -153,6 +154,127 @@ def main(out: str | None = None) -> None:
     print(f"{target}: {Image.open(target).size}, зазор между аппаратами {gap}px")
 
 
+# ======================================================================
+#                        Кадр для поста в канал
+# ======================================================================
+#
+# Почему это ОТДЕЛЬНЫЙ кадр, а не тот же баннер. Баннер намеренно пустой слева:
+# HeroBanner кладёт поверх него заголовок и подзаголовок, и пустота — это место
+# под текст (см. FIELD_LEFT выше). В посте канала никакого текста поверх нет,
+# картинка идёт голой — и та же пустота читается уже не как воздух, а как брак:
+# два маленьких аппарата, прижатых к правому краю, и половина кадра ни о чём.
+#
+# Значит у поста своя рамка: аппараты крупные, поля ровные со всех сторон,
+# устройств больше — пост перечисляет всю линейку, и картинка обязана говорить
+# то же самое.
+POST_OUT = "frontend/public/assets/promos/apple-sept-2026-post.webp"
+
+#: 4:3 — та пропорция, в которой Telegram показывает фото в канале целиком,
+#: не обрезая и не заставляя тапать ради полного кадра.
+POST_W, POST_H = 1600, 1200
+
+#: Поля кадра и зазор между рядами. Одно число на левое и правое поле —
+#: несимметричные поля и были тем, из-за чего баннер в посте «заваливался».
+POST_MARGIN_X = 80
+#: Своё поле нижнего ряда — см. _place_row.
+POST_MARGIN_X_COMPANIONS = 230
+POST_GAP_Y = 64
+
+
+def _row(items: list[Image.Image], height: int) -> list[Image.Image]:
+    return [scaled(it, height) for it in items]
+
+
+def _place_row(canvas: Image.Image, row: list[Image.Image], top: int,
+               margin: int = POST_MARGIN_X) -> None:
+    """Кладёт ряд по центру кадра с равными зазорами между предметами.
+
+    `margin` у рядов разный намеренно. Два героя занимают кадр во всю ширину, а
+    три спутника, растянутые на ту же ширину, расползались: между часами и
+    наушниками зияла дыра, и середина кадра пустела. Своим полем нижний ряд
+    собирается в плотную группу под героями — и читается как один предмет
+    композиции, а не как три случайно расставленных.
+    """
+    span = POST_W - 2 * margin
+    total = sum(it.width for it in row)
+    gap = (span - total) / max(1, len(row) - 1) if len(row) > 1 else 0
+    assert total <= span, f"ряд не помещается: {total}px при доступных {span}px"
+
+    x = float(margin)
+    tallest = max(it.height for it in row)
+    for it in row:
+        # Предметы ряда выравниваются по ОБЩЕЙ средней линии, а не по верху:
+        # часы, наушники и телефон разной высоты, и по верху ряд читался бы
+        # как полка, с которой всё свисает.
+        canvas.alpha_composite(it, (round(x), top + (tallest - it.height) // 2))
+        x += it.width + gap
+
+
+def _duo_open() -> Image.Image:
+    """Раскрытый Duo из составного кадра.
+
+    Кадр `duo-open-standalone` — три аппарата столбиком; раскрытый лежит
+    посередине, его и берём. В кадрах finish-select рядом с раскрытым лежит
+    сложенный и перекрывает ему левую грань.
+
+    Промежуточный файл пишется во ВРЕМЕННЫЙ каталог и удаляется. В корне
+    репозитория ему не место: деплой синхронизирует всё рабочее дерево, и
+    забытый `_duo_tmp.png` уехал бы на сервер — а удалить его оттуда потом
+    можно только руками, синхронизация ничего не удаляет.
+    """
+    src = Image.open(f"{SRC}/duo-open-standalone.jpg").convert("RGB")
+    dw, dh = src.size
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "duo.png")
+        src.crop((0, int(dh * 0.34), dw, int(dh * 0.72))).save(path)
+        return cutout(path)
+
+
+def compose_post(out: str | None = None) -> None:
+    """Кадр для поста: два героя сверху, три спутника снизу.
+
+    iPhone 18 Pro Max в кадр НЕ входит, хотя в посте он назван. Причина не в
+    месте: его пресс-кадр отличается от кадра Pro только пропорцией корпуса —
+    та же поза, тот же цвет, те же обои. Рядом они читались бы как один аппарат,
+    продублированный по ошибке, и кадр начал бы спорить с текстом вместо того,
+    чтобы его подтверждать. Размер Pro Max объясняет подпись, а не картинка.
+    """
+    canvas = gradient(POST_W, POST_H)
+
+    hero_h = 600
+    heroes = _row([cutout(f"{SRC}/iphone18pro-burgundy.jpg"), _duo_open()], hero_h)
+    # Duo раскрытым шире телефона больше чем вдвое; если дать ему ту же высоту,
+    # он съест ряд. Осаживаем до 0,92 — так же, как в баннере.
+    heroes[1] = scaled(heroes[1], int(hero_h * 0.92))
+
+    companions = _row([
+        cutout(f"{SRC}/watch-s12-pearlwhite.jpg"),
+        cutout(f"{SRC}/watch-ultra4-milanese.jpg"),
+        # Свой порог, а не общий 26. AirPods белые на почти белом фоне, и на
+        # общем пороге заливка от края прогрызала сам корпус: в кадре между
+        # вкладышами появлялся белый клин, а по краям — дыры. 12 оставляет
+        # корпус целым, ниже 9 фон уже не отделяется вовсе.
+        cutout(f"{SRC}/airpods5-1.jpg", tolerance=12),
+    ], 320)
+
+    row_h = max(it.height for it in heroes)
+    comp_h = max(it.height for it in companions)
+    block = row_h + POST_GAP_Y + comp_h
+    top = (POST_H - block) // 2
+
+    _place_row(canvas, heroes, top)
+    _place_row(canvas, companions, top + row_h + POST_GAP_Y,
+               margin=POST_MARGIN_X_COMPANIONS)
+
+    target = out or POST_OUT
+    canvas.convert("RGB").save(target, "WEBP", quality=90, method=6)
+    print(f"{target}: {Image.open(target).size}, блок {block}px по высоте, поля {top}px")
+
+
 if __name__ == "__main__":
     import sys
-    main(sys.argv[1] if len(sys.argv) > 1 else None)
+    args = sys.argv[1:]
+    if args and args[0] == "--post":
+        compose_post(args[1] if len(args) > 1 else None)
+    else:
+        main(args[0] if args else None)
