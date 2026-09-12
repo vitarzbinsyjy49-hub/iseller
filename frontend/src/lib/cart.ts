@@ -225,6 +225,9 @@ export type CheckoutInput = {
   idempotency_key: string;
   /** Только сам код: скидку и итог считает сервер по актуальному каталогу. */
   promo_code?: string | null;
+  /** Сколько баллов списать. Потолок считает сервер: всё сверх него — отказ,
+   *  а не молчаливое усечение. */
+  points_to_spend?: number;
 };
 
 export type CheckoutResult = {

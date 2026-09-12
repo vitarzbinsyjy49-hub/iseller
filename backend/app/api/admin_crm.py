@@ -232,6 +232,11 @@ def update_lead(
                 reviews.request_for_lead(db, lead)
             elif previous == "completed":
                 purchase.revert_for_lead(db, lead, actor=f"admin:{admin}")
+            if body.status == "cancelled":
+                # Списанные при оформлении баллы возвращаются: их обменяли на
+                # скидку, а скидки не будет. Ключ делает возврат однократным,
+                # сколько бы раз заявку ни отменяли с обеих сторон.
+                purchase.refund_spend_for_lead(db, lead, actor=f"admin:{admin}")
     # Правка суммы у уже завершённой заявки без смены статуса: менеджер
     # ошибся в цифре. Начислений это не трогает — они уже проведены.
     if body.final_total is not None and body.status is None:

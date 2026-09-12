@@ -15,6 +15,7 @@ API-слой (``app/api/cart.py``) остаётся тонким — здесь 
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -171,6 +172,9 @@ def cart_payload(db: Session, user_id: int) -> dict:
 
     rows = [_item_payload(i, products.get(i.product_id)) for i in items]
     orderable_rows = [r for r in rows if r["orderable"]]
+    subtotal = round(sum(r["line_total"] for r in orderable_rows), 2)
+    from app.services import loyalty   # локально: цикл импорта
+
     return {
         "cart_id": cart.id,
         "items": rows,
@@ -179,11 +183,15 @@ def cart_payload(db: Session, user_id: int) -> dict:
         # Предварительная сумма — только по позициям, которые реально можно
         # отправить. Складывать в неё недоступный товар значит обещать цену за
         # то, чего нет.
-        "estimated_total": round(sum(r["line_total"] for r in orderable_rows), 2),
+        "estimated_total": subtotal,
         "currency": "RUB",
         "has_unavailable": any(not r["orderable"] for r in rows),
         "has_price_changes": any(r["price_changed"] for r in rows),
         "max_positions": MAX_CART_ITEMS,
+        # Баланс и потолок списания считает СЕРВЕР: доля чека живёт в настройках
+        # рядом с правилом, и вторая копия во фронте разъехалась бы с первой.
+        "points_balance": int(loyalty.summary(db, user_id)["balance"]),
+        "points_redeemable": redeemable(db, user_id, subtotal),
     }
 
 
@@ -197,6 +205,8 @@ def _empty_payload(cart_id: int | None) -> dict:
         "currency": "RUB",
         "has_unavailable": False,
         "has_price_changes": False,
+        "points_balance": 0,
+        "points_redeemable": 0,
         "max_positions": MAX_CART_ITEMS,
     }
 
@@ -309,6 +319,29 @@ def _normalize_fulfillment(value: str | None) -> str:
     return v if v in DELIVERY_METHODS else "consult"
 
 
+def spend_key(lead_id: int) -> str:
+    """Ключ списания по заявке. Один на заявку: повторное оформление по тому же
+    ключу идемпотентности вернёт существующую заявку и не спишет второй раз."""
+    return f"lead_{lead_id}_spend"
+
+
+def redeemable(db: Session, user_id: int, subtotal: float) -> int:
+    """Сколько баллов человек может списать с этого чека.
+
+    Два ограничителя: собственный баланс и доля чека из настроек. Доля нужна
+    потому, что балл равен рублю: без неё накопивший закрывал бы баллами всю
+    покупку, и сделка уходила бы в минус — маржа магазина куда меньше ста
+    процентов. Значение настраивается (`redeem_max_bps`), по умолчанию 5%.
+    """
+    from app.services import loyalty, settings as settings_service
+
+    if subtotal <= 0:
+        return 0
+    share = int(Decimal(str(subtotal)) * settings_service.loyalty(db).redeem_max_bps // 10_000)
+    balance = int(loyalty.summary(db, user_id)["balance"])
+    return max(0, min(balance, share))
+
+
 def _promo_items(rows: list[dict]) -> list[dict]:
     """Состав корзины для проверки условий промокода.
 
@@ -365,6 +398,7 @@ def checkout(
     comment: str | None,
     idempotency_key: str | None = None,
     promo_code: str | None = None,
+    points_to_spend: int = 0,
 ) -> tuple[Lead, bool]:
     """Превратить корзину в ОДНУ общую заявку.
 
@@ -448,9 +482,28 @@ def checkout(
             ],
         )
 
+    # Баллы и промокод взаимоисключающи — решение владельца. Молча
+    # проигнорировать второе нельзя: человек должен видеть причину, иначе это
+    # выглядит как поломка, а не как правило.
+    points = max(0, int(points_to_spend or 0))
+    if points and offer is not None:
+        raise CartError(
+            "points_and_promo",
+            "Баллы и промокод нельзя применить вместе — выберите одно",
+        )
+    if points:
+        allowed = redeemable(db, user.id, subtotal)
+        if points > allowed:
+            raise CartError(
+                "points_too_many",
+                f"Баллами можно закрыть не больше {allowed} ₽ этого заказа",
+            )
+
     discount = offer.discount if offer else 0.0
-    estimated_total = round(subtotal - discount, 2)
+    estimated_total = round(subtotal - discount - points, 2)
     meta = {"origin": "cart"}
+    if points:
+        meta.update({"points_spent": points, "subtotal": subtotal})
     if offer is not None:
         # Снапшот в заявку: менеджеру нужно видеть, из чего сложился итог, а
         # настройки кода к моменту разговора могут уже смениться.
@@ -512,6 +565,21 @@ def checkout(
         promo_service.redeem(
             db, offer.promo, user_id=user.id, lead_id=lead.id,
             discount=discount, order_total=subtotal,
+        )
+    if points:
+        # Списание проводится ПОСЛЕ создания заявки: ключ идемпотентности
+        # включает её id, и без него повторный запрос списал бы второй раз.
+        # Тот же приём, что у начисления по факту покупки.
+        from app.services import loyalty
+
+        loyalty.record(
+            db,
+            user_id=user.id,
+            kind="spend",
+            points=-points,
+            comment=f"Списание по заявке {lead.id}",
+            created_by=f"user:{user.id}",
+            idempotency_key=spend_key(lead.id),
         )
 
     # Корзина закрывается ТОЛЬКО вместе с успешно созданной заявкой. Новая

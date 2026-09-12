@@ -22,6 +22,11 @@ type Props = {
   /** Предварительная сумма корзины — от неё считается скидка. */
   subtotal: number;
   onChange: (promo: AppliedPromo | null) => void;
+  /** Поле выключено: сейчас применено списание баллов, а вместе они не идут. */
+  disabled?: boolean;
+  /** Почему выключено. Показывается вместо поля ввода: молча погашенное поле
+   *  читается как поломка. */
+  disabledReason?: string;
 };
 
 /** Поле промокода в корзине.
@@ -29,7 +34,9 @@ type Props = {
  *  Проверка кода купон НЕ тратит — списание происходит только при оформлении
  *  заявки. Поэтому вводить можно сколько угодно: акции это ничего не стоит.
  */
-export default function PromoField({ subtotal, onChange }: Props) {
+export default function PromoField({
+  subtotal, onChange, disabled = false, disabledReason = "",
+}: Props) {
   const [input, setInput] = useState("");
   const [offer, setOffer] = useState<PromoOffer | null>(null);
   const [state, setState] = useState<"idle" | "checking" | "error">("idle");
@@ -119,6 +126,15 @@ export default function PromoField({ subtotal, onChange }: Props) {
         >
           Убрать промокод
         </button>
+      </div>
+    );
+  }
+
+  if (disabled) {
+    return (
+      <div className="mt-3 rounded-xl2 bg-surface p-4 shadow-soft">
+        <p className="text-[13px] font-semibold text-muted">Промокод</p>
+        <p className="mt-1 text-[12px] leading-4 text-muted">{disabledReason}</p>
       </div>
     );
   }

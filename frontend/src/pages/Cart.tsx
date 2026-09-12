@@ -25,6 +25,7 @@ import { QuantityStepper } from "../components/QuantityStepper";
 import { ErrorState } from "../components/StateViews";
 import { AnimatedCheck } from "../components/AnimatedCheck";
 import { CartGlyph } from "../components/CartBar";
+import PointsField from "../components/PointsField";
 import PromoField, { type AppliedPromo } from "../components/PromoField";
 import { cappedDiscount, forgetCode, totalWithDiscount } from "../lib/promo";
 import {
@@ -63,7 +64,12 @@ export default function Cart() {
   // Код уходит на сервер, скидка — только на экран. При оформлении сервер
   // считает её заново по актуальному каталогу: клиент присылает код, а не сумму.
   const [promo, setPromo] = useState<AppliedPromo | null>(null);
-  const discount = promo ? cappedDiscount(cart.estimated_total, promo.discount) : 0;
+  // Баллы и промокод взаимоисключающи: применение одного гасит другое ЗДЕСЬ,
+  // а не только на сервере — иначе человек увидит два применённых скидочных
+  // механизма и отказ уже на кнопке «Отправить».
+  const [points, setPoints] = useState(0);
+  const promoDiscount = promo ? cappedDiscount(cart.estimated_total, promo.discount) : 0;
+  const discount = points > 0 ? points : promoDiscount;
 
   const refresh = () => {
     setLoad("loading");
@@ -191,7 +197,20 @@ export default function Cart() {
 
       {/* Промокод. Ввод и проверка купон НЕ тратят — он списывается только
           вместе с созданной заявкой (services/cart.checkout). */}
-      <PromoField subtotal={cart.estimated_total} onChange={setPromo} />
+      <PromoField
+        subtotal={cart.estimated_total}
+        disabled={points > 0}
+        disabledReason="Нельзя вместе со списанием баллов"
+        onChange={(applied) => { setPromo(applied); if (applied) setPoints(0); }}
+      />
+
+      <PointsField
+        balance={cart.points_balance}
+        redeemable={cart.points_redeemable}
+        promoApplied={promo !== null}
+        value={points}
+        onChange={(n) => { setPoints(n); if (n > 0) setPromo(null); }}
+      />
 
       <button
         onClick={() => {
@@ -206,6 +225,7 @@ export default function Cart() {
       <CheckoutBlock
         cartTotal={totalWithDiscount(cart.estimated_total, discount)}
         promoCode={promo?.code ?? null}
+        pointsToSpend={points}
         itemsCount={cart.items_count}
         blocked={cart.has_unavailable}
         defaultName={user?.first_name ?? ""}
@@ -304,11 +324,12 @@ function Notice({ tone, children }: { tone: "info" | "warn"; children: React.Rea
 
 /* ---------------------------------------------------------------- checkout --- */
 function CheckoutBlock({
-  cartTotal, promoCode, itemsCount, blocked, defaultName, requirePhone, telegramUsername,
+  cartTotal, promoCode, pointsToSpend, itemsCount, blocked, defaultName, requirePhone, telegramUsername,
   autoOpen, onSuccess, onRefresh,
 }: {
   cartTotal: number;
   promoCode: string | null;
+  pointsToSpend: number;
   itemsCount: number;
   blocked: boolean;
   defaultName: string;
@@ -365,6 +386,7 @@ function CheckoutBlock({
         name: name.trim(), phone: phone.trim(), fulfillment_type: fulfillment,
         comment: comment.trim(), consent, idempotency_key: idempotencyKey,
         promo_code: promoCode,
+        points_to_spend: pointsToSpend,
       });
       // Купон списан вместе с заявкой — второй раз тот же код не пройдёт,
       // и держать его в хранилище значит показать скидку, которой уже нет.

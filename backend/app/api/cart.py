@@ -137,6 +137,7 @@ def checkout(body: CheckoutIn, user: User = Depends(get_current_user), db: Sessi
             comment=body.comment,
             idempotency_key=body.idempotency_key,
             promo_code=body.promo_code,
+            points_to_spend=body.points_to_spend,
         )
     except PromoError as e:
         # Заявку НЕ создаём: человек рассчитывал на скидку и обязан узнать, что

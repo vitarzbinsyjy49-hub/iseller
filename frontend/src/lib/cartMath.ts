@@ -45,6 +45,10 @@ export type CartState = {
   has_unavailable: boolean;
   has_price_changes: boolean;
   max_positions: number;
+  /** Баланс баллов и сколько из них можно закрыть этим чеком. Оба числа
+   *  считает СЕРВЕР: доля чека живёт в настройках рядом с правилом. */
+  points_balance: number;
+  points_redeemable: number;
 };
 
 export const EMPTY_CART: CartState = {
@@ -57,6 +61,8 @@ export const EMPTY_CART: CartState = {
   has_unavailable: false,
   has_price_changes: false,
   max_positions: 50,
+  points_balance: 0,
+  points_redeemable: 0,
 };
 
 /** Режимы, которые можно положить в корзину (то же множество, что на backend). */

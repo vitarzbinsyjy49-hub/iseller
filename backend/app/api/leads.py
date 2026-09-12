@@ -356,6 +356,10 @@ def cancel_lead(
         detail=f"lead={lead_id};from={previous};to=cancelled",
     ))
     _notify_cancelled_by_user(db, lead)
+    # Возврат списанных баллов — то же правило, что и при отмене менеджером.
+    from app.services import purchase
+
+    purchase.refund_spend_for_lead(db, lead, actor=f"user:{user.id}")
     db.commit()
     db.refresh(lead)
     return lead.to_dict()

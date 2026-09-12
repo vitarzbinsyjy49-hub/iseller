@@ -46,6 +46,39 @@ def accrue_for_lead(db: Session, lead: Lead, actor: str) -> None:
     referral.payout_for_lead(db, lead, actor=actor)
 
 
+def spend_refund_key(lead_id: int) -> str:
+    return f"lead_{lead_id}_spend_refund"
+
+
+def refund_spend_for_lead(db: Session, lead: Lead, actor: str) -> None:
+    """Вернуть баллы, списанные при оформлении отменённой заявки.
+
+    Отмена — единственный момент, когда возврат уместен: списание обменяли на
+    скидку, а скидки не будет. Идемпотентность держит КЛЮЧ, а не осторожность
+    вызывающего: отменить заявку могут и покупатель, и менеджер, подряд, и
+    второй раз баллы дарить нельзя.
+
+    Обратной операции (списать заново, если заявку вернули из отмены) нет
+    намеренно: к этому моменту баллы уже на счету и могли уйти в другую
+    покупку. Менеджер проводит списание руками из карточки клиента — это
+    редкий случай, и лучше он будет виден в журнале как ручной.
+    """
+    from app.services import cart as cart_service
+
+    spent = loyalty.transaction_by_key(db, cart_service.spend_key(lead.id))
+    if spent is None or spent.points >= 0:
+        return
+    loyalty.record(
+        db,
+        user_id=spent.user_id,
+        kind="correction",
+        points=-spent.points,
+        comment=f"Возврат баллов: заявка {lead.id} отменена",
+        created_by=actor,
+        idempotency_key=spend_refund_key(lead.id),
+    )
+
+
 def revert_for_lead(db: Session, lead: Lead, actor: str) -> None:
     """Откатить всё, что начислено по заявке на текущей попытке завершения.
 

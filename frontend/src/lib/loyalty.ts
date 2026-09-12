@@ -142,3 +142,14 @@ export const KIND_LABEL: Record<LoyaltyTx["kind"], string> = {
   correction: "Корректировка",
   referral: "За приглашение",
 };
+
+/** Почему списание сейчас недоступно, или null — если доступно.
+ *
+ *  Причину показываем всегда. Молча погашенная галочка читается как поломка:
+ *  человек видит баллы на счету, тычет в блок и ничего не происходит.
+ */
+export function redeemBlockedReason(promoApplied: boolean, redeemable: number): string | null {
+  if (promoApplied) return "Нельзя вместе с промокодом";
+  if (redeemable <= 0) return "На этот заказ баллов пока не хватает";
+  return null;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cashbackFor, formatPoints, formatRate, pointsWord, progressPercent, nextPurchaseLine } from "./loyalty";
+import { cashbackFor, formatPoints, formatRate, pointsWord, progressPercent, nextPurchaseLine, redeemBlockedReason } from "./loyalty";
 
 describe("formatRate", () => {
   it("пишет ставку по-русски, через запятую", () => {
@@ -101,5 +101,19 @@ describe("nextPurchaseLine", () => {
       rate_bps: 100, rate_percent: 1, cap_points: 1500, promo: null, promo_until: "2026-11-01",
     });
     expect(line).not.toContain("ноября");
+  });
+});
+
+describe("redeemBlockedReason", () => {
+  it("промокод перекрывает списание, и причина называется вслух", () => {
+    expect(redeemBlockedReason(true, 5000)).toContain("промокод");
+  });
+
+  it("нулевой потолок объясняется, а не молчит", () => {
+    expect(redeemBlockedReason(false, 0)).toBeTruthy();
+  });
+
+  it("когда всё можно — причины нет", () => {
+    expect(redeemBlockedReason(false, 5000)).toBeNull();
   });
 });

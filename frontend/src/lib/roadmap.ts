@@ -108,6 +108,7 @@ export const ROADMAP: RoadmapItem[] = [
       "«оплатить баллами» с пересчётом суммы до отправки заявки.",
     period: "oct",
     tracks: ["app", "loyalty"],
+    done: true,   // выехало 12.09.2026: списание в корзине, не более 5% чека
   },
   {
     id: "points-auto",
@@ -117,6 +118,7 @@ export const ROADMAP: RoadmapItem[] = [
       "фиксироваться в магазине, баллы появятся на счету сами.",
     period: "oct",
     tracks: ["loyalty"],
+    done: true,   // выехало 07.09.2026 вместе с фактом покупки
   },
   {
     id: "points-notify",
