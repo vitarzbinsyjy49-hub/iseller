@@ -706,3 +706,40 @@ def test_rich_post_unchanged_is_not_resent(db, telegram):
 
     assert result.unchanged == ["info_warranty"]
     assert len(telegram.sent_rich) == 1     # второго вызова не было
+
+
+def test_preorder_button_builds_a_deep_link_with_the_group(db):
+    """Кнопка «Предзаказ» собирает диплинк из группы события.
+
+    Группа хранится в value, а ссылка собирается В МОМЕНТ публикации — по той
+    же причине, по которой так устроены «менеджер» и «раздел»: сменится имя
+    бота или появится короткое имя Mini App, и все посты подхватят новую
+    ссылку, а не потащат вмороженную старую.
+    """
+    from app.services.info_posts import build_keyboard
+
+    keyboard = build_keyboard(
+        [{"text": "📦 Открыть предзаказ", "kind": "preorder", "value": "apple-sept-2026"}],
+        bot_username="isellerAIbot", manager_url="", channel_url="")
+    assert keyboard[0][0]["url"] == "https://t.me/isellerAIbot?start=preorder_apple-sept-2026"
+
+
+def test_preorder_button_uses_the_direct_mini_app_link_when_configured(db):
+    """С коротким именем Mini App кнопка открывает экран в один тап."""
+    from app.services.info_posts import build_keyboard
+
+    keyboard = build_keyboard(
+        [{"text": "📦 Открыть предзаказ", "kind": "preorder", "value": "apple-sept-2026"}],
+        bot_username="isellerAIbot", manager_url="", channel_url="", app_short_name="shop")
+    assert keyboard[0][0]["url"] == "https://t.me/isellerAIbot/shop?startapp=preorder_apple-sept-2026"
+
+
+def test_preorder_button_without_group_is_dropped(db):
+    """Без группы ссылка вела бы на экран несуществующего события — такая
+    кнопка выбрасывается, а не публикуется битой."""
+    from app.services.info_posts import build_keyboard
+
+    keyboard = build_keyboard(
+        [{"text": "📦 Открыть предзаказ", "kind": "preorder", "value": ""}],
+        bot_username="isellerAIbot", manager_url="", channel_url="")
+    assert keyboard == []

@@ -236,6 +236,39 @@ def parse_query_payload(payload: str) -> str | None:
     return query or None
 
 
+#: Диплинк на экран события предзаказа: `preorder_apple-sept-2026`.
+#:
+#: Группа едет В payload'е, а не лежит словарём в коде. Причина та же, по
+#: которой в коде нет списка категорий (см. CLAUDE.md, «Навигация каталога»):
+#: события заводятся баннером в админке (`action_type="preorder"`), старые
+#: пустеют сами, когда товар приехал, — и список групп в коде разъехался бы с
+#: базой на первом же новом событии. Здесь же новое событие работает без правки
+#: кода: завели баннер, собрали ссылку с его slug'ом.
+_PREORDER_PREFIX = "preorder_"
+#: Свой предел длины, а не «сколько пропустит Telegram»: payload приходит из
+#: ссылки, которую мог собрать кто угодно, а группа уходит в путь URL.
+_PREORDER_SLUG_MAX = 64
+_PREORDER_ALLOWED = set(string.ascii_lowercase + string.digits + "-")
+
+
+def parse_preorder_payload(payload: str) -> str | None:
+    """«preorder_apple-sept-2026» -> «apple-sept-2026». Всё остальное -> None.
+
+    Проверка строгая по той же причине, что у `parse_product_payload`: значение
+    подставляется в путь URL. Разрешены только строчная латиница, цифры и дефис —
+    ровно тот алфавит, которым записаны slug'и баннеров. Этого достаточно, чтобы
+    ни «..», ни слэш, ни кириллица до пути не добрались.
+    """
+    if not payload.startswith(_PREORDER_PREFIX):
+        return None
+    raw = payload[len(_PREORDER_PREFIX):]
+    if not raw or len(raw) > _PREORDER_SLUG_MAX:
+        return None
+    if not set(raw) <= _PREORDER_ALLOWED:
+        return None
+    return raw
+
+
 #: Префикс рекламных payload'ов: ad_<кампания>. Работает по обеим ссылкам:
 #: t.me/<bot>/<app>?startapp=ad_<кампания> (прямой вход в Mini App — Telegram
 #: кладёт метку в initDataUnsafe.start_param, фронт отдаёт её в /auth/telegram)
@@ -378,6 +411,9 @@ def resolve_payload_path(payload: str) -> str | None:
     query = parse_query_payload(payload)
     if query is not None:
         return f"/catalog?query={quote(query)}"
+    group = parse_preorder_payload(payload)
+    if group is not None:
+        return f"/preorder/{group}"
     # Рекламный payload. С товаром — сразу карточка: человек кликнул объявление
     # «PS5 Slim за 42 900» и обязан увидеть именно её, а не витрину, на которой
     # эту PS5 ещё надо найти. Без товара метка сама по себе не экран — открываем
@@ -442,6 +478,22 @@ def reply_for_payload(payload: str) -> Reply | None:
         return Reply(
             "Планы магазина на сентябрь и дальше — прямо в приложении.",
             _keyboard(_row(button)),
+        )
+
+    # Экран события предзаказа. Группа берётся из payload'а, а не из базы:
+    # reply_for_payload не ходит в БД (см. комментарий у товара ниже), а путь
+    # экрана целиком определяется slug'ом.
+    group = parse_preorder_payload(payload)
+    if group is not None:
+        button = _web_app_button("📦 Открыть предзаказ", f"/preorder/{group}")
+        if button is None:
+            return Reply(WELCOME, main_keyboard())
+        return Reply(
+            "Новинки, которые можно забронировать до поступления в продажу.",
+            _keyboard(
+                _row(button),
+                _row(_web_app_button("🛍 Весь каталог", "/catalog")),
+            ),
         )
 
     # Товар, которым поделились. НАЗВАНИЕ ТОВАРА ЗДЕСЬ НЕ ЧИТАЕТСЯ ИЗ БАЗЫ

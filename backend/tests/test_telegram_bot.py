@@ -1001,3 +1001,40 @@ def test_photo_takes_the_largest_size(monkeypatch):
     }}
     reply = telegram_bot.build_reply(update)
     assert reply is not None and "BIG" in reply.text
+
+
+# ------------------------------------------------- диплинк на экран предзаказа
+
+def test_preorder_payload_carries_the_group():
+    """«preorder_apple-sept-2026» -> /preorder/apple-sept-2026.
+
+    Группа едет В payload'е, а не лежит списком в коде, по той же причине, по
+    которой в коде нет списка категорий: событий со временем станет несколько,
+    старые будут пустеть, и словарь групп разъехался бы с баннерами в базе.
+    """
+    from app.services.telegram_bot import resolve_payload_path
+
+    assert resolve_payload_path("preorder_apple-sept-2026") == "/preorder/apple-sept-2026"
+
+
+def test_preorder_payload_rejects_anything_but_a_slug():
+    """Значение подставляется в URL кнопки, поэтому проверка строгая — ровно
+    как у product_ и q_. Пустая группа, слэш, точки и кириллица не проходят."""
+    from app.services.telegram_bot import resolve_payload_path
+
+    for bad in ["preorder_", "preorder_../etc", "preorder_a/b", "preorder_ЯБЛОКО",
+                "preorder_" + "x" * 80, "preorder_Apple_Sept"]:
+        assert resolve_payload_path(bad) is None, bad
+
+
+def test_preorder_deep_link_button_and_bot_reply_agree():
+    """Кнопка канала (?startapp=) и ответ бота (?start=) обязаны вести на один
+    экран — иначе человек с двух ссылок на один пост попадёт в разные места."""
+    from app.services.telegram_bot import reply_for_payload, resolve_payload_path
+
+    payload = "preorder_apple-sept-2026"
+    route = resolve_payload_path(payload)
+    reply = reply_for_payload(payload)
+    assert reply is not None, "бот не ответил на диплинк предзаказа"
+    urls = [b["web_app"]["url"] for row in reply.keyboard for b in row if "web_app" in b]
+    assert any(u.endswith(route) for u in urls), f"бот ведёт на {urls}, а Mini App на {route}"

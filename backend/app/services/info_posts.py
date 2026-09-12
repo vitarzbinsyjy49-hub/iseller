@@ -176,13 +176,15 @@ def info_keyboard(mini_app_url: str, manager_url: str = "", bot_username: str = 
 #: прайса подставляются в момент публикации из настроек и из БД — поэтому в
 #: посте хранится ОПИСАНИЕ кнопки, а не готовый URL: сменится ссылка менеджера,
 #: и все посты подхватят новую, вместо того чтобы тащить вмороженную старую.
-BUTTON_KINDS = ("catalog", "ai", "requests", "roadmap", "manager", "channel", "section", "url")
+BUTTON_KINDS = ("catalog", "ai", "requests", "roadmap", "preorder",
+                "manager", "channel", "section", "url")
 
 BUTTON_KIND_LABELS = {
     "catalog": "Каталог",
     "ai": "AI-подбор",
     "requests": "Мои заявки",
     "roadmap": "Что будет дальше",
+    "preorder": "Экран предзаказа",
     "manager": "Менеджер",
     "channel": "Наш канал",
     "section": "Раздел прайса",
@@ -210,6 +212,12 @@ def resolve_button(
 
     if kind in ("catalog", "ai", "requests", "roadmap"):
         url = deep_link(bot_username, kind, app_short_name)
+    elif kind == "preorder":
+        # Группа события лежит в value: `apple-sept-2026` -> payload
+        # `preorder_apple-sept-2026`. Без группы ссылка вела бы на экран
+        # несуществующего события — пусть кнопка лучше выпадет (ниже проверка
+        # на https), чем поведёт в пустоту.
+        url = deep_link(bot_username, f"preorder_{value}", app_short_name) if value else None
     elif kind == "manager":
         url = manager_url
     elif kind == "channel":
