@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cashbackFor, formatPoints, formatRate, pointsWord, progressPercent } from "./loyalty";
+import { cashbackFor, formatPoints, formatRate, pointsWord, progressPercent, nextPurchaseLine } from "./loyalty";
 
 describe("formatRate", () => {
   it("пишет ставку по-русски, через запятую", () => {
@@ -58,5 +58,48 @@ describe("cashbackFor", () => {
   it("на нулевых входах молчит, а не выдаёт NaN", () => {
     expect(cashbackFor(0, 25)).toBe(0);
     expect(cashbackFor(100_000, 0)).toBe(0);
+  });
+});
+
+describe("cashbackFor с потолком", () => {
+  it("срезает начисление так же, как сервер", () => {
+    expect(cashbackFor(100_000, 100, 1500)).toBe(1000);
+    expect(cashbackFor(300_000, 100, 1500)).toBe(1500);
+    expect(cashbackFor(100_000, 300, 1500)).toBe(1500);
+  });
+
+  it("без потолка считает как раньше — старые вызовы не ломаются", () => {
+    expect(cashbackFor(100_000, 300)).toBe(3000);
+  });
+});
+
+describe("nextPurchaseLine", () => {
+  // toLocaleString ставит НЕразрывный пробел — типографски верно, но в
+  // сравнении со строкой из обычных пробелов даёт ложный провал.
+  const plain = (s: string) => s.replace(/ /g, " ");
+
+  it("называет и ставку, и потолок: ставка без потолка — полуправда", () => {
+    const line = nextPurchaseLine({
+      rate_bps: 100, rate_percent: 1, cap_points: 1500, promo: null, promo_until: null,
+    });
+    expect(line).toContain("1%");
+    expect(plain(line)).toContain("1 500");
+  });
+
+  it("акцию называет акцией и ставит срок", () => {
+    const line = nextPurchaseLine({
+      rate_bps: 300, rate_percent: 3, cap_points: 1500,
+      promo: "акция первой покупки", promo_until: "2026-11-01",
+    });
+    expect(line).toContain("3%");
+    expect(plain(line)).toContain("1 500");
+    expect(line).toContain("1 ноября");
+  });
+
+  it("срок без акции не показывается", () => {
+    const line = nextPurchaseLine({
+      rate_bps: 100, rate_percent: 1, cap_points: 1500, promo: null, promo_until: "2026-11-01",
+    });
+    expect(line).not.toContain("ноября");
   });
 });

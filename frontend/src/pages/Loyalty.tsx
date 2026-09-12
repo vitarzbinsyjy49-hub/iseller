@@ -8,6 +8,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { track } from "../lib/analytics";
 import {
   fetchLoyalty, formatPoints, formatRate, progressPercent, KIND_LABEL,
+  nextPurchaseLine,
   type LoyaltyAccount, type LoyaltyLevel,
 } from "../lib/loyalty";
 import { Icon } from "../components/icons";
@@ -40,7 +41,7 @@ function LevelRow({ level, index, current, reached }: {
           {current && <span className="ml-2 text-[11px] font-bold uppercase tracking-wide text-accent">ваш уровень</span>}
         </p>
         <p className="mt-0.5 text-[12px] leading-4 text-muted">
-          Кэшбек {formatRate(level.rate_bps)} · от {RUB(level.threshold)} покупок
+          Кэшбек {formatRate(level.rate_bps)} до {RUB(level.cap_points)} · от {RUB(level.threshold)} покупок
         </p>
       </div>
     </div>
@@ -111,6 +112,21 @@ export default function Loyalty() {
         </div>
         <p className="mt-2 text-[12px] text-muted">
           Покупок за всё время: {RUB(account.lifetime_spent)}
+        </p>
+      </div>
+
+      {/* ---- Условия следующей покупки ----
+          Отдельной строкой, а не мелким шрифтом внутри счёта: это единственное
+          место, где ставка и потолок называются ВМЕСТЕ. Ставка без потолка —
+          полуправда: человек посчитает процент от ста тысяч и решит, что его
+          обманули. Акцию выделяем — у неё есть срок. */}
+      <div className={`mt-3 rounded-xl2 p-4 ${
+        account.next_purchase.promo ? "bg-accent/10" : "bg-surface shadow-soft"
+      }`}>
+        <p className={`text-[13px] font-semibold leading-5 ${
+          account.next_purchase.promo ? "text-accent" : ""
+        }`}>
+          {nextPurchaseLine(account.next_purchase)}
         </p>
       </div>
 

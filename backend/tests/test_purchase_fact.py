@@ -109,8 +109,8 @@ def test_completed_lead_accrues_cashback(admin_client, db, ctx):
         f"/api/admin/leads/{lead.id}",
         json={"status": "completed", "final_total": 100_000},
     )
-    # «Старт» — 0,25%: 100 000 * 25 // 10000 = 250
-    assert loyalty.summary(db, user.id)["balance"] == 250
+    # «Старт» — 1%: 100 000 * 100 // 10000 = 1000, потолок 1500 не задет
+    assert loyalty.summary(db, user.id)["balance"] == 1000
     assert loyalty.summary(db, user.id)["lifetime_spent"] == 100_000
 
 
@@ -127,7 +127,7 @@ def test_saving_completed_lead_twice_does_not_double_cashback(admin_client, db, 
             f"/api/admin/leads/{lead.id}",
             json={"status": "completed", "final_total": 100_000},
         )
-    assert loyalty.summary(db, user.id)["balance"] == 250
+    assert loyalty.summary(db, user.id)["balance"] == 1000
 
 
 def test_lead_without_user_accrues_nothing(admin_client, db):
@@ -156,7 +156,7 @@ def test_leaving_completed_reverts_cashback(admin_client, db, ctx):
         f"/api/admin/leads/{lead.id}",
         json={"status": "completed", "final_total": 100_000},
     )
-    assert loyalty.summary(db, user.id)["balance"] == 250
+    assert loyalty.summary(db, user.id)["balance"] == 1000
 
     admin_client.patch(f"/api/admin/leads/{lead.id}", json={"status": "cancelled"})
     assert loyalty.summary(db, user.id)["balance"] == 0
@@ -176,12 +176,12 @@ def test_revert_works_even_when_points_already_spent(admin_client, db, ctx):
         f"/api/admin/leads/{lead.id}",
         json={"status": "completed", "final_total": 100_000},
     )
-    loyalty.record(db, user_id=user.id, kind="spend", points=-250, comment="потратил")
+    loyalty.record(db, user_id=user.id, kind="spend", points=-1000, comment="потратил")
     db.commit()
     assert loyalty.summary(db, user.id)["balance"] == 0
 
     admin_client.patch(f"/api/admin/leads/{lead.id}", json={"status": "cancelled"})
-    assert loyalty.summary(db, user.id)["balance"] == -250
+    assert loyalty.summary(db, user.id)["balance"] == -1000
 
 
 def test_completing_again_after_revert_accrues_anew(admin_client, db, ctx):
@@ -202,7 +202,7 @@ def test_completing_again_after_revert_accrues_anew(admin_client, db, ctx):
         f"/api/admin/leads/{lead.id}",
         json={"status": "completed", "final_total": 100_000},
     )
-    assert loyalty.summary(db, user.id)["balance"] == 250
+    assert loyalty.summary(db, user.id)["balance"] == 1000
 
 
 def test_cheap_purchase_completes_and_reverts(admin_client, db, ctx):
@@ -219,11 +219,14 @@ def test_cheap_purchase_completes_and_reverts(admin_client, db, ctx):
 
     resp = admin_client.patch(
         f"/api/admin/leads/{lead.id}",
-        json={"status": "completed", "final_total": 200},
+        # Ниже 100 ₽: при ставке 1% кэшбек округляется в ноль именно здесь.
+        # На прежних 0,25% в ноль округлялось всё до 400 ₽ — сумма в тесте
+        # поехала вслед за ставкой, смысл проверки прежний.
+        json={"status": "completed", "final_total": 99},
     )
     assert resp.status_code == 200
     assert loyalty.summary(db, user.id)["balance"] == 0
-    assert loyalty.summary(db, user.id)["lifetime_spent"] == 200
+    assert loyalty.summary(db, user.id)["lifetime_spent"] == 99
 
     resp = admin_client.patch(f"/api/admin/leads/{lead.id}", json={"status": "cancelled"})
     assert resp.status_code == 200

@@ -61,15 +61,22 @@ def user_by_code(db: Session, code: str) -> User | None:
 # ---------------------------------------------------------------- расчёт
 
 
-def payout_points(amount: float | Decimal | None, rate_bps: int) -> int:
-    """Процент с покупки, округлённый ВНИЗ.
+def payout_points(
+    amount: float | Decimal | None, rate_bps: int, cap_points: int | None = None,
+) -> int:
+    """Процент с покупки, округлённый ВНИЗ, сверху — потолок.
 
     Ровно тот же расчёт, что у кэшбека (loyalty.points_for), и по той же
     причине вниз: округление вверх дарило бы по баллу на каждой операции.
+    Потолок — по той же причине, что и у кэшбека: процент растёт вместе с
+    ценой, а маржа магазина нет.
     """
     if amount is None or amount <= 0 or rate_bps <= 0:
         return 0
-    return int(Decimal(str(amount)) * rate_bps // 10_000)
+    points = int(Decimal(str(amount)) * rate_bps // 10_000)
+    if cap_points is not None and points > cap_points:
+        return cap_points
+    return points
 
 
 def is_first_purchase(db: Session, user_id: int) -> bool:
@@ -110,7 +117,7 @@ def payout_for_lead(db: Session, lead, actor: str) -> None:
     conf = settings.loyalty(db)
     seq = lead.completion_seq or 0
 
-    points = payout_points(lead.final_total, conf.referral_rate_bps)
+    points = payout_points(lead.final_total, conf.referral_rate_bps, conf.referral_cap_points)
     if points > 0:
         loyalty.record(
             db,

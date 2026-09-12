@@ -63,6 +63,17 @@ _running = True
 #: Добавляешь фоновой задаче новое поле — добавь его сюда.
 REQUIRED_SCHEMA: dict[str, tuple[str, ...]] = {
     "notifications": (),
+    # Настройки лояльности бот сам не читает, но держим их здесь по цене одного
+    # запроса инспектора: колонки приезжают мини-миграцией, а цена ошибки —
+    # полноэкранный UndefinedColumn на деплое, как уже было с acquisition_source.
+    "loyalty_settings": (
+        "referral_cap_points",
+        "newcomer_enabled",
+        "newcomer_rate_bps",
+        "newcomer_cap_points",
+        "newcomer_until",
+        "redeem_max_bps",
+    ),
     "product_favorites": ("notified_price", "notified_in_stock"),
     "carts": (),
     # Скан корзин джойнит users и тянет ВСЕ её колонки через ORM — значит новая

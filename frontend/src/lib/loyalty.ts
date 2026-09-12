@@ -14,6 +14,20 @@ export type LoyaltyLevel = {
   threshold: number;
   rate_bps: number;
   rate_percent: number;
+  /** Предел начисления с одной покупки, в баллах (= рублях). */
+  cap_points: number;
+};
+
+/** Условия следующей покупки. Считает сервер: акция зависит от журнала покупок
+ *  и от даты, и вторая копия правила во фронте разъехалась бы с первой. */
+export type NextPurchase = {
+  rate_bps: number;
+  rate_percent: number;
+  cap_points: number;
+  /** Название акции или null. */
+  promo: string | null;
+  /** Последний день акции, ISO. Без акции — null. */
+  promo_until: string | null;
 };
 
 export type LoyaltyTx = {
@@ -35,6 +49,7 @@ export type LoyaltyAccount = {
   ratio: number;
   history: LoyaltyTx[];
   levels: LoyaltyLevel[];
+  next_purchase: NextPurchase;
 };
 
 export function fetchLoyalty(): Promise<LoyaltyAccount> {
@@ -82,9 +97,42 @@ export function formatRate(rateBps: number): string {
 /** Сколько рублей скидки даёт кэшбек на конкретной цене — то, ради чего
  *  уровень вообще существует. Округление ВНИЗ, как на сервере: обещать
  *  больше, чем начислится, нельзя. */
-export function cashbackFor(price: number, rateBps: number): number {
+export function cashbackFor(price: number, rateBps: number, capPoints?: number): number {
   if (!(price > 0) || !(rateBps > 0)) return 0;
-  return Math.floor((price * rateBps) / 10000);
+  const points = Math.floor((price * rateBps) / 10000);
+  // Потолок обязателен везде, где число показывается человеку: обещать 3000 и
+  // начислить 1500 хуже, чем не обещать ничего.
+  if (capPoints != null && points > capPoints) return capPoints;
+  return points;
+}
+
+const MONTHS = [
+  "января", "февраля", "марта", "апреля", "мая", "июня",
+  "июля", "августа", "сентября", "октября", "ноября", "декабря",
+];
+
+/** «1 ноября» из ISO-даты. Пустая строка, если дату не разобрать. */
+function humanDate(iso: string): string {
+  const parts = iso.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return "";
+  const [, month, day] = parts;
+  const name = MONTHS[month - 1];
+  return name ? `${day} ${name}` : "";
+}
+
+/** Условия следующей покупки одной строкой.
+ *
+ *  Ставка и потолок называются ВМЕСТЕ и всегда. Ставка без потолка — полуправда:
+ *  человек посчитает 3% от ста тысяч, получит три тысячи и решит, что его
+ *  обманули. Срок показывается только у акции — у постоянной ставки срока нет.
+ */
+export function nextPurchaseLine(terms: NextPurchase): string {
+  const rate = formatRate(terms.rate_bps);
+  const cap = `${terms.cap_points.toLocaleString("ru-RU")} ₽`;
+  if (!terms.promo) return `Кэшбек ${rate} с покупки, не больше ${cap}`;
+  const until = terms.promo_until ? humanDate(terms.promo_until) : "";
+  const tail = until ? ` — до ${until}` : "";
+  return `Первая покупка — ${rate} кэшбека, не больше ${cap}${tail}`;
 }
 
 export const KIND_LABEL: Record<LoyaltyTx["kind"], string> = {

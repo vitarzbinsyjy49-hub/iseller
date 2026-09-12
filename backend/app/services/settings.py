@@ -17,6 +17,17 @@ def loyalty(db: Session) -> LoyaltySettings:
         return row
     # Несохранённый объект со значениями по умолчанию: строки может не быть на
     # свежей базе, и это не повод падать.
+    # Значения повторяют дефолты колонок (models/loyalty_settings.py). Акция
+    # выключена: несохранённая строка не имеет права включить акцию.
     return LoyaltySettings(
-        id=1, referral_rate_bps=100, welcome_bonus_points=1000, auto_accrual_enabled=True,
+        id=1,
+        referral_rate_bps=100,
+        referral_cap_points=1000,
+        welcome_bonus_points=500,
+        auto_accrual_enabled=True,
+        newcomer_enabled=False,
+        newcomer_rate_bps=300,
+        newcomer_cap_points=1500,
+        newcomer_until=None,
+        redeem_max_bps=500,
     )

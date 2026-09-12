@@ -241,9 +241,9 @@ def test_inviter_gets_percent_and_invited_gets_welcome(admin_client, db):
     inviter, invited = _pair(db, 920, 921)
     _complete(admin_client, db, invited, 100_000)
 
-    assert loyalty.summary(db, inviter.id)["balance"] == 1000       # 1%
-    # 250 собственного кэшбека «Старта» + 1000 приветственных
-    assert loyalty.summary(db, invited.id)["balance"] == 1250
+    assert loyalty.summary(db, inviter.id)["balance"] == 1000       # 1%, потолок не задет
+    # 1000 собственного кэшбека «Старта» (1%) + 500 приветственных
+    assert loyalty.summary(db, invited.id)["balance"] == 1500
     # Реферальный доход не двигает оборот: уровень так не поднять.
     assert loyalty.summary(db, inviter.id)["lifetime_spent"] == 0
 
@@ -256,8 +256,8 @@ def test_second_purchase_pays_percent_but_not_welcome(admin_client, db):
         _complete(admin_client, db, invited, 100_000)
 
     assert loyalty.summary(db, inviter.id)["balance"] == 2000       # 1% дважды
-    # 250 + 250 кэшбека и ОДИН приветственный бонус
-    assert loyalty.summary(db, invited.id)["balance"] == 1500
+    # 1000 + 1000 кэшбека и ОДИН приветственный бонус
+    assert loyalty.summary(db, invited.id)["balance"] == 2500
 
 
 def test_zero_percent_creates_no_transaction(admin_client, db):
@@ -341,7 +341,7 @@ def test_referral_me_returns_link_and_totals(admin_client, db, monkeypatch):
     # он про друга, а не про пригласившего.
     assert data["earned_points"] == 1000
     assert data["rate_percent"] == 1
-    assert data["welcome_bonus_points"] == 1000
+    assert data["welcome_bonus_points"] == 500
 
 
 def test_referral_me_issues_code_on_first_open(db, monkeypatch):
@@ -374,17 +374,20 @@ def test_admin_sees_referral_pairs_sorted_by_payout(admin_client, db):
     small_inviter, small_invited = _pair(db, 950, 951)
     big_inviter, big_invited = _pair(db, 952, 953)
 
-    _complete(admin_client, db, small_invited, 100_000)      # 1000 баллов
-    _complete(admin_client, db, big_invited, 500_000)        # 5000 баллов
+    # Суммы ниже потолка выплаты (1000 баллов) намеренно: с потолком чеки
+    # 100 000 и 500 000 дают одинаковые 1000, выплаты сравнялись бы и порядок
+    # строк стал бы произвольным — тест проверял бы удачу, а не сортировку.
+    _complete(admin_client, db, small_invited, 50_000)       # 500 баллов
+    _complete(admin_client, db, big_invited, 90_000)         # 900 баллов
 
     rows = admin_client.get("/api/admin/referrals").json()["items"]
     assert len(rows) == 2
     assert rows[0]["inviter"]["id"] == big_inviter.id
-    assert rows[0]["paid_points"] == 5000
+    assert rows[0]["paid_points"] == 900
     assert rows[0]["completed_leads"] == 1
     assert rows[0]["invited"]["id"] == big_invited.id
     assert rows[1]["inviter"]["id"] == small_inviter.id
-    assert rows[1]["paid_points"] == 1000
+    assert rows[1]["paid_points"] == 500
     assert rows[0]["registered_at"] is not None
 
 
@@ -398,3 +401,14 @@ def test_pair_without_payouts_is_still_visible(admin_client, db):
     assert rows[0]["inviter"]["id"] == inviter.id
     assert rows[0]["completed_leads"] == 0
     assert rows[0]["paid_points"] == 0
+
+
+def test_payout_is_capped_per_purchase():
+    """Без потолка пригласивший получал с чека на 200 000 больше, чем сам
+    покупатель, — перекос, ради которого лояльность и пересобирали."""
+    from app.services import referral
+
+    assert referral.payout_points(200_000, 100, 1000) == 1000   # упёрся
+    assert referral.payout_points(50_000, 100, 1000) == 500     # не упёрся
+    # Без потолка поведение прежнее — старые вызовы не ломаются.
+    assert referral.payout_points(200_000, 100) == 2000

@@ -81,7 +81,7 @@ def test_balance_and_spent_come_from_journal(ctx):
     db.commit()
 
     summary = loyalty.summary(db, user.id)
-    assert summary["balance"] == 250            # 0,25% стартовой ставки
+    assert summary["balance"] == 1000           # 1% стартовой ставки
     assert summary["lifetime_spent"] == 100_000
     assert summary["level"]["key"] == "start"
 
@@ -111,10 +111,13 @@ def test_rate_is_snapshotted_at_the_moment_of_purchase(ctx):
     second = loyalty.record(db, user_id=user.id, kind="purchase", amount=100_000)
     db.commit()
 
-    assert first.rate_bps == 25    # покупал ещё на «Старте»
-    assert first.points == 1000
-    assert second.rate_bps == 100  # к этому моменту уже «Золото»
-    assert second.points == 1000
+    assert first.rate_bps == 100   # покупал ещё на «Старте», 1%
+    # 1% от 400 000 — это 4000, но потолок «Старта» 1500. Снапшот ставки и
+    # потолок работают вместе: в строке остаётся и по какой ставке считали,
+    # и сколько в итоге начислили.
+    assert first.points == 1500
+    assert second.rate_bps == 200  # к этому моменту уже «Золото», 2%
+    assert second.points == 2000   # 2% от 100 000, потолок «Золота» 2500 не задет
 
 
 def test_balance_cannot_go_negative(ctx):
@@ -242,7 +245,7 @@ def test_idempotency_key_prevents_double_cashback(ctx):
     db.commit()
 
     assert first.id == second.id
-    assert loyalty.summary(db, user.id)["balance"] == 250
+    assert loyalty.summary(db, user.id)["balance"] == 1000
     assert db.query(LoyaltyTransaction).count() == 1
 
 
@@ -317,11 +320,12 @@ def test_admin_can_add_purchase_and_see_it_in_list(ctx):
     )
     assert created.status_code == 201
     body = created.json()
-    assert body["transaction"]["points"] == 500
-    assert body["balance"] == 500
+    # 1% от 200 000 — это 2000, потолок «Старта» срезает до 1500.
+    assert body["transaction"]["points"] == 1500
+    assert body["balance"] == 1500
 
     row = next(r for r in client.get("/api/admin/users").json()["users"] if r["id"] == user.id)
-    assert row["balance"] == 500
+    assert row["balance"] == 1500
     assert row["lifetime_spent"] == 200_000
     assert row["level"]["key"] == "silver"
 
@@ -351,7 +355,7 @@ def test_admin_detail_has_history_and_progress(ctx):
     client.post(f"/api/admin/users/{user.id}/loyalty", json={"kind": "purchase", "amount": 100_000})
 
     data = client.get(f"/api/admin/users/{user.id}").json()
-    assert data["balance"] == 250
+    assert data["balance"] == 1000
     assert data["progress"]["next_level"]["key"] == "silver"
     assert data["progress"]["to_next"] == 50_000
     assert len(data["history"]) == 1
@@ -381,3 +385,157 @@ def test_admin_rejects_unknown_kind(ctx):
         f"/api/admin/users/{user.id}/loyalty", json={"kind": "give_everything", "points": 10}
     )
     assert resp.status_code == 422
+
+
+# ------------------------------------------------- потолок начисления и акция
+
+
+def test_levels_carry_rate_and_cap():
+    """У уровня два числа: ставка и предел начисления с одной покупки.
+
+    Потолок растёт вместе со ставкой намеренно — иначе верхние уровни
+    отличаются только там, где потолок и так не достигается.
+    """
+    table = {l.key: (l.rate_bps, l.cap_points) for l in loyalty.LEVELS}
+    assert table == {
+        "start": (100, 1500),
+        "silver": (150, 2000),
+        "gold": (200, 2500),
+        "platinum": (250, 3000),
+        "black": (300, 4000),
+    }
+
+
+def test_points_capped_in_rubles():
+    """Маржа магазина постоянна в рублях, а процент растёт с ценой — потолок
+    и есть то, что связывает начисление с маржой, а не с ценником."""
+    assert loyalty.points_for(100_000, 100, 1500) == 1000     # 1% не упёрся
+    assert loyalty.points_for(300_000, 100, 1500) == 1500     # упёрся
+    assert loyalty.points_for(100_000, 300, 1500) == 1500     # акция упёрлась
+    assert loyalty.points_for(9_900, 300, 1500) == 297        # мелкий чек свободен
+    # Без потолка поведение прежнее — старые вызовы не ломаются.
+    assert loyalty.points_for(100_000, 300) == 3000
+
+
+def test_purchase_rate_without_promo_is_the_level_rate(ctx):
+    _, db, user, _ = ctx
+    rate, cap, label = loyalty.purchase_rate(db, user.id)
+    assert (rate, cap, label) == (100, 1500, None)
+
+
+def _enable_promo(db, *, until="2026-11-01", rate=300, cap=1500):
+    from datetime import date
+    from app.models.loyalty_settings import LoyaltySettings
+
+    row = db.get(LoyaltySettings, 1) or LoyaltySettings(id=1)
+    row.newcomer_enabled = True
+    row.newcomer_rate_bps = rate
+    row.newcomer_cap_points = cap
+    row.newcomer_until = date.fromisoformat(until)
+    db.add(row)
+    db.commit()
+    return row
+
+
+def test_promo_applies_to_the_very_first_purchase(ctx):
+    """Признак «первая» — по журналу покупок, а не по дате регистрации:
+    регистрация ничего не стоит и накручивается за минуту."""
+    from datetime import date
+
+    _, db, user, _ = ctx
+    _enable_promo(db)
+    rate, cap, label = loyalty.purchase_rate(db, user.id, on_date=date(2026, 10, 31))
+    assert (rate, cap) == (300, 1500)
+    assert label, "акция обязана назвать себя — она попадёт в комментарий операции"
+
+
+def test_promo_does_not_apply_to_the_second_purchase(ctx):
+    from datetime import date
+
+    _, db, user, _ = ctx
+    _enable_promo(db)
+    loyalty.record(db, user_id=user.id, kind="purchase", amount=10_000,
+                   comment="первая", idempotency_key="p1")
+    db.commit()
+    rate, cap, label = loyalty.purchase_rate(db, user.id, on_date=date(2026, 10, 31))
+    assert (rate, cap, label) == (100, 1500, None)
+
+
+def test_promo_expires_by_the_date_of_accrual(ctx):
+    """Срок считается по моменту начисления, то есть по завершению заявки
+    менеджером: купил 30 октября, закрыли 3 ноября — акции нет. Ровно так это
+    и написано покупателю."""
+    from datetime import date
+
+    _, db, user, _ = ctx
+    _enable_promo(db, until="2026-11-01")
+    assert loyalty.purchase_rate(db, user.id, on_date=date(2026, 11, 1))[0] == 300
+    assert loyalty.purchase_rate(db, user.id, on_date=date(2026, 11, 2))[0] == 100
+
+
+def test_promo_is_off_unless_switched_on(ctx):
+    """По умолчанию акция выключена: иначе тесты зависели бы от системной даты,
+    а акция включалась бы сама от одного факта деплоя."""
+    from datetime import date
+
+    _, db, user, _ = ctx
+    assert loyalty.purchase_rate(db, user.id, on_date=date(2026, 10, 1))[0] == 100
+
+
+def test_purchase_records_the_promo_rate_and_says_so(ctx):
+    """В журнале должны остаться и ставка акции, и её имя — иначе через месяц
+    строку на 1500 баллов нечем объяснить."""
+    from datetime import date
+
+    _, db, user, _ = ctx
+    _enable_promo(db)
+    row = loyalty.record(db, user_id=user.id, kind="purchase", amount=100_000,
+                         comment="Заявка 1 завершена", idempotency_key="p-promo",
+                         on_date=date(2026, 10, 1))
+    db.commit()
+    assert row.points == 1500          # 3% от 100 000 = 3000, потолок 1500
+    assert row.rate_bps == 300
+    assert "акци" in (row.comment or "").lower()
+
+
+def test_me_tells_the_terms_of_the_next_purchase(ctx):
+    """Экран обязан называть ставку И потолок следующей покупки.
+
+    Ставка без потолка — полуправда: человек посчитает 3% от ста тысяч, получит
+    три тысячи и решит, что его обманули. Полная формула должна стоять там же,
+    где обещание.
+    """
+    client, db, user, _ = ctx
+    data = client.get("/api/loyalty/me").json()
+    terms = data["next_purchase"]
+    assert terms["rate_bps"] == 100
+    assert terms["cap_points"] == 1500
+    assert terms["promo"] is None
+    assert terms["promo_until"] is None
+
+
+def test_me_announces_the_promo_while_it_lasts(ctx):
+    client, db, user, _ = ctx
+    _enable_promo(db, until="2099-01-01")
+    terms = client.get("/api/loyalty/me").json()["next_purchase"]
+    assert terms["rate_bps"] == 300
+    assert terms["cap_points"] == 1500
+    assert terms["promo"]
+    assert terms["promo_until"] == "2099-01-01"
+
+
+def test_me_drops_the_promo_after_the_first_purchase(ctx):
+    client, db, user, _ = ctx
+    _enable_promo(db, until="2099-01-01")
+    loyalty.record(db, user_id=user.id, kind="purchase", amount=10_000,
+                   comment="первая", idempotency_key="np1")
+    db.commit()
+    terms = client.get("/api/loyalty/me").json()["next_purchase"]
+    assert terms["promo"] is None
+    assert terms["rate_bps"] == 100
+
+
+def test_levels_expose_their_cap(ctx):
+    client, _db, _user, _ = ctx
+    levels = client.get("/api/loyalty/me").json()["levels"]
+    assert [l["cap_points"] for l in levels] == [1500, 2000, 2500, 3000, 4000]

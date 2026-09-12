@@ -266,6 +266,22 @@ def _apply_demo_migrations() -> None:
         # синхронно добавлено в REQUIRED_SCHEMA (bot_polling.py).
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_blocked_at TIMESTAMPTZ",
         "ALTER TABLE ad_touches ADD COLUMN IF NOT EXISTS kind VARCHAR(8) NOT NULL DEFAULT 'ad'",
+        # Пересборка лояльности (12.09.2026), см.
+        # docs/superpowers/specs/2026-09-12-loyalty-rebuild-design.md.
+        # Таблица loyalty_settings уже существует, поэтому create_all её не
+        # тронет — колонки приезжают сюда.
+        #
+        # Акция выключена дефолтом и здесь тоже: DEFAULT FALSE. Включать её
+        # должен человек в админке, а не факт деплоя.
+        "ALTER TABLE loyalty_settings ADD COLUMN IF NOT EXISTS referral_cap_points INTEGER NOT NULL DEFAULT 1000",
+        "ALTER TABLE loyalty_settings ADD COLUMN IF NOT EXISTS newcomer_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE loyalty_settings ADD COLUMN IF NOT EXISTS newcomer_rate_bps INTEGER NOT NULL DEFAULT 300",
+        "ALTER TABLE loyalty_settings ADD COLUMN IF NOT EXISTS newcomer_cap_points INTEGER NOT NULL DEFAULT 1500",
+        "ALTER TABLE loyalty_settings ADD COLUMN IF NOT EXISTS newcomer_until DATE",
+        "ALTER TABLE loyalty_settings ADD COLUMN IF NOT EXISTS redeem_max_bps INTEGER NOT NULL DEFAULT 500",
+        # Дефолт колонки меняется только для НОВЫХ строк; существующую строку
+        # (если её успели создать) не трогаем: 1000 там мог быть выбран руками.
+        "ALTER TABLE loyalty_settings ALTER COLUMN welcome_bonus_points SET DEFAULT 500",
     ]
     for stmt in statements:
         try:

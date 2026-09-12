@@ -14,6 +14,7 @@
 сколько человек у нас купил, а не сколько у него сейчас на счету.
 """
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import case, func, select
@@ -32,7 +33,8 @@ class Level:
     key: str
     title: str
     threshold: int  # оборот за всё время, ₽, от которого действует уровень
-    rate_bps: int   # ставка кэшбека в сотых процента: 25 = 0,25%
+    rate_bps: int   # ставка кэшбека в сотых процента: 100 = 1%
+    cap_points: int  # предел начисления с ОДНОЙ покупки, в баллах (= рублях)
 
     def to_dict(self) -> dict:
         return {
@@ -41,18 +43,24 @@ class Level:
             "threshold": self.threshold,
             "rate_bps": self.rate_bps,
             "rate_percent": self.rate_bps / 100,
+            "cap_points": self.cap_points,
         }
 
 
 # Пороги в рублях, а не в баллах: рубль понятен человеку, а порог в баллах
 # зависел бы от ставки, то есть сам от себя. Первый порог обязан быть нулевым —
 # уровень есть у каждого с первого дня.
+#: Потолок растёт вместе со ставкой намеренно. Без него процент привязан не к
+#: тому числу: маржа магазина примерно постоянна в рублях, а процент растёт
+#: вместе с ценой — и на дорогой технике кэшбек съедал бы маржу целиком (см.
+#: docs/superpowers/specs/2026-09-12-loyalty-rebuild-design.md). Расширяется
+#: обязательство только для тех, кто уже доказал оборот.
 LEVELS: tuple[Level, ...] = (
-    Level("start", "Старт", 0, 25),
-    Level("silver", "Серебро", 150_000, 50),
-    Level("gold", "Золото", 400_000, 100),
-    Level("platinum", "Платина", 800_000, 150),
-    Level("black", "Чёрный", 1_500_000, 200),
+    Level("start", "Старт", 0, 100, 1_500),
+    Level("silver", "Серебро", 150_000, 150, 2_000),
+    Level("gold", "Золото", 400_000, 200, 2_500),
+    Level("platinum", "Платина", 800_000, 250, 3_000),
+    Level("black", "Чёрный", 1_500_000, 300, 4_000),
 )
 
 MAX_HISTORY = 100
@@ -79,15 +87,21 @@ def next_level(lifetime_spent: float | Decimal) -> Level | None:
     return None
 
 
-def points_for(amount: float | Decimal, rate_bps: int) -> int:
-    """Баллы за покупку. Округление ВНИЗ.
+def points_for(amount: float | Decimal, rate_bps: int, cap_points: int | None = None) -> int:
+    """Баллы за покупку. Округление ВНИЗ, сверху — потолок в баллах.
 
     Вверх дарило бы по баллу на каждой операции, и на длинной истории это
     расхождение с обещанной ставкой, которое никто не сможет объяснить.
+
+    `cap_points=None` — без потолка; так считаются реферальные выплаты, у
+    которых свой предел, и так себя вела функция раньше.
     """
     if amount is None or amount <= 0 or rate_bps <= 0:
         return 0
-    return int(Decimal(str(amount)) * rate_bps // 10_000)
+    points = int(Decimal(str(amount)) * rate_bps // 10_000)
+    if cap_points is not None and points > cap_points:
+        return cap_points
+    return points
 
 
 def progress(lifetime_spent: float | Decimal) -> dict:
@@ -109,6 +123,77 @@ def progress(lifetime_spent: float | Decimal) -> dict:
         "next_level": upcoming.to_dict(),
         "to_next": float(upcoming.threshold - spent),
         "ratio": float(done / span) if span else 0.0,
+    }
+
+
+# ---------------------------------------------------------------- ставка покупки
+
+
+def purchases_count(db: Session, user_id: int) -> int:
+    """Сколько покупок уже проведено. Считается по журналу, а не по заявкам:
+    журнал — источник правды для всего остального в лояльности."""
+    return int(db.execute(
+        select(func.count()).select_from(LoyaltyTransaction).where(
+            LoyaltyTransaction.user_id == user_id,
+            LoyaltyTransaction.kind == "purchase",
+        )
+    ).scalar_one())
+
+
+def purchase_rate(
+    db: Session, user_id: int, *, on_date: date | None = None,
+) -> tuple[int, int, str | None]:
+    """Ставка, потолок и имя акции для НОВОЙ покупки этого человека.
+
+    Одно место, где решается, по какой ставке считать, — иначе правило
+    расползётся по вызывающим и разъедется с тем, что написано покупателю.
+
+    Дата приходит снаружи ради тестов и ради честности: срок акции считается по
+    дню НАЧИСЛЕНИЯ, то есть по дню, когда менеджер завершил заявку. Человек мог
+    купить 30 октября, а заявку закроют 3 ноября — акции не будет, и ровно так
+    это сформулировано покупателю («заявка завершена до …»).
+    """
+    from app.services import settings as settings_service   # локально: цикл импорта
+
+    level = level_for(summary(db, user_id)["lifetime_spent"])
+    conf = settings_service.loyalty(db)
+
+    if not conf.newcomer_enabled or conf.newcomer_until is None:
+        return level.rate_bps, level.cap_points, None
+    today = on_date or date.today()
+    if today > conf.newcomer_until:
+        return level.rate_bps, level.cap_points, None
+    # Первая — значит ни одной проведённой. Считаем ДО начисления текущей,
+    # поэтому ноль, а не единица (ср. referral.is_first_purchase, которая
+    # вызывается после и потому ищет единицу).
+    if purchases_count(db, user_id) > 0:
+        return level.rate_bps, level.cap_points, None
+    # Акция не имеет права оказаться ХУЖЕ уровня: у человека с оборотом уровень
+    # мог бы быть выше акционной ставки, и «подарок» стал бы понижением.
+    if conf.newcomer_rate_bps < level.rate_bps:
+        return level.rate_bps, level.cap_points, None
+    return conf.newcomer_rate_bps, conf.newcomer_cap_points, "акция первой покупки"
+
+
+def next_purchase_terms(
+    db: Session, user_id: int, *, on_date: date | None = None,
+) -> dict:
+    """Условия СЛЕДУЮЩЕЙ покупки — то, что показывается покупателю.
+
+    Ставка без потолка — полуправда: человек посчитает 3% от ста тысяч, получит
+    три тысячи и решит, что его обманули. Поэтому наружу всегда уезжают оба
+    числа, а не одно.
+    """
+    from app.services import settings as settings_service   # локально: цикл импорта
+
+    rate_bps, cap_points, promo = purchase_rate(db, user_id, on_date=on_date)
+    until = settings_service.loyalty(db).newcomer_until if promo else None
+    return {
+        "rate_bps": rate_bps,
+        "rate_percent": rate_bps / 100,
+        "cap_points": cap_points,
+        "promo": promo,
+        "promo_until": until.isoformat() if until else None,
     }
 
 
@@ -261,6 +346,7 @@ def record(
     created_by: str | None = None,
     idempotency_key: str | None = None,
     rate_bps: int | None = None,
+    on_date: date | None = None,
 ) -> LoyaltyTransaction:
     """Провести операцию. Единственный способ изменить счёт.
 
@@ -278,14 +364,21 @@ def record(
     # Ставка покупки берётся из уровня, и перебить её нельзя: она следствие
     # оборота. Для реферальной выплаты ставку задаёт настройка, поэтому она
     # приходит снаружи — но снапшотится точно так же.
+    cap_points: int | None = None
     if kind == "purchase":
-        rate_bps = current["level"]["rate_bps"]
+        rate_bps, cap_points, promo = purchase_rate(db, user_id, on_date=on_date)
+        # Имя акции дописывается к комментарию, а не заменяет его: через месяц
+        # строку на 1500 баллов нечем будет объяснить, если в ней только номер
+        # заявки. Ставка тоже снапшотится — но 300 bps сами по себе не говорят,
+        # ПОЧЕМУ их применили.
+        if promo:
+            comment = f"{(comment or '').strip()} · {promo}".strip(" ·")
     elif kind != "referral":
         rate_bps = None
     if points is None:
         # Расчёт предлагается, а не навязывается: менеджер может перебить его
         # руками, передав points явно.
-        points = points_for(money, rate_bps) if kind == "purchase" else 0
+        points = points_for(money, rate_bps, cap_points) if kind == "purchase" else 0
 
     _validate(kind, int(points), money, comment)
 
