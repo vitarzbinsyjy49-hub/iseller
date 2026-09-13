@@ -395,11 +395,22 @@ export default function Home() {
               звучала бы дважды подряд. */}
           <div className="grid min-w-0 flex-1 [grid-template-areas:'slot'] [&>*]:[grid-area:slot] [&>*]:self-center">
             <HeroSlot />
+            {/* pointer-events-none обязателен и не про стиль.
+                Заголовок лежит в ТОЙ ЖЕ ячейке сетки, что и статусная строка, и
+                идёт в разметке позже — значит, рисуется поверх. При opacity: 0
+                он невидим, но из попадания по координатам НЕ исчезает: браузер
+                отдаёт тап ему, а не кнопке под ним. Статус и курс из-за этого
+                просто не нажимались.
+                Поймать это программным .click() нельзя — тот вызывается на
+                элементе напрямую и слой сверху не проверяет. Проверять такое
+                можно только elementFromPoint или живым пальцем.
+                Элемент декоративный (aria-hidden), события ему не нужны ни в
+                одном состоянии — ни спрятанным, ни проявленным. */}
             <span
               data-collapsing-smalltitle
               aria-hidden="true"
               style={{ opacity: 0 }}
-              className="block truncate text-[15px] font-semibold tracking-tight"
+              className="pointer-events-none block truncate text-[15px] font-semibold tracking-tight"
             >
               {HOME_HEADLINE}
             </span>

@@ -31,13 +31,14 @@
  *  как у кнопки ИИ внутри поля поиска: расти вширь строке некуда, а промах
  *  мимо неё недопустим.
  */
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "./icons";
 import { useLeadsBadge } from "../store/leadsBadge";
 import { usePublicConfig } from "../lib/appConfig";
 import { formatFxChip } from "../lib/fxFormat";
 import { moscowHour, pickupStatus, PICKUP_CLOSE_HOUR, PICKUP_OPEN_HOUR } from "../lib/pickup";
+import { animateNumber, prefersReducedMotion } from "../lib/motion";
 import { track } from "../lib/analytics";
 
 const PickupHoursSheet = lazy(() => import("./PickupHoursSheet"));
@@ -47,6 +48,54 @@ const FxRateSheet = lazy(() => import("./FxRateSheet"));
 const CLOCK_TICK_MS = 60_000;
 
 type Sheet = "status" | "rate";
+
+/** Дыхание зелёной точки: сколько гаснет, сколько разгорается и сколько стоит
+ *  на месте между вдохами. Медленно намеренно — точка сообщает «работаем прямо
+ *  сейчас», а не требует внимания. Быстрое мигание в углу экрана превращается в
+ *  раздражитель за минуту. */
+const BREATH_DOWN_MS = 900;
+const BREATH_UP_MS = 900;
+const BREATH_PAUSE_MS = 1_400;
+
+/** Медленное дыхание индикатора, покадрово.
+ *
+ *  CSS-анимация здесь не годится по той же причине, что и везде в проекте: этот
+ *  webview гасит декларативную анимацию целиком (см. lib/motion).
+ *
+ *  Дышит ТОЛЬКО когда открыто. Это не украшение: движение значит «сейчас
+ *  работаем», и пульсирующая точка у закрытой точки выдачи говорила бы
+ *  обратное тому, что написано рядом.
+ *
+ *  При «уменьшить движение» точка просто горит. Здесь это правильный отказ, а
+ *  не потеря события: сам факт «открыто/закрыто» несут цвет и подпись, дыхание
+ *  ничего не добавляет к смыслу. */
+function useBreathing(ref: React.RefObject<HTMLElement>, alive: boolean) {
+  useEffect(() => {
+    if (!alive || prefersReducedMotion()) return;
+    let cancel = () => {};
+    let timer = 0;
+    let stopped = false;
+
+    const set = (v: number) => { if (ref.current) ref.current.style.opacity = String(v); };
+    const breathe = () => {
+      if (stopped) return;
+      cancel = animateNumber(1, 0.32, BREATH_DOWN_MS, set, () => {
+        if (stopped) return;
+        cancel = animateNumber(0.32, 1, BREATH_UP_MS, set, () => {
+          if (stopped) return;
+          timer = window.setTimeout(breathe, BREATH_PAUSE_MS);
+        });
+      });
+    };
+    breathe();
+    return () => {
+      stopped = true;
+      cancel();
+      window.clearTimeout(timer);
+      if (ref.current) ref.current.style.opacity = "";
+    };
+  }, [ref, alive]);
+}
 
 export default function HeroSlot() {
   const navigate = useNavigate();
@@ -66,6 +115,8 @@ export default function HeroSlot() {
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const rate = formatFxChip(config.usd_rate);
   const lead = latest;
+  const dotRef = useRef<HTMLSpanElement>(null);
+  useBreathing(dotRef, shop.open && !lead);
 
   return (
     <div
@@ -89,6 +140,7 @@ export default function HeroSlot() {
           ariaLabel={`Точка выдачи ${shop.open ? "открыта" : "закрыта"}, ${shop.label}. Подробнее`}
         >
           <span
+            ref={dotRef}
             aria-hidden
             className={`h-1.5 w-1.5 shrink-0 rounded-full ${shop.open ? "bg-green" : "bg-muted"}`}
           />
