@@ -38,24 +38,34 @@
      привычку у тех, кто уже пользуется, но отчётливо не Telegram. Контраст
      проверен: 7.4:1 на фоне экрана, 8.1:1 на белой карточке, белый текст на
      заливке — 6.9:1. Все три выше порога 4.5:1. */
-  /* ===== Палитра живого фона: «холодный закат» =====
-     Фон раньше собирался из тех же каналов, что и кнопки: индиго + оранжевый.
-     Экономия вышла дорогой — смешиваясь на светлой подложке, эти два давали
-     сиренево-персиковую дымку, которая читается как косметика, а не как
-     техника. А вариант профиля был буквально оранжевый с красным.
+  /* ===== Палитра живого фона: небо =====
 
-     Здесь фон получает СВОИ три канала и перестаёт зависеть от цвета кнопок.
-     Логика закатная, но холодная: основная масса — глубокая сталь, средний
-     план — дымчатая синь, и одна тёплая искра приглушённой латуни. Латунь, а
-     не оранжевый: оранжевый на светлом уходит в персик, латунь остаётся
-     металлом. Розового и пурпурного в наборе нет вовсе — им неоткуда взяться
-     при любом смешении этих трёх.
+     Прошлая версия была «холодный премиум» — сталь с латунью. Дорого, но
+     мертво: на светлой подложке при низкой прозрачности сталь и дымка сходятся
+     в серое, и фон читался не как небо, а как пыль на стекле.
 
-     Значения каналами, как остальные токены: прозрачность задаётся отдельно и
-     лежит рядом с цветом в одном месте. */
-  --dusk-steel: 38 74 118;
-  --dusk-haze: 88 128 160;
-  --dusk-brass: 176 143 88;
+     Здесь цвета сняты с настоящего неба, а не подобраны на вкус, и их три —
+     ровно те, что есть в кадре на рассвете и на закате одновременно:
+
+       zenith   — синь зенита, самая насыщенная часть купола;
+       haze     — дымка у горизонта: тот же синий, выбеленный воздухом;
+       sun      — цвет низкого солнца. ЗОЛОТО, а не оранжевый: оранжевый на
+                  светлой подложке уходит в персик и тянет за собой розовое.
+
+     Розового и пурпурного в наборе нет намеренно. В настоящем небе они есть,
+     но на витрине техники читаются как косметика — а мы продаём не её.
+
+     Цвета СВЕТЛЫЕ, и это не полумера. Первая попытка взяла настоящую синь
+     зенита (72 116 178) при плотности .38 — на белой подложке получился
+     полумрак: страница выглядела как вечер в комнате без света. Здесь мы не
+     рисуем небо, а пускаем по странице утренний свет ОТ него, и он бледный.
+     Ориентир — белая комната на рассвете, а не сам рассвет в кадре.
+
+     Контраст текста это не задевает: подписи лежат на собственных подложках
+     (карточки, чипы), а не прямо на пятнах. */
+  --sky-zenith: 122 162 210;
+  --sky-haze: 186 210 228;
+  --sky-sun: 240 206 156;
   --app-accent: 74 68 206;
   --app-accent-dark: 62 56 178;
   --app-green: 53 199 89;
@@ -1052,31 +1062,31 @@ html.kb-open .js-bottom-nav:not([data-search-open="true"]) { display: none; }
    описать, он получит бренд, а не пустоту. Оттенок верхней плашки Telegram для
    каждого варианта лежит в components/AuroraBackground.tsx рядом с маршрутом. */
 .aurora {
-  --aurora-1: var(--dusk-steel);  --aurora-1-a: .30;
-  --aurora-2: var(--dusk-brass);  --aurora-2-a: .16;
-  --aurora-3: var(--dusk-haze);   --aurora-3-a: .20;
+  --aurora-1: var(--sky-zenith);  --aurora-1-a: .24;
+  --aurora-2: var(--sky-sun);     --aurora-2-a: .22;
+  --aurora-3: var(--sky-haze);    --aurora-3-a: .20;
   /* Четвёртое пятно прибито к низу (см. .aurora-4). Тёплый оттенок: оно
      внизу-справа и уравновешивает жёлтое пятно вверху-справа. */
-  --aurora-4: var(--dusk-brass);  --aurora-4-a: .11;
+  --aurora-4: var(--sky-sun);     --aurora-4-a: .16;
 }
 /* AI: холодный индиго вместо тёплого — экран про машинный подбор, и тёплое
    пятно там читалось как продолжение витрины. Индиго нигде больше в интерфейсе
    не встречается и поэтому не заведён как токен палитры: он не роль, а фон
    одного экрана. */
 .aurora[data-variant="ai"] {
-  --aurora-1: var(--dusk-steel);  --aurora-1-a: .32;
-  --aurora-2: var(--dusk-haze);   --aurora-2-a: .22;
-  --aurora-3: var(--dusk-steel);  --aurora-3-a: .14;
-  --aurora-4: var(--dusk-haze);   --aurora-4-a: .12;
+  --aurora-1: var(--sky-zenith);  --aurora-1-a: .38;
+  --aurora-2: var(--sky-haze);    --aurora-2-a: .30;
+  --aurora-3: var(--sky-zenith);  --aurora-3-a: .20;
+  --aurora-4: var(--sky-haze);    --aurora-4-a: .18;
 }
 /* Профиль и баллы: закат — оранжевый с розовым. Это экраны про накопленное, и
    тёплый фон отделяет их от синей витрины, не заводя нового цвета: оба канала
    уже есть в палитре. */
 .aurora[data-variant="warm"] {
-  --aurora-1: var(--dusk-brass);  --aurora-1-a: .24;
-  --aurora-2: var(--dusk-steel);  --aurora-2-a: .16;
-  --aurora-3: var(--dusk-brass);  --aurora-3-a: .13;
-  --aurora-4: var(--dusk-haze);   --aurora-4-a: .11;
+  --aurora-1: var(--sky-sun);     --aurora-1-a: .34;
+  --aurora-2: var(--sky-zenith);  --aurora-2-a: .24;
+  --aurora-3: var(--sky-sun);     --aurora-3-a: .22;
+  --aurora-4: var(--sky-haze);    --aurora-4-a: .20;
 }
 /* Каталог: один синий, без тёплого пятна — оно спорило бы с фотографиями
    товара. Сила почти как на главной: первая версия была вдвое тише справки, и
@@ -1084,19 +1094,19 @@ html.kb-open .js-bottom-nav:not([data-search-open="true"]) { display: none; }
    карточки занимают почти всю площадь, и на промежутки между ними от такой
    прозрачности не оставалось ничего. */
 .aurora[data-variant="quiet"] {
-  --aurora-1: var(--dusk-steel);  --aurora-1-a: .26;
-  --aurora-2: var(--dusk-haze);   --aurora-2-a: .18;
-  --aurora-3: var(--dusk-steel);  --aurora-3-a: .16;
-  --aurora-4: var(--dusk-haze);   --aurora-4-a: .15;
+  --aurora-1: var(--sky-zenith);  --aurora-1-a: .30;
+  --aurora-2: var(--sky-haze);    --aurora-2-a: .24;
+  --aurora-3: var(--sky-zenith);  --aurora-3-a: .18;
+  --aurora-4: var(--sky-haze);    --aurora-4-a: .18;
 }
 /* Информация: один синий втрое тише. Экран длинного текста — фону здесь нельзя
    спорить со строками, и вся его работа в том, чтобы страница не была белым
    листом. */
 .aurora[data-variant="calm"] {
-  --aurora-1: var(--dusk-steel);  --aurora-1-a: .20;
-  --aurora-2: var(--dusk-haze);   --aurora-2-a: .12;
-  --aurora-3: var(--dusk-steel);  --aurora-3-a: .10;
-  --aurora-4: var(--dusk-haze);   --aurora-4-a: .09;
+  --aurora-1: var(--sky-zenith);  --aurora-1-a: .24;
+  --aurora-2: var(--sky-haze);    --aurora-2-a: .16;
+  --aurora-3: var(--sky-zenith);  --aurora-3-a: .12;
+  --aurora-4: var(--sky-haze);    --aurora-4-a: .12;
 }
 
 /* Карточка товара: фон едва различим — примерно вдвое тише справки. Страница
@@ -1104,10 +1114,10 @@ html.kb-open .js-bottom-nav:not([data-search-open="true"]) { display: none; }
    с фото товара фону нельзя; вся его работа в том, чтобы низ под
    характеристиками не читался как белый лист. */
 .aurora[data-variant="faint"] {
-  --aurora-1: var(--dusk-steel);  --aurora-1-a: .10;
-  --aurora-2: var(--dusk-haze);   --aurora-2-a: .07;
-  --aurora-3: var(--dusk-steel);  --aurora-3-a: .06;
-  --aurora-4: var(--dusk-haze);   --aurora-4-a: .05;
+  --aurora-1: var(--sky-zenith);  --aurora-1-a: .13;
+  --aurora-2: var(--sky-haze);    --aurora-2-a: .10;
+  --aurora-3: var(--sky-zenith);  --aurora-3-a: .08;
+  --aurora-4: var(--sky-sun);     --aurora-4-a: .08;
 }
 
 .aurora-blob {
@@ -1133,13 +1143,21 @@ html.kb-open .js-bottom-nav:not([data-search-open="true"]) { display: none; }
      пятно оказалось на −281px). Размер по-прежнему в долях ШИРИНЫ: она у
      телефонов и различается, и определяет, каким пятно выглядит. */
   top: -150px; left: -130px;
-  background: radial-gradient(circle, rgb(var(--aurora-1) / var(--aurora-1-a)), transparent 70%);
+  background: radial-gradient(circle,
+    rgb(var(--aurora-1) / var(--aurora-1-a)) 0%,
+    rgb(var(--aurora-1) / calc(var(--aurora-1-a) * .78)) 32%,
+    rgb(var(--aurora-1) / calc(var(--aurora-1-a) * .34)) 62%,
+    rgb(var(--aurora-1) / 0) 100%);
   animation: aurora-drift-1 22s ease-in-out infinite alternate;
 }
 .aurora-2 {
   width: min(82vw, 340px); height: min(82vw, 340px);
   top: 20px; right: -130px;
-  background: radial-gradient(circle, rgb(var(--aurora-2) / var(--aurora-2-a)), transparent 70%);
+  background: radial-gradient(circle,
+    rgb(var(--aurora-2) / var(--aurora-2-a)) 0%,
+    rgb(var(--aurora-2) / calc(var(--aurora-2-a) * .78)) 32%,
+    rgb(var(--aurora-2) / calc(var(--aurora-2-a) * .34)) 62%,
+    rgb(var(--aurora-2) / 0) 100%);
   animation: aurora-drift-2 27s ease-in-out infinite alternate;
 }
 .aurora-3 {
@@ -1148,7 +1166,11 @@ html.kb-open .js-bottom-nav:not([data-search-open="true"]) { display: none; }
      разная. Раньше отвечало и за низ — теперь низ на четвёртом пятне, поэтому
      подъём в keyframes смягчён (было −120px, стало −80px). */
   top: 45%; left: -90px;
-  background: radial-gradient(circle, rgb(var(--aurora-3) / var(--aurora-3-a)), transparent 70%);
+  background: radial-gradient(circle,
+    rgb(var(--aurora-3) / var(--aurora-3-a)) 0%,
+    rgb(var(--aurora-3) / calc(var(--aurora-3-a) * .78)) 32%,
+    rgb(var(--aurora-3) / calc(var(--aurora-3-a) * .34)) 62%,
+    rgb(var(--aurora-3) / 0) 100%);
   animation: aurora-drift-3 25s ease-in-out infinite alternate;
 }
 .aurora-4 {
@@ -1159,7 +1181,11 @@ html.kb-open .js-bottom-nav:not([data-search-open="true"]) { display: none; }
      третьего. */
   width: min(120vw, 480px); height: min(120vw, 480px);
   bottom: -220px; right: -40px;
-  background: radial-gradient(circle, rgb(var(--aurora-4) / var(--aurora-4-a)), transparent 70%);
+  background: radial-gradient(circle,
+    rgb(var(--aurora-4) / var(--aurora-4-a)) 0%,
+    rgb(var(--aurora-4) / calc(var(--aurora-4-a) * .78)) 32%,
+    rgb(var(--aurora-4) / calc(var(--aurora-4-a) * .34)) 62%,
+    rgb(var(--aurora-4) / 0) 100%);
   animation: aurora-drift-4 29s ease-in-out infinite alternate;
 }
 
@@ -1172,6 +1198,33 @@ html.kb-open .js-bottom-nav:not([data-search-open="true"]) { display: none; }
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 120px;
 }
+
+/* Размеры пятен трогать осторожно: между цветом и кромкой есть размен.
+   Пробовал раздуть их заведомо шире вьюпорта, чтобы убрать видимую границу —
+   получилось хуже: в кадр стали попадать только выцветшие хвосты, и фон снова
+   уехал в серое. Насыщенная часть пятна обязана быть НА экране; кромку, если
+   она мешает, надо гасить длиной хвоста, а не размером.
+
+/* Почему у градиента три остановки, а не две.
+   Пятна намеренно сдвинуты за кромку экрана (см. позиции выше): так их
+   насыщенные середины не мешают контенту, а в кадр попадают края. Но с
+   двухточечным градиентом (цвет -> прозрачность на 70%) в кадре оставалась
+   только выцветшая юбка, и фон читался как серая дымка, а не как небо —
+   «безжизненно», и справедливо.
+   Средние остановки держат цвет дальше от центра: пятно по-прежнему мягкое, но
+   в видимой части у него есть ЦВЕТ, а не намёк на него. Поднимать вместо этого
+   прозрачность было нельзя — это сделало бы ядро за кромкой ещё гуще, а в
+   кадре почти ничего не изменило.
+
+   Хвост доведён до 100%, а не оборван на 78%: при раннем обрыве у пятна
+   появлялась различимая кромка, и фон читался как круги на бумаге. Небо не
+   имеет границ — их не должно быть и здесь.
+
+   И заканчивается он `rgb(... / 0)`, а НЕ ключевым словом `transparent`. Это не
+   придирка: `transparent` в CSS — это прозрачный ЧЁРНЫЙ, и градиент к нему
+   идёт через подмешивание черноты. На светлом фоне это даёт по краю пятна
+   серое кольцо — ровно ту границу, которую мы и убираем. Тот же цвет с нулевой
+   альфой гасится честно, без примеси. */
 
 /* Циклы намеренно разной длины и взаимно непростые (22 / 27 / 25 / 29 —
    попарно взаимно простые): совпади они, пятна начали бы возвращаться в одну и

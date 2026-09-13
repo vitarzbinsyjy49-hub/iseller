@@ -1,32 +1,35 @@
-/** Пара статусов в шапке главной: состояние магазина и курс.
+/** Барабан статусов в шапке главной: режим работы и курс в одном окне.
  *
- *  ===== Почему пара, а не два чипа рядом =====
+ *  ===== Почему барабан, а не два чипа рядом =====
  *
- *  Два одинаково ярких факта в одном ряду конкурируют за внимание и не дают
- *  глазу точки входа: оба что-то сообщают, оба нажимаются, оба выглядят
- *  одинаково важными. Поэтому у них есть передний и задний план: впереди тот,
- *  которым сейчас интересуются, второй приглушён и отодвинут вглубь.
+ *  Два одинаково ярких факта в ряду конкурируют за внимание и съедают половину
+ *  шапки по горизонтали. Здесь они занимают ОДНО место: окно высотой в контрол,
+ *  внутри — вертикальная лента, и в кадре всегда ровно один факт.
  *
- *  Тап по заднему выводит его вперёд И сразу открывает его шторку — одно
- *  движение отвечает и на «покажи подробнее», и на «теперь смотрю сюда».
- *  Разделять эти два намерения не нужно: человек не переключает план ради
- *  переключения.
+ *  Была промежуточная версия со стопкой: две карточки друг на друге со сдвигом
+ *  и поворотом по X. Выглядело это не глубиной, а двойной экспозицией — нижняя
+ *  просвечивала сквозь верхнюю, и «$84,3» читался прямо под «до 21:00». Две
+ *  одинаковые по размеру карточки так и будут выглядеть при любом смещении:
+ *  приём оказался не тот. Обрезка окна снимает вопрос целиком — просвечивать
+ *  нечему.
  *
- *  Левый элемент пары подменяется по приоритету: живая заявка важнее режима
- *  работы и занимает его место. Курс при этом остаётся вторым в любом случае.
+ *  Тап прокручивает ленту И сразу открывает шторку того, что встало в кадр:
+ *  одно движение отвечает и на «покажи подробнее», и на «теперь смотрю сюда».
+ *  Разделять эти намерения не нужно — человек тянется сюда узнать, а не менять
+ *  порядок фактов.
+ *
+ *  Левый факт подменяется по приоритету: живая заявка важнее режима работы и
+ *  занимает его место. Курс остаётся вторым в любом случае.
  *
  *  ===== Почему статус вообще нужен =====
  *
  *  «Закрыто» без пояснения читается как «магазин не работает», хотя заявку мы
  *  принимаем круглосуточно — очно только выдача. Поэтому статус кликабелен и
  *  объясняет себя (PickupHoursSheet), а не просто гасит настроение в полночь.
- *
- *  Кнопка менеджера раньше стояла здесь же и уехала в строку услуг под афишей:
- *  связь с менеджером — услуга, а не статус. Рядом с часами работы она
- *  смотрелась как «Позвонить» рядом с «Открыто до 21:00» на двери магазина —
- *  вроде и о том же месте, но про разное.
  */
-import { forwardRef, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "./icons";
 import { useLeadsBadge } from "../store/leadsBadge";
@@ -42,11 +45,11 @@ const FxRateSheet = lazy(() => import("./FxRateSheet"));
 /** Как часто пересчитывается московский час. */
 const CLOCK_TICK_MS = 60_000;
 
-/** Сколько длится переворот стопки. Совпадает с --motion-standard: это
- *  перестроение элемента, а не отклик на нажатие. */
-const FLIP_MS = 190;
+/** Сколько едет барабан. Совпадает с --motion-standard: это перестроение
+ *  элемента, а не отклик на нажатие. */
+const ROLL_MS = 190;
 
-/** Что сейчас на переднем плане. */
+/** Что сейчас в кадре. */
 type Front = "status" | "rate";
 
 export default function HeroSlot() {
@@ -71,78 +74,53 @@ export default function HeroSlot() {
   const lead = latest;
   const still = prefersReducedMotion();
 
-  /** Вывести вперёд и открыть. Одно намерение — один обработчик. */
-  function pick(which: Front) {
-    if (which !== front) track("status_pair_switched", { to: which });
-    setFront(which);
-    setSheet(which);
-  }
-
-  /** Ссылки на карточки: стили пишем НАПРЯМУЮ в DOM, минуя React.
-   *  Покадровый рендер компонента на каждое значение прогресса — это ровно тот
-   *  приём, который на карусели фото уже дал рывки (см. ProductCard). */
-  const frontRef = useRef<HTMLSpanElement>(null);
-  const backRef = useRef<HTMLSpanElement>(null);
-  const progress = useRef(front === "rate" ? 1 : 0);
+  /** Ссылка на ленту. Стили пишем прямо в DOM, минуя React: покадровый
+   *  setState на карусели фото уже давал рывки (см. ProductCard). */
+  const trackRef = useRef<HTMLSpanElement>(null);
+  const progress = useRef(0);
   const cancel = useRef<() => void>(() => {});
 
-  /** Как выглядит карточка при данной «выдвинутости» вперёд (0 — сзади, 1 —
-   *  впереди). Считается покадрово, а не CSS-переходом: этот webview гасит
-   *  декларативную анимацию целиком, и transition здесь просто перещёлкивал
-   *  состояние — переворота не было видно вовсе (тот же урок, что у стекла
-   *  нижней навигации и у проявления онбординга, см. lib/motion).
+  /** Сдвиг ленты: 0 — виден первый факт, 1 — второй.
    *
-   *  Пишутся только transform и opacity — композиторные свойства, кадр отдаёт
-   *  GPU, раскладка не пересчитывается. */
-  const paintCard = useCallback((el: HTMLSpanElement | null, forwardness: number) => {
-    if (!el) return;
-    const back = 1 - forwardness;
-    el.style.opacity = String(0.55 + 0.45 * forwardness);
-    el.style.zIndex = forwardness > 0.5 ? "10" : "0";
-    el.style.transform = still
-      ? ""
-      : `translateY(${(back * 7).toFixed(2)}px) scale(${(1 - back * 0.1).toFixed(3)}) rotateX(${(back * 38).toFixed(1)}deg)`;
-  }, [still]);
-
+   *  Покадрово, а не CSS-переходом: этот webview гасит декларативную анимацию
+   *  целиком — урок уже дважды оплачен (стекло нижней навигации, проявление
+   *  онбординга), см. lib/motion. translateY композиторное, раскладка не
+   *  пересчитывается. */
   const paint = useCallback((t: number) => {
     progress.current = t;
-    paintCard(frontRef.current, 1 - t);  // статус впереди при t = 0
-    paintCard(backRef.current, t);       // курс впереди при t = 1
-  }, [paintCard]);
+    const el = trackRef.current;
+    if (el) el.style.transform = `translateY(${(-t * 100).toFixed(3)}%)`;
+  }, []);
 
-  // Начальное состояние — до первого кадра, иначе обе карточки успевают
-  // мигнуть одинаковыми.
+  // Начальное состояние — до первого кадра.
   //
-  // hasRate в зависимостях обязателен. Публичный конфиг приходит асинхронно:
-  // на первом рендере курса ещё нет, компонент уходит в ветку одиночного
-  // статуса, и привязывать ссылки не к чему. Стопка появляется ПОЗЖЕ — и без
-  // этой зависимости эффект к тому моменту уже отработал, а второй раз не
-  // вызывался. Карточки оставались без стилей: до первого тапа стопка
-  // выглядела плоской, а первый переворот стартовал из состояния, которого
-  // никто не задавал.
+  // hasRate в зависимостях обязателен: публичный конфиг приходит асинхронно, на
+  // первом рендере курса ещё нет и ленты в разметке не существует. Без этой
+  // зависимости эффект отработал бы впустую и второй раз не вызвался — лента
+  // осталась бы без стилей.
   const hasRate = rate !== null;
   useLayoutEffect(() => { paint(progress.current); }, [paint, hasRate]);
   useEffect(() => () => cancel.current(), []);
 
-  /** Один жест: перевернуть стопку и открыть то, что вышло вперёд.
+  /** Прокрутить барабан и открыть то, что встало в кадр.
    *
-   *  Отдельной кнопки «открыть» нет намеренно. Два действия на одном контроле
-   *  человек различать не обязан — он тянется к статусу, чтобы УЗНАТЬ, а не
-   *  чтобы поменять порядок карточек.
-   */
-  function flip() {
+   *  При «уменьшить движение» лента переставляется мгновенно: движение уходит,
+   *  событие остаётся — то же правило, что во всём проекте. */
+  function roll() {
     const next: Front = front === "status" ? "rate" : "status";
+    const target = next === "rate" ? 1 : 0;
     cancel.current();
-    cancel.current = animateNumber(progress.current, next === "rate" ? 1 : 0, FLIP_MS, paint);
+    if (still) paint(target);
+    else cancel.current = animateNumber(progress.current, target, ROLL_MS, paint);
 
+    setFront(next);
     if (next === "status" && lead) {
-      setFront(next);
+      // У заявки свой экран, шторки нет.
       track("cart_open", { source: "hero_slot_lead" });
       navigate("/requests");
       return;
     }
     track("status_pair_switched", { to: next });
-    setFront(next);
     setSheet(next);
   }
 
@@ -153,8 +131,10 @@ export default function HeroSlot() {
     </>
   ) : (
     <>
-      <span aria-hidden
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${shop.open ? "bg-green" : "bg-muted"}`} />
+      <span
+        aria-hidden
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${shop.open ? "bg-green" : "bg-muted"}`}
+      />
       <span className="shrink-0 text-[13px] font-medium leading-none">
         {shop.open ? `до ${PICKUP_CLOSE_HOUR}:00` : `с ${PICKUP_OPEN_HOUR}:00`}
       </span>
@@ -165,55 +145,8 @@ export default function HeroSlot() {
     ? `Заявка ${lead.number}, ${lead.label}`
     : `Точка выдачи ${shop.open ? "открыта" : "закрыта"}, ${shop.label}`;
 
-  // Курса нет, пока в fx_rate_history нет строк. Тогда стопки не существует —
-  // остаётся один статус, и переворачивать нечего.
-  if (!rate) {
-    return (
-      <div data-collapsing-pretitle className="flex min-w-0 items-center">
-        <button type="button" onClick={() => (lead ? navigate("/requests") : setSheet("status"))}
-          aria-label={`${statusLabel}. Подробнее`}
-          className="tap flex h-control shrink-0 items-center gap-1.5 rounded-field border border-border bg-surface px-3">
-          {statusNode}
-        </button>
-        {sheet === "status" && (
-          <Suspense fallback={null}>
-            <PickupHoursSheet open={shop.open} onClose={() => setSheet(null)} />
-          </Suspense>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div data-collapsing-pretitle className="flex min-w-0 items-center">
-      <button
-        type="button"
-        onClick={flip}
-        aria-label={
-          front === "status"
-            ? `${statusLabel}. Нажмите, чтобы посмотреть курс доллара`
-            : `Курс доллара ${rate.value} рублей. Нажмите, чтобы посмотреть режим работы`
-        }
-        // grid со всеми детьми в одной ячейке: стопка занимает место ШИРОЧАЙШЕЙ
-        // из карточек и ровно одну высоту контрола, сколько бы их ни было.
-        // Раньше эти же два факта стояли рядом и съедали половину шапки.
-        //
-        // perspective включает настоящую глубину: без неё rotateX даёт плоское
-        // сжатие по вертикали, и переворот читается как «схлопнулось», а не как
-        // «повернулось».
-        className="stack-flip tap relative grid h-control shrink-0 items-center outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <StackCard ref={frontRef}>{statusNode}</StackCard>
-        <StackCard ref={backRef}>
-          <span className="text-[13px] font-bold leading-none">${rate.value}</span>
-          {rate.delta !== null && (
-            <span className={`text-[11px] font-bold leading-none ${rate.rising ? "text-green" : "text-danger"}`}>
-              {rate.rising ? "▲" : "▼"}{rate.delta}
-            </span>
-          )}
-        </StackCard>
-      </button>
-
+  const sheets = (
+    <>
       {sheet === "status" && (
         <Suspense fallback={null}>
           <PickupHoursSheet open={shop.open} onClose={() => setSheet(null)} />
@@ -224,29 +157,57 @@ export default function HeroSlot() {
           <FxRateSheet usdRate={config.usd_rate} onClose={() => setSheet(null)} />
         </Suspense>
       )}
+    </>
+  );
+
+  // Курса нет, пока в fx_rate_history нет строк — крутить нечего, остаётся
+  // обычный чип. Городить ленту из одного элемента незачем.
+  if (!rate) {
+    return (
+      <div data-collapsing-pretitle className="flex min-w-0 items-center">
+        <button
+          type="button"
+          onClick={() => (lead ? navigate("/requests") : setSheet("status"))}
+          aria-label={`${statusLabel}. Подробнее`}
+          className="tap flex h-control shrink-0 items-center gap-1.5 rounded-field border border-border bg-surface px-3"
+        >
+          {statusNode}
+        </button>
+        {sheets}
+      </div>
+    );
+  }
+
+  return (
+    <div data-collapsing-pretitle className="flex min-w-0 items-center">
+      <button
+        type="button"
+        onClick={roll}
+        aria-label={
+          front === "status"
+            ? `${statusLabel}. Нажмите, чтобы посмотреть курс доллара`
+            : `Курс доллара ${rate.value} рублей. Нажмите, чтобы посмотреть режим работы`
+        }
+        className="tap flex h-control shrink-0 items-start overflow-hidden rounded-field border border-border bg-surface px-3 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        {/* Окно высотой в один контрол, внутри — лента из двух фактов подряд.
+            Каждый занимает ровно высоту окна, поэтому сдвиг на 100% показывает
+            следующий целиком, без подгонки пикселей под шрифт и отступы. */}
+        <span ref={trackRef} className="flex w-full flex-col will-change-transform">
+          <span className="flex h-control shrink-0 items-center gap-1.5">{statusNode}</span>
+          <span className="flex h-control shrink-0 items-center gap-1.5">
+            <span className="text-[13px] font-bold leading-none">${rate.value}</span>
+            {rate.delta !== null && (
+              <span
+                className={`text-[11px] font-bold leading-none ${rate.rising ? "text-green" : "text-danger"}`}
+              >
+                {rate.rising ? "▲" : "▼"}{rate.delta}
+              </span>
+            )}
+          </span>
+        </span>
+      </button>
+      {sheets}
     </div>
   );
 }
-
-/** Карточка в стопке. Обе лежат в одной ячейке grid, одна поверх другой.
- *
- *  Своих состояний у неё нет: прозрачность, поворот и порядок наложения пишет
- *  покадровый мотор родителя прямо в style. Здесь только то, что не меняется
- *  во время движения, — форма, отступы и типографика.
- *
- *  Из-под передней карточки видно нижнюю кромку задней, и по этой кромке сразу
- *  понятно, что под ней что-то есть и стопку можно перевернуть. Без этого
- *  намёка контрол выглядел бы обычной кнопкой, а второй факт был бы спрятан.
- */
-const StackCard = forwardRef<HTMLSpanElement, { children: ReactNode }>(
-  function StackCard({ children }, ref) {
-    return (
-      <span
-        ref={ref}
-        className="pointer-events-none col-start-1 row-start-1 flex h-control items-center justify-center gap-1.5 rounded-field border border-border bg-surface px-3"
-      >
-        {children}
-      </span>
-    );
-  },
-);
