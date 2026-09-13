@@ -1,5 +1,32 @@
 import { describe, expect, it } from "vitest";
+import indexHtml from "../../index.html?raw";
 import { shouldHideSplash } from "./splash";
+
+/** Живой градиент (.aurora) лежит на z-index: -10 и виден только потому, что
+ *  фон body всплывает на холст и рисуется ПОД ним. Стоит задать фон ещё и на
+ *  html — всплытие отменяется, body красит свой блок в обычном потоке, то есть
+ *  поверх отрицательного z-index, и градиент пропадает СРАЗУ НА ВСЕХ экранах.
+ *
+ *  Проверяется исходником, а не рендером, намеренно: тесты этого проекта идут
+ *  в node без DOM, а поймать нужно ровно одну строку в index.html. Вручную
+ *  такое не ловится — пятна остаются в DOM, живые и анимированные, у них
+ *  правильные цвета и прозрачности, и виноватым выглядит что угодно, кроме
+ *  разметки. Так этот дефект и уехал в прод.
+ */
+describe("index.html: фон не должен блокировать живой градиент", () => {
+  const html = indexHtml;
+
+  it("не задаёт background на html", () => {
+    // Селекторы, куда попадает html: `html {`, `html, body {`, `body, html {`.
+    const blocks: string[] = html.match(/(^|\s|,)html\s*(,[^{]*)?\{[^}]*\}/g) ?? [];
+    const withBackground = blocks.filter((b: string) => /\bbackground\b/.test(b));
+    expect(withBackground).toEqual([]);
+  });
+
+  it("задаёт background на body — иначе первый кадр белый", () => {
+    expect(/\bbody\s*\{[^}]*\bbackground\b/.test(html)).toBe(true);
+  });
+});
 
 /** Заставка запуска снимается ровно в двух случаях, и второй легко забыть.
  *
