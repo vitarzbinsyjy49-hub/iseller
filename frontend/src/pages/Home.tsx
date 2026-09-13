@@ -605,7 +605,7 @@ export default function Home() {
               }}
             />
           ) : (
-            <div key={i} className="skeleton aspect-[2/1] w-[min(82vw,320px)] shrink-0 rounded-hero lg:aspect-auto lg:h-[160px] lg:w-auto" />
+            <div key={i} className="skeleton aspect-[3/2] w-[min(82vw,320px)] shrink-0 rounded-hero lg:aspect-auto lg:h-[184px] lg:w-auto" />
           ),
         )}
       </div>
@@ -849,7 +849,7 @@ function HeroBanner({
   return (
     <button
       onClick={onOpen}
-      className={`press-surface lift relative aspect-[2/1] h-auto w-[min(82vw,320px)] shrink-0 snap-start overflow-hidden rounded-hero p-4 text-left lg:aspect-auto lg:h-[160px] lg:w-auto lg:p-5 lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.22)] ${
+      className={`press-surface lift relative aspect-[3/2] h-auto w-[min(82vw,320px)] shrink-0 snap-start overflow-hidden rounded-hero p-4 text-left lg:aspect-auto lg:h-[184px] lg:w-auto lg:p-5 lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.22)] ${
         isCurated
           ? "bg-white text-text shadow-card ring-1 ring-inset ring-black/[0.04]"
           : "shadow-float"
