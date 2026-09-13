@@ -98,6 +98,15 @@ ALLOWED_EVENTS = {
     "search_result_clicked",
     "search_ai_escalated",
     "quick_scenario_clicked",
+    # v5.9, верх главной: обещания магазина вынесены из карусели в строку под
+    # афишей. Событие говорит, ЧТО именно человек проверяет перед покупкой —
+    # проверку, оплату или гарантию; в payload идёт только имя раздела.
+    "trust_fact_opened",
+    # Обращение к менеджеру. source отличает главную от карточки товара и
+    # корзины: без него не видно, в какой момент нужен живой человек.
+    "manager_opened",
+    # Пара статусов в шапке главной: что вывели на передний план.
+    "status_pair_switched",
     "ai_prefill_opened",
     "history_opened",
     "empty_state_action_clicked",

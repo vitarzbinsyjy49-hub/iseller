@@ -10,6 +10,7 @@ import { ScenarioChoiceSheet } from "../components/ScenarioSheet";
 import { MACBOOK_CHOICES, type ChoiceItem, type ScenarioKey } from "../lib/scenario";
 import { usePublicConfig } from "../lib/appConfig";
 import { openExternalLink } from "../lib/telegram";
+import { managerLink } from "../lib/managerLink";
 import { ProfileChip } from "../components/ProfileChip";
 import { ErrorState } from "../components/StateViews";
 import SearchPanel from "../components/SearchPanel";
@@ -24,14 +25,10 @@ import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
 import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { ClaudeMark } from "../components/ClaudeMark";
-import { FxRateChip } from "../components/FxRateChip";
 import LaunchCountdown from "../components/LaunchCountdown";
 
 const RoadmapSheet = lazy(() => import("../components/RoadmapSheet"));
 const AboutServiceSheet = lazy(() => import("../components/AboutServiceSheet"));
-// Как соседние шторки выше: открывается только тапом по чипу, в основной
-// чанк первого экрана попадать не должна (мобильные сети, Mini App).
-const FxRateSheet = lazy(() => import("../components/FxRateSheet"));
 import { autoplayReady, nextSlideIndex, snapTargetLeft } from "../lib/carousel";
 import { animateScrollTo } from "../lib/motion";
 import { useCollapsingHeader } from "../lib/useCollapsingHeader";
@@ -264,7 +261,6 @@ export default function Home() {
   const [consult, setConsult] = useState(false);
   const [roadmap, setRoadmap] = useState(false);
   const [about, setAbout] = useState(false);
-  const [fxSheetOpen, setFxSheetOpen] = useState(false);
   const [search, setSearch] = useState("");
   // Панель умного поиска: открыта по фокусу (полезное пустое состояние) или
   // при вводе (live-результаты). Содержимое — SearchPanel; debounce и отмена
@@ -436,21 +432,17 @@ export default function Home() {
           onOpenRoadmap={() => { track("beta_roadmap_opened", { source: "home_launch" }); setRoadmap(true); }}
         />
 
-        {/* Фраза бренда переехала сюда из-под логотипа и вместе с местом сменила
-            вес: 11px серым она была подписью к картинке, а на первом экране
-            магазина главный вопрос — «что здесь можно найти». Текст тот же, но
-            теперь он отвечает на него, а не украшает шапку.
-            26px вместо 20 и <h1> вместо <p>: это заголовок ЭКРАНА, а не подпись
-            к чему-то, и он единственный, кто на этом верху имеет право быть
-            крупным. Пока он был одного веса с остальными пятью рядами, у экрана
-            не было главного элемента вовсе — отсюда и ощущение веб-страницы.
-            Растворяется при прокрутке (data-collapsing-title). */}
-        <h1
-          data-collapsing-title
-          className="mt-1 text-h1 font-bold tracking-tight [text-wrap:balance]"
-        >
-          {HOME_HEADLINE}
-        </h1>
+        {/* Крупного заголовка здесь больше нет.
+            «Техника, которую легко найти» — слоган: он занимал 64px первого
+            экрана (замер) и не сообщал ничего, чего не сообщает сам магазин.
+            Приём с тающим крупным заголовком — системный для ЗАГОЛОВКОВ
+            НАВИГАЦИИ в iOS, а не для витрины: ни один магазин, с которым нас
+            сравнивают, на главной его не держит.
+            Название при этом не потеряно — оно приезжает в липкую шапку при
+            прокрутке (data-collapsing-smalltitle там же). Без пары
+            data-collapsing-title хук просто уводит прогресс в единицу с первой
+            прокрутки, то есть шапка «наливается» сразу — для липкого поиска это
+            и нужно (см. lib/useCollapsingHeader.ts). */}
 
         {/* Крупный поиск — главный элемент верха (relative: под ним панель подсказок).
             onBlur на обёртке: закрываем панель, только если фокус ушёл наружу
@@ -467,8 +459,8 @@ export default function Home() {
           {/* Волосяная рамка вместо тени: поле лежит на странице, а не парит
               над ней. Тень нужна была, чтобы белое читалось на синем; синего
               больше нет, и тень осталась бы украшением. */}
-          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-card border border-border bg-surface py-1.5 pl-4 pr-1.5 text-text">
-            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <div className="flex h-control min-w-0 flex-1 items-center gap-2.5 rounded-field border border-border bg-surface pl-4 pr-1.5 text-text">
+            <svg viewBox="0 0 24 24" className="h-icon w-icon shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
             </svg>
             <input
@@ -490,7 +482,7 @@ export default function Home() {
               placeholder="Найти технику"
               aria-label="Поиск по каталогу"
               aria-expanded={searchOpen || search.trim().length >= 2}
-              className="h-9 min-w-0 flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-muted"
+              className="self-stretch min-w-0 flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-muted"
             />
             {/* Кнопка очистки — только когда есть текст. Иконка сканера убрана до
                 реализации сценария «наведи камеру → AI определил модель». */}
@@ -516,7 +508,7 @@ export default function Home() {
               // это форма «по умолчанию для всего», от которой мы уходим.
               // Круглыми остаются только кнопки-иконки, где круг задан
               // содержимым, а не вкусом.
-              className="tap flex h-9 shrink-0 items-center gap-1.5 rounded-field bg-accent px-3.5 text-[13px] font-semibold text-white"
+              className="tap tap-area-control relative flex h-[34px] shrink-0 items-center gap-1.5 rounded-field bg-accent px-3.5 text-[13px] font-semibold text-white"
             >
               <Icon name="sparkles" className="h-4 w-4" strokeWidth={2} />
               ИИ
@@ -543,73 +535,27 @@ export default function Home() {
           )}
         </div>
 
-        {/* Ось навигации (категории/бренды) слева, курс USD справа. Строка
-            рисуется, если есть ХОТЯ БЫ ОДНО из двух — тумблера нет, пока
-            бренды не пришли, чип нет, пока в fx_rate_history нет строк. */}
-        {(hasBrandAxis || config.usd_rate) && (
-          <div className="mt-3 flex items-center justify-between">
-            {hasBrandAxis ? (
-              <SegmentedToggle
-                value={axis}
-                onChange={switchAxis}
-                options={[
-                  { value: "category", label: "Категории" },
-                  { value: "brand", label: "Бренды" },
-                ] as const}
-                ariaLabel="Навигация по каталогу"
-                variant="on-surface"
-              />
-            ) : <div />}
-            <FxRateChip usdRate={config.usd_rate} onClick={() => setFxSheetOpen(true)} />
-          </div>
-        )}
+        {/* Тумблера «Категории / Бренды» здесь больше нет, и ряда категорий
+            ниже — тоже. Целый этаж уходил на переключение оси каталога, ещё
+            один — на ссылки в него же, а каталог у нас отдельная вкладка нижней
+            навигации. Дублировать её на витрине значило соревноваться с самим
+            собой: человек, которому нужен каталог, нажимает «Каталог».
+            Курс, стоявший в этой строке справа, уехал в шапку — к режиму
+            работы, где ему и место по смыслу. */}
 
-        {fxSheetOpen && config.usd_rate && (
-          <Suspense fallback={null}>
-            <FxRateSheet usdRate={config.usd_rate} onClose={() => setFxSheetOpen(false)} />
-          </Suspense>
-        )}
 
-        {/* Категории — элементы с волосяной рамкой, радиус общей шкалы (12px).
-            Не пилюли и не голый текст, и оба отказа по делу.
-            Пилюля (радиус 999) — форма «по умолчанию для всего», от которой мы
-            уходим. Голый текст был перебором в другую сторону: у надписи нет ни
-            границы, ни фона, ни подчёркивания — ни одного признака, по которому
-            глаз отличает «нажми» от «прочитай». Убрав подложку, я убрал вместе с
-            ней и сигнал.
-            Рамка — тот же язык, которым в каталоге говорят «Популярные ▾» и
-            «Фильтры · N»: об управляющих элементах приложение обязано говорить
-            одинаково на всех экранах.
-            Подчёркивание сюда не годится: в каталоге оно значит «эта категория
-            ВЫБРАНА», а здесь выбранной нет — все ссылки равноправны. Один знак с
-            двумя смыслами хуже двух разных знаков.
-            Данные: админские плитки → каталог → кэш; максимум 6. */}
-        {/* bg-surface/70, а не сплошной белый — и это не украшение, а иерархия
-            материалов. Раньше весь верх состоял из девяти одинаковых белых
-            пилюль (действия, поиск, кнопка ИИ, тумблер осей, курс, четыре
-            категории): один радиус, одна заливка, один вес — экран читался как
-            выгрузка библиотеки компонентов. Теперь материал говорит о роли:
-            поиск сплошной, потому что это поле ввода и оно главное; категории
-            полупрозрачны и живой фон идёт сквозь них; шапка — стекло. Текст на
-            них по-прежнему почти чёрный (контраст ~14:1), читаемость не
-            тронута. */}
-        <div className={`no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 ${hasBrandAxis ? "mt-2" : "mt-3"}`}>
-          {heroChips.map((c) => (
-            <button
-              key={c.key}
-              onClick={() => navigate(safeInternalRoute(c.route))}
-              className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-field border border-border bg-surface/70 px-3.5 text-footnote font-medium text-text outline-none transition-colors hover:border-accent hover:text-accent focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              {c.label}
-            </button>
-          ))}
-          <button
-            onClick={() => navigate("/catalog")}
-            className="tap flex h-11 shrink-0 items-center whitespace-nowrap rounded-field border border-border bg-surface/70 px-3.5 text-footnote font-medium text-accent outline-none transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            {axis === "brand" ? "Все бренды →" : "Все категории →"}
-          </button>
-        </div>
+        {/* Ряд категорий отсюда убран вместе с тумблером осей.
+            Это были ссылки из витрины в каталог, у которого есть собственная
+            вкладка в нижней навигации. Витрина соревновалась с ней за ту же
+            задачу и проигрывала: чтобы дойти до нужной категории, всё равно
+            приходилось открывать каталог — ряд показывал шесть из десятка.
+            Поиск и AI-подбор остаются: они находят товар, а не ведут в список.
+
+            `axis`, `navChips` и `switchAxis` в компоненте СОХРАНЕНЫ и мёртвым
+            кодом не являются — ими живёт desktop-сайдбар ниже (там ряд
+            категорий уместен: место есть, и он не конкурирует с нижней
+            навигацией, которой на desktop нет). `heroChips` продолжает питать
+            панель подсказок под поиском. Убрана только мобильная витрина. */}
       </div>
 
       {/* ===== Быстрые сценарии (mobile): не категории, а намерения пользователя.
@@ -677,6 +623,26 @@ export default function Home() {
           ),
         )}
       </div>
+
+      {/* ===== Чем мы отличаемся — строкой под афишей =====
+
+          Это те же обещания, которые написаны в «Информации», вынесенные туда,
+          где их читают. Раньше они жили слайдами карусели («Техника с
+          гарантией» — пятым из шести): до них не долистывали, то есть УТП
+          формально было и фактически не работало.
+
+          Каждый факт ведёт в СВОЙ раздел, а не в оглавление: человек тапает по
+          тому, что его беспокоит, и попадает на ответ. Новых экранов для этого
+          заводить не пришлось — все три адреса уже существуют.
+
+          Кнопка менеджера стоит здесь же и переехала сюда из шапки (HeroSlot):
+          связь с живым человеком — такое же обещание, как проверка и оплата
+          после неё, и читается оно в одном ряду с ними. */}
+      <TrustRow
+        managerUrl={config.manager_retail_url}
+        onInfo={(hash) => { track("trust_fact_opened", { fact: hash }); navigate(`/info#${hash}`); }}
+        onManagerFallback={() => navigate("/info#contacts")}
+      />
 
       {/* ===== Секции товаров: mobile — ленты/сетка 2, desktop — сетка 4 (5 на wide) =====
           Все три секции ниже (Хиты/Сегодня/Рекомендуем) читают один и тот же /catalog/feed —
@@ -1126,6 +1092,66 @@ function ScenarioIcon({ name }: { name: string }) {
  *  просадки. Лента (горизонтальный скролл) здесь не вариант — см. комментарий
  *  ниже, в проекте уже отказывались от неё по этой же причине для чипов
  *  категорий. */
+/** Строка обещаний под афишей.
+ *
+ *  Не украшение и не «бейджи доверия»: каждый элемент — вход в раздел, где это
+ *  обещание расписано. Поэтому у всех троих шеврон — признак, по которому глаз
+ *  отличает «нажми» от «прочитай». Без него ряд читался бы как наклейки, и
+ *  нажимать бы их не стали.
+ *
+ *  Горизонтальная прокрутка, а не перенос: перенос на вторую строку удваивает
+ *  высоту ради третьего элемента, а ряд обязан оставаться одной строкой — это
+ *  сопроводительная информация к афише, а не самостоятельный блок.
+ */
+function TrustRow({
+  managerUrl, onInfo, onManagerFallback,
+}: {
+  managerUrl?: string;
+  onInfo: (hash: string) => void;
+  onManagerFallback: () => void;
+}) {
+  const cls =
+    "tap flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-field border border-border " +
+    "bg-surface/70 px-3 text-[12px] font-semibold text-text outline-none transition-colors " +
+    "hover:border-accent focus-visible:ring-2 focus-visible:ring-accent";
+
+  return (
+    <div className="no-scrollbar -mx-4 mt-3 flex items-center gap-2 overflow-x-auto px-4 lg:mx-0 lg:px-0">
+      <button className={cls} onClick={() => onInfo("warranty")}>
+        <Icon name="shield" className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2.2} />
+        Проверка при вас
+        <Chevron />
+      </button>
+      <button className={cls} onClick={() => onInfo("payment")}>
+        Оплата после проверки
+        <Chevron />
+      </button>
+      <button
+        className={cls}
+        onClick={() => {
+          track("manager_opened", { source: "home_trust" });
+          // Текст подставляется в поле ввода, отправляет человек сам
+          // (lib/managerLink). Ссылки нет — уводим в контакты, а не в никуда.
+          if (!openExternalLink(managerLink(managerUrl, null))) onManagerFallback();
+        }}
+      >
+        <Icon name="chat" className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2.2} />
+        Написать менеджеру
+      </button>
+    </div>
+  );
+}
+
+/** Шеврон «здесь откроется». Отдельным узлом, чтобы не повторять svg трижды. */
+function Chevron() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-3 w-3 shrink-0 text-muted"
+      fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+      <path d="m9 5 7 7-7 7" />
+    </svg>
+  );
+}
+
 function QuickScenarios({
   onCatalog, onScenario, onMacbook, onSellItem,
 }: {
