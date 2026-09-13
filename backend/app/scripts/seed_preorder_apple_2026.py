@@ -36,7 +36,17 @@ from app.models.home import HomeBanner
 from app.models.product import Product
 
 GROUP = "apple-sept-2026"
-BANNER_IMAGE = "/assets/promos/apple-sept-2026.webp"
+#: Та же композиция, что ушла постом в канал (apple-sept-2026-post.webp), но
+#: достроенная до 3:2 — пропорции баннера на главной. Прежняя картинка
+#: (apple-sept-2026.webp) показывала два устройства из шести, и витрина
+#: расходилась с каналом: человек видел в канале пять силуэтов, открывал
+#: приложение и находил два.
+#:
+#: Имя НОВОЕ, а не перезапись старого файла, и это обязательно: картинки
+#: отдаются с `Cache-Control: public, immutable, max-age=2592000`. Под прежним
+#: именем каждый, кто открывал приложение за последний месяц, продолжал бы
+#: видеть старую — браузер даже не сходил бы спросить.
+BANNER_IMAGE = "/assets/promos/apple-sept-2026-lineup.webp"
 
 _BASE = "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is"
 _SQUARE = "wid=1200&hei=1200&fmt=jpeg&qlt=90"
