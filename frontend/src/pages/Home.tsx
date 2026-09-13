@@ -6,11 +6,11 @@ import { useAuthStore } from "../store/auth";
 import { ProductCard as TCard } from "../components/ai/types";
 import ProductCard from "../components/ProductCard";
 import LeadForm from "../components/LeadForm";
-import { ScenarioChoiceSheet } from "../components/ScenarioSheet";
-import { MACBOOK_CHOICES, type ChoiceItem, type ScenarioKey } from "../lib/scenario";
+import { type ScenarioKey } from "../lib/scenario";
 import { usePublicConfig } from "../lib/appConfig";
 import { openExternalLink } from "../lib/telegram";
 import { managerLink } from "../lib/managerLink";
+import { edgeColor, inkOn, SURFACE_SAMPLE, type Rgb } from "../lib/bannerSurface";
 import { ProfileChip } from "../components/ProfileChip";
 import { ErrorState } from "../components/StateViews";
 import SearchPanel from "../components/SearchPanel";
@@ -225,21 +225,10 @@ export default function Home() {
   // v6: Trade-In/бизнес/опт ведут в AI-чат заявки (/apply/:scenario) вместо
   // встроенного bottom-sheet. Меню MacBook (v5.4.0) остаётся как есть — это
   // prefill в /ai, не lead-сценарий.
-  const [macbookOpen, setMacbookOpen] = useState(false);
 
   function openScenario(k: ScenarioKey) {
     track("quick_scenario_clicked", { scenario: k });
     navigate(`/apply/${k}`);
-  }
-  function openMacbook() {
-    track("quick_scenario_clicked", { scenario: "pick_macbook" });
-    setMacbookOpen(true);
-  }
-  function pickMacbook(item: ChoiceItem) {
-    track("scenario_option_selected", { scenario: "macbook", field: item.key });
-    setMacbookOpen(false);
-    // prefill без авто-отправки: пользователь видит текст и жмёт «Отправить» сам.
-    navigate(`/ai?q=${encodeURIComponent(item.prefill)}`);
   }
   // Стартуем с кэша последнего реального ответа — hero-чипы рисуются мгновенно,
   // без сдвига вёрстки и без выдуманных категорий.
@@ -563,13 +552,10 @@ export default function Home() {
           public config (пустая ссылка → существующий fallback: AI-консультант).
           На desktop аналогичные действия уже есть в сайдбаре — не дублируем. ===== */}
       <QuickScenarios
-        onCatalog={(route, scenarioKey) => {
-          track("quick_scenario_clicked", { scenario: scenarioKey });
-          navigate(safeInternalRoute(route));
-        }}
         onScenario={openScenario}
-        onMacbook={openMacbook}
         onSellItem={() => { track("quick_scenario_clicked", { scenario: "sell_item" }); navigate("/sell"); }}
+        onAi={() => { track("quick_scenario_clicked", { scenario: "ai_pick" }); navigate("/ai"); }}
+        onMarketplace={() => { track("quick_scenario_clicked", { scenario: "marketplace" }); navigate("/marketplace"); }}
       />
 
       {/* ===== Desktop: сетка [sidebar 260px | контент] ===== */}
@@ -619,7 +605,7 @@ export default function Home() {
               }}
             />
           ) : (
-            <div key={i} className="skeleton h-[176px] w-[78%] shrink-0 rounded-hero lg:h-[184px] lg:w-auto" />
+            <div key={i} className="skeleton aspect-[2/1] w-[min(82vw,320px)] shrink-0 rounded-hero lg:aspect-auto lg:h-[160px] lg:w-auto" />
           ),
         )}
       </div>
@@ -786,15 +772,13 @@ export default function Home() {
         </Suspense>
       )}
 
-      {/* v5.4.0: меню «Подобрать MacBook» (AI prefill, без заявки и авто-отправки) */}
-      {macbookOpen && (
-        <ScenarioChoiceSheet
-          title="Какой MacBook вам нужен?"
-          items={MACBOOK_CHOICES}
-          onClose={() => setMacbookOpen(false)}
-          onPick={pickMacbook}
-        />
-      )}
+      {/* Шторка «Подобрать MacBook» отсюда убрана: её никто не открывал.
+          Обработчик openMacbook передавался в ряд услуг пропом, но сам ряд
+          пункта «MacBook» не содержал уже давно — то есть путь был мёртв и до
+          этой ревизии, просто прятался за живым на вид пропом.
+          Сами ScenarioChoiceSheet и MACBOOK_CHOICES не тронуты: это отдельные
+          модули со своими тестами, и удалять покрытый код заодно с правкой
+          витрины неправильно. Не импортируются — значит, в бандл не попадают. */}
     </div>
   );
 }
@@ -807,6 +791,32 @@ export default function Home() {
  *  - битая ссылка на изображение не оставляет иконку сломанной картинки: фото
  *    скрывается, остаётся фирменный градиент и читаемый текст.
  */
+/** Прочитать цвет левого края картинки. null — прочитать не удалось.
+ *
+ *  Canvas «пачкается» чужой картинкой и запрещает getImageData, если сервер не
+ *  отдал CORS-заголовки. Для наших загрузок (тот же origin) и для промо из
+ *  public это не случается, но администратор может вписать ссылку на чужой
+ *  CDN — и тогда чтение бросит исключение. Ловим и возвращаем null: баннер
+ *  остаётся на прежнем градиенте, то есть просто не получает улучшения, а не
+ *  ломается.
+ */
+function readSurface(img: HTMLImageElement): { rgb: Rgb; ink: "dark" | "light" } | null {
+  try {
+    const c = document.createElement("canvas");
+    c.width = SURFACE_SAMPLE.width;
+    c.height = SURFACE_SAMPLE.height;
+    const ctx = c.getContext("2d", { willReadFrequently: false });
+    if (!ctx) return null;
+    // Рисуем картинку целиком в узкую полоску: нас интересует её левый край,
+    // а масштаб по горизонтали как раз и усредняет его по ширине выборки.
+    ctx.drawImage(img, 0, 0, SURFACE_SAMPLE.width, SURFACE_SAMPLE.height);
+    const rgb = edgeColor(ctx.getImageData(SURFACE_SAMPLE.x, 0, SURFACE_SAMPLE.width, SURFACE_SAMPLE.height).data);
+    return rgb ? { rgb, ink: inkOn(rgb) } : null;
+  } catch {
+    return null;
+  }
+}
+
 function HeroBanner({
   banner, onOpen, claudeEnabled,
 }: {
@@ -815,6 +825,9 @@ function HeroBanner({
   claudeEnabled: boolean;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
+  // Подложка и цвет текста — из самой фотографии (lib/bannerSurface).
+  // Считается один раз на загрузку картинки, не на каждый кадр.
+  const [surface, setSurface] = useState<{ rgb: Rgb; ink: "dark" | "light" } | null>(null);
   const curated = curatedPromo(banner);
   const imageSrc = banner.image_url || curated?.src;
   const hasImage = !!imageSrc && !imageFailed;
@@ -824,18 +837,36 @@ function HeroBanner({
   // не рисуем вовсе, баннер работает как одна большая кнопка. Признак —
   // пустой subtitle у баннера с картинкой: заголовок остаётся для screen reader.
   const artworkOnly = hasImage && !isCurated && !banner.subtitle;
+  /** Формат «карточка»: загруженная фотография + наша подпись. Единственный
+   *  случай, где текст и снимок делят кадр, — и единственный, где нужна
+   *  подложка из самой фотографии. */
+  const photoOnSurface = hasImage && !isCurated && !artworkOnly;
+  /** Пока цвет не прочитан (первый кадр, сеть, отказ canvas) — текст светлый:
+   *  под ним прежний градиент, он тёмный. Так подпись читается всегда, а не
+   *  «после того, как картинка доедет». */
+  const ink = surface?.ink ?? "light";
 
   return (
     <button
       onClick={onOpen}
-      className={`press-surface lift relative aspect-[3/2] h-auto w-[min(82vw,320px)] shrink-0 snap-start overflow-hidden rounded-hero p-4 text-left lg:aspect-auto lg:h-[184px] lg:w-auto lg:p-5 lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.22)] ${
+      className={`press-surface lift relative aspect-[2/1] h-auto w-[min(82vw,320px)] shrink-0 snap-start overflow-hidden rounded-hero p-4 text-left lg:aspect-auto lg:h-[160px] lg:w-auto lg:p-5 lg:hover:shadow-[0_18px_40px_-14px_rgba(17,24,39,0.22)] ${
         isCurated
           ? "bg-white text-text shadow-card ring-1 ring-inset ring-black/[0.04]"
-          : "text-white shadow-float"
-      }`}
-      style={isCurated ? undefined : {
-        background: banner.background_gradient || "linear-gradient(135deg,#1a7fd4,#6d5ae0)",
-      }}
+          : "shadow-float"
+      } ${isCurated || ink === "dark" ? "text-text" : "text-white"}`}
+      style={
+        isCurated
+          ? undefined
+          : {
+              // Подложка из фотографии, когда она прочитана; иначе прежний
+              // градиент. Переход мягкий: цвет приезжает на долю секунды позже
+              // картинки, и щелчок заливки был бы заметнее самой заливки.
+              background: surface
+                ? `rgb(${surface.rgb.join(" ")})`
+                : banner.background_gradient || "linear-gradient(135deg,#1a7fd4,#6d5ae0)",
+              transition: "background-color 190ms cubic-bezier(0.22,1,0.36,1)",
+            }
+      }
     >
       {hasImage && (
         <img
@@ -846,12 +877,33 @@ function HeroBanner({
           alt={artworkOnly ? banner.title : ""}
           loading="lazy" decoding="async"
           onError={() => setImageFailed(true)}
-          className="absolute inset-0 h-full w-full object-cover"
+          onLoad={(e) => {
+            // Только для формата «карточка»: у готовой афиши и у curated
+            // подложка не нужна — первая занимает кадр целиком, вторая лежит
+            // на белом по своему макету.
+            if (isCurated || artworkOnly) return;
+            setSurface(readSurface(e.currentTarget));
+          }}
+          crossOrigin="anonymous"
+          className={photoOnSurface
+            ? "absolute inset-y-0 right-0 h-full w-[58%] object-cover"
+            : "absolute inset-0 h-full w-full object-cover"}
           style={{ objectPosition: isCurated ? "72% center" : "center" }}
         />
       )}
-      {hasImage && !isCurated && !artworkOnly && (
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
+      {/* Растворение фотографии в подложку вместо затемнения всего кадра.
+          Затемнение гасило снимок целиком ради читаемости подписи — то есть
+          прятало ровно то, ради чего снимок и ставили. Здесь текст лежит на
+          РОВНОМ цвете слева, а фотография начинается там, где текст кончился;
+          граница между ними размыта градиентом той же заливки, поэтому шва
+          не видно и прямоугольного блока не остаётся. */}
+      {photoOnSurface && surface && (
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(to right, rgb(${surface.rgb.join(" ")}) 42%, rgb(${surface.rgb.join(" ")} / 0) 66%)`,
+          }}
+        />
       )}
       {artworkOnly ? null : (
       <div className="relative z-10 flex h-full max-w-[62%] flex-col justify-end lg:max-w-[66%]">
@@ -872,11 +924,11 @@ function HeroBanner({
           </span>
         )}
         <p className={`text-[16px] font-extrabold leading-5 lg:text-[18px] lg:leading-6 ${
-          isCurated ? "tracking-[-0.02em] text-text" : "drop-shadow"
+          isCurated || ink === "dark" ? "tracking-[-0.02em] text-text" : "drop-shadow"
         }`}>{banner.title}</p>
         {banner.subtitle && (
           <p className={`mt-1 line-clamp-2 text-[12px] font-medium leading-4 lg:text-[13px] ${
-            isCurated ? "text-text/60" : "text-white/85 drop-shadow"
+            isCurated || ink === "dark" ? "text-text/60" : "text-white/85 drop-shadow"
           }`}>
             {banner.subtitle}
           </p>
@@ -1066,6 +1118,10 @@ function ScenarioIcon({ name }: { name: string }) {
         return <><rect x="3.5" y="7.5" width="17" height="12" rx="2" /><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5M3.5 12.5h17" /></>;
       case "wholesale":
         return <><path d="M12 3 3.5 7.5v9L12 21l8.5-4.5v-9z" /><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" /></>;
+      case "ai_pick":  // искра — тот же знак, что у кнопки ИИ в поиске
+        return <><path d="M12 3.5 13.6 8 18 9.6 13.6 11.2 12 15.7l-1.6-4.5L6 9.6 10.4 8z" /><path d="m18.2 15.4.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z" /></>;
+      case "marketplace":  // витрина: то, что выставлено на продажу
+        return <><path d="M4 9.5V20h16V9.5" /><path d="M3 9.5 4.8 4.5h14.4L21 9.5z" /><path d="M9.5 20v-5.5h5V20" /></>;
       case "sell_item":  // ценник-бирка
         return <><path d="M11 3h6a2 2 0 0 1 2 2v6L10 20l-9-9L10 3z" /><circle cx="15" cy="8" r="1.4" /></>;
       default: // нейтральный силуэт для незнакомого сценария
@@ -1074,7 +1130,7 @@ function ScenarioIcon({ name }: { name: string }) {
   })();
   return (
     <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor"
-      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       {glyph}
     </svg>
   );
@@ -1153,62 +1209,53 @@ function Chevron() {
 }
 
 function QuickScenarios({
-  onCatalog, onScenario, onMacbook, onSellItem,
+  onScenario, onSellItem, onAi, onMarketplace,
 }: {
-  onCatalog: (route: string, scenario: string) => void;
   onScenario: (k: ScenarioKey) => void;
-  onMacbook: () => void;
   onSellItem: () => void;
+  onAi: () => void;
+  onMarketplace: () => void;
 }) {
-  // Осталось два пункта из четырёх. «Бизнесу» и «Опт» — не то же самое, что
-  // Trade-In и «Продать»: первые два делает обычный покупатель, вторые два
-  // адресованы юрлицам, и попадают туда единицы. Четыре РАВНЫЕ плитки — это
-  // отказ решать, что важнее, и платит за него первый экран.
+  // Четыре услуги — то, чего на витрине больше нигде нет. Товарных ссылок здесь
+  // нет намеренно: каталог живёт отдельной вкладкой внизу, и дублировать её
+  // значит соревноваться с собой. Раньше на этом месте стояли две плитки
+  // (Trade-In и «Продать») — оставшиеся от четырёх, из которых две адресовались
+  // юрлицам и дублировали профиль.
   //
-  // Из приложения они никуда не делись: обе строки уже стояли в профиле, в
-  // блоке «Связаться с нами» («Оптовая закупка», «Поставка для компании»), —
-  // то есть на главной они были вторым показом одного и того же.
+  // «Продать» и «Маркетплейс» стоят рядом и в таком порядке не случайно: это
+  // одна дорожка, а не две кнопки. Сдал технику — она появилась на витрине;
+  // сосед справа показывает, куда именно она попадёт.
   const items: { key: string; label: string; onClick: () => void }[] = [
+    { key: "ai_pick", label: "AI-подбор", onClick: onAi },
     { key: "tradein", label: "Trade-In", onClick: () => onScenario("trade_in") },
     { key: "sell_item", label: "Продать", onClick: onSellItem },
-    // Плитки «Аксессуары» здесь больше нет: она вела в категорию «аксессуары»,
-    // которой в каталоге не существует (кабелей/чехлов/зарядок нет вовсе).
-    // Реальные категории показывает блок категорий — он строится из данных.
-    //
-    // iPhone и MacBook отсюда убраны как ТРЕТИЙ показ одного и того же: выше
-    // чипы «Смартфоны/Ноутбуки», ниже баннеры «iPhone в наличии» и «MacBook
-    // для работы». Повтор не помогал выбрать — он забирал место у того, чего
-    // на главной больше нигде нет: обмена, счёта юрлицу и цены на партию.
+    { key: "marketplace", label: "Маркетплейс", onClick: onMarketplace },
   ];
   return (
-    // mt-4, а не mt-3: между шапкой, рядом плиток и лентой баннеров теперь
-    // ровно 16px в обоих просветах. Было 12 и 20 — глаз читал это как «плитки
-    // прилипли к шапке и отвалились от ленты».
-    // Сетка, а не лента: все пункты видны целиком без прокрутки. Лента здесь
-    // была третьей подряд — чипы категорий в шапке, эта, лента баннеров, — и
-    // три листающиеся полосы читались одинаково важными. Плюс лента всегда
-    // обрезает пункт по правому краю: человек видит, что «там ещё что-то
-    // есть», но не знает что. Когда видно всё, ни прокрутка, ни привязка, ни
-    // обрез не нужны — их тут больше и нет.
+    // Сетка на четыре, а не лента. Довод прежний и он не изменился: лента
+    // обрезает последний пункт по правому краю — человек видит, что «там ещё
+    // что-то есть», но не знает что, и не всякий догадается листать. На 375px
+    // четыре колонки дают по 79px при зазоре 8 — «Маркетплейс» помещается.
+    // Появится пятая услуга — тогда и решим: лента или вторая строка. Заранее
+    // платить обрезом за гипотетический пятый пункт незачем.
     //
-    // Тени и обводки сняты намеренно. Это не товар и не карточка: подложка
-    // тоном отделяет пункт от фона, а поднимать его над страницей незачем —
-    // рядом стоят настоящие карточки товаров, и спорить с ними по весу
-    // служебные ссылки не должны.
-    <div className="stagger mt-4 grid grid-cols-2 gap-2 lg:hidden">
+    // h-entry (56px) — вторая и последняя высота в системе после control (44).
+    // Вход в услугу обязан читаться как другой класс объекта, а не как «кнопка
+    // повыше», поэтому разница заметная, а не в пару пикселей.
+    <div className="stagger mt-4 grid grid-cols-4 gap-2 lg:hidden">
       {items.map((s) => (
         <button
           key={s.key}
           ref={enterGridRefCallback("fadeUp")}
           onClick={s.onClick}
-          // min-h-11 (44px) держит тач-таргет на минимуме, даже когда сама
-          // плитка визуально компактнее — иконка+подпись сами по себе ниже.
-          className="tap flex min-h-11 min-w-0 flex-col items-center gap-1 rounded-xl2 bg-mutedbg px-1 py-2 text-center"
+          className="tap flex h-entry min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl2 bg-mutedbg px-1 text-center"
         >
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface text-accent">
+          {/* Иконка 24px — размер для карточки-входа; внутри контролов ходит
+              18px (h-icon). Двух размеров хватает, третий заводить не нужно. */}
+          <span className="shrink-0 text-accent">
             <ScenarioIcon name={s.key} />
           </span>
-          <span className="line-clamp-1 block max-w-full text-[11px] font-bold leading-[1.2] text-text">{s.label}</span>
+          <span className="line-clamp-1 block max-w-full text-[10.5px] font-bold leading-none text-text">{s.label}</span>
         </button>
       ))}
     </div>
