@@ -449,7 +449,7 @@ export default function Home() {
               над ней. Тень нужна была, чтобы белое читалось на синем; синего
               больше нет, и тень осталась бы украшением. */}
           <div className="flex h-control min-w-0 flex-1 items-center gap-2.5 rounded-field border border-border bg-surface pl-4 pr-1.5 text-text">
-            <svg viewBox="0 0 24 24" className="h-icon w-icon shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <svg viewBox="0 0 24 24" className="h-icon w-icon shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
             </svg>
             <input
@@ -1166,15 +1166,19 @@ function TrustRow({
   onInfo: (hash: string) => void;
   onManagerFallback: () => void;
 }) {
+  // h-control, а не прежние h-8 (32px): это нажимаемые элементы, и на них
+  // распространяется та же норма касания, что на всё остальное. Собственный
+  // аудит поймал здесь ровно то, от чего эта строка и должна была уводить, —
+  // ещё одну высоту и ещё две толщины обводки.
   const cls =
-    "tap flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-field border border-border " +
+    "tap flex h-control shrink-0 items-center gap-1.5 whitespace-nowrap rounded-field border border-border " +
     "bg-surface/70 px-3 text-[12px] font-semibold text-text outline-none transition-colors " +
     "hover:border-accent focus-visible:ring-2 focus-visible:ring-accent";
 
   return (
     <div className="no-scrollbar -mx-4 mt-3 flex items-center gap-2 overflow-x-auto px-4 lg:mx-0 lg:px-0">
       <button className={cls} onClick={() => onInfo("warranty")}>
-        <Icon name="shield" className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2.2} />
+        <Icon name="shield" className="h-icon w-icon shrink-0 text-accent" />
         Проверка при вас
         <Chevron />
       </button>
@@ -1191,7 +1195,7 @@ function TrustRow({
           if (!openExternalLink(managerLink(managerUrl, null))) onManagerFallback();
         }}
       >
-        <Icon name="chat" className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2.2} />
+        <Icon name="chat" className="h-icon w-icon shrink-0 text-accent" />
         Написать менеджеру
       </button>
     </div>
@@ -1202,7 +1206,7 @@ function TrustRow({
 function Chevron() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className="h-3 w-3 shrink-0 text-muted"
-      fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+      fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
       <path d="m9 5 7 7-7 7" />
     </svg>
   );
