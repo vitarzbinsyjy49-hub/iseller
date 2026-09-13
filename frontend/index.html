@@ -4,10 +4,139 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
     <title>AI Seller</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <meta name="theme-color" content="#f6f7f9" />
+
+    <!-- Рукопожатие с telegram.org начинается сразу, параллельно разбору страницы,
+         а не в момент, когда до тега со скриптом дойдёт очередь. Экономит целый
+         round-trip на установку TLS — на мобильной сети это сотни миллисекунд. -->
+    <link rel="preconnect" href="https://telegram.org" crossorigin />
+
+    <!-- defer, а не обычный блокирующий тег.
+         Без него браузер останавливал разбор HTML на внешнем запросе к
+         telegram.org и не доходил даже до заставки ниже — то есть первый кадр
+         ждал чужой сервер.
+         Порядок исполнения при этом СОХРАНЯЕТСЯ: defer-скрипты и module-скрипты
+         (наш /src/main.tsx — модуль, а значит тоже отложенный) выполняются в
+         порядке следования в документе. Telegram.WebApp гарантированно
+         существует к моменту старта приложения, как и раньше. -->
+    <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <style>
+      /* ===== Заставка запуска =====
+         Живёт ЗДЕСЬ, а не в index.css, намеренно: она обязана быть в том же
+         файле, что и разметка, иначе её появление ждало бы ещё один запрос —
+         ровно та пауза, ради устранения которой она и заведена.
+
+         Цвет совпадает с --app-bg (246 247 249) из index.css. Совпадение здесь
+         важнее переиспользования переменной: расходятся они — и в момент
+         подмены заставки приложением экран моргает фоном. */
+      html, body { height: 100%; margin: 0; background: #f6f7f9; }
+
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: #f6f7f9;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* Содержимое проявляется с задержкой, сам фон — мгновенно. Разделение
+         намеренное и в нём весь смысл: фон закрывает белую вспышку с первого
+         кадра, а надпись с индикатором на быстром запуске не успевают
+         показаться вовсе. Заставка, мелькнувшая на 80мс, читается как сбой
+         отрисовки — хуже, чем её отсутствие. */
+      #app-splash .splash-body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        opacity: 0;
+        animation: splashIn 260ms ease-out 140ms forwards;
+      }
+
+      #app-splash .splash-word {
+        font-size: 27px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1;
+        color: #111827;
+      }
+
+      /* Индикатор без процентов: сколько осталось, мы не знаем, и рисовать
+         заполняющуюся шкалу значило бы врать. Полоса ездит по рельсу —
+         это сообщение «идёт работа», а не «осталось столько-то». */
+      #app-splash .splash-rail {
+        position: relative;
+        width: 116px;
+        height: 3px;
+        border-radius: 999px;
+        background: rgba(17, 24, 39, 0.08);
+        overflow: hidden;
+      }
+      #app-splash .splash-rail::after {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 42%;
+        border-radius: 999px;
+        background: #4a44ce;
+        animation: splashRail 1.15s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+      }
+
+      @keyframes splashIn { to { opacity: 1; } }
+
+      /* Границы хода подобраны так, чтобы полоса НИКОГДА не уходила за край
+         целиком. Рельс 116px, полоса 42% от него (≈49px), значит она видна,
+         пока сдвиг лежит между −100% и 238% её собственной ширины. Прежние
+         −110% → 280% выходили за оба предела, и примерно пятую часть цикла на
+         рельсе не было ничего — а из-за ease обе «пустые» фазы приходились
+         ровно на замедление у краёв. Выглядело это не как индикатор, а как
+         подвисание: то, ради чего заставка и заведена, она же и изображала. */
+      @keyframes splashRail {
+        0%   { transform: translate3d(-90%, 0, 0); }
+        100% { transform: translate3d(215%, 0, 0); }
+      }
+
+      /* Уход заставки: класс вешает приложение, узел снимается после перехода
+         (frontend/src/lib/splash.ts). Анимируется только opacity — свойство
+         композиторное, кадр отдаёт GPU, поэтому уход заставки не конкурирует
+         за главный поток с монтированием React. */
+      #app-splash.is-hiding {
+        opacity: 0;
+        transition: opacity 260ms cubic-bezier(0.22, 1, 0.36, 1);
+        pointer-events: none;
+      }
+
+      /* «Уменьшить движение» убирает движение, но НЕ событие: то же правило,
+         что в lib/motion.ts. Заставка остаётся и по-прежнему уходит плавно —
+         исчезает только бегающая полоса и проявление. */
+      @media (prefers-reduced-motion: reduce) {
+        #app-splash .splash-body { animation: none; opacity: 1; }
+        #app-splash .splash-rail::after { animation: none; width: 100%; opacity: .45; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+
+    <!-- Заставка в разметке, а не в React: всё, что рисует React, по
+         определению появляется уже после загрузки и разбора бандла — то есть
+         ровно после той паузы, которую заставка закрывает. Разметка приходит
+         с первым же байтом документа.
+         aria-hidden: для скринридера это не содержимое, а пауза. -->
+    <div id="app-splash" aria-hidden="true">
+      <div class="splash-body">
+        <div class="splash-word">АйСеллер</div>
+        <div class="splash-rail"></div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

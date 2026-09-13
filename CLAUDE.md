@@ -169,7 +169,7 @@ in_stock -> popularity -> позиция категории из плиток ->
 ## Проверки перед тем, как считать работу сделанной
 
 ```bash
-cd backend && python -m pytest -q          # 1105 тестов
+cd backend && python -m pytest -q
 cd frontend && npx tsc --noEmit && npx vitest run && npm run build
 cd admin && npx tsc --noEmit && npm run build
 ```

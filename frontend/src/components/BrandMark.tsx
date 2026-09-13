@@ -22,8 +22,16 @@ export function BrandWordmark({
 }: { size?: number; className?: string }) {
   return (
     <span className={`inline-flex items-center gap-2 ${className}`}>
+      {/* 128px lossless WebP, 11 КБ. Раньше здесь стоял мастер-файл
+          logo-icon.png: 480×480 и 264 КБ на знак, который нигде не
+          показывается крупнее 28px. Он приезжал на телефон при первом запуске
+          и в одиночку весил вдвое больше, чем весь сжатый JS приложения.
+          Мастер лежит рядом (logo-icon.png) — он нужен, когда знак понадобится
+          в другом размере, но в браузер больше не едет.
+          Lossless, а не lossy: на 128px у lossy-WebP отклонение до 100 единиц
+          канала по кромкам знака, а выигрыш — 7 КБ. Для логотипа это не сделка. */}
       <img
-        src="/assets/brand/logo-icon.png"
+        src="/assets/brand/logo-icon-128.webp"
         alt=""
         aria-hidden
         width={size} height={size}
