@@ -17,10 +17,9 @@ export default function PickupHoursSheet({
   open, onClose,
 }: { open: boolean; onClose: () => void }) {
   return (
-    <SheetShell onClose={onClose} labelledBy="pickup-hours-title">
+    <SheetShell from="top" onClose={onClose} labelledBy="pickup-hours-title">
       {(close) => (
         <>
-          <div className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-border" aria-hidden />
 
           <div className="flex items-start gap-3 px-5 pb-3 pt-4">
             <span

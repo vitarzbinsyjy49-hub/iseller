@@ -89,10 +89,9 @@ export default function FxRateSheet({
   const updated = history?.length ? new Date(history[history.length - 1].date) : null;
 
   return (
-    <SheetShell onClose={onClose} labelledBy="fx-rate-title">
+    <SheetShell from="top" onClose={onClose} labelledBy="fx-rate-title">
       {(close) => (
         <>
-          <div className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-border" aria-hidden />
 
           <div className="flex items-start justify-between px-5 pb-1 pt-4">
             <div>

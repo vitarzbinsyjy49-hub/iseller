@@ -47,19 +47,41 @@ export type SheetClose = (afterClose?: () => void) => void;
  *  неоткуда, снизу экрана она не появляется. Там `undefined` возвращает
  *  animateSheet* к их собственным значениям по умолчанию. */
 
-function sheetTravelPx(panel: HTMLElement, centered: boolean): number | undefined {
+function sheetTravelPx(panel: HTMLElement, centered: boolean, top = false): number | undefined {
   if (centered) return undefined;
+  // Отрицательный ход = панель приезжает СВЕРХУ: animateSheetIn/Out просто
+  // умножают его на прогресс, направление им безразлично. Второго мотора для
+  // верхней шторки заводить не нужно.
+  if (top) return -(panel.offsetHeight + 1);
   // Запас в 1px: при дробном DPR округление высоты вниз оставляло бы у нижней
   // кромки полоску панели, видимую до и после анимации.
   return panel.offsetHeight + 1;
 }
 
-export function SheetShell({ onClose, labelledBy, panelClassName = "", children }: {
+/** Откуда приезжает шторка.
+ *
+ *  Направление — не украшение, а соответствие месту нажатия. Шторка обязана
+ *  выезжать ОТТУДА, где стоит кнопка, которая её открыла: панель, приехавшая
+ *  снизу по тапу в самом верху экрана, заставляет глаз искать связь между
+ *  двумя противоположными краями, и связь эта не находится.
+ *
+ *  «bottom» по умолчанию: почти всё в приложении открывается из нижней
+ *  навигации и из карточек. «top» — для статусной строки в шапке (курс, режим
+ *  работы). */
+export type SheetFrom = "bottom" | "top";
+
+export function SheetShell({ onClose, labelledBy, panelClassName = "", from = "bottom", children }: {
   onClose: () => void;
   labelledBy: string;
   panelClassName?: string;
+  from?: SheetFrom;
   children: ReactNode | ((close: SheetClose) => ReactNode);
 }) {
+  const top = from === "top";
+  /** Куда «прочь от кромки». Весь жест считается в этом направлении, а знак
+   *  подставляется на границе — так чистая логика перетаскивания (sheetDrag)
+   *  остаётся одной на оба направления и не удваивается. */
+  const awaySign = top ? -1 : 1;
   const panelRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -103,7 +125,7 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
     // возвращения в приложение. Показывать всё равно нечего — оставляем её
     // сразу в конечном положении (стили просто не трогаем).
     if (document.hidden) return;
-    cancelAnimRef.current = animateSheetIn(panel, backdrop, undefined, sheetTravelPx(panel, centered));
+    cancelAnimRef.current = animateSheetIn(panel, backdrop, undefined, sheetTravelPx(panel, centered, top));
     return () => cancelAnimRef.current();
   }, []);
 
@@ -159,7 +181,7 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
     cancelAnimRef.current = animateSheetOut(panel, backdrop, () => {
       onCloseRef.current();
       afterClose?.();
-    }, undefined, sheetTravelPx(panel, window.innerWidth >= 640));
+    }, undefined, sheetTravelPx(panel, window.innerWidth >= 640, top));
   }, []);
 
   // Блокировка фонового скролла без прыжка страницы (компенсируем ширину
@@ -206,7 +228,7 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
       // должна остаться читаемой и узнаваемой — шторка накрывает её, а не
       // выключает. Отделяет панель от фона не темнота, а её собственная тень
       // (shadow-sheet) и то, что она приезжает снизу целиком.
-      className={`fixed inset-0 z-50 flex items-end justify-center bg-black/25 sm:items-center ${closing ? "pointer-events-none" : ""}`}
+      className={`fixed inset-0 z-50 flex ${top ? "items-start" : "items-end"} justify-center bg-black/25 sm:items-center ${closing ? "pointer-events-none" : ""}`}
       onClick={() => requestClose()}
     >
       <div
@@ -221,7 +243,12 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
           const panel = panelRef.current;
           if (!panel) return;
           const rect = panel.getBoundingClientRect();
-          const fromHandle = e.clientY - rect.top <= HANDLE_ZONE_PX;
+          // Ручка у верхней шторки нарисована СНИЗУ панели — там же, где у
+          // неё свободный край. Искать её сверху значило бы отдавать жест
+          // содержимому ровно там, где человек за неё тянет.
+          const fromHandle = top
+            ? rect.bottom - e.clientY <= HANDLE_ZONE_PX
+            : e.clientY - rect.top <= HANDLE_ZONE_PX;
           dragRef.current = {
             pointerId: e.pointerId,
             startX: e.clientX, startY: e.clientY, startAt: performance.now(),
@@ -238,16 +265,27 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
           if (!drag || !panel || !backdrop || e.pointerId !== drag.pointerId) return;
           const dx = e.clientX - drag.startX;
           const dy = e.clientY - drag.startY;
+          // «Прочь» — вниз у нижней шторки и вверх у верхней. Дальше в этом
+          // блоке рассуждаем только про away, а знак вернётся при отрисовке.
+          const away = dy * awaySign;
 
           if (!drag.active) {
             if (!isVerticalDrag(dx, dy)) return;
             // Пока списку есть куда прокручиваться вверх, движение вниз
             // адресовано ему, а не шторке. Исключение — жест за ручку.
-            const contentAtTop = !drag.scroller || drag.scroller.scrollTop <= 0;
-            if (dy > 0 && !contentAtTop) { dragRef.current = null; return; }
-            // Вверх шторку тянут только за ручку: в остальных местах это
+            // Пока содержимому есть куда прокручиваться В СТОРОНУ ЖЕСТА,
+            // движение адресовано ему, а не шторке. У нижней шторки это край
+            // «выше нечего показывать» (scrollTop 0), у верхней — зеркальный
+            // «ниже нечего показывать»: тянуть её вверх значит листать список
+            // вниз, и перехватывать это до конца списка нельзя.
+            const sc = drag.scroller;
+            const contentAtEdge = !sc || (top
+              ? sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 1
+              : sc.scrollTop <= 0);
+            if (away > 0 && !contentAtEdge) { dragRef.current = null; return; }
+            // ОБРАТНО шторку тянут только за ручку: в остальных местах это
             // прокрутка содержимого, и перехватывать её нельзя.
-            if (dy < 0 && !drag.fromHandle) { dragRef.current = null; return; }
+            if (away < 0 && !drag.fromHandle) { dragRef.current = null; return; }
             drag.active = true;
             // Вход мог ещё не доиграть — палец главнее анимации.
             cancelAnimRef.current();
@@ -259,9 +297,11 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
             try { panel.setPointerCapture?.(e.pointerId); } catch { /* не критично */ }
           }
 
-          const offset = sheetDragOffset(dy);
+          const offset = sheetDragOffset(away);
           drag.offset = offset;
-          panel.style.transform = offset ? `translate3d(0, ${offset}px, 0)` : "";
+          panel.style.transform = offset
+            ? `translate3d(0, ${offset * awaySign}px, 0)`
+            : "";
           backdrop.style.opacity = String(sheetBackdropOpacity(offset, drag.height));
         }}
         onPointerUp={(e) => {
@@ -289,9 +329,16 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", children 
         // приоритетом (см. pickViewportHeight), этого скачка не даёт. Fallback
         // (var не установлена — вне Telegram) — 100vh*0.88/0.9, то есть те же
         // 88vh/90vh, что были.
-        className={`flex max-h-[calc(var(--app-height,100vh)*0.88)] w-full max-w-md flex-col rounded-t-3xl bg-surface shadow-sheet outline-none safe-bottom sm:max-h-[calc(var(--app-height,100vh)*0.9)] sm:rounded-3xl ${closing ? "pointer-events-none" : ""} ${panelClassName}`}
+        className={`flex max-h-[calc(var(--app-height,100vh)*0.88)] w-full max-w-md flex-col bg-surface shadow-sheet outline-none sm:max-h-[calc(var(--app-height,100vh)*0.9)] sm:rounded-3xl ${top ? "safe-top rounded-b-3xl" : "safe-bottom rounded-t-3xl"} ${closing ? "pointer-events-none" : ""} ${panelClassName}`}
       >
         {typeof children === "function" ? children(requestClose) : children}
+        {/* Ручку верхней шторки рисует ШЕЛЛ и ставит её снизу — у свободного
+            края, за который и тянут. Нижние шторки по-прежнему рисуют свою
+            сами: переносить сюда и их значило бы править восемь файлов ради
+            одного нового направления. */}
+        {top && (
+          <div className="mx-auto mb-3 mt-2 h-1 w-10 shrink-0 rounded-full bg-border" aria-hidden />
+        )}
       </div>
     </div>,
     document.body,
