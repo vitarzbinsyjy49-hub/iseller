@@ -116,10 +116,22 @@ export default function HeroSlot() {
   const rate = formatFxChip(config.usd_rate);
   const lead = latest;
   const dotRef = useRef<HTMLSpanElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  /** Откуда свисает шторка — нижняя кромка этой самой строки, замеренная в
+   *  момент открытия. Не константа: строка уезжает при прокрутке вместе с
+   *  шапкой, и высота выреза Telegram у разных клиентов разная. */
+  const [anchorTopPx, setAnchorTopPx] = useState(0);
+
+  function openSheet(which: Sheet) {
+    const r = rowRef.current?.getBoundingClientRect();
+    setAnchorTopPx(r ? Math.round(r.bottom + 8) : 0);
+    setSheet(which);
+  }
   useBreathing(dotRef, shop.open && !lead);
 
   return (
     <div
+      ref={rowRef}
       data-collapsing-pretitle
       className="flex min-w-0 shrink items-center gap-2 overflow-hidden text-[12.5px] leading-none"
     >
@@ -136,7 +148,7 @@ export default function HeroSlot() {
         </StatusItem>
       ) : (
         <StatusItem
-          onClick={() => setSheet("status")}
+          onClick={() => openSheet("status")}
           ariaLabel={`Точка выдачи ${shop.open ? "открыта" : "закрыта"}, ${shop.label}. Подробнее`}
         >
           <span
@@ -157,7 +169,7 @@ export default function HeroSlot() {
         <>
           <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-border" />
           <StatusItem
-            onClick={() => setSheet("rate")}
+            onClick={() => openSheet("rate")}
             ariaLabel={`Курс доллара ${rate.value} рублей. Подробнее`}
           >
             <span className="shrink-0 font-bold text-text">${rate.value}</span>
@@ -172,12 +184,12 @@ export default function HeroSlot() {
 
       {sheet === "status" && (
         <Suspense fallback={null}>
-          <PickupHoursSheet open={shop.open} onClose={() => setSheet(null)} />
+          <PickupHoursSheet open={shop.open} anchorTopPx={anchorTopPx} onClose={() => setSheet(null)} />
         </Suspense>
       )}
       {sheet === "rate" && config.usd_rate && (
         <Suspense fallback={null}>
-          <FxRateSheet usdRate={config.usd_rate} onClose={() => setSheet(null)} />
+          <FxRateSheet usdRate={config.usd_rate} anchorTopPx={anchorTopPx} onClose={() => setSheet(null)} />
         </Suspense>
       )}
     </div>

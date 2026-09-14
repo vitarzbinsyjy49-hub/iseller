@@ -58,9 +58,13 @@ function Stat({ label, children }: { label: string; children: React.ReactNode })
 export default function FxRateSheet({
   usdRate,
   onClose,
+  anchorTopPx,
 }: {
   usdRate: { value: number; delta: number };
   onClose: () => void;
+  /** Нижняя кромка строки статуса: шторка свисает из-под неё, а не из-под
+   *  верхнего края экрана, где её накрывает интерфейс Telegram. */
+  anchorTopPx?: number;
 }) {
   const [history, setHistory] = useState<HistoryPoint[] | null>(null);
 
@@ -89,7 +93,7 @@ export default function FxRateSheet({
   const updated = history?.length ? new Date(history[history.length - 1].date) : null;
 
   return (
-    <SheetShell from="top" onClose={onClose} labelledBy="fx-rate-title">
+    <SheetShell from="top" anchorTopPx={anchorTopPx} onClose={onClose} labelledBy="fx-rate-title">
       {(close) => (
         <>
 

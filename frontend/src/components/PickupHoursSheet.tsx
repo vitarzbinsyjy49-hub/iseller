@@ -14,10 +14,16 @@ import { Icon } from "./icons";
 import { PICKUP_ADDRESS, PICKUP_HOURS, PICKUP_OPEN_HOUR } from "../lib/pickup";
 
 export default function PickupHoursSheet({
-  open, onClose,
-}: { open: boolean; onClose: () => void }) {
+  open, onClose, anchorTopPx,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** Нижняя кромка строки статуса: шторка свисает из-под неё, а не из-под
+   *  верхнего края экрана, где её накрывает интерфейс Telegram. */
+  anchorTopPx?: number;
+}) {
   return (
-    <SheetShell from="top" onClose={onClose} labelledBy="pickup-hours-title">
+    <SheetShell from="top" anchorTopPx={anchorTopPx} onClose={onClose} labelledBy="pickup-hours-title">
       {(close) => (
         <>
 

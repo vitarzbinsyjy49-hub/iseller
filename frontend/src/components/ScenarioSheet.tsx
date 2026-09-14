@@ -70,11 +70,24 @@ function sheetTravelPx(panel: HTMLElement, centered: boolean, top = false): numb
  *  работы). */
 export type SheetFrom = "bottom" | "top";
 
-export function SheetShell({ onClose, labelledBy, panelClassName = "", from = "bottom", children }: {
+export function SheetShell({
+  onClose, labelledBy, panelClassName = "", from = "bottom", anchorTopPx, children,
+}: {
   onClose: () => void;
   labelledBy: string;
   panelClassName?: string;
   from?: SheetFrom;
+  /** Откуда именно свисает верхняя шторка, в пикселях от верха экрана.
+   *
+   *  Без него панель вставала в самый верх — то есть ПОД интерфейс Telegram:
+   *  часы, индикаторы и плавающие кнопки клиента ложились прямо на её
+   *  содержимое. Safe-area отступ внутри панели этого не решает: он сдвигает
+   *  текст, но сама панель по-прежнему начинается от нуля.
+   *
+   *  Правильная точка — нижняя кромка того, по чему нажали. Тогда панель не
+   *  просто «не лезет под чужое», а честно выезжает ИЗ-ПОД своей кнопки.
+   *  Значение передаёт вызывающий: только он знает, где стоит его кнопка. */
+  anchorTopPx?: number;
   children: ReactNode | ((close: SheetClose) => ReactNode);
 }) {
   const top = from === "top";
@@ -119,7 +132,10 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", from = "b
     const rawAppHeight = getComputedStyle(document.documentElement).getPropertyValue("--app-height");
     const appHeightPx = parseFloat(rawAppHeight) || window.innerHeight;
     const centered = window.innerWidth >= 640;
-    panel.style.maxHeight = `${sheetMaxHeightPx(appHeightPx, centered)}px`;
+    // Отступ сверху съедает доступную высоту: без вычитания панель считала
+    // бы себе полный экран и вылезала бы за нижнюю кромку.
+    const inset = top ? (anchorTopPx ?? 0) : 0;
+    panel.style.maxHeight = `${Math.max(0, sheetMaxHeightPx(appHeightPx, centered) - inset)}px`;
     // Скрытый документ не выдаёт кадров: requestAnimationFrame в нём не
     // вызывается вообще. Шторка осталась бы сдвинутой вниз и невидимой до
     // возвращения в приложение. Показывать всё равно нечего — оставляем её
@@ -147,10 +163,15 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", from = "b
     const remaining = Math.max(0, 1 - fromPx / Math.max(target, 1));
     const duration = Math.max(110, Math.round(SHEET_OUT_MS * remaining));
     cancelAnimRef.current = animateNumber(0, 1, duration, (t) => {
-      panel.style.transform = `translate3d(0, ${fromPx + (target - fromPx) * t}px, 0)`;
+      // awaySign обязателен: без него панель доводилась ВНИЗ независимо от
+      // направления, и верхняя шторка вместо ухода вверх пролетала через весь
+      // экран — снизу на мгновение появлялся её призрак. Смещение хранится как
+      // величина «прочь от кромки», знак подставляется здесь, при отрисовке.
+      const y = (fromPx + (target - fromPx) * t) * awaySign;
+      panel.style.transform = `translate3d(0, ${y}px, 0)`;
       backdrop.style.opacity = String(fromOpacity * (1 - t));
     }, () => onCloseRef.current());
-  }, []);
+  }, [awaySign]);
 
   /** Вернуть шторку на место: жеста не хватило, чтобы закрыть. */
   const settleBack = useCallback((fromPx: number) => {
@@ -161,11 +182,13 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", from = "b
     const fromOpacity = Number(backdrop.style.opacity || "1");
     cancelAnimRef.current();
     cancelAnimRef.current = animateNumber(0, 1, SHEET_SETTLE_MS, (t) => {
-      const y = fromPx * (1 - t);
+      // Тот же знак, что и при закрытии: возврат обязан идти по тому пути, по
+      // которому палец шёл, а не всегда сверху вниз.
+      const y = fromPx * (1 - t) * awaySign;
       panel.style.transform = y ? `translate3d(0, ${y}px, 0)` : "";
       backdrop.style.opacity = String(fromOpacity + (1 - fromOpacity) * t);
     }, clear);
-  }, []);
+  }, [awaySign]);
 
   const requestClose = useCallback<SheetClose>((afterClose) => {
     if (closingRef.current) return;
@@ -231,6 +254,16 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", from = "b
       className={`fixed inset-0 z-50 flex ${top ? "items-start" : "items-end"} justify-center bg-black/25 sm:items-center ${closing ? "pointer-events-none" : ""}`}
       onClick={() => requestClose()}
     >
+      {/* Окно с обрезкой от точки крепления до низа экрана.
+          Без него панель, приезжающая из положения «выше своего места на
+          собственную высоту», была бы видна поверх шапки — то есть не
+          выезжала бы из-под кнопки, а накрывала её сверху. Обрезка делает
+          движение тем, чем оно выглядит. Для нижней шторки обёртка
+          прозрачная: `display: contents` убирает её из раскладки целиком. */}
+      <div
+        className={top ? "absolute inset-x-0 bottom-0 flex justify-center overflow-hidden" : "contents"}
+        style={top ? { top: `${anchorTopPx ?? 0}px` } : undefined}
+      >
       <div
         ref={panelRef}
         role="dialog"
@@ -339,6 +372,7 @@ export function SheetShell({ onClose, labelledBy, panelClassName = "", from = "b
         {top && (
           <div className="mx-auto mb-3 mt-2 h-1 w-10 shrink-0 rounded-full bg-border" aria-hidden />
         )}
+      </div>
       </div>
     </div>,
     document.body,
