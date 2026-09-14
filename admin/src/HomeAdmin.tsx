@@ -458,6 +458,18 @@ function EditFields({ obj, set, kind }: {
           <input style={input} placeholder="linear-gradient(135deg,#1a7fd4,#6d5ae0)"
             value={(obj.background_gradient as string) ?? ""} onChange={(e) => set({ background_gradient: e.target.value })} />
         </label>
+        <label style={{ width: "100%" }}>
+          <span style={lbl}>Путь к картинке</span>
+          {/* Поля не было вовсе: картинку можно было только ЗАГРУЗИТЬ, то есть
+              положить ещё одну копию в /api/uploads. Указать на снимок, который
+              уже едет в сборке (/assets/promos/...), было нечем — и такие
+              баннеры приходилось переключать правкой кода или прогоном сида на
+              сервере. Теперь достаточно вставить путь.
+              Загрузка рядом никуда не делась: она по-прежнему проставляет сюда
+              свой /api/uploads/... */}
+          <input style={input} placeholder="/assets/promos/apple-sept-2026-hero.webp"
+            value={(obj.image_url as string) ?? ""} onChange={(e) => set({ image_url: e.target.value || null })} />
+        </label>
       </div>
     </>
   );
