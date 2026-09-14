@@ -286,6 +286,92 @@ export function animateSheetOut(
   return () => { cancelPanel(); cancelBackdrop(); };
 }
 
+/* ============================================================
+   Поповер: панель, раскрывающаяся ИЗ точки нажатия.
+   ============================================================ */
+
+/** Раскрытие и схлопывание поповера.
+ *
+ *  Короче шторки (190/140 против 260/190) намеренно. Шторка — это приход
+ *  отдельной поверхности, и ей нужно время, чтобы движение прочиталось как
+ *  путь. Поповер никуда не едет: он разворачивается на месте, из точки, куда
+ *  человек только что ткнул пальцем и куда уже смотрит. Растянуть такое
+ *  движение значит показать задержку между нажатием и ответом.
+ */
+export const POPOVER_IN_MS = 190;
+export const POPOVER_OUT_MS = 140;
+
+/** С какого масштаба разворачивается панель.
+ *
+ *  0.94, а не привычные 0.9 и ниже: панель разворачивается от СВОЕЙ верхней
+ *  кромки (transform-origin стоит в точке нажатия), и при заметном масштабе
+ *  нижний край проходит десятки пикселей — снова получается переезд, от
+ *  которого мы и уходили. 6% дают ощущение раскрытия, не двигая содержимое
+ *  настолько, чтобы его начали читать в движении. */
+const POPOVER_SCALE_FROM = 0.94;
+
+/** Насколько панель подтянута к точке нажатия на первом кадре. Маленький
+ *  сдвиг вверх поверх масштаба — он сообщает направление («вышло отсюда»),
+ *  которого у чистого масштаба нет. */
+const POPOVER_LIFT_PX = 8;
+
+/** Общий кадр поповера: t=0 — свёрнут в точке нажатия, t=1 — на месте. */
+function popoverFrame(panel: HTMLElement, t: number, reducedMotion: boolean): void {
+  panel.style.opacity = String(t);
+  if (reducedMotion) {
+    // Движения нет, но СОБЫТИЕ есть: панель проявляется. Это то же правило,
+    // что и у шторки, — «убрать движение» не означает «убрать ответ».
+    panel.style.transform = "";
+    return;
+  }
+  const scale = POPOVER_SCALE_FROM + (1 - POPOVER_SCALE_FROM) * t;
+  panel.style.transform = transformString(-POPOVER_LIFT_PX * (1 - t), scale);
+}
+
+/** Раскрытие поповера из точки нажатия.
+ *
+ *  `transform-origin` ставит вызывающий (SheetShell): только он знает, где
+ *  стояла кнопка. Здесь — само движение.
+ *
+ *  Первый кадр применяется синхронно, ДО планирования rAF: вызывать обязательно
+ *  из useLayoutEffect, иначе браузер успеет нарисовать панель уже раскрытой.
+ */
+export function animatePopoverIn(
+  panel: HTMLElement,
+  backdrop: HTMLElement,
+  reducedMotion = prefersReducedMotion(),
+): () => void {
+  const duration = reducedMotion ? FADE_MS : POPOVER_IN_MS;
+  const apply = (t: number) => popoverFrame(panel, t, reducedMotion);
+  apply(0);
+  backdrop.style.opacity = "0";
+
+  const cancelPanel = animateNumber(0, 1, duration, apply, () => {
+    // Инлайновые стили снимаются полностью: дальше панель живёт своими
+    // классами, а забытый transform ломает position: fixed у всего, что
+    // внутри неё (создаётся новый содержащий блок).
+    panel.style.transform = "";
+    panel.style.opacity = "";
+  });
+  const cancelBackdrop = animateOpacity(backdrop, 0, 1, duration);
+  return () => { cancelPanel(); cancelBackdrop(); };
+}
+
+/** Схлопывание — зеркало раскрытия. `done` держит размонтирование. */
+export function animatePopoverOut(
+  panel: HTMLElement,
+  backdrop: HTMLElement,
+  done: () => void,
+  reducedMotion = prefersReducedMotion(),
+): () => void {
+  const duration = reducedMotion ? FADE_MS : POPOVER_OUT_MS;
+  const cancelPanel = animateNumber(0, 1, duration, (t) => {
+    popoverFrame(panel, 1 - t, reducedMotion);
+  }, done);
+  const cancelBackdrop = animateOpacity(backdrop, 1, 0, duration);
+  return () => { cancelPanel(); cancelBackdrop(); };
+}
+
 /** Собрать transform из вертикального сдвига и масштаба, пропуская
  *  тождественные слагаемые — иначе рраз при каждом кадре ставился бы
  *  `translate3d(0, 0px, 0) scale(1)`, а не пустая строка, что мешает

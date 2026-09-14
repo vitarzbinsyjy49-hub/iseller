@@ -12,7 +12,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { haptic } from "../lib/telegram";
-import { SHEET_OUT_MS, SHEET_SETTLE_MS, animateNumber, animateSheetIn, animateSheetOut } from "../lib/motion";
+import {
+  SHEET_OUT_MS, SHEET_SETTLE_MS,
+  animateNumber, animatePopoverIn, animatePopoverOut, animateSheetIn, animateSheetOut,
+} from "../lib/motion";
 import {
   HANDLE_ZONE_PX,
   isVerticalDrag,
@@ -21,7 +24,7 @@ import {
   sheetDragOffset,
   shouldDismissSheet,
 } from "../lib/sheetDrag";
-import { sheetMaxHeightPx } from "../lib/viewport";
+import { dropdownMaxHeightPx, sheetMaxHeightPx } from "../lib/viewport";
 import type { ChoiceItem } from "../lib/scenario";
 import { Icon } from "./icons";
 
@@ -58,6 +61,33 @@ function sheetTravelPx(panel: HTMLElement, centered: boolean, top = false): numb
   return panel.offsetHeight + 1;
 }
 
+/** Зазор между нижней кромкой поповера и низом экрана.
+ *
+ *  Панель, упирающаяся в кромку, выглядит обрезанной, а не законченной: глаз
+ *  читает «дальше есть ещё» даже когда прокручивать нечего. 16px — ровно
+ *  столько, чтобы под панелью осталась полоска страницы: она и сообщает, что
+ *  панель лежит ПОВЕРХ, а не заменила собой экран. */
+const POPOVER_BOTTOM_GAP_PX = 16;
+
+/** Потолок высоты поповера — доля высоты экрана.
+ *
+ *  Одного зазора снизу мало. «Сколько влезло до низа экрана» — это разрешение
+ *  занять почти всё, и панель с содержимым на 500px им пользуется: получается
+ *  ровно тот второй экран, от которого мы уходим, просто со скруглёнными
+ *  углами. Поповер обязан ОСТАВЛЯТЬ страницу видимой — иначе он не поповер.
+ *
+ *  0.62 подобрано от обратного: под панелью должна остаться треть экрана,
+ *  чтобы было видно, что страница никуда не делась и мы всё ещё на ней.
+ *  Содержимое при этом не режется — то, что не поместилось, прокручивается
+ *  внутри панели (у курса область прокрутки уже есть). */
+const POPOVER_MAX_SHARE = 0.62;
+
+/** Боковые поля поповера. Панель не во всю ширину принципиально: свободное
+ *  поле по бокам — единственное, что отличает «карточка поверх страницы» от
+ *  «новый экран». Именно его отсутствие и делало верхнюю шторку вторым
+ *  экраном, наехавшим на первый. */
+const POPOVER_SIDE_PAD = "px-3";
+
 /** Откуда приезжает шторка.
  *
  *  Направление — не украшение, а соответствие месту нажатия. Шторка обязана
@@ -66,12 +96,23 @@ function sheetTravelPx(panel: HTMLElement, centered: boolean, top = false): numb
  *  двумя противоположными краями, и связь эта не находится.
  *
  *  «bottom» по умолчанию: почти всё в приложении открывается из нижней
- *  навигации и из карточек. «top» — для статусной строки в шапке (курс, режим
- *  работы). */
-export type SheetFrom = "bottom" | "top";
+ *  навигации и из карточек.
+ *
+ *  «anchor» — не шторка, а ПОПОВЕР: панель по размеру содержимого, прижатая к
+ *  той строке, по которой нажали, и раскрывающаяся из точки нажатия. Заведён
+ *  для статусной строки в шапке (курс, режим работы), где верхняя шторка
+ *  провалилась: панель во всю ширину с прямой верхней кромкой висела в 8px
+ *  под строкой, не примыкая ни к чему, набирала 88% высоты экрана ради двух
+ *  фактов и проходила эту же высоту за 260мс — вместо раскрытия получалось
+ *  обрушение слоя поверх вёрстки.
+ *
+ *  «top» — прежняя верхняя шторка. В приложении ею никто не пользуется; она
+ *  остаётся как направление для панели, которая ДЕЙСТВИТЕЛЬНО должна приходить
+ *  во всю ширину сверху (системное уведомление, глобальный баннер). */
+export type SheetFrom = "bottom" | "top" | "anchor";
 
 export function SheetShell({
-  onClose, labelledBy, panelClassName = "", from = "bottom", anchorTopPx, children,
+  onClose, labelledBy, panelClassName = "", from = "bottom", anchorTopPx, anchorLeftPx, children,
 }: {
   onClose: () => void;
   labelledBy: string;
@@ -86,10 +127,20 @@ export function SheetShell({
    *
    *  Правильная точка — нижняя кромка того, по чему нажали. Тогда панель не
    *  просто «не лезет под чужое», а честно выезжает ИЗ-ПОД своей кнопки.
-   *  Значение передаёт вызывающий: только он знает, где стоит его кнопка. */
+   *  Значение передаёт вызывающий: только он знает, где стоит его кнопка.
+   *
+   *  У поповера (`from="anchor"`) это же значение — верхняя кромка панели: он
+   *  не свисает из-под чего-то, а стоит сразу под ним. */
   anchorTopPx?: number;
+  /** Центр нажатого элемента по горизонтали, в пикселях от левого края экрана.
+   *  Только для поповера: в эту точку ставится transform-origin, и панель
+   *  раскрывается ИЗ неё. Без него origin уезжает в центр панели — раскрытие
+   *  перестаёт указывать на свой источник и читается как «просто появилось».
+   *  Не задан — origin по центру верхней кромки, разумный запасной вариант. */
+  anchorLeftPx?: number;
   children: ReactNode | ((close: SheetClose) => ReactNode);
 }) {
+  const popover = from === "anchor";
   const top = from === "top";
   /** Куда «прочь от кромки». Весь жест считается в этом направлении, а знак
    *  подставляется на границе — так чистая логика перетаскивания (sheetDrag)
@@ -132,6 +183,29 @@ export function SheetShell({
     const rawAppHeight = getComputedStyle(document.documentElement).getPropertyValue("--app-height");
     const appHeightPx = parseFloat(rawAppHeight) || window.innerHeight;
     const centered = window.innerWidth >= 640;
+
+    if (popover) {
+      // Потолок высоты — не доля экрана, а РАССТОЯНИЕ ДО ЕГО НИЗА: поповер
+      // стоит под своей строкой, и всё, что ниже кромки экрана, просто
+      // недостижимо. Доля (88%, как у шторки) этого не знает и при высоком
+      // якоре отправляет низ панели за экран. Та же функция, что у выпадающей
+      // панели поиска: задача ровно одна.
+      panel.style.maxHeight = `${Math.min(
+        dropdownMaxHeightPx(anchorTopPx ?? 0, appHeightPx, POPOVER_BOTTOM_GAP_PX),
+        Math.round(appHeightPx * POPOVER_MAX_SHARE),
+      )}px`;
+      // Точку раскрытия считаем ПОСЛЕ max-height: до него панель может быть
+      // шире/выше, и её rect ещё не окончательный.
+      const rect = panel.getBoundingClientRect();
+      const originX = anchorLeftPx === undefined
+        ? rect.width / 2
+        : Math.min(Math.max(anchorLeftPx - rect.left, 0), rect.width);
+      panel.style.transformOrigin = `${Math.round(originX)}px top`;
+      if (document.hidden) return;
+      cancelAnimRef.current = animatePopoverIn(panel, backdrop);
+      return () => cancelAnimRef.current();
+    }
+
     // Отступ сверху съедает доступную высоту: без вычитания панель считала
     // бы себе полный экран и вылезала бы за нижнюю кромку.
     const inset = top ? (anchorTopPx ?? 0) : 0;
@@ -201,11 +275,12 @@ export function SheetShell({
     // документе не будет — шторка провисела бы до возвращения в приложение.
     // Закрываем сразу: анимацию закрытия всё равно никто не увидит.
     if (document.hidden) { onCloseRef.current(); afterClose?.(); return; }
-    cancelAnimRef.current = animateSheetOut(panel, backdrop, () => {
-      onCloseRef.current();
-      afterClose?.();
-    }, undefined, sheetTravelPx(panel, window.innerWidth >= 640, top));
-  }, []);
+    const done = () => { onCloseRef.current(); afterClose?.(); };
+    cancelAnimRef.current = popover
+      ? animatePopoverOut(panel, backdrop, done)
+      : animateSheetOut(panel, backdrop, done, undefined,
+          sheetTravelPx(panel, window.innerWidth >= 640, top));
+  }, [popover, top]);
 
   // Блокировка фонового скролла без прыжка страницы (компенсируем ширину
   // скроллбара на desktop; на mobile она ~0). Восстанавливаем при закрытии.
@@ -251,7 +326,13 @@ export function SheetShell({
       // должна остаться читаемой и узнаваемой — шторка накрывает её, а не
       // выключает. Отделяет панель от фона не темнота, а её собственная тень
       // (shadow-sheet) и то, что она приезжает снизу целиком.
-      className={`fixed inset-0 z-50 flex ${top ? "items-start" : "items-end"} justify-center bg-black/25 sm:items-center ${closing ? "pointer-events-none" : ""}`}
+      // У поповера затемнение вдвое легче (12%). Подложка шторки гасит
+      // страницу, потому что шторка её ЗАМЕЩАЕТ — человек ушёл в отдельную
+      // задачу. Поповер ничего не замещает: это сноска к строке, которая
+      // осталась на месте и должна остаться читаемой. Затемнять ради неё весь
+      // экран на 25% — заявлять вес, которого у двух фактов нет. Подложка
+      // всё равно нужна: она ловит тап мимо панели.
+      className={`fixed inset-0 z-50 flex ${top || popover ? "items-start" : "items-end"} justify-center ${popover ? "bg-black/[0.12]" : "bg-black/25"} ${popover ? "" : "sm:items-center"} ${closing ? "pointer-events-none" : ""}`}
       onClick={() => requestClose()}
     >
       {/* Окно с обрезкой от точки крепления до низа экрана.
@@ -261,8 +342,16 @@ export function SheetShell({
           движение тем, чем оно выглядит. Для нижней шторки обёртка
           прозрачная: `display: contents` убирает её из раскладки целиком. */}
       <div
-        className={top ? "absolute inset-x-0 bottom-0 flex justify-center overflow-hidden" : "contents"}
-        style={top ? { top: `${anchorTopPx ?? 0}px` } : undefined}
+        className={
+          popover
+            ? `absolute inset-x-0 flex justify-center ${POPOVER_SIDE_PAD}`
+            : top
+              ? "absolute inset-x-0 bottom-0 flex justify-center overflow-hidden"
+              : "contents"
+        }
+        // Поповеру обрезка НЕ нужна и вредна: он не выезжает из-под кромки, а
+        // разворачивается на месте, и overflow: hidden срезал бы его тень.
+        style={top || popover ? { top: `${anchorTopPx ?? 0}px` } : undefined}
       >
       <div
         ref={panelRef}
@@ -272,6 +361,13 @@ export function SheetShell({
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => {
+          // Поповер не тянут. Перетаскивание — жест поверхности, у которой
+          // есть свободный край и ход: шторку тянут туда, откуда она приехала.
+          // Поповер никуда не ехал, тянуть его некуда, и подхваченный
+          // вертикальный жест здесь отобрал бы прокрутку у содержимого
+          // (в курсе она есть) ради движения, которое ничем не кончается.
+          // Закрывают его тапом мимо, крестиком и Escape.
+          if (popover) return;
           if (closingRef.current || e.pointerType === "mouse") return;
           const panel = panelRef.current;
           if (!panel) return;
@@ -362,7 +458,18 @@ export function SheetShell({
         // приоритетом (см. pickViewportHeight), этого скачка не даёт. Fallback
         // (var не установлена — вне Telegram) — 100vh*0.88/0.9, то есть те же
         // 88vh/90vh, что были.
-        className={`flex max-h-[calc(var(--app-height,100vh)*0.88)] w-full max-w-md flex-col bg-surface shadow-sheet outline-none sm:max-h-[calc(var(--app-height,100vh)*0.9)] sm:rounded-3xl ${top ? "safe-top rounded-b-3xl" : "safe-bottom rounded-t-3xl"} ${closing ? "pointer-events-none" : ""} ${panelClassName}`}
+        className={
+          popover
+            // Скруглены ВСЕ четыре угла, и ширина меньше экрана — это и есть
+            // разница между карточкой и вторым экраном. max-w-sm, а не max-w-md
+            // шторки: поповер держит один факт, и растянутая на всю ширину
+            // строка в 20 слов в нём читается хуже, чем в узкой колонке.
+            // overflow-hidden обязателен — без него углы содержимого вылезают
+            // за скругление панели. Потолок высоты ставится инлайном при
+            // монтировании (dropdownMaxHeightPx), классом его тут нет.
+            ? `flex w-full max-w-sm flex-col overflow-hidden rounded-3xl bg-surface shadow-popover outline-none ${closing ? "pointer-events-none" : ""} ${panelClassName}`
+            : `flex max-h-[calc(var(--app-height,100vh)*0.88)] w-full max-w-md flex-col bg-surface shadow-sheet outline-none sm:max-h-[calc(var(--app-height,100vh)*0.9)] sm:rounded-3xl ${top ? "rounded-b-3xl" : "safe-bottom rounded-t-3xl"} ${closing ? "pointer-events-none" : ""} ${panelClassName}`
+        }
       >
         {typeof children === "function" ? children(requestClose) : children}
         {/* Ручку верхней шторки рисует ШЕЛЛ и ставит её снизу — у свободного

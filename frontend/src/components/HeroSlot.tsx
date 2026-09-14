@@ -117,14 +117,29 @@ export default function HeroSlot() {
   const lead = latest;
   const dotRef = useRef<HTMLSpanElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
-  /** Откуда свисает шторка — нижняя кромка этой самой строки, замеренная в
-   *  момент открытия. Не константа: строка уезжает при прокрутке вместе с
-   *  шапкой, и высота выреза Telegram у разных клиентов разная. */
-  const [anchorTopPx, setAnchorTopPx] = useState(0);
+  /** Куда крепится поповер: верхняя кромка панели и точка, из которой она
+   *  раскрывается. Замеряется в момент открытия, а не константой: строка
+   *  уезжает при прокрутке вместе с шапкой, высота выреза Telegram у разных
+   *  клиентов разная, а горизонтальный центр у «режима работы» и у «курса»
+   *  вообще разный — это два конца одной строки.
+   *
+   *  `left` — центр НАЖАТОГО факта, а не всей строки. Панель раскрывается из
+   *  него, и это единственное, что связывает её с конкретным словом: без этого
+   *  тап по курсу справа разворачивал бы панель из середины экрана. */
+  const [anchor, setAnchor] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  function openSheet(which: Sheet) {
-    const r = rowRef.current?.getBoundingClientRect();
-    setAnchorTopPx(r ? Math.round(r.bottom + 8) : 0);
+  function openSheet(which: Sheet, target: HTMLElement) {
+    const row = rowRef.current?.getBoundingClientRect();
+    const hit = target.getBoundingClientRect();
+    setAnchor({
+      // От нижней кромки СТРОКИ, а не нажатого слова: оба поповера обязаны
+      // вставать на одной высоте, иначе переключение между ними выглядит как
+      // подпрыгивание. Зазор 6px — панель стоит ПОД строкой, не отрываясь от
+      // неё: прежние 8px вместе с прямой верхней кромкой во всю ширину и
+      // читались как «плашка висит сама по себе».
+      top: Math.round((row ? row.bottom : hit.bottom) + 6),
+      left: Math.round(hit.left + hit.width / 2),
+    });
     setSheet(which);
   }
   useBreathing(dotRef, shop.open && !lead);
@@ -148,7 +163,7 @@ export default function HeroSlot() {
         </StatusItem>
       ) : (
         <StatusItem
-          onClick={() => openSheet("status")}
+          onClick={(e) => openSheet("status", e.currentTarget)}
           ariaLabel={`Точка выдачи ${shop.open ? "открыта" : "закрыта"}, ${shop.label}. Подробнее`}
         >
           <span
@@ -169,7 +184,7 @@ export default function HeroSlot() {
         <>
           <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-border" />
           <StatusItem
-            onClick={() => openSheet("rate")}
+            onClick={(e) => openSheet("rate", e.currentTarget)}
             ariaLabel={`Курс доллара ${rate.value} рублей. Подробнее`}
           >
             <span className="shrink-0 font-bold text-text">${rate.value}</span>
@@ -184,12 +199,22 @@ export default function HeroSlot() {
 
       {sheet === "status" && (
         <Suspense fallback={null}>
-          <PickupHoursSheet open={shop.open} anchorTopPx={anchorTopPx} onClose={() => setSheet(null)} />
+          <PickupHoursSheet
+            open={shop.open}
+            anchorTopPx={anchor.top}
+            anchorLeftPx={anchor.left}
+            onClose={() => setSheet(null)}
+          />
         </Suspense>
       )}
       {sheet === "rate" && config.usd_rate && (
         <Suspense fallback={null}>
-          <FxRateSheet usdRate={config.usd_rate} anchorTopPx={anchorTopPx} onClose={() => setSheet(null)} />
+          <FxRateSheet
+            usdRate={config.usd_rate}
+            anchorTopPx={anchor.top}
+            anchorLeftPx={anchor.left}
+            onClose={() => setSheet(null)}
+          />
         </Suspense>
       )}
     </div>
@@ -203,7 +228,9 @@ export default function HeroSlot() {
 function StatusItem({
   onClick, ariaLabel, children,
 }: {
-  onClick: () => void;
+  /** Получает событие: вызывающему нужен сам нажатый узел — из него
+   *  раскрывается поповер. */
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
   ariaLabel: string;
   children: React.ReactNode;
 }) {

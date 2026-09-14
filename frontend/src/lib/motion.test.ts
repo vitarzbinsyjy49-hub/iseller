@@ -2,11 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FADE_MS,
   ONBOARDING_APPEAR_MS,
+  POPOVER_IN_MS,
+  POPOVER_OUT_MS,
   SHEET_IN_MS,
   SHEET_OUT_MS,
   animateAppear,
   animateEnter,
   animateNumber,
+  animatePopoverIn,
+  animatePopoverOut,
   animatePulse,
   animateSheetIn,
   animateSheetOut,
@@ -514,5 +518,90 @@ describe("scrollPositionAt", () => {
 
   it("нулевая длительность — сразу цель, без деления на ноль", () => {
     expect(scrollPositionAt(0, 320, 0, 0)).toBe(320);
+  });
+});
+
+describe("animatePopoverIn / animatePopoverOut", () => {
+  it("первый кадр ставится синхронно: панель свёрнута и невидима", () => {
+    withControlledRafQueue(() => {
+      const panel = fakeSheetElement();
+      const backdrop = fakeSheetElement();
+      animatePopoverIn(panel, backdrop, false);
+      // Та же причина, что у шторки: вызывающий обязан звать это из
+      // useLayoutEffect, иначе браузер нарисует кадр уже раскрытой панели.
+      expect(panel.style.opacity).toBe("0");
+      expect(panel.style.transform).toContain("scale(0.94)");
+      expect(backdrop.style.opacity).toBe("0");
+    });
+  });
+
+  it("к концу раскрытия инлайновые стили снимаются полностью", () => {
+    withControlledRafQueue((tick) => {
+      const panel = fakeSheetElement();
+      const backdrop = fakeSheetElement();
+      animatePopoverIn(panel, backdrop, false);
+      tick(0);
+      tick(POPOVER_IN_MS);
+      // Пустая строка, а не "scale(1)": забытый transform создаёт содержащий
+      // блок и ломает position: fixed у всего, что внутри панели.
+      expect(panel.style.transform).toBe("");
+      expect(panel.style.opacity).toBe("");
+      expect(backdrop.style.opacity).toBe("1");
+    });
+  });
+
+  it("подтянут к точке нажатия: на первом кадре есть сдвиг вверх", () => {
+    withControlledRafQueue(() => {
+      const panel = fakeSheetElement();
+      animatePopoverIn(panel, fakeSheetElement(), false);
+      // Масштаб сообщает «раскрылось», сдвиг — «ОТСЮДА». Без него раскрытие
+      // не указывает на свой источник.
+      expect(panel.style.transform).toContain("-8px");
+    });
+  });
+
+  it("«уменьшить движение» — только проявление, без масштаба и сдвига", () => {
+    withControlledRafQueue((tick) => {
+      const panel = fakeSheetElement();
+      animatePopoverIn(panel, fakeSheetElement(), true);
+      expect(panel.style.transform).toBe("");
+      expect(panel.style.opacity).toBe("0");
+      tick(0);
+      tick(FADE_MS / 2);
+      // Движения нет, но событие есть — панель проявляется, а не возникает.
+      const mid = Number(panel.style.opacity);
+      expect(mid).toBeGreaterThan(0);
+      expect(mid).toBeLessThan(1);
+    });
+  });
+
+  it("схлопывание доводит до конца и зовёт done — на нём держится размонтирование", () => {
+    withControlledRafQueue((tick) => {
+      const panel = fakeSheetElement();
+      const backdrop = fakeSheetElement();
+      const done = vi.fn();
+      animatePopoverOut(panel, backdrop, done, false);
+      tick(0);
+      expect(done).not.toHaveBeenCalled();
+      tick(POPOVER_OUT_MS);
+      expect(done).toHaveBeenCalledTimes(1);
+      expect(panel.style.opacity).toBe("0");
+      expect(backdrop.style.opacity).toBe("0");
+    });
+  });
+
+  it("схлопывание короче раскрытия: уход не должен задерживать", () => {
+    expect(POPOVER_OUT_MS).toBeLessThan(POPOVER_IN_MS);
+  });
+
+  it("раскрытие короче выезда шторки: поповер не едет, а разворачивается на месте", () => {
+    expect(POPOVER_IN_MS).toBeLessThan(SHEET_IN_MS);
+  });
+
+  it("возвращает функцию отмены обеих цепочек", () => {
+    withControlledRafQueue(() => {
+      const cancel = animatePopoverIn(fakeSheetElement(), fakeSheetElement(), false);
+      expect(() => cancel()).not.toThrow();
+    });
   });
 });
