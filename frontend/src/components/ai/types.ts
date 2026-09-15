@@ -127,11 +127,29 @@ export type AiAnswer = {
   cards: ProductCard[];
   actions: AiAction[];
   meta: {
-    source?: "ai" | "fallback" | "mock" | "cache";
+    source?: "ai" | "fallback" | "mock" | "cache" | "rules";
     intent?: string;
     latency_ms?: number;
     analytics_id?: number | null;
     cache_hit?: boolean;
     model?: string;
+    /** Сколько товаров backend показал модели. Из него собирается след работы
+     *  («просмотрел N позиций каталога») — см. lib/aiTrace.ts. */
+    candidates?: number;
+    /** Ответ собран из каталога без модели: быстрый путь простого просмотра.
+     *  Флаг, а НЕ source: туда backend кладёт "catalog" — значение вне союза. */
+    skipped_llm?: boolean;
+    /** Провайдер был недоступен, ответ деградировал в каталог. Идёт ВМЕСТЕ с
+     *  source: "fallback", поэтому в следе проверяется раньше него. */
+    degraded?: boolean;
   };
 };
+
+/** Один элемент ленты диалога.
+ *
+ *  `elapsed_ms` у ответа — ФРОНТОВЫЙ замер ожидания, а не `meta.latency_ms`:
+ *  тот меряет только работу сервера и всегда меньше пережитого человеком.
+ *  Из него собирается след работы (см. lib/aiTrace.ts). */
+export type ChatItem =
+  | { role: "user"; text: string }
+  | { role: "assistant"; answer: AiAnswer; elapsed_ms: number };

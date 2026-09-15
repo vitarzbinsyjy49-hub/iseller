@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
-import { AiAction, AiAnswer, ProductCard as TCard } from "../components/ai/types";
-import ProductCard, { ProductImage } from "../components/ProductCard";
+import { AiAction, AiAnswer, ChatItem, ProductCard as TCard } from "../components/ai/types";
+import { ProductImage } from "../components/ProductCard";
+import Turn from "../components/ai/Turn";
+import WorkTrace from "../components/ai/WorkTrace";
 import { CartGlyph } from "../components/CartBar";
 import { useCart } from "../lib/cart";
 import { formatPrice } from "../lib/format";
@@ -14,7 +16,6 @@ import AiRoadmapSheet from "../components/AiRoadmapSheet";
 import { openExternalLink } from "../lib/telegram";
 import { aiEntryAction, clearAiHistory, loadAiHistory, pushAiQuery } from "../lib/searchHistory";
 import { prefersReducedMotion, revealDurationMs, revealedChars } from "../lib/answerReveal";
-import AnswerBody from "../components/AnswerBody";
 import { parseAnswer, plainText } from "../lib/answerFormat";
 import { Icon } from "../components/icons";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
@@ -52,11 +53,8 @@ const QUICK_ACTIONS: QuickAction[] = [
   { label: "Позвать менеджера", hint: "Живой диалог в Telegram", mode: "manager" },
 ];
 
-type ChatItem =
-  | { role: "user"; text: string }
-  | { role: "assistant"; answer: AiAnswer };
-
-/** AI-подбор в виде чата: bubble пользователя, typing, bubble ассистента + карточки.
+/** AI-подбор линейной лентой: реплика покупателя рамкой справа, след работы,
+ *  ответ текстом на странице + карточки. Пузырей нет — см. components/ai/Turn.
  *  Всё через backend POST /api/ai/chat (JWT). При недоступности AI backend сам
  *  вернёт fallback/mock — пользователь никогда не видит ошибку AI. */
 export default function AiSearch() {
@@ -148,18 +146,26 @@ export default function AiSearch() {
   }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [chat, loading]);
 
-  // Подпись под точками «печатает»: обычный ответ укладывается в 3-15с, но при
-  // сетевом сбое на пути к гейтвею SDK делает до двух ретраев по 30с каждый —
-  // тогда пузырь неотличимо висит до минуты. Без текста это читается как
-  // «зависло», хотя запрос всё ещё выполняется. Подпись даём по реальным
-  // порогам ожидания, не выдумывая проценты и таймер.
-  const [waitLabel, setWaitLabel] = useState<string | null>(null);
+  // Отметка начала запроса: от неё и строка работы считает свои секунды, и
+  // готовый ответ получает прошедшее время для следа. Одна точка отсчёта на
+  // обе задачи — два независимых замера разъехались бы.
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+
+  // Живой фон тихнет, как только пошёл разговор. У /ai он самый сильный в
+  // приложении (.aurora[data-variant="ai"] в index.css), и всё это время его
+  // заслонял непрозрачный пузырь ответа. Пузыря больше нет — текст лёг бы
+  // прямо на плывущие пятна. Пустой экран силу сохраняет: там человек
+  // осматривается, и фон работает на впечатление.
+  //
+  // Признак на корне документа, а не вторая копия палитры: палитра обязана
+  // остаться в одном месте. Уборка НЕ формальность — без неё приглушённый фон
+  // уехал бы на главную.
+  const hasChat = chat.length > 0;
   useEffect(() => {
-    if (!loading) { setWaitLabel(null); return; }
-    const t1 = setTimeout(() => setWaitLabel("Подбираем варианты в каталоге"), 4000);
-    const t2 = setTimeout(() => setWaitLabel("Ещё немного — сверяем наличие и цену"), 16000);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [loading]);
+    if (!hasChat) return;
+    document.documentElement.dataset.auroraHushed = "1";
+    return () => { delete document.documentElement.dataset.auroraHushed; };
+  }, [hasChat]);
 
   // Набор текста последнего ответа. null — «набирать нечего»: либо ответ уже
   // показан целиком, либо это старое сообщение в истории диалога.
@@ -268,8 +274,8 @@ export default function AiSearch() {
   /** Добавить ответ ассистента и начать его набор. Единая точка: ответов три
    *  вида (AI, fallback-поиск, недоступный каталог), и набор должен вести себя
    *  одинаково у всех — иначе fallback появлялся бы рывком на фоне плавного AI. */
-  function pushAnswer(answer: AiAnswer) {
-    setChat((c) => [...c, { role: "assistant", answer }]);
+  function pushAnswer(answer: AiAnswer, elapsedMs: number) {
+    setChat((c) => [...c, { role: "assistant", answer, elapsed_ms: elapsedMs }]);
     startReveal(answer.text ?? "");
   }
 
@@ -278,6 +284,11 @@ export default function AiSearch() {
     if (!query || loading) return;
     setAiHistory(pushAiQuery(query));
     setLoading(true);
+    // Замер начинается ДО запроса и до любой ветки ответа: в след должно попасть
+    // всё ожидание целиком, включая деградацию в каталог.
+    const begin = performance.now();
+    setStartedAt(begin);
+    const elapsed = () => performance.now() - begin;
     setValue("");
     const history = historyPayload(chat);
     setChat((c) => [...c, { role: "user", text: query }]);
@@ -294,7 +305,7 @@ export default function AiSearch() {
         signal: controller.signal,
       });
       const data = normalizeAnswer(raw);
-      pushAnswer(data);
+      pushAnswer(data, elapsed());
       data.cards.forEach((card) => track("ai_product_card_viewed", { product_id: card.id, source: data.meta?.source }));
     } catch {
       // Даже при отказе AI-роута — тихий fallback на прямой поиск по каталогу
@@ -306,16 +317,17 @@ export default function AiSearch() {
             ? "Вот что нашлось в каталоге:"
             : "По запросу ничего не нашлось — попробуйте изменить бюджет или категорию.",
           cards, actions: [], meta: { source: "fallback" },
-        });
+        }, elapsed());
       } catch {
         pushAnswer({
           text: "Каталог сейчас недоступен. Попробуйте ещё раз через минуту или напишите менеджеру.",
           cards: [], actions: [], meta: { source: "fallback" },
-        });
+        }, elapsed());
       }
     } finally {
       clearTimeout(timer);
       setLoading(false);
+      setStartedAt(null);
     }
   }
 
@@ -474,81 +486,26 @@ export default function AiSearch() {
         </div>
       )}
 
-      {/* Чат */}
-      <div className="mt-4 space-y-3">
-        {chat.map((item, i) => {
-          if (item.role === "user") {
-            return (
-              <div key={i} ref={enterGridRefCallback("fadeUp")} className="flex justify-end">
-                <div className="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-sm text-white lg:max-w-[560px]">
-                  {item.text}
-                </div>
-              </div>
-            );
-          }
-          // Набирается только последний ответ: старые в истории диалога всегда
-          // показаны целиком, иначе прокрутка назад запускала бы анимацию заново.
-          const isRevealing = revealChars !== null && i === chat.length - 1;
-          const fullText = item.answer.text ?? "";
-          return (
-            <div key={i} ref={enterGridRefCallback("fadeUp")}>
-              {/* max-w текста ответа на desktop ~760px — не растягиваем на всю ширину */}
-              <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-sm shadow-soft lg:max-w-[760px]">
-                {/* Абзацы, списки и выделения; ненабранный хвост держит размер
-                    пузыря — см. комментарий в AnswerBody. */}
-                <AnswerBody text={fullText} revealChars={isRevealing ? revealChars : null} />
-              </div>
-              {/* Карточки и кнопки прикладываются ПОСЛЕ набора текста: сначала
-                  читаешь ответ, потом появляются варианты. */}
-              {!isRevealing && (item.answer.cards ?? []).length > 0 && (
-                <div className="stagger mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4 wide:grid-cols-4">
-                  {(item.answer.cards ?? []).slice(0, 6).map((c) => (
-                    <ProductCard
-                      key={c.id} card={c}
-                      onOpen={(card) => track("ai_product_card_clicked", { product_id: card.id })}
-                    />
-                  ))}
-                </div>
-              )}
-              {/* Кнопки-действия (v5.1): только у последнего ответа, чтобы старые не путали */}
-              {!isRevealing && i === chat.length - 1 && (item.answer.actions ?? []).length > 0 && (
-                <div ref={enterRefCallback("fade")} className="mt-2.5 flex flex-wrap gap-2">
-                  {/* Быстрые ответы — реплики ПОКУПАТЕЛЯ, поэтому обведены
-                      акцентом: визуально это продолжение его стороны диалога,
-                      а не системное действие вроде «Позвать менеджера». */}
-                  {(item.answer.actions ?? []).map((a) => (
-                    <button
-                      key={`${a.type}-${a.label}`}
-                      onClick={() => handleAction(a, item.answer)}
-                      disabled={loading}
-                      className={
-                        a.type === "quick_reply"
-                          ? "tap rounded-full border border-accent bg-transparent px-3.5 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent hover:text-white disabled:opacity-50"
-                          : "tap rounded-full bg-surface px-3.5 py-2 text-xs font-medium text-text shadow-soft transition-colors hover:bg-accent hover:text-white disabled:opacity-50"
-                      }
-                    >
-                      {a.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {/* Лента диалога */}
+      <div className="mt-4 space-y-4">
+        {chat.map((item, i) => (
+          <Turn
+            key={i}
+            item={item}
+            index={i}
+            isLast={i === chat.length - 1}
+            revealChars={revealChars}
+            loading={loading}
+            onAction={handleAction}
+          />
+        ))}
 
-        {/* Typing indicator: пузырь растёт по контенту, а не фиксированной
-            ширины — подпись ожидания (см. waitLabel выше) не должна обрезаться. */}
-        {loading && (
-          // w-fit обязателен. Контейнер чата — блочный, поэтому пузырь без него
-          // растягивался во всю ширину экрана: три точки посреди пустой панели
-          // читались как сломанная заглушка, а не как «собеседник печатает».
-          <div ref={enterRefCallback("fade")} className="flex w-fit max-w-[92%] flex-col items-start gap-1.5 rounded-2xl rounded-bl-md bg-surface px-4 py-3.5 shadow-soft">
-            <div className="flex items-center gap-1.5">
-              <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
-              <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
-              <span className="typing-dot h-2 w-2 rounded-full bg-muted" />
-            </div>
-            {waitLabel && <span ref={enterRefCallback("fade")} className="text-xs text-muted">{waitLabel}</span>}
+        {/* Строка работы, пока идёт запрос. Отбивается линией так же, как ответ:
+            она стоит на месте будущего ответа, и без линии ход покупателя
+            сливался бы со следующим. */}
+        {loading && startedAt !== null && (
+          <div ref={enterRefCallback("fade")}>
+            <WorkTrace state="running" startedAt={startedAt} />
           </div>
         )}
         {/* scroll-mb-40: автоскролл оставляет последнюю карточку над фикс-строкой ввода */}
