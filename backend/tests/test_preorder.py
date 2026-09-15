@@ -64,8 +64,8 @@ def _preorder(db, **kw) -> Product:
 def test_preorder_hides_price_behind_a_note(db):
     p = _preorder(db)
     assert resolve_availability(p) == "preorder"
-    assert price_note(p) == "Цену уточнит менеджер"
-    assert p.to_card()["price_note"] == "Цену уточнит менеджер"
+    assert price_note(p) == "Цена по запросу"
+    assert p.to_card()["price_note"] == "Цена по запросу"
 
 
 def test_ordinary_product_has_no_price_note(db):
@@ -94,7 +94,7 @@ def test_preorder_fields_reach_card_and_admin(db):
 
 
 def test_detail_carries_the_note_too(db):
-    assert _preorder(db).to_detail()["price_note"] == "Цену уточнит менеджер"
+    assert _preorder(db).to_detail()["price_note"] == "Цена по запросу"
 
 
 # ---------- сортировка ----------
