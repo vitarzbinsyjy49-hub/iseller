@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAnswer, parseSpans, plainText } from "./answerFormat";
+import { hasLead, parseAnswer, parseSpans, plainText } from "./answerFormat";
 
 describe("parseSpans", () => {
   it("выделяет жирным то, что модель обернула в звёздочки", () => {
@@ -66,5 +66,66 @@ describe("plainText", () => {
     expect(text).not.toContain("- ");
     expect(text).toContain("512 ГБ");
     expect(text).toContain("дешевле");
+  });
+});
+
+describe("hasLead", () => {
+  it("короткая первая фраза, за которой есть текст — это вывод", () => {
+    expect(hasLead(parseAnswer("Подходят три модели.\n\nРазница только в памяти и цвете."))).toBe(true);
+  });
+
+  it("единственный абзац выводом не делаем: крупным стал бы весь ответ", () => {
+    expect(hasLead(parseAnswer("Подходят три модели."))).toBe(false);
+  });
+
+  it("длинная первая фраза остаётся обычным абзацем", () => {
+    const long = "а".repeat(200);
+    expect(hasLead(parseAnswer(`${long}\n\nВторой абзац.`))).toBe(false);
+  });
+
+  it("список первым блоком выводом не бывает", () => {
+    expect(hasLead(parseAnswer("- первый пункт\n- второй пункт\n\nАбзац после."))).toBe(false);
+  });
+
+  it("пустой ответ не роняет проверку", () => {
+    expect(hasLead(parseAnswer(""))).toBe(false);
+  });
+});
+
+describe("пункт списка, приклеенный к концу абзаца", () => {
+  it("отрывает пункт, который модель приписала к предыдущей фразе", () => {
+    const blocks = parseAnswer("Разница в памяти. - 256 ГБ хватает\n- 512 ГБ для видео");
+    expect(blocks).toEqual([
+      { kind: "para", spans: [{ text: "Разница в памяти.", bold: false }] },
+      { kind: "list", items: [
+        [{ text: "256 ГБ хватает", bold: false }],
+        [{ text: "512 ГБ для видео", bold: false }],
+      ] },
+    ]);
+  });
+
+  it("разбирает несколько пунктов, склеенных в одну строку", () => {
+    const blocks = parseAnswer("Итого. - раз. - два");
+    expect(blocks).toEqual([
+      { kind: "para", spans: [{ text: "Итого.", bold: false }] },
+      { kind: "list", items: [
+        [{ text: "раз.", bold: false }],
+        [{ text: "два", bold: false }],
+      ] },
+    ]);
+  });
+
+  it("длинное тире мид-фразы НЕ считается пунктом: это русская пунктуация", () => {
+    const blocks = parseAnswer("Берите 512 ГБ. — так надёжнее");
+    expect(blocks).toEqual([
+      { kind: "para", spans: [{ text: "Берите 512 ГБ. — так надёжнее", bold: false }] },
+    ]);
+  });
+
+  it("дефис без точки перед ним абзац не рвёт", () => {
+    const blocks = parseAnswer("модель iPhone 17 - отличный выбор");
+    expect(blocks).toEqual([
+      { kind: "para", spans: [{ text: "модель iPhone 17 - отличный выбор", bold: false }] },
+    ]);
   });
 });

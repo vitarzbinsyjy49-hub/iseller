@@ -12,6 +12,7 @@
 import ProductCard from "../ProductCard";
 import AnswerBody from "../AnswerBody";
 import WorkTrace from "./WorkTrace";
+import CompareTable from "./CompareTable";
 import { track } from "../../lib/analytics";
 import { enterGridRefCallback, enterRefCallback } from "../../lib/useEnter";
 import type { AiAction, AiAnswer, ChatItem } from "./types";
@@ -59,10 +60,17 @@ export default function Turn({ item, index, isLast, revealChars, loading, onActi
       <WorkTrace state="done" meta={item.answer.meta} elapsedMs={item.elapsed_ms} />
 
       {/* Ни фона, ни тени, ни скруглений — текст лежит на самой странице.
+          answer-voice: засечный шрифт и щедрый интерлиньяж (index.css). Пузырь
+          больше не отделяет ответ от интерфейса — это делает шрифт.
           max-w на desktop: строка во всю ширину монитора нечитаема. */}
-      <div className="text-sm lg:max-w-[760px]">
+      <div className="answer-voice lg:max-w-[760px]">
         <AnswerBody text={item.answer.text ?? ""} revealChars={isRevealing ? revealChars : null} />
       </div>
+
+      {/* Чем товары отличаются — из карточек, а не из текста модели. Стоит между
+          ответом и самими карточками: сначала «почему», потом «чем именно», и
+          только потом сами товары. */}
+      {!isRevealing && <CompareTable cards={cards} />}
 
       {/* Карточки и кнопки прикладываются ПОСЛЕ набора текста: сначала читаешь
           ответ, потом появляются варианты. */}

@@ -1,8 +1,8 @@
 /** Тело ответа AI: абзацы, списки и выделения вместо сплошной строки.
  *
  *  Совмещено с посимвольным набором. Ненабранный хвост остаётся в разметке
- *  прозрачным — он держит финальный размер пузыря. Без этого текст
- *  перевёрстывался на каждом кадре, пузырь рос скачками, а карточки под ним
+ *  прозрачным — он держит финальный размер блока. Без этого текст
+ *  перевёрстывался на каждом кадре, ответ рос скачками, а карточки под ним
  *  дёргались; скринридеру при этом сразу доступен весь ответ.
  *
  *  Смещения считаются РОВНО так же, как их склеивает `plainText`: блоки и
@@ -10,7 +10,7 @@
  *  разметкой, и хвост обрывался бы не там.
  */
 import { useMemo } from "react";
-import { parseAnswer, type Span } from "../lib/answerFormat";
+import { hasLead, parseAnswer, type Span } from "../lib/answerFormat";
 
 type Props = {
   text: string;
@@ -44,6 +44,9 @@ function SpanText({ span, cursor, revealChars }: {
 
 export default function AnswerBody({ text, revealChars }: Props) {
   const blocks = useMemo(() => parseAnswer(text), [text]);
+  // Первая фраза как вывод — решает чистая функция, а не вёрстка: правило
+  // («короткая, абзацем, и за ней есть ещё текст») проверяется тестами.
+  const lead = useMemo(() => hasLead(blocks), [blocks]);
   // Пересоздаётся на каждый рендер намеренно: курсор — состояние ОДНОГО прохода
   // по блокам, а не памяти между кадрами.
   const cursor: Cursor = { at: 0 };
@@ -56,7 +59,7 @@ export default function AnswerBody({ text, revealChars }: Props) {
         if (bi > 0) cursor.at += 1; // «\n» между блоками в plainText
         if (block.kind === "para") {
           return (
-            <p key={bi} className="leading-relaxed">
+            <p key={bi} className={lead && bi === 0 ? "answer-lead" : undefined}>
               {block.spans.map((span, si) => (
                 <SpanText key={si} span={span} cursor={cursor} revealChars={revealChars} />
               ))}
@@ -68,10 +71,10 @@ export default function AnswerBody({ text, revealChars }: Props) {
             {block.items.map((spans, ii) => {
               if (ii > 0) cursor.at += 1; // «\n» между пунктами
               return (
-                <li key={ii} className="flex gap-2 leading-relaxed">
+                <li key={ii} className="flex gap-2">
                   {/* Маркер — не текст ответа: в счётчик набора он не входит и
                       появляется сразу, иначе пункты «выползали» бы с задержкой. */}
-                  <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-muted" />
+                  <span aria-hidden className="mt-[10px] h-1 w-1 shrink-0 rounded-full bg-muted" />
                   <span className="min-w-0 flex-1">
                     {spans.map((span, si) => (
                       <SpanText key={si} span={span} cursor={cursor} revealChars={revealChars} />
