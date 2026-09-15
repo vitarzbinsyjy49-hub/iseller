@@ -21,6 +21,7 @@ import { cardBadges } from "../lib/cardBadges";
 import { QuantityStepper } from "./QuantityStepper";
 import { CART_SWAP_DX_PX } from "../lib/useCartSwap";
 import { preloadProduct } from "../lib/routePreload";
+import { productName } from "../lib/productName";
 import { Icon } from "./icons";
 
 const MAX_CARD_IMAGES = 10;
@@ -334,13 +335,6 @@ export function FavButton({
 /** Название для показа: без кода страны и с брендом впереди, если его в
  *  названии нет. `title_clean` приходит с backend; старый ответ без него
  *  (кэш прошлого визита, фикстура AI) читается по `title`, как раньше. */
-export function productName(card: Pick<TCard, "title" | "title_clean" | "brand">): string {
-  const name = card.title_clean || card.title;
-  return card.brand && !name.toLowerCase().includes(card.brand.toLowerCase())
-    ? `${card.brand} ${name}`
-    : name;
-}
-
 export function Badge({ color, children }: {
   color: "red" | "blue" | "green" | "orange" | "gold" | "gray"; children: ReactNode;
 }) {
@@ -583,10 +577,14 @@ function ProductCard({ card, compact, onOpen }: Props) {
             остаётся самым тяжёлым элементом блока за счёт размера и насыщенности,
             а не за счёт места в очереди. */}
         <button onClick={open} onPointerDown={() => preloadProduct(card.id)} className="block w-full text-left">
-          {/* Название на карточке — чистое, без приставки региона: товары
-              должны начинаться с модели («iPhone 17 Pro…»), а не с флага
-              перед ней. title_clean уже вырезает «(HK-KR, SIM+eSIM)» из
-              текста; сам регион — на странице товара, во вкладке «Описание». */}
+          {/* Название на карточке — чистое: без кодов страны и без ведущего
+              «Apple». Правило со всеми оговорками живёт в lib/productName —
+              там же объяснено, почему у Dyson бренд остаётся.
+
+              Прежний комментарий здесь утверждал, что title_clean вырезает
+              «(HK-KR, SIM+eSIM)» целиком. Это неверно: split_region_codes
+              убирает ТОЛЬКО коды стран, а «SIM+eSIM» намеренно оставляет —
+              потерять его значит слить разные позиции в одну. */}
           <p className="line-clamp-2 min-h-[2.25rem] text-footnote font-medium">
             {productName(card)}
           </p>
