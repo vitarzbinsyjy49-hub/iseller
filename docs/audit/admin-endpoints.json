@@ -1,0 +1,446 @@
+[
+ {
+  "file": "admin.py",
+  "verb": "GET",
+  "path": "/api/admin/stats",
+  "func": "stats"
+ },
+ {
+  "file": "admin.py",
+  "verb": "GET",
+  "path": "/api/admin/audit",
+  "func": "audit_list"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "GET",
+  "path": "/api/admin/leads",
+  "func": "list_leads"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "GET",
+  "path": "/api/admin/leads/{lead_id}",
+  "func": "lead_detail"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "PATCH",
+  "path": "/api/admin/leads/{lead_id}",
+  "func": "update_lead"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "GET",
+  "path": "/api/admin/dashboard",
+  "func": "dashboard"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "GET",
+  "path": "/api/admin/analytics",
+  "func": "analytics"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "GET",
+  "path": "/api/admin/ai-logs",
+  "func": "ai_logs"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "GET",
+  "path": "/api/admin/products",
+  "func": "admin_products"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "POST",
+  "path": "/api/admin/products",
+  "func": "admin_create_product"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "PATCH",
+  "path": "/api/admin/products/{product_id}",
+  "func": "admin_update_product"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "PATCH",
+  "path": "/api/admin/products/{product_id}/stock",
+  "func": "admin_update_stock"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "GET",
+  "path": "/api/admin/products/{product_id}/image-group",
+  "func": "admin_product_image_group"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "GET",
+  "path": "/api/admin/photo-coverage",
+  "func": "photo_coverage"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "DELETE",
+  "path": "/api/admin/products/{product_id}",
+  "func": "admin_delete_product"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "POST",
+  "path": "/api/admin/products/bulk-action",
+  "func": "admin_bulk_action"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "POST",
+  "path": "/api/admin/products/{product_id}/images",
+  "func": "admin_add_product_image"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "POST",
+  "path": "/api/admin/products/{product_id}/images/bulk",
+  "func": "admin_add_product_images_bulk"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "POST",
+  "path": "/api/admin/products/{product_id}/images/main",
+  "func": "admin_set_main_image"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "POST",
+  "path": "/api/admin/products/{product_id}/images/reorder",
+  "func": "admin_reorder_product_images"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "DELETE",
+  "path": "/api/admin/products/{product_id}/images",
+  "func": "admin_delete_product_image"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "POST",
+  "path": "/api/admin/products/import",
+  "func": "admin_import_products"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "GET",
+  "path": "/api/admin/reviews",
+  "func": "admin_list_reviews"
+ },
+ {
+  "file": "admin_crm.py",
+  "verb": "PATCH",
+  "path": "/api/admin/reviews/{review_id}",
+  "func": "admin_moderate_review"
+ },
+ {
+  "file": "admin_promo.py",
+  "verb": "GET",
+  "path": "/api/admin/promo-codes",
+  "func": "list_codes"
+ },
+ {
+  "file": "admin_promo.py",
+  "verb": "POST",
+  "path": "/api/admin/promo-codes",
+  "func": "create_code"
+ },
+ {
+  "file": "admin_promo.py",
+  "verb": "PATCH",
+  "path": "/api/admin/promo-codes/{promo_id}",
+  "func": "update_code"
+ },
+ {
+  "file": "admin_promo.py",
+  "verb": "DELETE",
+  "path": "/api/admin/promo-codes/{promo_id}",
+  "func": "delete_code"
+ },
+ {
+  "file": "admin_promo.py",
+  "verb": "GET",
+  "path": "/api/admin/promo-codes/{promo_id}/redemptions",
+  "func": "list_redemptions"
+ },
+ {
+  "file": "admin_referrals.py",
+  "verb": "GET",
+  "path": "/api/admin/referrals",
+  "func": "list_referrals"
+ },
+ {
+  "file": "admin_settings.py",
+  "verb": "GET",
+  "path": "/api/admin/settings/loyalty",
+  "func": "read_loyalty_settings"
+ },
+ {
+  "file": "admin_settings.py",
+  "verb": "PUT",
+  "path": "/api/admin/settings/loyalty",
+  "func": "write_loyalty_settings"
+ },
+ {
+  "file": "admin_users.py",
+  "verb": "GET",
+  "path": "/api/admin/users",
+  "func": "list_users"
+ },
+ {
+  "file": "admin_users.py",
+  "verb": "GET",
+  "path": "/api/admin/users/{user_id}",
+  "func": "user_detail"
+ },
+ {
+  "file": "admin_users.py",
+  "verb": "POST",
+  "path": "/api/admin/users/{user_id}/loyalty",
+  "func": "add_loyalty"
+ },
+ {
+  "file": "admin_users.py",
+  "verb": "GET",
+  "path": "/api/admin/loyalty/levels",
+  "func": "loyalty_levels"
+ },
+ {
+  "file": "events.py",
+  "verb": "GET",
+  "path": "/api/events/recent",
+  "func": "recent"
+ },
+ {
+  "file": "home.py",
+  "verb": "GET",
+  "path": "/api/admin/home/banners",
+  "func": "admin_list_banners"
+ },
+ {
+  "file": "home.py",
+  "verb": "POST",
+  "path": "/api/admin/home/banners",
+  "func": "admin_create_banner"
+ },
+ {
+  "file": "home.py",
+  "verb": "PATCH",
+  "path": "/api/admin/home/banners/{banner_id}",
+  "func": "admin_update_banner"
+ },
+ {
+  "file": "home.py",
+  "verb": "DELETE",
+  "path": "/api/admin/home/banners/{banner_id}",
+  "func": "admin_delete_banner"
+ },
+ {
+  "file": "home.py",
+  "verb": "GET",
+  "path": "/api/admin/home/categories",
+  "func": "admin_list_categories"
+ },
+ {
+  "file": "home.py",
+  "verb": "POST",
+  "path": "/api/admin/home/categories",
+  "func": "admin_create_category"
+ },
+ {
+  "file": "home.py",
+  "verb": "PATCH",
+  "path": "/api/admin/home/categories/{category_id}",
+  "func": "admin_update_category"
+ },
+ {
+  "file": "home.py",
+  "verb": "DELETE",
+  "path": "/api/admin/home/categories/{category_id}",
+  "func": "admin_delete_category"
+ },
+ {
+  "file": "imports.py",
+  "verb": "POST",
+  "path": "/api/admin/import/products/preview",
+  "func": "import_preview"
+ },
+ {
+  "file": "imports.py",
+  "verb": "POST",
+  "path": "/api/admin/import/products/confirm",
+  "func": "import_confirm"
+ },
+ {
+  "file": "imports.py",
+  "verb": "POST",
+  "path": "/api/admin/uploads/products/images-zip",
+  "func": "upload_images_zip"
+ },
+ {
+  "file": "imports.py",
+  "verb": "POST",
+  "path": "/api/admin/uploads/image",
+  "func": "upload_single_image"
+ },
+ {
+  "file": "imports.py",
+  "verb": "POST",
+  "path": "/api/admin/import/batch/preview",
+  "func": "batch_preview"
+ },
+ {
+  "file": "imports.py",
+  "verb": "GET",
+  "path": "/api/admin/import/batch/{job_id}",
+  "func": "batch_get"
+ },
+ {
+  "file": "imports.py",
+  "verb": "DELETE",
+  "path": "/api/admin/import/batch/{job_id}",
+  "func": "batch_cancel"
+ },
+ {
+  "file": "imports.py",
+  "verb": "POST",
+  "path": "/api/admin/import/batch/{job_id}/confirm",
+  "func": "batch_confirm"
+ },
+ {
+  "file": "imports.py",
+  "verb": "POST",
+  "path": "/api/admin/import/image-groups/preview",
+  "func": "image_groups_preview"
+ },
+ {
+  "file": "imports.py",
+  "verb": "POST",
+  "path": "/api/admin/import/image-groups/confirm",
+  "func": "image_groups_confirm"
+ },
+ {
+  "file": "posts.py",
+  "verb": "GET",
+  "path": "/api/admin/posts",
+  "func": "list_posts"
+ },
+ {
+  "file": "posts.py",
+  "verb": "POST",
+  "path": "/api/admin/posts",
+  "func": "create_post"
+ },
+ {
+  "file": "posts.py",
+  "verb": "PATCH",
+  "path": "/api/admin/posts/{post_id}",
+  "func": "update_post"
+ },
+ {
+  "file": "posts.py",
+  "verb": "POST",
+  "path": "/api/admin/posts/{post_id}/approve",
+  "func": "approve_post"
+ },
+ {
+  "file": "posts.py",
+  "verb": "POST",
+  "path": "/api/admin/posts/{post_id}/reject",
+  "func": "reject_post"
+ },
+ {
+  "file": "posts.py",
+  "verb": "POST",
+  "path": "/api/admin/posts/{post_id}/publish",
+  "func": "publish"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "GET",
+  "path": "/api/admin/price-posts",
+  "func": "list_price_posts"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "POST",
+  "path": "/api/admin/price-posts/info/generate",
+  "func": "generate_info"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "GET",
+  "path": "/api/admin/price-posts/info/button-kinds",
+  "func": "button_kinds"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "POST",
+  "path": "/api/admin/price-posts/info/rich-preview",
+  "func": "rich_preview"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "POST",
+  "path": "/api/admin/price-posts/info",
+  "func": "create_info"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "PATCH",
+  "path": "/api/admin/price-posts/info/{slug}",
+  "func": "edit_info"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "POST",
+  "path": "/api/admin/price-posts/info/{slug}/reset",
+  "func": "reset_info"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "POST",
+  "path": "/api/admin/price-posts/info/publish",
+  "func": "publish_info"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "GET",
+  "path": "/api/admin/price-posts/plan",
+  "func": "plan"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "GET",
+  "path": "/api/admin/price-posts/{slug}/preview",
+  "func": "preview_one"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "POST",
+  "path": "/api/admin/price-posts/generate",
+  "func": "generate"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "POST",
+  "path": "/api/admin/price-posts/publish",
+  "func": "publish"
+ },
+ {
+  "file": "price_posts.py",
+  "verb": "POST",
+  "path": "/api/admin/price-posts/navigation",
+  "func": "update_navigation"
+ }
+]
