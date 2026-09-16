@@ -82,7 +82,10 @@ export default function Catalog() {
   // Чипы недавних запросов при пустом поиске (localStorage; читаем на фокусе)
   const [recentQueries, setRecentQueries] = useState<string[]>([]);
   const [searchFocused, setSearchFocused] = useState(false);
-  const [condition, setCondition] = useState("");
+  // Состояние читается ИЗ URL, как и остальные фильтры. Раньше оно туда только
+  // писалось (см. сборку qs ниже), и ссылка с ?condition=used молча теряла
+  // фильтр — а именно такие ссылки строит экран AI («понял так» -> каталог).
+  const [condition, setCondition] = useState(params.get("condition") ?? "");
   // Desktop: сворачиваемый sidebar фильтров (>=1024px)
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const collection = params.get("collection") ?? "";

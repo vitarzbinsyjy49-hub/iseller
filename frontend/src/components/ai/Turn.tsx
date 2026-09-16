@@ -13,6 +13,7 @@ import ProductCard from "../ProductCard";
 import AnswerBody from "../AnswerBody";
 import WorkTrace from "./WorkTrace";
 import CompareTable from "./CompareTable";
+import UnderstoodFilters from "./UnderstoodFilters";
 import { track } from "../../lib/analytics";
 import { enterGridRefCallback, enterRefCallback } from "../../lib/useEnter";
 import type { AiAction, AiAnswer, ChatItem } from "./types";
@@ -71,6 +72,10 @@ export default function Turn({ item, index, isLast, revealChars, loading, onActi
           ответом и самими карточками: сначала «почему», потом «чем именно», и
           только потом сами товары. */}
       {!isRevealing && <CompareTable cards={cards} />}
+
+      {/* Разбор фразы — только у ПОСЛЕДНЕГО ответа: старые разборы к текущему
+          вопросу отношения не имеют и засоряли бы ленту повторами. */}
+      {!isRevealing && isLast && <UnderstoodFilters state={item.answer.meta?.state} />}
 
       {/* Карточки и кнопки прикладываются ПОСЛЕ набора текста: сначала читаешь
           ответ, потом появляются варианты. */}

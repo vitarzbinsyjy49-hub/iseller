@@ -1,4 +1,5 @@
 /** Типы ответа AI-моста и карточек товаров (Demo MVP). */
+import type { AiFilterState } from "../../lib/aiFilters";
 import type { AvailabilityMode } from "../../lib/cartMath";
 import type { ScenarioKey } from "../../lib/scenario";
 
@@ -142,6 +143,10 @@ export type AiAnswer = {
     /** Провайдер был недоступен, ответ деградировал в каталог. Идёт ВМЕСТЕ с
      *  source: "fallback", поэтому в следе проверяется раньше него. */
     degraded?: boolean;
+    /** Разбор фразы (`extract_filters.to_state()`): бюджет, бренд, категория,
+     *  состояние. Из него собираются чипы «понял так» и ссылка в каталог —
+     *  см. lib/aiFilters.ts. */
+    state?: AiFilterState;
   };
 };
 

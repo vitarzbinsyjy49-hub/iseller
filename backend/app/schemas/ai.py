@@ -81,6 +81,7 @@ ALLOWED_EVENTS = {
     # AI-воронка
     "ai_chat_opened",
     "ai_conversation_reset",
+    "ai_filters_to_catalog",
     "ai_query_submitted",
     "ai_response_received",
     "ai_product_card_viewed",
