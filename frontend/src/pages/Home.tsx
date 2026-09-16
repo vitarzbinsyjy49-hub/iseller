@@ -1,4 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { TYPEWRITER_TIMING_CALM } from "../lib/typewriter";
+import { useTypewriterPlaceholder } from "../lib/useTypewriterPlaceholder";
+import { SEARCH_HINTS, SEARCH_PLACEHOLDER } from "../lib/searchHints";
 import { useNavigate } from "react-router-dom";
 import { cachedApi, SHOP } from "../lib/apiCache";
 import { track, trackProduct } from "../lib/analytics";
@@ -255,6 +258,18 @@ export default function Home() {
   // при вводе (live-результаты). Содержимое — SearchPanel; debounce и отмена
   // запросов (AbortController) — в lib/liveSearch.
   const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  // Бегущая подсказка. Спокойный тайминг, а не тот, что внизу: здесь она идёт
+  // фоном, пока человек осматривается, и обычная скорость выглядела бы суетой
+  // в углу экрана. Работает ТОЛЬКО пока поле пустое и закрыто — как только
+  // человек сфокусировался или начал печатать, подсказке место уступается.
+  useTypewriterPlaceholder(
+    searchInputRef,
+    SEARCH_HINTS,
+    !searchOpen && search === "",
+    SEARCH_PLACEHOLDER,
+    TYPEWRITER_TIMING_CALM,
+  );
   // v5.2.6: персональные секции («Для вас», «Недавно смотрели»)
   const [recs, setRecs] = useState<TCard[] | null>(null);
   const [recsMode, setRecsMode] = useState<string>("cold");
@@ -479,7 +494,8 @@ export default function Home() {
               // iPhone, MacBook, AirPods…» (239px) обрывались на середине слова
               // — обрезанная подсказка хуже короткой. Что продаёт магазин,
               // говорит ряд категорий строкой ниже.
-              placeholder="Найти технику"
+              ref={searchInputRef}
+              placeholder={SEARCH_PLACEHOLDER}
               aria-label="Поиск по каталогу"
               aria-expanded={searchOpen || search.trim().length >= 2}
               className="self-stretch min-w-0 flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-muted"
@@ -1124,7 +1140,10 @@ function ScenarioIcon({ name }: { name: string }) {
       case "macbook":
         return <><rect x="5" y="5" width="14" height="9" rx="1" /><path d="M3 17.5h18l-1.4 2.2H4.4z" /></>;
       case "tradein":
-        return <><path d="M4 9a8 8 0 0 1 14-3l2 2" /><path d="M20 3v5h-5" /><path d="M20 15a8 8 0 0 1-14 3l-2-2" /><path d="M4 21v-5h5" /></>;
+        // Дуги короче и без «хвостов» наружу: при четырёх штуках в одном
+        // глифе прежний вариант нёс вдвое больше чернил, чем соседняя искра,
+        // и ряд читался неровным — один вход темнее остальных.
+        return <><path d="M4.5 9.5a7.5 7.5 0 0 1 13-3.2" /><path d="M18.5 3v4h-4" /><path d="M19.5 14.5a7.5 7.5 0 0 1-13 3.2" /><path d="M5.5 21v-4h4" /></>;
       case "b2b":
         return <><rect x="3.5" y="7.5" width="17" height="12" rx="2" /><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5M3.5 12.5h17" /></>;
       case "wholesale":
@@ -1132,16 +1151,18 @@ function ScenarioIcon({ name }: { name: string }) {
       case "ai_pick":  // искра — тот же знак, что у кнопки ИИ в поиске
         return <><path d="M12 3.5 13.6 8 18 9.6 13.6 11.2 12 15.7l-1.6-4.5L6 9.6 10.4 8z" /><path d="m18.2 15.4.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z" /></>;
       case "marketplace":  // витрина: то, что выставлено на продажу
-        return <><path d="M4 9.5V20h16V9.5" /><path d="M3 9.5 4.8 4.5h14.4L21 9.5z" /><path d="M9.5 20v-5.5h5V20" /></>;
+        return <><path d="M4.5 10V19.5h15V10" /><path d="M3.5 9.5 5.2 5h13.6l1.7 4.5z" /><path d="M10 19.5V15h4v4.5" /></>;
       case "sell_item":  // ценник-бирка
-        return <><path d="M11 3h6a2 2 0 0 1 2 2v6L10 20l-9-9L10 3z" /><circle cx="15" cy="8" r="1.4" /></>;
+        return <><path d="M11.5 3.5h5.5a2 2 0 0 1 2 2V11l-8.5 8.5-8-8z" /><circle cx="15" cy="8" r="1.2" /></>;
       default: // нейтральный силуэт для незнакомого сценария
         return <><path d="M9.5 3v4.5M14.5 3v4.5" /><rect x="7.5" y="7.5" width="9" height="6" rx="2" /><path d="M12 13.5V18a3 3 0 0 1-3 3" /></>;
     }
   })();
   return (
-    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor"
-      strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    // 20px внутри кружка 44px — оптический центр, а не «иконка в рамке». При
+    // 24px глиф упирался в края и кружок читался тесным.
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor"
+      strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       {glyph}
     </svg>
   );
@@ -1263,14 +1284,29 @@ function QuickScenarios({
           key={s.key}
           ref={enterGridRefCallback("fadeUp")}
           onClick={s.onClick}
-          className="tap flex h-entry min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl2 bg-mutedbg px-1 text-center"
+          className="tap flex min-w-0 flex-col items-center gap-[7px] text-center"
         >
-          {/* Иконка 24px — размер для карточки-входа; внутри контролов ходит
-              18px (h-icon). Двух размеров хватает, третий заводить не нужно. */}
-          <span className="shrink-0 text-accent">
+          {/* Кружок, а не плашка во всю плитку. Плашка 79×56 с радиусом 20 —
+              это почти скруглённый квадрат без границы, и читался он как
+              незагруженный блок. Кружок — правильная фигура: он одинаков у всех
+              четырёх, и ряд перестаёт быть набором разных прямоугольников.
+
+              АКЦЕНТ ТОЛЬКО У AI-ПОДБОРА. Индиго — цвет главного действия, и
+              когда им выкрашены все четыре неактивных входа, он не помечает
+              ничего. Оставив его ровно на одном, возвращаем ему работу: по ряду
+              сразу видно, что здесь главное. Остальные три — нейтральные. */}
+          <span
+            className={
+              s.key === "ai_pick"
+                ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent/[0.11] text-accent"
+                : "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-mutedbg text-text/75"
+            }
+          >
             <ScenarioIcon name={s.key} />
           </span>
-          <span className="line-clamp-1 block max-w-full text-[10.5px] font-bold leading-none text-text">{s.label}</span>
+          {/* 11px обычным, а не 10.5 жирным. Мелкий жирный шрифт даёт кашу
+              вместо букв — это и был самый заметный признак дешевизны ряда. */}
+          <span className="line-clamp-1 block max-w-full text-[11px] font-medium leading-[1.1] tracking-[0.005em] text-text">{s.label}</span>
         </button>
       ))}
     </div>

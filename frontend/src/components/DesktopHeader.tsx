@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../store/auth";
 import { usePublicConfig } from "../lib/appConfig";
@@ -10,6 +10,9 @@ import { CartGlyph } from "./CartBar";
 import { useCart } from "../lib/cart";
 import SearchPanel from "./SearchPanel";
 import { aiSearchRoute, catalogSearchRoute } from "../lib/searchRoutes";
+import { SEARCH_HINTS, SEARCH_PLACEHOLDER } from "../lib/searchHints";
+import { TYPEWRITER_TIMING_CALM } from "../lib/typewriter";
+import { useTypewriterPlaceholder } from "../lib/useTypewriterPlaceholder";
 import { preloadRoute } from "../lib/routePreload";
 import { BrandWordmark } from "./BrandMark";
 import { Icon } from "./icons";
@@ -43,6 +46,18 @@ export default function DesktopHeader() {
   // Компактный popover при фокусе с пустым запросом: история + быстрые сценарии
   // + «Спросить AI». Live-результаты на desktop рисует сам каталог (как раньше).
   const [panelOpen, setPanelOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  // Та же бегущая подсказка и тот же спокойный тайминг, что на главной: это
+  // одно поле в двух вёрстках, и вести себя по-разному оно не должно. Идёт,
+  // только пока панель закрыта и поле пустое — поверх набранного подсказки не
+  // видно, а кадры шли бы ровно в момент набора.
+  useTypewriterPlaceholder(
+    searchInputRef,
+    SEARCH_HINTS,
+    !panelOpen && q === "",
+    SEARCH_PLACEHOLDER,
+    TYPEWRITER_TIMING_CALM,
+  );
 
   // Подхватить внешний query (переход на каталог с другим query) или сброс
   // при уходе со страницы каталога — шапка не должна хранить «чужой» текст.
@@ -159,7 +174,8 @@ export default function DesktopHeader() {
               // «Найти iPhone, MacBook…» требует 160px и на 1024 обрывалась на
               // середине слова. Обрезанная подсказка хуже короткой, а что
               // продаёт магазин — говорит меню и каталог рядом.
-              placeholder="Найти технику"
+              ref={searchInputRef}
+              placeholder={SEARCH_PLACEHOLDER}
               aria-label="Поиск по каталогу"
               aria-expanded={panelOpen && !q.trim()}
               className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-muted"

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   TYPEWRITER_TIMING,
+  TYPEWRITER_TIMING_CALM,
   cycleMs,
   packPhrases,
   phraseCycleMs,
@@ -84,5 +85,25 @@ describe("typewriterTextAt", () => {
     // должен читаться человеком, а не мелькать.
     expect(phraseCycleMs("смартфоны", TYPEWRITER_TIMING)).toBeGreaterThan(2000);
     expect(phraseCycleMs("смартфоны", TYPEWRITER_TIMING)).toBeLessThan(5000);
+  });
+});
+
+describe("TYPEWRITER_TIMING_CALM", () => {
+  it("спокойный вариант медленнее обычного по КАЖДОЙ фазе", () => {
+    // Медленный набор при быстром стирании (или наоборот) читался бы не как
+    // «спокойно», а как рывок в одну сторону.
+    expect(TYPEWRITER_TIMING_CALM.typeMs).toBeGreaterThan(TYPEWRITER_TIMING.typeMs);
+    expect(TYPEWRITER_TIMING_CALM.deleteMs).toBeGreaterThan(TYPEWRITER_TIMING.deleteMs);
+    expect(TYPEWRITER_TIMING_CALM.holdMs).toBeGreaterThan(TYPEWRITER_TIMING.holdMs);
+    expect(TYPEWRITER_TIMING_CALM.gapMs).toBeGreaterThan(TYPEWRITER_TIMING.gapMs);
+  });
+
+  it("стирание всё ещё быстрее набора: обратный ход не просит внимания", () => {
+    expect(TYPEWRITER_TIMING_CALM.deleteMs).toBeLessThan(TYPEWRITER_TIMING_CALM.typeMs);
+  });
+
+  it("смена символа реже кадра — иначе «медленнее» не получилось бы вовсе", () => {
+    // 60 кадров в секунду это 16.7мс на кадр.
+    expect(TYPEWRITER_TIMING_CALM.typeMs).toBeGreaterThan(16.7);
   });
 });
