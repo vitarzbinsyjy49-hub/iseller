@@ -421,6 +421,51 @@ def recently_viewed_endpoint(
     return {"cards": cards}
 
 
+#: Потолок на один запрос by-ids. Защита от «отдай весь каталог одной строкой»:
+#: эндпоинт восстанавливает карточки ОДНОГО хода диалога, а там их максимум шесть.
+_BY_IDS_LIMIT = 24
+
+
+@router.get("/by-ids", dependencies=[Depends(get_current_user)])
+def cards_by_ids(ids: str = Query(default=""), db: Session = Depends(get_db)):
+    """Свежие карточки по списку id, В ПОРЯДКЕ ЗАПРОСА.
+
+    Нужен восстановлению разговора с AI. Лента диалога хранится на устройстве
+    текстом и id, без карточек: карточка — снимок цены и наличия, и держать её
+    сутки в localStorage значит однажды показать вчерашнюю цену. Здесь товары
+    берутся из базы заново, поэтому цена в восстановленном разговоре всегда
+    сегодняшняя.
+
+    Порядок сохраняется тот, что пришёл: в ленте товары стоят так, как их выдала
+    модель, и пересортировать их при восстановлении нельзя. Снятый с продажи
+    товар не возвращается вовсе — это честнее, чем карточка, которую уже не
+    купить. Мусор в списке молча игнорируется: строка приходит из localStorage,
+    то есть её мог испортить кто угодно.
+    """
+    wanted: list[int] = []
+    for chunk in ids.split(","):
+        chunk = chunk.strip()
+        if not chunk.isdigit():
+            continue
+        value = int(chunk)
+        if value > 0 and value not in wanted:
+            wanted.append(value)
+        if len(wanted) >= _BY_IDS_LIMIT:
+            break
+    if not wanted:
+        return {"cards": []}
+
+    found = db.scalars(
+        select(Product).where(Product.id.in_(wanted), Product.is_active.is_(True))
+    ).all()
+    by_id = {p.id: p for p in found}
+    products = [by_id[i] for i in wanted if i in by_id]
+    cards = [p.to_card() for p in products]
+    apply_group_images(db, products, cards)
+    apply_social_proof(db, products, cards)
+    return {"cards": cards}
+
+
 @router.get("/product/{product_id}", dependencies=[Depends(get_current_user)])
 @router.get("/products/{product_id}", dependencies=[Depends(get_current_user)])  # alias (spec v2)
 def product_details(product_id: int, db: Session = Depends(get_db)):

@@ -80,6 +80,7 @@ def sanitize_lead_metadata(raw) -> dict:
 ALLOWED_EVENTS = {
     # AI-воронка
     "ai_chat_opened",
+    "ai_conversation_reset",
     "ai_query_submitted",
     "ai_response_received",
     "ai_product_card_viewed",

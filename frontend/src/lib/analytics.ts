@@ -5,6 +5,9 @@ import { useAuthStore } from "../store/auth";
 export type AppEvent =
   // AI-воронка
   | "ai_chat_opened"
+  /** Человек сбросил восстановленный разговор. По нему видно, помогает память
+   *  о прошлом разе или мешает: частый сброс означает, что мешает. */
+  | "ai_conversation_reset"
   | "ai_product_card_viewed"
   | "ai_product_card_clicked"
   | "ai_order_started_from_ai"

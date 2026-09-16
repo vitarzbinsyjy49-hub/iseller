@@ -15,6 +15,7 @@ import { PoweredByClaude } from "../components/ClaudeMark";
 import AiRoadmapSheet from "../components/AiRoadmapSheet";
 import { openExternalLink } from "../lib/telegram";
 import { aiEntryAction, clearAiHistory, loadAiHistory, pushAiQuery } from "../lib/searchHistory";
+import { clearConversation, loadConversation, saveConversation } from "../lib/aiConversation";
 import { prefersReducedMotion, revealDurationMs, revealedChars } from "../lib/answerReveal";
 import { parseAnswer, plainText } from "../lib/answerFormat";
 import { Icon } from "../components/icons";
@@ -145,6 +146,55 @@ export default function AiSearch() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [chat, loading]);
+
+  // Восстановление разговора. Текст встаёт СРАЗУ, карточки догружаются следом
+  // и только у ПОСЛЕДНЕГО ответа: у давних ходов карточек не будет вовсе —
+  // старый ход это история разговора, а не витрина. Цены при этом всегда
+  // сегодняшние, потому что карточки берутся из базы заново, а не из хранилища.
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    const saved = loadConversation();
+    if (!saved) { setRestored(true); return; }
+
+    const items: ChatItem[] = saved.turns.map((t) => t.role === "user"
+      ? { role: "user", text: t.text }
+      : { role: "assistant", elapsed_ms: t.elapsed_ms,
+          answer: { text: t.text, cards: [], actions: [], meta: t.meta } });
+    setChat(items);
+    // Набор не запускаем: восстановленный ответ человек уже читал, и печатать
+    // его заново — издевательство.
+    setRestored(true);
+
+    // Товар, о котором шёл разговор, тоже возвращается — но ТОЛЬКО если человек
+    // не пришёл с другой карточки: явный переход важнее памяти о прошлом разе.
+    if (saved.focus_id && !params.get("product")) {
+      api<TCard>(`/catalog/product/${saved.focus_id}`)
+        .then((cardData) => setFocus(cardData))
+        .catch(() => undefined);
+    }
+
+    const lastIdx = items.length - 1;
+    const lastTurn = saved.turns[lastIdx];
+    if (!lastTurn || lastTurn.role !== "assistant" || lastTurn.card_ids.length === 0) return;
+    api<{ cards?: TCard[] }>(`/catalog/by-ids?ids=${lastTurn.card_ids.join(",")}`)
+      .then((data) => {
+        const cards = Array.isArray(data.cards) ? data.cards : [];
+        if (!cards.length) return;
+        setChat((c) => c.map((item, i) => i === lastIdx && item.role === "assistant"
+          ? { ...item, answer: { ...item.answer, cards } }
+          : item));
+      })
+      // Карточки не приехали — остаётся текст ответа. Это хуже, но не сломано.
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Сохранение. Ждём конца восстановления: без этого первый же рендер с пустым
+  // chat затёр бы в хранилище то, что мы ещё не успели прочитать.
+  useEffect(() => {
+    if (!restored) return;
+    saveConversation(chat, focus?.id ?? null);
+  }, [chat, focus, restored]);
 
   // Отметка начала запроса: от неё и строка работы считает свои секунды, и
   // готовый ответ получает прошедшее время для следа. Одна точка отсчёта на
@@ -486,8 +536,29 @@ export default function AiSearch() {
         </div>
       )}
 
+      {/* Начать заново. Появляется только когда есть что начинать заново —
+          иначе кнопка предлагала бы сбросить пустоту. Чистит и ленту, и
+          хранилище, и контекст товара: «новый разговор» должен значить новый. */}
+      {chat.length > 0 && (
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={() => {
+              track("ai_conversation_reset", { turns: chat.length });
+              clearConversation();
+              setChat([]);
+              setFocus(null);
+              setValue("");
+            }}
+            disabled={loading}
+            className="tap rounded-full px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-mutedbg hover:text-text disabled:opacity-50"
+          >
+            Новый разговор
+          </button>
+        </div>
+      )}
+
       {/* Лента диалога */}
-      <div className="mt-4 space-y-4">
+      <div className="mt-2 space-y-4">
         {chat.map((item, i) => (
           <Turn
             key={i}
