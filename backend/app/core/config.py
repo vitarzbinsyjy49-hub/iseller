@@ -199,6 +199,10 @@ class Settings(BaseSettings):
     # по-прежнему идут в модель. Выключается, если поведение не устроит.
     AI_SKIP_LLM_FOR_BROWSE: bool = True
     AI_FALLBACK_ENABLED: bool = True   # при недоступности Gateway отвечать fallback'ом
+    #: Бот отвечает на обычные вопросы в личке, а не только на команды.
+    #: Рубильник отдельный от AI_PROVIDER: ответы в переписке стоят денег на
+    #: каждый вопрос, и выключить их надо уметь, не трогая подбор в Mini App.
+    AI_BOT_REPLIES_ENABLED: bool = True
     AI_SYSTEM_PROMPT_VERSION: str = "v2"  # версия файла app/prompts/ai_seller_system_<v>.md
     # Таймаут запроса VPS->Gateway (v5.1.1). Полный запрос на gateway может занять
     # queue wait (до 10с) + inference (до 45с) + сетевой overhead, поэтому здесь

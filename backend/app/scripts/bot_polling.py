@@ -18,10 +18,13 @@ Polling переворачивает направление: соединени�
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import signal
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from types import FrameType
 
 import httpx
@@ -29,6 +32,7 @@ import httpx
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.services import ad_touch
+from app.services.ai_bot import allow_question, is_ai_question, prune_window, render_answer
 from app.services.telegram_bot import (
     TELEGRAM_API,
     build_reply,
@@ -293,6 +297,73 @@ def _handle_membership(update: dict) -> str | None:
     return change
 
 
+#: Сколько вопросов к модели обрабатываем одновременно. Три — потолок нагрузки
+#: на гейтвей и на наш кошелёк разом; четвёртый подождёт в очереди пула.
+AI_WORKERS = 3
+
+#: Когда каждый чат задавал вопросы: chat_id -> отметки времени. В ПАМЯТИ
+#: процесса, поэтому сбрасывается на деплое — см. комментарий к окну в ai_bot.
+_ai_asked: dict[int, list[float]] = {}
+
+#: Как часто повторять «печатает…». Telegram гасит индикатор через пять секунд,
+#: а ответ модели идёт до полуминуты: без повтора человек полминуты смотрит в
+#: тишину и думает, что бот умер.
+_TYPING_REPEAT_SECONDS = 4.0
+
+
+def _answer_question(chat_id: int, question: str, history: list[dict]) -> None:
+    """Спросить модель и отправить ответ. Выполняется в ФОНОВОМ потоке.
+
+    Цикл опроса при этом продолжает принимать апдейты: ответ модели идёт до
+    полуминуты, и блокировать на это время всех остальных нельзя.
+
+    Отправка идёт напрямую через Bot API, а НЕ через send_reply: та удаляет
+    предыдущее сообщение бота ради чистого меню, а здесь вопрос и ответ обязаны
+    остаться в переписке историей.
+    """
+    from app.db.session import SessionLocal
+    from app.services.ai_orchestrator import answer_via_local_ai
+    from app.services.telegram_publisher import call
+
+    stop_typing = threading.Event()
+
+    def keep_typing() -> None:
+        while not stop_typing.wait(0):
+            try:
+                call("sendChatAction", {"chat_id": chat_id, "action": "typing"})
+            except Exception:  # noqa: BLE001 — индикатор не стоит падения ответа
+                return
+            if stop_typing.wait(_TYPING_REPEAT_SECONDS):
+                return
+
+    typing = threading.Thread(target=keep_typing, daemon=True)
+    typing.start()
+    try:
+        with SessionLocal() as db:
+            answer = asyncio.run(answer_via_local_ai(db, question, history))
+        text, keyboard = render_answer(answer)
+        if not text:
+            return
+        payload: dict = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+        if keyboard:
+            payload["reply_markup"] = {"inline_keyboard": keyboard}
+        call("sendMessage", payload)
+        logger.info("ai-ответ отправлен (чат %s, источник %s)",
+                    chat_id, (answer.get("meta") or {}).get("source"))
+    except Exception:  # noqa: BLE001 — один неудачный вопрос не роняет бота
+        logger.exception("не удалось ответить на вопрос в чате %s", chat_id)
+        try:
+            call("sendMessage", {
+                "chat_id": chat_id,
+                "text": "Сейчас не получилось ответить. Попробуйте ещё раз "
+                        "или откройте каталог в приложении.",
+            })
+        except Exception:  # noqa: BLE001
+            logger.warning("не удалось отправить сообщение об ошибке в чат %s", chat_id)
+    finally:
+        stop_typing.set()
+
+
 def run() -> int:
     if not settings.TELEGRAM_BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN не задан — бот не запускается")
@@ -319,6 +390,9 @@ def run() -> int:
 
         offset: int | None = None
         backoff = BACKOFF_START
+        # Пул живёт столько же, сколько цикл: выход из with дожидается уже
+        # запущенных ответов, чтобы человек не остался с «печатает…» навсегда.
+        ai_pool = ThreadPoolExecutor(max_workers=AI_WORKERS, thread_name_prefix="ai")
         # Состояние фоновых задач живёт в локальной переменной, а не в модуле:
         # так его видно из сигнатуры и его нельзя случайно разделить между
         # двумя run() в тестах.
@@ -360,6 +434,27 @@ def run() -> int:
                 try:
                     if _handle_membership(update) is not None:
                         continue
+
+                    # Обычная реплика человека -> вопрос к модели, в фоновый
+                    # поток. Всё остальное (команды, диплинки из канала) идёт
+                    # прежним путём через чистую build_reply — её AI не касается.
+                    question = is_ai_question(update) if settings.AI_BOT_REPLIES_ENABLED else None
+                    if question is not None:
+                        chat_id = ((update.get("message") or {}).get("chat") or {}).get("id")
+                        if chat_id is not None:
+                            now = time.time()
+                            asked = prune_window(_ai_asked.get(chat_id, []), now)
+                            if allow_question(asked, now):
+                                asked.append(now)
+                                _ai_asked[chat_id] = asked
+                                ai_pool.submit(_answer_question, chat_id, question, [])
+                                logger.info("апдейт: ai-вопрос (чат %s)", chat_id)
+                                continue
+                            # Потолок выбран: отвечаем честно и БЕЗ модели,
+                            # иначе отказ стоил бы столько же, сколько ответ.
+                            _ai_asked[chat_id] = asked
+                            logger.info("апдейт: ai-лимит (чат %s)", chat_id)
+
                     reply = build_reply(update)
                     if reply is None:
                         continue
@@ -387,6 +482,10 @@ def run() -> int:
                                 outcome_label(update) or "—", chat_id)
                 except Exception:  # noqa: BLE001 — один плохой апдейт не роняет бота
                     logger.exception("не удалось обработать апдейт %s", update.get("update_id"))
+
+        # Уже запущенные ответы дожидаемся: иначе человек остаётся с
+        # «печатает…» и без ответа, а деньги за вызов модели уже потрачены.
+        ai_pool.shutdown(wait=True)
 
     logger.info("бот остановлен")
     return 0
