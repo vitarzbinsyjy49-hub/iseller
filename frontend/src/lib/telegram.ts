@@ -14,6 +14,11 @@ type SafeAreaInset = { top: number; bottom: number; left: number; right: number 
 
 type TelegramWebApp = {
   initData: string;
+  /** Клиент, из которого открыт Mini App: "tdesktop", "macos", "android",
+   *  "ios", "weba"… Нужен аналитике, чтобы отличить окно Telegram Desktop от
+   *  телефона (см. lib/analyticsContext.ts). Необязательное: старые клиенты
+   *  поля не отдают. */
+  platform?: string;
   // Патч 2.0: startapp-запуск (t.me/<bot>/<app>?startapp=<payload>) — Mini App
   // открывается СРАЗУ, минуя чат с ботом; payload приходит сюда, а не в
   // текстовое сообщение (см. getStartParam/startParamFrom ниже).

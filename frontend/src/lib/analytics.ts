@@ -1,6 +1,8 @@
 /** Продуктовая аналитика: отправка UI-событий в основной backend.
  * Fire-and-forget: аналитика никогда не должна ломать интерфейс. */
 import { useAuthStore } from "../store/auth";
+import { eventContext } from "./analyticsContext";
+import { getTelegram } from "./telegram";
 
 export type AppEvent =
   // AI-воронка
@@ -119,13 +121,24 @@ export type AppEvent =
   | "onboarding_skipped"
   | "onboarding_completed";
 
+/** Раскладка и платформа едут с КАЖДЫМ событием и добавляются здесь, а не в
+ *  вызовах: полусотне мест по коду знать о служебных полях не нужно, и первое
+ *  же новое событие иначе забыло бы их передать. Почему это вообще меряется —
+ *  в docstring lib/analyticsContext.ts.
+ *
+ *  Контекст идёт ПЕРВЫМ, payload события — вторым: событие знает про себя
+ *  больше, и его поле обязано побеждать при совпадении имени. */
 export function track(event: AppEvent, payload: Record<string, unknown> = {}): void {
   const { accessToken } = useAuthStore.getState();
   if (!accessToken) return;
+  const context = eventContext({
+    window: typeof window === "undefined" ? null : window,
+    telegram: getTelegram(),
+  });
   fetch("/api/events", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({ event, payload }),
+    body: JSON.stringify({ event, payload: { ...context, ...payload } }),
     keepalive: true,
   }).catch(() => {
     /* аналитика не должна мешать пользователю */
