@@ -8,6 +8,7 @@ def _seed(db):
     make_product(db, sku="IP-18PRO-256-BLACK-KRHK-SIM", title="18 Pro", price=128500)
     make_product(db, sku="IP-18PRO-512-BLACK-KRHK-SIM", title="18 Pro 512", price=154500)
     make_product(db, sku="IP-18PROMAX-256-SILVER-KRHK-SIM", title="18 Pro Max", price=148500)
+    make_product(db, sku="IP-18PROMAX-1-SILVER-HK-SIM", title="18 Pro Max 1TB", price=222500)
     # Дешевле всех, но выключена — в «от» попадать не должна.
     make_product(db, sku="IP-18PROMAX-256-BLACK-KW-ESIM", title="off", price=1000,
                  is_active=False)
@@ -43,4 +44,5 @@ def test_rich_version_has_storage_tables_without_activated(db):
     assert "<details>" in rich and "<table>" in rich
     assert "<summary><b>iPhone 18 Pro — от 128 500 ₽</b></summary>" in rich
     assert "<td><b>512 ГБ</b></td><td>от 154 500 ₽</td>" in rich
+    assert "<td><b>1 ТБ</b></td><td>от 222 500 ₽</td>" in rich
     assert "123 000" not in rich            # активированный в таблицу не попадает

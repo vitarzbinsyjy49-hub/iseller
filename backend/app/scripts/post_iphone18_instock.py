@@ -99,7 +99,8 @@ def storage_table(db, prefix: str) -> list[tuple[str, float]]:
     """Память -> самая низкая цена новой версии. Пустые объёмы пропускаются."""
     rows = []
     for storage in STORAGES:
-        token = storage.split()[0] + ("TB" if "ТБ" in storage else "")
+        # В артикуле объём — только число: «1 ТБ» -> «1» (bsa_parser.Item.sku).
+        token = storage.split()[0]
         price = (db.query(func.min(Product.price))
                  .filter(Product.sku.like(f"{prefix}{token}-%"),
                          Product.is_active.is_(True), Product.in_stock.is_(True),
@@ -121,7 +122,7 @@ def build_rich(db, image_url: str | None) -> str:
         parts.append(f'<img src="{image_url}"/>')
     parts.append(
         "<p>Все четыре цвета — Burgundy, Glacier, Silver и Black, память от 256 ГБ "
-        "до 2 ТБ. Аппараты новые, в плёнке, можно забрать сегодня.</p>")
+        "до 2 ТБ. Аппараты новые, не активированные.</p>")
     parts.append(
         "<blockquote>Burgundy — новый цвет этого поколения. Живьём он темнее "
         "и спокойнее, чем на рендерах.</blockquote>")
