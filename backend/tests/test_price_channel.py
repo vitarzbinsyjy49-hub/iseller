@@ -409,6 +409,19 @@ def test_load_catalog_excludes_marketplace(db, catalog):
     assert "iPhone 13 с рук" not in titles
 
 
+def test_load_catalog_excludes_out_of_stock(db, catalog):
+    """Прайс — это то, что можно купить сегодня. Позиция, пропавшая из прайса
+    поставщика (import_bsa --sync-stock), остаётся карточкой «нет в наличии»,
+    но в канале с ценой ей не место: покупатель придёт за ней к менеджеру."""
+    db.add(Product(title="iPhone 17 512 ASIS", brand="Apple", category="смартфоны",
+                   subcategory="iPhone", price=75500, is_active=True, in_stock=False,
+                   sku="IP-17-512-BLACK-US-SIM-ASIS", source="bsa"))
+    db.commit()
+    titles = [p["title"] for p in price_channel.load_catalog(db)]
+    assert "Apple iPhone 17 256 Blue" in titles
+    assert "iPhone 17 512 ASIS" not in titles
+
+
 def test_marketplace_item_never_reaches_channel_post(db, catalog, telegram):
     db.add(Product(title="iPhone 13 с рук", brand="Apple", category="смартфоны",
                    subcategory="iPhone", price=45000, is_active=True, sku="MP-2",

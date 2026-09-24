@@ -3,10 +3,10 @@ import { useParams } from "react-router-dom";
 import { cachedApi } from "../lib/apiCache";
 import { ErrorState } from "../components/StateViews";
 import PreorderEvent, {
-  PreorderSkeleton, type EventBanner, type EventItem,
+  PreorderSkeleton, type ArrivedItem, type EventBanner, type EventItem,
 } from "../components/PreorderEvent";
 
-type EventData = { banner: EventBanner | null; items: EventItem[] };
+type EventData = { banner: EventBanner | null; items: EventItem[]; arrived?: ArrivedItem[] };
 
 /** Экран события предзаказа по адресу `/preorder/:group`.
  *
@@ -38,5 +38,5 @@ export default function Preorder() {
   }
   if (!data) return <PreorderSkeleton />;
 
-  return <PreorderEvent banner={data.banner} items={data.items} />;
+  return <PreorderEvent banner={data.banner} items={data.items} arrived={data.arrived ?? []} />;
 }

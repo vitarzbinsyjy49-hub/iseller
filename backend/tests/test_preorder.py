@@ -160,7 +160,48 @@ def test_empty_group_is_not_an_error(db, client):
     """Группа пустеет сама, когда товары приехали. Это конец жизни события."""
     r = client.get("/api/preorder/apple-sept-2026")
     assert r.status_code == 200
-    assert r.json() == {"banner": None, "items": []}
+    assert r.json() == {"banner": None, "items": [], "arrived": []}
+
+
+def test_arrived_model_moves_to_its_own_block_with_real_offer(db, client):
+    """Аппарат приехал: карточка предзаказа снята с витрины, в каталоге его
+    варианты. Экран события показывает его в «Уже в наличии» — с описанием из
+    карточки предзаказа и самым доступным НОВЫМ вариантом, а Duo остаётся ниже."""
+    pro = _preorder(db, title="iPhone 18 Pro 256 ГБ", sku="PREORDER-IP18PRO",
+                    is_active=False, description="Переменная диафрагма.")
+    duo = _preorder(db, title="iPhone Duo 256 ГБ", sku="PREORDER-IPDUO")
+    make_product(db, sku="IP-18PRO-256-BLACK-KRHK-SIM", title="Apple iPhone 18 Pro 256 ГБ Black",
+                 price=128500, source="bsa")
+    cheapest = make_product(db, sku="IP-18PRO-256-SILVER-HK-SIM", title="Apple iPhone 18 Pro 256 ГБ Silver",
+                            price=127000, source="bsa")
+    # Активированный дешевле, но витриной модели его ставить нельзя.
+    make_product(db, sku="IP-18PRO-256-GLACIER-HK-SIM-ACT", title="act", price=123000, source="bsa")
+    # Нет в наличии — не считается.
+    make_product(db, sku="IP-18PRO-512-BLACK-KRHK-SIM", title="x", price=1000, in_stock=False,
+                 source="bsa")
+    # Pro Max — другая модель, в вариантах Pro её быть не должно.
+    make_product(db, sku="IP-18PROMAX-256-BLACK-KRHK-SIM", title="max", price=100, source="bsa")
+
+    body = client.get("/api/preorder/apple-sept-2026").json()
+
+    assert [i["id"] for i in body["items"]] == [duo.id]
+    [arrived] = body["arrived"]
+    assert arrived["id"] == pro.id
+    assert arrived["description"] == "Переменная диафрагма."
+    assert arrived["offer"]["id"] == cheapest.id
+    assert arrived["variants"] == 3
+    assert arrived["min_price"] == 123000
+    assert arrived["query"] == "iphone 18 pro"
+
+
+def test_active_preorder_with_variants_counts_as_arrived(db, client):
+    """Порядок шагов не должен ломать экран: варианты завели, а карточку
+    предзаказа снять ещё не успели — аппарат всё равно уже в наличии."""
+    _preorder(db, title="iPhone 18 Pro Max 256 ГБ", sku="PREORDER-IP18PROMAX")
+    make_product(db, sku="IP-18PROMAX-256-BLACK-KRHK-SIM", title="max", price=148500, source="bsa")
+    body = client.get("/api/preorder/apple-sept-2026").json()
+    assert body["items"] == []
+    assert body["arrived"][0]["query"] == "iphone 18 pro max"
 
 
 # ---------- секция на главной ----------

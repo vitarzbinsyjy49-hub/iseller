@@ -5,6 +5,7 @@ import ProductCard from "./ProductCard";
 import AnswerBody from "./AnswerBody";
 import { enterRefCallback } from "../lib/useEnter";
 import { OVERLAY_HEADER, useOverlayTopColor } from "./AuroraBackground";
+import { formatPrice } from "../lib/format";
 
 /** Шапка события — это баннер, который на него ведёт. Второго набора тех же
  *  полей в отдельной таблице нет намеренно: они бы разошлись. */
@@ -38,11 +39,22 @@ export type EventItem = TCard & {
   chips?: { label: string; value: string }[];
 };
 
+/** Аппарат события, который уже приехал. Описание и характеристики — с его
+ *  карточки предзаказа, а купить предлагается настоящий складской вариант:
+ *  самый доступный новый (offer) и ссылка на все варианты модели. */
+export type ArrivedItem = EventItem & {
+  offer: TCard;
+  variants: number;
+  min_price: number;
+  query: string;
+};
+
 export default function PreorderEvent({
-  banner, items,
+  banner, items, arrived = [],
 }: {
   banner: EventBanner | null;
   items: EventItem[];
+  arrived?: ArrivedItem[];
 }) {
   const navigate = useNavigate();
 
@@ -93,7 +105,21 @@ export default function PreorderEvent({
           />
         )}
 
-        {items.length === 0 ? (
+        {arrived.length > 0 && (
+          <>
+            <SectionLabel>Уже в наличии</SectionLabel>
+            <div className="lg:grid lg:grid-cols-2 lg:gap-x-10">
+              {arrived.map((card) => (
+                <ArrivedBlock key={card.id} card={card}
+                  onAll={() => navigate(`/catalog?query=${encodeURIComponent(card.query)}`)} />
+              ))}
+            </div>
+          </>
+        )}
+
+        {arrived.length > 0 && items.length > 0 && <SectionLabel>Скоро</SectionLabel>}
+
+        {items.length === 0 && arrived.length > 0 ? null : items.length === 0 ? (
           // Группа пустеет сама, когда товары приехали и стали обычными. Это
           // штатный конец жизни события, а не ошибка — и сказать об этом надо
           // словами, а не пустым экраном.
@@ -117,10 +143,13 @@ export default function PreorderEvent({
           </div>
         )}
 
-        <p className="mt-10 text-[12px] leading-5 opacity-60">
-          Цены и сроки предварительные: устройства ещё не поступили. Менеджер
-          свяжется и подтвердит и то, и другое.
-        </p>
+        {items.length > 0 && (
+          <p className="mt-10 text-[12px] leading-5 opacity-60">
+            {arrived.length > 0 ? "Для предзаказа цены" : "Цены"} и сроки
+            предварительные: устройства ещё не поступили. Менеджер свяжется и
+            подтвердит и то, и другое.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -129,7 +158,14 @@ export default function PreorderEvent({
 /** Один аппарат: описание, затем его карточка. Акцент берётся с товара и красит
  *  ровно два места — полоску и заголовок; всё остальное у блоков общее, иначе
  *  шесть разных цветов передрались бы между собой. */
-function DeviceBlock({ card }: { card: EventItem }) {
+function DeviceBlock({
+  card, product, children,
+}: {
+  card: EventItem;
+  /** Что показать карточкой под рассказом. По умолчанию — сам аппарат. */
+  product?: TCard;
+  children?: ReactNode;
+}) {
   const accent = card.accent_color || "#6E2639";
   return (
     <section className="mt-8 border-t pt-6" style={{ borderColor: "rgba(43,31,46,.12)" }}>
@@ -160,9 +196,32 @@ function DeviceBlock({ card }: { card: EventItem }) {
         </div>
       )}
       <div className="mt-4 max-w-[280px]">
-        <ProductCard card={card} />
+        <ProductCard card={product ?? card} />
       </div>
+      {children}
     </section>
+  );
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="mt-10 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6E2639]">
+      {children}
+    </p>
+  );
+}
+
+/** Приехавший аппарат: тот же рассказ, что в предзаказе, но под ним — не
+ *  бронь, а настоящая карточка самого доступного варианта и выход ко всем
+ *  вариантам модели (память, цвет, регион выбираются уже там). */
+function ArrivedBlock({ card, onAll }: { card: ArrivedItem; onAll: () => void }) {
+  return (
+    <DeviceBlock card={card} product={card.offer}>
+      <button onClick={onAll}
+        className="tap mt-3 h-11 w-full max-w-[280px] rounded-field bg-[#2B1F2E] text-[13px] font-medium text-white">
+        Все варианты ({card.variants}) — от {formatPrice(card.min_price)}
+      </button>
+    </DeviceBlock>
   );
 }
 

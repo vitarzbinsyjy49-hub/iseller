@@ -83,8 +83,11 @@ def load_catalog(db: Session) -> list[dict]:
     как собственный ассортимент, и чужая б/у вещь в нём — утечка за пределы
     Mini App, а не просто мимо изоляции витрины.
     """
+    # Только то, что есть в наличии: прайс в канале — предложение купить
+    # сегодня. Карточка «нет в наличии» (в т.ч. снятая сверкой с BSA) и
+    # предзаказ без цены живут в Mini App, но не в прайсе.
     rows = (db.query(Product)
-            .filter(Product.is_active.is_(True),
+            .filter(Product.is_active.is_(True), Product.in_stock.is_(True),
                     Product.source.is_distinct_from(MARKETPLACE_SOURCE))
             .all())
     return [{
