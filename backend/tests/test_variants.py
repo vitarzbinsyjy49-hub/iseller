@@ -133,3 +133,17 @@ def test_feed_new_section_has_one_card_per_model(db, client):
     new = client.get("/api/catalog/feed").json()["new"]
     ids = [c["id"] for c in new]
     assert len([c for c in new if "iPhone 18 Pro" in c["title"]]) == 1, ids
+
+
+def test_feed_section_is_not_eaten_by_one_big_family(db, client):
+    """40 вариантов одной модели не должны занять всю выборку секции: иначе в
+    «Горячем» остаются две карточки, а представитель — не самый дешёвый."""
+    for i in range(40):
+        _p(db, f"Apple iPhone 18 Pro {256 if i % 2 else 512} ГБ Black ({'HK' if i < 20 else 'KW'}, SIM+eSIM)",
+           200000 - i, is_hot=True, sku=f"V{i}")
+    _p(db, "Apple iPhone 18 Pro 256 ГБ Black (US, eSIM)", 100000, is_hot=True, sku="CHEAP")
+    for i in range(5):
+        _p(db, f"PlayStation {i}", 50000, is_hot=True, sku=f"PS{i}")
+    hot = client.get("/api/catalog/feed").json()["hot"]
+    assert len(hot) >= 6
+    assert any(c["sku"] == "CHEAP" for c in hot)

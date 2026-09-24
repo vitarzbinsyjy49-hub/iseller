@@ -313,7 +313,12 @@ def feed(db: Session = Depends(get_db)):
     v5.4.1: товары без реального фото (плейсхолдер/пустая галерея) на главную не
     попадают вовсе — исключаются из всех 4 секций до дедупа и добора.
     """
-    def rows(stmt, n=32):
+    # 400, а не 32: секции сворачиваются по семействам (services/variants), и
+    # одна модель с сорока вариантами занимала бы всю выборку — в «Горячем»
+    # оставалось две карточки, а представителем выходил не самый дешёвый
+    # вариант (он просто не попадал в первые 32 строки). Каталог — сотни
+    # позиций, запрос дешёвый.
+    def rows(stmt, n=400):
         return db.execute(stmt.limit(n)).scalars().all()
 
     base = exclude_marketplace(select(Product).where(Product.is_active.is_(True)))
@@ -327,8 +332,8 @@ def feed(db: Session = Depends(get_db)):
     today_raw = rows(base.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
                      .order_by(*order))
     new_raw = rows(base.where(Product.is_new.is_(True)).order_by(Product.id.desc()))
-    recent_raw = rows(base.order_by(Product.id.desc()), n=64)
-    pool_raw = rows(base.order_by(*order), n=96)
+    recent_raw = rows(base.order_by(Product.id.desc()))
+    pool_raw = rows(base.order_by(*order))
 
     all_candidates = list({p.id: p for p in (*hot_raw, *today_raw, *new_raw, *recent_raw, *pool_raw,
                                             *preorder_raw)}.values())
