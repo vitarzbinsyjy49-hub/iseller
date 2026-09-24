@@ -56,3 +56,15 @@ def test_region_change_retargets_the_card_instead_of_hiding_it(db):
     row = db.query(Product).filter_by(sku="IP-17-256-BLACK-USJP-ESIM").one()
     assert row.price == 78000 and row.title.endswith("(US-JP, eSIM)")
     assert db.query(Product).filter_by(sku="IP-17-512-BLUE-JP-ESIM").one()
+
+
+def test_activated_are_retired_from_showcase(db):
+    """Владелец 24.09.2026: активированные аппараты пока не продаём."""
+    from app.scripts.import_bsa import retire_activated
+
+    make_product(db, sku="IP-18PRO-256-GLACIER-HK-SIM-ACT", source="bsa", is_active=True)
+    make_product(db, sku="IP-18PRO-256-GLACIER-KRHK-SIM", source="bsa", is_active=True)
+    assert retire_activated(db, dry_run=False) == ["IP-18PRO-256-GLACIER-HK-SIM-ACT"]
+    active = {p.sku: p.is_active for p in db.query(Product)}
+    assert active == {"IP-18PRO-256-GLACIER-HK-SIM-ACT": False,
+                      "IP-18PRO-256-GLACIER-KRHK-SIM": True}

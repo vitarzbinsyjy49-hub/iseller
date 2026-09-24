@@ -219,6 +219,28 @@ def upsert(db, *, sku: str, title: str, price: int, category: str,
     return "обновлён" if changed else "без изменений"
 
 
+#: Активированные аппараты («актив» в прайсе, суффикс -ACT в артикуле) не
+#: продаём — решение владельца 24.09.2026: покупатель ждёт новый аппарат, а
+#: «новый, но включённый» требует объяснений, которых витрина не даёт. Импорт
+#: их не заводит, а уже заведённые снимает с витрины (не удаляет: вернуть —
+#: поставить False и прогнать импорт).
+SKIP_ACTIVATED = True
+ACTIVATED_SUFFIX = "-ACT"
+
+
+def retire_activated(db, *, dry_run: bool) -> list[str]:
+    """Снять с витрины активированные позиции BSA. Возвращает их артикулы."""
+    rows = (db.query(Product)
+            .filter(Product.source == "bsa", Product.is_active.is_(True),
+                    Product.sku.like("%" + ACTIVATED_SUFFIX))
+            .order_by(Product.sku).all())
+    if not dry_run:
+        for row in rows:
+            row.is_active = False
+        db.flush()
+    return [row.sku for row in rows]
+
+
 def _without_region(sku: str) -> str:
     """Артикул без региона: «IP-17-256-BLACK-US-ESIM» -> «IP-17-256-BLACK-ESIM».
 
@@ -330,6 +352,8 @@ def main() -> int:
                          for name in names.split(",") if name.strip())
 
     phones, failed_phones = parse(read(args.phones))
+    if SKIP_ACTIVATED:
+        phones = [p for p in phones if not p.activated]
     macs, failed_macs = parse_mac(read(args.macs))
     if failed_phones or failed_macs:
         print("!! не разобраны строки, импорт остановлен:")
@@ -375,6 +399,11 @@ def main() -> int:
 
     try:
         moved: list[tuple[str, str]] = []
+        retired: list[str] = []
+        if SKIP_ACTIVATED:
+            retired = retire_activated(db, dry_run=dry_run)
+            if retired:
+                print(f"активированные сняты с витрины: {len(retired)}\n")
         if args.sync_stock:
             price = {i.sku: (max(i.price - NAKIDKA, 0), i.title) for i in phones}
             price.update({m.sku: (max(m.price - NAKIDKA, 0), m.full_title) for m in macs})
