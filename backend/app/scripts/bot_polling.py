@@ -108,7 +108,7 @@ REQUIRED_SCHEMA: dict[str, tuple[str, ...]] = {
         "screen_size", "cpu", "ram", "source", "created_at", "images",
         "is_limited", "model_family", "image_group_detached", "image_group_key",
         "availability_mode", "preorder_eta", "preorder_group", "accent_color",
-        "is_legendary", "poster_url", "promo_boost",
+        "is_legendary", "poster_url", "promo_boost", "family_key", "variant",
     ),
     "fx_rate_history": (),
 }

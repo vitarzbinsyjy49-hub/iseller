@@ -183,6 +183,10 @@ def _apply_demo_migrations() -> None:
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS is_legendary BOOLEAN NOT NULL DEFAULT FALSE",
         # Редакторское продвижение (services/ranking): 0 у всех существующих.
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS promo_boost INTEGER NOT NULL DEFAULT 0",
+        # Склейка вариантов (services/variants): модель и оси варианта.
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS family_key VARCHAR(160)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS variant JSON",
+        "CREATE INDEX IF NOT EXISTS ix_products_family_key ON products (family_key)",
         # Афиша события: широкий макет для страницы товара. Отдельно от images,
         # потому что в квадратной карточке ленты постер обрезался бы по центру,
         # теряя и заголовок, и цену. NULL у всех, кроме единичных позиций.

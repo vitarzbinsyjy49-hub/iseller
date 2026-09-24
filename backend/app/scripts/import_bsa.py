@@ -28,6 +28,7 @@ from app.core.uploads import save_image
 from app.db.session import SessionLocal
 from app.models.product import Product
 from app.services.bsa_parser import Item, MacItem, parse, parse_mac
+from app.services.family_rules import resolve as resolve_family
 
 DATA = Path(__file__).resolve().parent / "data"
 
@@ -194,6 +195,11 @@ def upsert(db, *, sku: str, title: str, price: int, category: str,
                       subcategory=subcategory,
                       price=final_price, in_stock=True, stock=1, is_active=True,
                       warranty_months=1, source="bsa")
+        # Сразу в своё семейство (services/variants): иначе новая карточка до
+        # следующего backfill жила бы только на правилах «на лету».
+        resolved = resolve_family(row)
+        if resolved is not None:
+            row.family_key, row.variant = resolved.family, resolved.variant
         if photo_name:
             url = fetch_photo(photo_name)
             if url:

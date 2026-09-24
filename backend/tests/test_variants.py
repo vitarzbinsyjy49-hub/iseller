@@ -1,5 +1,5 @@
 """Варианты одной модели: память, цвет, SIM — одна карточка вместо сорока."""
-from app.services.variants import collapse, family_of, parse_axes, variants_payload
+from app.services.variants import collapse, family_of, variants_payload
 from tests.conftest import make_product
 
 
@@ -9,30 +9,20 @@ def _p(db, title, price, **kw):
     return make_product(db, title=title, price=price, **kw)
 
 
-def test_axes_from_bsa_title():
-    a = parse_axes("Apple iPhone 18 Pro Max 256 ГБ Glacier (KR-HK, SIM+eSIM)")
-    assert a.model == "Apple iPhone 18 Pro Max"
-    assert (a.storage, a.color, a.sim) == ("256 ГБ", "Glacier", "SIM+eSIM")
-    assert a.regions == ["KR", "HK"]
-    assert a.family == "Apple iPhone 18 Pro Max"
+def test_stored_family_wins_over_rules(db):
+    """Ручная правка в админке главнее правил: товар с сохранённым семейством
+    склеивается по нему, даже если правила сказали бы иначе."""
+    p = _p(db, "Apple iPhone 18 Pro 256 ГБ Black (KR-HK, SIM+eSIM)", 1,
+           family_key="Своя модель", variant={"Цвет": "Чёрный"})
+    assert family_of(p) == "Своя модель"
 
 
-def test_asis_is_its_own_family():
-    """Витринный образец — другое предложение, а не «тот же аппарат дешевле»."""
-    a = parse_axes("Apple iPhone 17 512 ГБ Black [ASIS] (US)")
-    assert a.family == "Apple iPhone 17 [ASIS]"
-    assert a.sim == ""
-
-
-def test_non_phone_titles_are_not_grouped():
-    assert parse_axes("Apple Mac Mini M4 (16/256) (US)") is None
-    assert parse_axes("PlayStation 5 Pro 2 TB") is None
-
-
-def test_models_do_not_merge():
-    pro = parse_axes("Apple iPhone 18 Pro 256 ГБ Black (US-KW, eSIM)")
-    mx = parse_axes("Apple iPhone 18 Pro Max 256 ГБ Black (US-KW, eSIM)")
-    assert pro.family != mx.family
+def test_mac_family_from_rules(db):
+    a = _p(db, "Apple iMac M4 (10/10/16/256) Purple (SG)", 150000)
+    b = _p(db, "Apple iMac M4 (10/10/16/512) Silver (RU)", 170000)
+    out, info = collapse([a, b])
+    assert [p.id for p in out] == [a.id]
+    assert info[a.id]["model"] == "Apple iMac M4" and info[a.id]["colors"] == ["Purple", "Silver"]
 
 
 def test_collapse_keeps_one_card_per_model_at_first_position(db):
@@ -61,9 +51,12 @@ def test_variants_payload_lists_family_members(db):
 
     v = variants_payload(db, cur)
 
-    assert v["axes"] == {"storage": ["256 ГБ", "512 ГБ"], "color": ["Black", "Glacier"],
-                         "sim": ["SIM+eSIM", "eSIM"]}
-    assert v["current"] == {"storage": "256 ГБ", "color": "Black", "sim": "SIM+eSIM",
+    assert v["axes"] == [
+        {"name": "Цвет", "values": ["Black", "Glacier"]},
+        {"name": "Память", "values": ["256 ГБ", "512 ГБ"]},
+        {"name": "SIM", "values": ["SIM+eSIM", "eSIM"]},
+    ]
+    assert v["current"] == {"values": {"Цвет": "Black", "Память": "256 ГБ", "SIM": "SIM+eSIM"},
                             "regions": ["KR", "HK"]}
     assert len(v["options"]) == 3        # выключенный и Pro Max не входят
     assert {o["price"] for o in v["options"]} == {129000.0, 127500.0, 152500.0}
@@ -107,7 +100,7 @@ def _family(db):
 def test_detail_carries_variants(db, client):
     a, _, _ = _family(db)
     body = client.get(f"/api/catalog/product/{a.id}").json()
-    assert body["variants"]["current"]["color"] == "Black"
+    assert body["variants"]["current"]["values"]["Цвет"] == "Black"
     assert len(body["variants"]["options"]) == 3
 
 

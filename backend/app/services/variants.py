@@ -1,89 +1,52 @@
 """Варианты одной модели: одна карточка вместо сорока.
 
 Прайс поставщика заводит товар на каждую комбинацию память × цвет × SIM ×
-регион: у iPhone 18 Pro это 40 позиций. Покупателю столько карточек не нужно —
-он выбирает модель, а память, цвет и SIM переключает уже внутри. Поэтому:
+регион: у iPhone 18 Pro это 40 позиций, у iMac M4 — 29. Покупателю столько
+карточек не нужно — он выбирает модель, а остальное переключает внутри:
 
-* **семейство** — модель без памяти, цвета, SIM и региона («Apple iPhone 18
-  Pro»). Витринный образец (`[ASIS]`) — отдельное семейство: это другое
-  предложение, а не «тот же аппарат дешевле»;
+* **семейство** (`family_key`) — модель без памяти, цвета, SIM и региона;
+* **оси** (`variant`) — чем товар отличается от соседей: {"Цвет": "Silver",
+  "Память": "256 ГБ"}. Набор осей у каждой линейки свой (у Mac —
+  «Конфигурация», у iPad — «Связь»), экран строит ряды из того, что пришло;
 * в выдаче (каталог, поиск, главная) семейство занимает ОДНО место — там, где
   встретился первый его вариант, а показывается самый дешёвый в наличии;
-* на странице товара переключатели «Память / Цвет / SIM» ведут на соседний
-  товар того же семейства. Регион не переключатель: из одинаковых версий
-  по умолчанию берётся самая дешёвая, остальные — «другие версии».
+* регион — не ось: из одинаковых по осям версий по умолчанию берётся самая
+  дешёвая, остальные — «другие версии».
 
-Всё выводится из НАЗВАНИЯ, отдельной таблицы вариантов нет — та же логика, что
-у категорий (services/catalog_nav): второе хранилище одного и того же факта
-разъехалось бы с первым. Название, которое не разбирается (Mac, консоли,
-Dyson), просто не группируется — товар остаётся одиночкой, как раньше.
+Откуда берутся семейство и оси: сохранённые в товаре значения главнее (их
+можно поправить в админке), а где их нет — правила по линейкам
+(services/family_rules). Отдельной таблицы вариантов нет — та же логика, что
+у категорий (services/catalog_nav): второе хранилище одного факта разъехалось
+бы с первым.
 """
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
 from app.models.product import Product
+from app.services.family_rules import AXIS_ORDER, resolve
 from app.services.price_posts import split_region_codes
 
-#: «Apple iPhone 18 Pro 256 ГБ Glacier [ASIS] (SIM+eSIM)»: модель, память,
-#: цвет, пометки в квадратных скобках, SIM в круглых. Регион к этому моменту
-#: уже снят split_region_codes.
-_TITLE_RE = re.compile(
-    r"^(?P<model>.+?)\s+(?P<storage>\d+\s?(?:ГБ|ТБ))\s+(?P<color>[^\[\]()]+?)"
-    r"(?:\s+\[(?P<flags>[^\]]+)\])?(?:\s+\((?P<sim>[^)]*)\))?\s*$",
-    re.IGNORECASE,
-)
-
-#: Порядок SIM в переключателе: физическая SIM — привычный вариант.
-_SIM_ORDER = {"SIM+eSIM": 0, "eSIM": 1, "": 2}
+COLOR_AXIS = "Цвет"
 
 
-@dataclass
-class Axes:
-    model: str
-    storage: str
-    color: str
-    sim: str
-    regions: list[str] = field(default_factory=list)
-    flags: str = ""
-
-    @property
-    def family(self) -> str:
-        return f"{self.model} [{self.flags}]" if self.flags else self.model
-
-
-def parse_axes(title: str | None) -> Axes | None:
-    """Название -> оси варианта. None, если название не про вариант модели."""
-    if not title:
+def family_and_variant(product: Product) -> tuple[str, dict[str, str]] | None:
+    """(семейство, оси) товара. None — товар одиночка."""
+    stored_family = getattr(product, "family_key", None)
+    stored_variant = getattr(product, "variant", None)
+    if stored_family and stored_variant:
+        return stored_family, dict(stored_variant)
+    got = resolve(product)
+    if got is None:
         return None
-    regions, clean = split_region_codes(title)
-    match = _TITLE_RE.match(clean.strip())
-    if not match or "iphone" not in match["model"].lower():
-        # Пока только iPhone: у остальных названий память/цвет пишутся как
-        # попало («(16/256)», «2 TB»), и неверная склейка разных товаров в
-        # одну карточку хуже, чем отсутствие переключателя.
-        return None
-    return Axes(
-        model=match["model"].strip(),
-        storage=re.sub(r"\s+", " ", match["storage"]).upper(),
-        color=match["color"].strip(),
-        sim=(match["sim"] or "").strip(),
-        regions=regions,
-        flags=(match["flags"] or "").strip(),
-    )
+    return stored_family or got.family, got.variant
 
 
 def family_of(product: Product) -> str | None:
-    axes = parse_axes(product.title)
-    return axes.family if axes else None
-
-
-def _storage_rank(storage: str) -> float:
-    number, unit = storage.split()
-    return float(number) * (1024 if unit.upper() == "ТБ" else 1)
+    fv = family_and_variant(product)
+    return fv[0] if fv else None
 
 
 def _rank(product: Product) -> tuple:
@@ -97,17 +60,18 @@ def collapse(products: list[Product]) -> tuple[list[Product], dict[int, dict]]:
     Порядок сохраняется: семейство стоит там, где встретился первый его
     вариант (ранжирование уже решило, где ему место), а на это место встаёт
     лучший представитель. Возвращает список и {id представителя: сводка}.
-    Сводка — сколько вариантов, минимальная цена В НАЛИЧИИ, какие цвета.
+    Сводка — модель, сколько вариантов, минимальная цена В НАЛИЧИИ, цвета.
     """
     out: list[Product] = []
     slot: dict[str, int] = {}
-    members: dict[str, list[Product]] = {}
+    members: dict[str, list[tuple[Product, dict]]] = {}
     for product in products:
-        family = family_of(product)
-        if family is None:
+        fv = family_and_variant(product)
+        if fv is None:
             out.append(product)
             continue
-        members.setdefault(family, []).append(product)
+        family, variant = fv
+        members.setdefault(family, []).append((product, variant))
         if family in slot:
             index = slot[family]
             if _rank(product) < _rank(out[index]):
@@ -121,10 +85,10 @@ def collapse(products: list[Product]) -> tuple[list[Product], dict[int, dict]]:
         if len(group) < 2:
             continue
         rep = out[slot[family]]
-        available = [p for p in group if p.in_stock] or group
-        colors = sorted({parse_axes(p.title).color for p in group})
+        available = [p for p, _ in group if p.in_stock] or [p for p, _ in group]
+        colors = sorted({v[COLOR_AXIS] for _, v in group if v.get(COLOR_AXIS)})
         info[rep.id] = {
-            "model": parse_axes(rep.title).family,
+            "model": family,
             "count": len(group),
             "min_price": min(float(p.price) for p in available),
             "colors": colors,
@@ -139,43 +103,64 @@ def apply_family_info(cards: list[dict], info: dict[int, dict]) -> None:
             card["family"] = info[card["id"]]
 
 
+def _value_rank(axis: str, value: str) -> tuple:
+    """Порядок значений в ряду: объёмы — по возрастанию, SIM — физическая
+    первой, остальное — по алфавиту."""
+    m = re.search(r"(\d+)\s*(ГБ|ТБ)\s*$", value)
+    if m and axis in ("Память", "Конфигурация"):
+        size = int(m.group(1)) * (1024 if m.group(2) == "ТБ" else 1)
+        return (0, size, value)
+    if axis == "SIM":
+        return (0, {"SIM+eSIM": 0, "eSIM": 1}.get(value, 2), value)
+    return (1, 0, value)
+
+
 def variants_payload(db: Session, product: Product) -> dict | None:
-    """Варианты для страницы товара. None — переключать не на что."""
-    axes = parse_axes(product.title)
-    if axes is None:
+    """Варианты для страницы товара. None — переключать не на что.
+
+    `axes` — только оси, по которым варианты действительно различаются: ряд из
+    одной кнопки ничего не выбирает. Если различается только регион, осей нет,
+    но payload есть — экран покажет «другие версии»."""
+    fv = family_and_variant(product)
+    if fv is None:
         return None
+    family, current = fv
     from app.services.marketplace import MARKETPLACE_SOURCE
 
+    # Кандидаты — все активные товары; семейство считается в Python, потому что
+    # у части товаров оно не сохранено и выводится правилами. Каталог — сотни
+    # позиций, это дешевле, чем держать второй путь в SQL.
     candidates = (db.query(Product)
                   .filter(Product.is_active.is_(True),
-                          Product.source.is_distinct_from(MARKETPLACE_SOURCE),
-                          Product.title.like(axes.model + " %"))
+                          Product.source.is_distinct_from(MARKETPLACE_SOURCE))
                   .all())
     options = []
     for candidate in candidates:
-        other = parse_axes(candidate.title)
-        if other is None or other.family != axes.family:
+        other = family_and_variant(candidate)
+        if other is None or other[0] != family:
             continue
         options.append({
             "id": candidate.id,
-            "storage": other.storage,
-            "color": other.color,
-            "sim": other.sim,
-            "regions": other.regions,
+            "values": other[1],
+            "regions": split_region_codes(candidate.title)[0],
             "price": float(candidate.price),
             "in_stock": bool(candidate.in_stock),
         })
     if len(options) < 2:
         return None
-    options.sort(key=lambda o: (_storage_rank(o["storage"]), o["color"],
-                                _SIM_ORDER.get(o["sim"], 3), o["price"], o["id"]))
+
+    names = [a for a in AXIS_ORDER if any(a in o["values"] for o in options)]
+    names += sorted({a for o in options for a in o["values"]} - set(names))
+    axes = []
+    for name in names:
+        values = sorted({o["values"][name] for o in options if name in o["values"]},
+                        key=lambda v: _value_rank(name, v))
+        if len(values) > 1:
+            axes.append({"name": name, "values": values})
+    options.sort(key=lambda o: (tuple(_value_rank(a["name"], o["values"].get(a["name"], ""))
+                                      for a in axes), o["price"], o["id"]))
     return {
-        "axes": {
-            "storage": sorted({o["storage"] for o in options}, key=_storage_rank),
-            "color": sorted({o["color"] for o in options}),
-            "sim": sorted({o["sim"] for o in options}, key=lambda s: _SIM_ORDER.get(s, 3)),
-        },
-        "current": {"storage": axes.storage, "color": axes.color, "sim": axes.sim,
-                    "regions": axes.regions},
+        "axes": axes,
+        "current": {"values": current, "regions": split_region_codes(product.title)[0]},
         "options": options,
     }

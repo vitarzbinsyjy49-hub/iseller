@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { colorHex, isExact, otherVersions, pickVariant, type Variants } from "./variants";
+import { colorHex, isExact, otherVersions, pickVariant, valueLabel, type Variants } from "./variants";
 
 const o = (id: number, storage: string, color: string, sim: string, price: number,
-  in_stock = true, regions: string[] = []) => ({ id, storage, color, sim, price, in_stock, regions });
+  in_stock = true, regions: string[] = []) =>
+  ({ id, values: { "Цвет": color, "Память": storage, SIM: sim }, price, in_stock, regions });
 
 const v: Variants = {
-  axes: {
-    storage: ["256 ГБ", "512 ГБ"],
-    color: ["Black", "Burgundy"],
-    sim: ["SIM+eSIM", "eSIM"],
-  },
-  current: { storage: "256 ГБ", color: "Black", sim: "SIM+eSIM", regions: ["KR", "HK"] },
+  axes: [
+    { name: "Цвет", values: ["Black", "Burgundy"] },
+    { name: "Память", values: ["256 ГБ", "512 ГБ"] },
+    { name: "SIM", values: ["SIM+eSIM", "eSIM"] },
+  ],
+  current: { values: { "Цвет": "Black", "Память": "256 ГБ", SIM: "SIM+eSIM" }, regions: ["KR", "HK"] },
   options: [
     o(1, "256 ГБ", "Black", "SIM+eSIM", 129000, true, ["KR", "HK"]),
     o(2, "256 ГБ", "Black", "SIM+eSIM", 128000, true, ["HK"]),
@@ -23,40 +24,61 @@ const v: Variants = {
   ],
 };
 
+const burgundy: Variants = {
+  ...v, current: { ...v.current, values: { ...v.current.values, "Цвет": "Burgundy" } },
+};
+
 describe("pickVariant", () => {
   it("меняет одну ось, остальные сохраняет, и берёт самый дешёвый", () => {
-    expect(pickVariant(v, "color", "Burgundy")?.id).toBe(4);
-    expect(pickVariant(v, "sim", "eSIM")?.id).toBe(3);
+    expect(pickVariant(v, "Цвет", "Burgundy")?.id).toBe(4);
+    expect(pickVariant(v, "SIM", "eSIM")?.id).toBe(3);
   });
 
   it("отсутствующий в наличии не выигрывает, даже если дешевле", () => {
-    expect(pickVariant(v, "storage", "512 ГБ")?.id).toBe(6);
+    expect(pickVariant(v, "Память", "512 ГБ")?.id).toBe(6);
   });
 
-  it("нет точной комбинации — ближайший по остальным осям", () => {
-    const burgundy = { ...v, current: { ...v.current, color: "Burgundy" } };
-    // Burgundy 512 есть только eSIM: память меняется, SIM уступает.
-    expect(pickVariant(burgundy, "storage", "512 ГБ")?.id).toBe(7);
+  it("нет точной комбинации — цвет важнее SIM", () => {
+    // Burgundy 512 есть только eSIM: память меняется, SIM уступает, цвет — нет.
+    expect(pickVariant(burgundy, "Память", "512 ГБ")?.id).toBe(7);
   });
 
   it("неизвестное значение — null", () => {
-    expect(pickVariant(v, "color", "Pink")).toBeNull();
+    expect(pickVariant(v, "Цвет", "Pink")).toBeNull();
+  });
+
+  it("оси любой линейки, а не только iPhone", () => {
+    const mac: Variants = {
+      axes: [{ name: "Конфигурация", values: ["16 ГБ · 256 ГБ", "24 ГБ · 512 ГБ"] }],
+      current: { values: { "Конфигурация": "16 ГБ · 256 ГБ" }, regions: [] },
+      options: [
+        { id: 10, values: { "Конфигурация": "16 ГБ · 256 ГБ" }, regions: [], price: 60000, in_stock: true },
+        { id: 11, values: { "Конфигурация": "24 ГБ · 512 ГБ" }, regions: [], price: 90000, in_stock: true },
+      ],
+    };
+    expect(pickVariant(mac, "Конфигурация", "24 ГБ · 512 ГБ")?.id).toBe(11);
   });
 });
 
-describe("isExact / otherVersions / colorHex", () => {
+describe("isExact / otherVersions / colorHex / valueLabel", () => {
   it("помечает сочетания, которых нет", () => {
-    const burgundy = { ...v, current: { ...v.current, color: "Burgundy" } };
-    expect(isExact(burgundy, "storage", "512 ГБ")).toBe(false);
-    expect(isExact(v, "storage", "512 ГБ")).toBe(true);
+    expect(isExact(burgundy, "Память", "512 ГБ")).toBe(false);
+    expect(isExact(v, "Память", "512 ГБ")).toBe(true);
   });
 
-  it("другие версии — та же конфигурация, другой регион, дешёвые первыми", () => {
+  it("другие версии — те же оси, другой регион, дешёвые первыми", () => {
     expect(otherVersions(v, 1).map((x) => x.id)).toEqual([2]);
   });
 
-  it("незнакомый цвет не пропадает", () => {
+  it("цвет по имени, по слову, а незнакомый не пропадает", () => {
     expect(colorHex("Glacier")).toBe("#b9ceda");
-    expect(colorHex("Cosmic Teal")).toBe("#c7c7cc");
+    expect(colorHex("Ceramic Pink")).toBe("#f1c9cf");
+    expect(colorHex("Cosmic Teal")).toBe("#3f8a8c");
+    expect(colorHex("Zzz")).toBe("#c7c7cc");
+  });
+
+  it("SIM подписана словами", () => {
+    expect(valueLabel("SIM", "eSIM")).toBe("Только eSIM");
+    expect(valueLabel("Память", "256 ГБ")).toBe("256 ГБ");
   });
 });

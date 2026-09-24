@@ -459,6 +459,9 @@ _PRODUCT_EDITABLE = (
     "poster_url",   # v5.8: афиша события для страницы легендарного товара
     "rating", "popularity", "margin_pct",
     "model_family", "image_group_detached",   # v5.2.6: канонические группы фото
+    # Склейка вариантов (services/variants): ручная правка главнее правил.
+    "family_key", "variant",
+    "promo_boost",   # редакторское продвижение в выдаче (services/ranking)
 )
 
 
@@ -482,6 +485,16 @@ def _apply_product_fields(product: Product, body: dict) -> None:
     # Режим доступности: пустая строка из формы = «выводить из флагов» (NULL),
     # неизвестное значение не сохраняем — иначе товар получил бы режим, которого
     # резолвер не знает, и молча вёл бы себя как «под заказ».
+    # Пустое семейство из формы = «пусть решают правила» (NULL), а не модель
+    # с именем "" — иначе все очищенные товары склеились бы в одну карточку.
+    if "family_key" in body:
+        product.family_key = (body.get("family_key") or "").strip() or None
+    if "variant" in body:
+        raw = body.get("variant") or {}
+        product.variant = {str(k).strip(): str(v).strip() for k, v in raw.items()
+                           if str(k).strip() and str(v).strip()} or None
+    if "promo_boost" in body:
+        product.promo_boost = int(body.get("promo_boost") or 0)
     if "availability_mode" in body:
         raw = (body.get("availability_mode") or "").strip().lower()
         product.availability_mode = raw if raw in EXPLICIT_MODES else None

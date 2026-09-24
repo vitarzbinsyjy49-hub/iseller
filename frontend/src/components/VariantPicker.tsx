@@ -1,19 +1,22 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatPrice } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import {
-  colorHex, isExact, otherVersions, pickVariant, simLabel,
-  type VariantAxis, type Variants,
+  COLOR_AXIS, colorHex, isExact, otherVersions, pickVariant, valueLabel, type Variants,
 } from "../lib/variants";
 import { RegionFlags } from "./flags";
 
-/** Переключатели «Цвет / Память / SIM» на странице товара.
+/** Переключатели вариантов на странице товара: цвет, память, конфигурация…
+ *
+ *  Ряды строятся из осей, которые пришли с backend (у iPhone — цвет, память,
+ *  SIM; у Mac — цвет и конфигурация), поэтому новая линейка не требует правки
+ *  экрана. Цвет рисуется кружками, остальное — кнопками.
  *
  *  Каждый вариант — отдельный товар, поэтому выбор уводит на соседнюю
  *  страницу (replace: «Назад» возвращает в каталог, а не листает цвета).
- *  Регион не переключатель: покупателю он почти никогда не важен, и четвёртый
- *  ряд кнопок только пугал бы. Показываем его одной строкой, а одинаковые
+ *  Регион не переключатель: покупателю он почти никогда не важен, и лишний ряд
+ *  кнопок только пугал бы. Показываем его одной строкой, а одинаковые
  *  конфигурации других регионов — по тапу, «другие версии». */
 export default function VariantPicker({ variants, productId }: {
   variants: Variants;
@@ -22,9 +25,10 @@ export default function VariantPicker({ variants, productId }: {
   const navigate = useNavigate();
   const [showOthers, setShowOthers] = useState(false);
   const others = otherVersions(variants, productId);
+  const current = variants.current.values;
 
-  function go(axis: VariantAxis, value: string) {
-    if (variants.current[axis] === value) return;
+  function go(axis: string, value: string) {
+    if (current[axis] === value) return;
     const target = pickVariant(variants, axis, value);
     if (!target || target.id === productId) return;
     haptic("light");
@@ -33,46 +37,34 @@ export default function VariantPicker({ variants, productId }: {
 
   return (
     <div className="mt-4 space-y-3.5">
-      {variants.axes.color.length > 1 && (
-        <Row label="Цвет" value={variants.current.color}>
-          {variants.axes.color.map((c) => {
-            const active = c === variants.current.color;
+      {variants.axes.map((axis) => (
+        <Row key={axis.name} label={axis.name}
+          value={axis.name === COLOR_AXIS ? current[axis.name] : undefined}>
+          {axis.values.map((value) => {
+            const active = current[axis.name] === value;
+            const dim = !isExact(variants, axis.name, value);
+            if (axis.name === COLOR_AXIS) {
+              return (
+                <button key={value} onClick={() => go(axis.name, value)} aria-label={value}
+                  aria-pressed={active}
+                  className="tap flex h-11 w-11 items-center justify-center rounded-full">
+                  <span
+                    className={`h-8 w-8 rounded-full border border-black/10 ${
+                      active ? "ring-2 ring-accent ring-offset-2 ring-offset-bg" : ""
+                    } ${dim ? "opacity-50" : ""}`}
+                    style={{ background: colorHex(value) }}
+                  />
+                </button>
+              );
+            }
             return (
-              <button key={c} onClick={() => go("color", c)} aria-label={c} aria-pressed={active}
-                className="tap flex h-11 w-11 items-center justify-center rounded-full">
-                <span
-                  className={`h-8 w-8 rounded-full border border-black/10 ${
-                    active ? "ring-2 ring-accent ring-offset-2 ring-offset-bg" : ""
-                  } ${isExact(variants, "color", c) ? "" : "opacity-50"}`}
-                  style={{ background: colorHex(c) }}
-                />
-              </button>
+              <Chip key={value} active={active} dim={dim} onClick={() => go(axis.name, value)}>
+                {valueLabel(axis.name, value)}
+              </Chip>
             );
           })}
         </Row>
-      )}
-
-      {variants.axes.storage.length > 1 && (
-        <Row label="Память">
-          {variants.axes.storage.map((s) => (
-            <Chip key={s} active={s === variants.current.storage}
-              dim={!isExact(variants, "storage", s)} onClick={() => go("storage", s)}>
-              {s}
-            </Chip>
-          ))}
-        </Row>
-      )}
-
-      {variants.axes.sim.length > 1 && (
-        <Row label="SIM">
-          {variants.axes.sim.map((s) => (
-            <Chip key={s} active={s === variants.current.sim}
-              dim={!isExact(variants, "sim", s)} onClick={() => go("sim", s)}>
-              {simLabel(s)}
-            </Chip>
-          ))}
-        </Row>
-      )}
+      ))}
 
       {variants.current.regions.length > 0 && (
         <div className="text-[12px] text-muted">
@@ -106,9 +98,7 @@ export default function VariantPicker({ variants, productId }: {
   );
 }
 
-function Row({ label, value, children }: {
-  label: string; value?: string; children: React.ReactNode;
-}) {
+function Row({ label, value, children }: { label: string; value?: string; children: ReactNode }) {
   return (
     <div>
       <p className="mb-1.5 text-[12px] text-muted">
@@ -120,7 +110,7 @@ function Row({ label, value, children }: {
 }
 
 function Chip({ active, dim, onClick, children }: {
-  active: boolean; dim: boolean; onClick: () => void; children: React.ReactNode;
+  active: boolean; dim: boolean; onClick: () => void; children: ReactNode;
 }) {
   return (
     <button onClick={onClick} aria-pressed={active}

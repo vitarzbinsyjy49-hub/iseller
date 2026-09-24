@@ -17,6 +17,11 @@ export type Prod = {
   preorder_eta?: string | null;
   preorder_group?: string | null;
   accent_color?: string | null;
+  /** Склейка вариантов: модель и оси ({"Цвет": "Silver", "Память": "256 ГБ"}). */
+  family_key?: string | null;
+  variant?: Record<string, string>;
+  /** Редакторское продвижение в выдаче: больше — выше (после наличия, до спроса). */
+  promo_boost?: number;
   popularity: number; rating: number;
   // Полные поля (to_admin) — используются модалкой редактирования
   description?: string | null; specs?: Record<string, unknown>; tags?: string[];
@@ -26,6 +31,24 @@ export type Prod = {
 };
 
 type ProdFull = Prod;
+
+/** {"Цвет": "Silver"} <-> «Цвет: Silver» по строке — так ось правится руками
+ *  без JSON. Строка без двоеточия или с пустым значением отбрасывается. */
+export function variantToText(v?: Record<string, string> | null): string {
+  return Object.entries(v ?? {}).map(([k, val]) => `${k}: ${val}`).join("\n");
+}
+
+export function textToVariant(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const i = line.indexOf(":");
+    if (i <= 0) continue;
+    const key = line.slice(0, i).trim();
+    const value = line.slice(i + 1).trim();
+    if (key && value) out[key] = value;
+  }
+  return out;
+}
 
 type ListResp = {
   products: Prod[]; total: number; page: number; page_size: number; pages: number;
@@ -427,6 +450,15 @@ function ProductModal({
       description: product.description ?? "", warranty_months: String(product.warranty_months ?? 12),
       condition: product.condition ?? "new",
       availability_mode: product.availability_mode ?? "",
+      // Поля предзаказа ОБЯЗАНЫ подгружаться: save() отправляет их всегда, и
+      // пустая форма молча снимала товар с экрана события при любой правке
+      // (например, цены). Найдено 24.09.2026.
+      preorder_eta: product.preorder_eta ?? "",
+      preorder_group: product.preorder_group ?? "",
+      accent_color: product.accent_color ?? "",
+      family_key: product.family_key ?? "",
+      variant: variantToText(product.variant),
+      promo_boost: String(product.promo_boost ?? 0),
     });
     setImages(product.images ?? []);
     setSpecsText(JSON.stringify(product.specs ?? {}, null, 2));
@@ -539,6 +571,10 @@ function ProductModal({
       preorder_eta: form.preorder_eta?.trim() || null,
       preorder_group: form.preorder_group?.trim() || null,
       accent_color: form.accent_color?.trim() || null,
+      // Пустое семейство = «решают правила» (backend превратит в NULL).
+      family_key: form.family_key?.trim() ?? "",
+      variant: textToVariant(form.variant ?? ""),
+      promo_boost: Number(form.promo_boost || 0),
       specs,
     };
     setSaving(true);
@@ -628,6 +664,22 @@ function ProductModal({
           <label style={{ fontSize: 13, color: C.sub }}>
             Акцент карточки (hex)
             <input style={input} placeholder="#6E2639" value={form.accent_color ?? ""} onChange={(e) => set("accent_color", e.target.value)} />
+          </label>
+          {/* Склейка вариантов. Пусто — модель и оси определяют правила
+              (services/family_rules); заполнено — главнее правил. Одинаковая
+              модель у двух товаров = одна карточка в каталоге с переключателем. */}
+          <label style={{ fontSize: 13, color: C.sub }}>
+            Модель (склейка вариантов; пусто — автоматически)
+            <input style={input} placeholder="Apple iPhone 18 Pro" value={form.family_key ?? ""} onChange={(e) => set("family_key", e.target.value)} />
+          </label>
+          <label style={{ fontSize: 13, color: C.sub }}>
+            Оси варианта — по строке «Ось: значение»
+            <textarea style={{ ...input, minHeight: 64, fontFamily: "inherit" }} placeholder={"Цвет: Silver\nПамять: 256 ГБ"}
+              value={form.variant ?? ""} onChange={(e) => set("variant", e.target.value)} />
+          </label>
+          <label style={{ fontSize: 13, color: C.sub }}>
+            Продвижение в выдаче (0 — нет; больше — выше)
+            <input style={input} inputMode="numeric" value={form.promo_boost ?? "0"} onChange={(e) => set("promo_boost", e.target.value.replace(/\D/g, ""))} />
           </label>
           <label style={{ fontSize: 13, color: C.sub }}>
             Бренд<input style={input} value={form.brand ?? ""} onChange={(e) => set("brand", e.target.value)} />

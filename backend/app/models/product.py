@@ -82,6 +82,14 @@ class Product(Base):
     # поколением. Число, а не флаг — чтобы из двух продвигаемых решать, кто
     # первый. 0 = не продвигается. Снимать, когда спрос наберётся сам.
     promo_boost: Mapped[int] = mapped_column(Integer, default=0)
+    # Склейка вариантов (services/variants): к какой модели относится товар и
+    # чем он от соседей отличается — {"Цвет": "Silver", "Память": "256 ГБ"}.
+    # Заполняется правилами (services/family_rules) при импорте и разовым
+    # прогоном scripts/backfill_families; ручная правка в админке главнее
+    # правил и следующим прогоном не перетирается. NULL — правила решают на
+    # лету (или товар одиночка).
+    family_key: Mapped[str | None] = mapped_column(String(160), index=True)
+    variant: Mapped[dict | None] = mapped_column(JSON)
     # Режим доступности для корзины. NULL (по умолчанию) => выводится из
     # in_stock/is_limited — поведение существующих товаров не меняется. Явное
     # значение нужно только там, где флагами сказать нечем: «нет в наличии»
@@ -346,6 +354,8 @@ class Product(Base):
             "preorder_eta": self.preorder_eta,
             "preorder_group": self.preorder_group,
             "accent_color": self.accent_color,
+            "family_key": self.family_key, "variant": self.variant or {},
+            "promo_boost": self.promo_boost or 0,
             "popularity": self.popularity, "rating": self.rating,
             # Полные поля для формы редактирования в админке (v2)
             "image": self.image, "images": self.images or [], "poster_url": self.poster_url,
