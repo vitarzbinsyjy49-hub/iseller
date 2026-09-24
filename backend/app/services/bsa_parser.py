@@ -37,6 +37,8 @@ COLOR_RU: dict[str, str] = {
     "silver": "Silver", "orange": "Orange", "blue": "Blue",
     "black": "Black", "white": "White", "pink": "Pink",
     "sage": "Sage", "lavender": "Lavender", "mist blue": "Blue",
+    # iPhone 18 Pro / Pro Max (выгрузка 24.09.2026): два новых цвета корпуса.
+    "burgundy": "Burgundy", "glacier": "Glacier",
 }
 
 _FLAG_RE = re.compile("[\U0001F1E6-\U0001F1FF]{2}")
@@ -49,8 +51,10 @@ _PRICE_RE = re.compile(r"(\d{1,3}(?:[.\s]\d{3})+|\d{4,9})")
 #: от 12.09.2026, и из-за него разом выпали 14 позиций 17 и 17 Pro, почти все
 #: ASIS, то есть самые дешёвые в прайсе. Флаг в начале строки и длинное тире
 #: парсер переживал и до этого: флаги срезаются, хвост из «-–—» обрезается.
+#: 18 Pro / 18 Pro Max добавлены 24.09.2026. Базового «18» в прайсе нет —
+#: регулярка его не берёт, чтобы строка неизвестного вида падала в failed.
 _MODEL_RE = re.compile(
-    r"^(17 Pro Max|17 Pro|17E|17e|17)\s+(256|512|1TB|2TB)(?:GB)?\s+(.+)$", re.I)
+    r"^(18 Pro Max|18 Pro|17 Pro Max|17 Pro|17E|17e|17)\s+(256|512|1TB|2TB)(?:GB)?\s+(.+)$", re.I)
 
 
 @dataclass
@@ -94,6 +98,13 @@ class Item:
         if self.activated:
             bits.append("ACT")
         return "-".join(bits).upper()
+
+
+#: Написание модели в прайсе -> как она называется в каталоге.
+_MODELS: dict[str, str] = {
+    "18 pro max": "18 Pro Max", "18 pro": "18 Pro",
+    "17 pro max": "17 Pro Max", "17 pro": "17 Pro", "17e": "17e", "17": "17",
+}
 
 
 def _storage(token: str) -> str:
@@ -182,9 +193,7 @@ def parse_line(line: str) -> Item | None:
     tail = f"{rest} {right}"
     tail_low = tail.lower()
     return Item(
-        model="17 Pro Max" if model_raw.lower() == "17 pro max"
-        else "17 Pro" if model_raw.lower() == "17 pro"
-        else "17e" if model_raw.lower() == "17e" else "17",
+        model=_MODELS[model_raw.lower()],
         storage=_storage(storage_raw),
         color=COLOR_RU[color_key],
         price=price,

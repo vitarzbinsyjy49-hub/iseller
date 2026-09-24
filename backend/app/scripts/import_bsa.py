@@ -36,7 +36,15 @@ DATA = Path(__file__).resolve().parent / "data"
 #: проверяемым, а не «примерно».
 NAKIDKA = 500
 
-#: Модель + цвет -> фото на нашем сайте. Ключи для iPhone — («модель», «цвет»),
+#: Кадр Apple «finish-select» отдаётся 16:9 — без cropN Scene7 дорисует белые
+#: полосы сверху и снизу (см. docs/context/product-photos.md).
+APPLE_CDN = (
+    "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/"
+    "iphone-18-pro-finish-select-202609-{size}-{color}"
+    "?wid=1200&hei=1200&fmt=jpeg&qlt=90&cropN=0.21875,0,0.5625,1"
+)
+
+#: Модель + цвет -> фото на нашем сайте (или полный URL, если фото чужое). Ключи для iPhone — («модель», «цвет»),
 #: для остального — подстрока названия.
 PHOTOS_IPHONE: dict[tuple[str, str], str] = {
     ("17 Pro Max", "Blue"): "49b305d8a8d2e7b2ea98b3e1ad5fda41.webp",
@@ -50,6 +58,13 @@ PHOTOS_IPHONE: dict[tuple[str, str], str] = {
     ("17", "Blue"): "e5b2b73b4ae1ed45fdd56f31deefd862.webp",
     ("17", "Sage"): "ab2182a98be304ce5aecffdfe51db878.webp",
     ("17", "Lavender"): "f2268c01fcbc933dcbdc5f2fcf1f3a64.webp",
+    # 18 Pro / Pro Max — на rocketniks их нет, берём с CDN Apple те же кадры
+    # finish-select, что у предзаказа (product-photos/preorder-apple-2026).
+    **{
+        (model, color.title()): APPLE_CDN.format(size=size, color=color)
+        for model, size in (("18 Pro", "6-3inch"), ("18 Pro Max", "6-9inch"))
+        for color in ("black", "burgundy", "silver", "glacier")
+    },
 }
 
 #: Для Mac/мониторов совпадение по подстроке названия, сверху вниз.
@@ -81,7 +96,8 @@ def fetch_photo(name: str) -> str | None:
     if name in _downloaded:
         return _downloaded[name]
     try:
-        response = httpx.get(PHOTO_BASE + name, timeout=30, follow_redirects=True)
+        url = name if name.startswith("https://") else PHOTO_BASE + name
+        response = httpx.get(url, timeout=30, follow_redirects=True)
         response.raise_for_status()
     except Exception as exc:  # noqa: BLE001 — сеть, причин отказа много
         print(f"   !! фото {name}: {exc}")
@@ -215,11 +231,22 @@ def main() -> int:
         "--diff", action="store_true",
         help="показать список «было → стало» по каждой изменившейся позиции",
     )
+    parser.add_argument(
+        "--phones", default="bsa_2026_09_12.txt",
+        help="файл iPhone в data/; пустая строка — пропустить",
+    )
+    parser.add_argument(
+        "--macs", default="bsa_mac_2026_09_12.txt",
+        help="файл Mac/мониторов в data/; пустая строка — пропустить",
+    )
     args = parser.parse_args()
     dry_run = not args.confirm
 
-    phones, failed_phones = parse((DATA / "bsa_2026_09_12.txt").read_text(encoding="utf-8"))
-    macs, failed_macs = parse_mac((DATA / "bsa_mac_2026_09_12.txt").read_text(encoding="utf-8"))
+    def read(name: str) -> str:
+        return (DATA / name).read_text(encoding="utf-8") if name else ""
+
+    phones, failed_phones = parse(read(args.phones))
+    macs, failed_macs = parse_mac(read(args.macs))
     if failed_phones or failed_macs:
         print("!! не разобраны строки, импорт остановлен:")
         for line in failed_phones + failed_macs:

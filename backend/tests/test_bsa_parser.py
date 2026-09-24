@@ -319,3 +319,46 @@ def test_old_format_still_parses():
     """Старый формат никуда не делся — он идёт в той же выгрузке рядом."""
     item = parse_line("17 Pro 256 Silver-102.000🇭🇰🇰🇷(1sim+e sim)")
     assert item is not None and item.price == 102000 and item.storage == "256 ГБ"
+
+
+# ------------------------------------------------------------ iPhone 18 Pro
+
+DUMP_18 = DUMP.parent / "bsa_18_2026_09_24.txt"
+
+
+def test_iphone_18_pro_max_with_new_colors():
+    """18 Pro/Pro Max пришли в выгрузке 24.09.2026 с новыми цветами корпуса."""
+    item = parse_line("18 Pro Max 256Gb Burgundy-165.000🇰🇷🇭🇰(1 sim+e sim)")
+    assert item is not None
+    assert item.model == "18 Pro Max"
+    assert item.color == "Burgundy"
+    assert item.price == 165000
+    assert item.sim == "SIM+eSIM"
+    assert item.title == "Apple iPhone 18 Pro Max 256 ГБ Burgundy (KR-HK, SIM+eSIM)"
+
+
+def test_iphone_18_pro_glacier_activated_is_its_own_sku():
+    new = parse_line("18 Pro 256Gb Glacier-129.000🇰🇷🇭🇰(1 sim+e sim)")
+    act = parse_line("18 Pro 256Gb Glacier-123.500🇭🇰(1 sim+e sim)актив 🔥")
+    assert new.model == act.model == "18 Pro"
+    assert new.color == act.color == "Glacier"
+    assert act.activated and not new.activated
+    assert new.sku != act.sku
+
+
+def test_iphone_18_dump_parses_without_losses():
+    items, failed = parse(DUMP_18.read_text(encoding="utf-8"))
+    assert failed == [], f"не разобраны: {failed}"
+    counts = {m: sum(1 for i in items if i.model == m) for m in ("18 Pro", "18 Pro Max")}
+    assert counts == {"18 Pro": 40, "18 Pro Max": 40}
+    skus = [i.sku for i in items]
+    assert len(set(skus)) == len(skus)
+
+
+def test_every_iphone_18_position_has_a_photo():
+    """Карточка без фото в канале и на витрине выглядит как ошибка."""
+    from app.scripts.import_bsa import photo_for_iphone
+
+    items, _ = parse(DUMP_18.read_text(encoding="utf-8"))
+    missing = {(i.model, i.color) for i in items if photo_for_iphone(i) is None}
+    assert not missing, missing
