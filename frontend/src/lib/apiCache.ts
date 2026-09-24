@@ -66,13 +66,28 @@ const keyFor = (path: string) => ["api", path] as const;
  * перезапрашивается, одновременные одинаковые запросы схлопываются в один.
  *
  * Подпись повторяет `api()` намеренно — заменить вызов можно, не трогая ничего
- * вокруг. Сигнал отмены прокидывается как есть: экран каталога отменяет свой
- * предыдущий запрос сам, и отнимать у него это право кэш не должен.
+ * вокруг.
+ *
+ * Сигнал отмены обрывает ОЖИДАНИЕ этого вызова, но не общий запрос. Раньше
+ * сигнал уходил внутрь склеенного запроса: экран отменял свой вызов, тут же
+ * просил тот же путь снова (двойной эффект, быстрый уход и возврат) — и второй
+ * вызов получал ошибку первого, потому что это был ОДИН запрос с уже
+ * оборванным сигналом; повтор react-query уходил с тем же сигналом и падал
+ * снова. Экран каталога показывал «Не удалось загрузить товары» на ровном
+ * месте (найдено 24.09.2026). Недождавшийся ответ не пропадает — ляжет в кэш.
  */
 export function cachedApi<T>(path: string, options: RequestInit = {}): Promise<T> {
-  return queryClient.fetchQuery({
+  const { signal, ...rest } = options;
+  const shared = queryClient.fetchQuery({
     queryKey: keyFor(path),
-    queryFn: () => api<T>(path, options),
+    queryFn: () => api<T>(path, rest),
+  });
+  if (!signal) return shared;
+  return new Promise<T>((resolve, reject) => {
+    const aborted = () => reject(new DOMException("Aborted", "AbortError"));
+    if (signal.aborted) return aborted();
+    signal.addEventListener("abort", aborted, { once: true });
+    shared.then(resolve, reject).finally(() => signal.removeEventListener("abort", aborted));
   });
 }
 

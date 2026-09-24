@@ -21,24 +21,28 @@ def test_mac_family_from_rules(db):
     a = _p(db, "Apple iMac M4 (10/10/16/256) Purple (SG)", 150000)
     b = _p(db, "Apple iMac M4 (10/10/16/512) Silver (RU)", 170000)
     out, info = collapse([a, b])
-    assert [p.id for p in out] == [a.id]
-    assert info[a.id]["model"] == "Apple iMac M4" and info[a.id]["colors"] == ["Purple", "Silver"]
+    # Разные цвета iMac — разные карточки.
+    assert [p.id for p in out] == [a.id, b.id]
 
 
-def test_collapse_keeps_one_card_per_model_at_first_position(db):
+def test_collapse_keeps_one_card_per_model_and_color(db):
+    """Карточка в выдаче — модель + цвет (решение владельца 24.09.2026): цвет
+    видно на фото, его выбирают глазами; память и SIM — внутри карточки."""
     a = _p(db, "Apple iPhone 18 Pro 512 ГБ Black (KR-HK, SIM+eSIM)", 153000)
     other = _p(db, "PlayStation 5 Pro 2 TB", 70000)
     cheap = _p(db, "Apple iPhone 18 Pro 256 ГБ Silver (US-KW, eSIM)", 127500)
+    black = _p(db, "Apple iPhone 18 Pro 256 ГБ Black (US-KW, eSIM)", 128000)
     gone = _p(db, "Apple iPhone 18 Pro 256 ГБ Black (KW, eSIM)", 100000, in_stock=False)
     mx = _p(db, "Apple iPhone 18 Pro Max 256 ГБ Silver (KR-HK, SIM+eSIM)", 148500)
 
-    out, info = collapse([a, other, cheap, gone, mx])
+    out, info = collapse([a, other, cheap, black, gone, mx])
 
-    # Место семейства — там, где встретился первый его вариант; представитель —
-    # самый дешёвый В НАЛИЧИИ (дешёвый, но отсутствующий не выигрывает).
-    assert [p.id for p in out] == [cheap.id, other.id, mx.id]
-    assert info[cheap.id] == {"model": "Apple iPhone 18 Pro", "count": 3, "min_price": 127500.0,
-                              "colors": ["Black", "Silver"]}
+    # Цвета одной модели стоят подряд, на месте первого варианта модели;
+    # представитель цвета — самый дешёвый В НАЛИЧИИ.
+    assert [p.id for p in out] == [black.id, cheap.id, other.id, mx.id]
+    assert info[black.id] == {"model": "Apple iPhone 18 Pro Black", "count": 3,
+                              "min_price": 128000.0, "colors": []}
+    assert cheap.id not in info           # цвет из одного товара — сводка не нужна
     assert other.id not in info           # одиночка без семейства
 
 
@@ -105,18 +109,19 @@ def test_detail_carries_variants(db, client):
 
 
 def test_list_shows_one_card_per_model(db, client):
-    _, b, _ = _family(db)
+    a, b, _ = _family(db)
     _p(db, "PlayStation 5 Pro 2 TB", 70000, category="консоли")
     cards = client.get("/api/catalog/list?query=iphone").json()["cards"]
-    assert [c["id"] for c in cards] == [b.id]
-    assert cards[0]["family"]["count"] == 3
-    assert cards[0]["family"]["min_price"] == 127500.0
+    by_id = {c["id"]: c for c in cards}
+    assert set(by_id) == {a.id, b.id}                  # Black и Silver
+    assert by_id[a.id]["family"]["count"] == 2          # Black 256 и 512
+    assert by_id[a.id]["family"]["min_price"] == 129000.0
 
 
 def test_search_collapses_too(db, client):
     _, b, _ = _family(db)
     cards = client.get("/api/catalog/search?query=iphone 18").json()["cards"]
-    assert [c["id"] for c in cards] == [b.id]
+    assert len(cards) == 2
 
 
 def test_feed_new_section_has_one_card_per_model(db, client):
@@ -125,7 +130,7 @@ def test_feed_new_section_has_one_card_per_model(db, client):
     db.commit()
     new = client.get("/api/catalog/feed").json()["new"]
     ids = [c["id"] for c in new]
-    assert len([c for c in new if "iPhone 18 Pro" in c["title"]]) == 1, ids
+    assert len([c for c in new if "iPhone 18 Pro" in c["title"]]) == 2, ids   # по цвету
 
 
 def test_feed_section_is_not_eaten_by_one_big_family(db, client):
@@ -147,7 +152,7 @@ def test_family_summary_counts_the_whole_family_not_the_section(db, client):
     вариантов на карточке — про модель целиком: иначе цена «от» завышена."""
     _p(db, "Apple iPhone 18 Pro 256 ГБ Black (KR-HK, SIM+eSIM)", 129000, is_hot=True)
     _p(db, "Apple iPhone 18 Pro 512 ГБ Black (HK, SIM+eSIM)", 153000, is_hot=True)
-    _p(db, "Apple iPhone 18 Pro 256 ГБ Silver (US-KW, eSIM)", 127500)       # не «горячий»
+    _p(db, "Apple iPhone 18 Pro 256 ГБ Black (US-KW, eSIM)", 127500)       # не «горячий»
     [card] = [c for c in client.get("/api/catalog/feed").json()["hot"] if "18 Pro" in c["title"]]
     assert card["family"]["count"] == 3
     assert card["family"]["min_price"] == 127500.0

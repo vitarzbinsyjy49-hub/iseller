@@ -54,84 +54,102 @@ def _rank(product: Product) -> tuple:
     return (0 if product.in_stock else 1, float(product.price or 0), product.id)
 
 
-def collapse(products: list[Product]) -> tuple[list[Product], dict[int, dict]]:
-    """Свернуть выдачу до одной карточки на семейство.
+def card_key(family: str, variant: dict[str, str]) -> str:
+    """Ключ карточки в выдаче: модель + цвет (решение владельца 24.09.2026).
 
-    Порядок сохраняется: семейство стоит там, где встретился первый его
-    вариант (ранжирование уже решило, где ему место), а на это место встаёт
-    лучший представитель. Возвращает список и {id представителя: сводка}.
-    Сводка — модель, сколько вариантов, минимальная цена В НАЛИЧИИ, цвета.
+    Цвет выбирают глазами — он виден на фото, и «iPhone 18 Pro Burgundy»
+    отдельной карточкой продаёт лучше, чем кружок внутри. Память, SIM,
+    конфигурация — выбор «по таблице», он живёт внутри карточки. У линейки без
+    цвета (Mac mini) карточка — модель целиком."""
+    color = variant.get(COLOR_AXIS)
+    return f"{family} {color}" if color else family
+
+
+def collapse(products: list[Product]) -> tuple[list[Product], dict[int, dict]]:
+    """Свернуть выдачу до одной карточки на модель + цвет.
+
+    Модель стоит там, где встретился первый её вариант (ранжирование уже
+    решило, где ей место), и все её цвета идут ПОДРЯД — вперемешку с другими
+    моделями они читались бы как случайный набор. Представитель цвета — лучший
+    вариант (в наличии, дешевле). Возвращает список и {id представителя:
+    сводка}; сводка только у карточек, за которыми больше одного товара.
     """
-    out: list[Product] = []
-    slot: dict[str, int] = {}
-    members: dict[str, list[tuple[Product, dict]]] = {}
+    order: list = []                       # Product-одиночки и ключи моделей
+    seen_family: set[str] = set()
+    cards_of: dict[str, list[str]] = {}    # модель -> ключи карточек по порядку
+    best: dict[str, Product] = {}
+    members: dict[str, list[Product]] = {}
     for product in products:
         fv = family_and_variant(product)
         if fv is None:
-            out.append(product)
+            order.append(product)
             continue
         family, variant = fv
-        members.setdefault(family, []).append((product, variant))
-        if family in slot:
-            index = slot[family]
-            if _rank(product) < _rank(out[index]):
-                out[index] = product
+        key = card_key(family, variant)
+        if family not in seen_family:
+            seen_family.add(family)
+            order.append(("family", family))
+        if key not in members:
+            cards_of.setdefault(family, []).append(key)
+            members[key] = []
+            best[key] = product
+        members[key].append(product)
+        if _rank(product) < _rank(best[key]):
+            best[key] = product
+
+    out: list[Product] = []
+    for item in order:
+        if isinstance(item, tuple):
+            out.extend(best[key] for key in cards_of[item[1]])
         else:
-            slot[family] = len(out)
-            out.append(product)
+            out.append(item)
 
     info: dict[int, dict] = {}
-    for family, group in members.items():
+    for key, group in members.items():
         if len(group) < 2:
             continue
-        rep = out[slot[family]]
-        available = [p for p, _ in group if p.in_stock] or [p for p, _ in group]
-        colors = sorted({v[COLOR_AXIS] for _, v in group if v.get(COLOR_AXIS)})
-        info[rep.id] = {
-            "model": family,
-            "count": len(group),
-            "min_price": min(float(p.price) for p in available),
-            "colors": colors,
-        }
+        info[best[key].id] = _summary(key, group)
     return out, info
 
 
+def _summary(key: str, group: list[Product]) -> dict:
+    available = [p for p in group if p.in_stock] or group
+    return {
+        "model": key,
+        "count": len(group),
+        "min_price": min(float(p.price) for p in available),
+        # Кружки цветов не нужны: карточка уже про один цвет. Поле оставлено
+        # для линеек, где цвет не ось (пусто) — фронт рисует кружки при > 1.
+        "colors": [],
+    }
+
+
 def whole_family_info(db: Session, info: dict[int, dict]) -> dict[int, dict]:
-    """Пересчитать сводки по ВСЕМ активным товарам семейства.
+    """Пересчитать сводки по ВСЕМ активным товарам той же модели и цвета.
 
     `collapse` видит только то, что попало в выдачу: секция «Горячее» — лишь
-    часть вариантов модели, и «от X ₽» на карточке выходил бы выше настоящей
-    цены, а «N вариантов» — меньше. Карточка говорит о модели целиком, значит
-    и считать надо по модели целиком. Один запрос на все семейства сразу.
+    часть вариантов, и «от X ₽» на карточке выходил бы выше настоящей цены,
+    а «N вариантов» — меньше. Один запрос на все карточки сразу.
     """
     if not info:
         return info
     from app.services.marketplace import MARKETPLACE_SOURCE
 
     wanted = {summary["model"] for summary in info.values()}
-    groups: dict[str, list[tuple[Product, dict]]] = {}
+    groups: dict[str, list[Product]] = {}
     rows = (db.query(Product)
             .filter(Product.is_active.is_(True),
                     Product.source.is_distinct_from(MARKETPLACE_SOURCE))
             .all())
     for row in rows:
         fv = family_and_variant(row)
-        if fv and fv[0] in wanted:
-            groups.setdefault(fv[0], []).append((row, fv[1]))
-    out = {}
-    for rep_id, summary in info.items():
-        group = groups.get(summary["model"]) or []
-        if len(group) < 2:
-            out[rep_id] = summary
-            continue
-        available = [p for p, _ in group if p.in_stock] or [p for p, _ in group]
-        out[rep_id] = {
-            "model": summary["model"],
-            "count": len(group),
-            "min_price": min(float(p.price) for p in available),
-            "colors": sorted({v[COLOR_AXIS] for _, v in group if v.get(COLOR_AXIS)}),
-        }
-    return out
+        if fv:
+            key = card_key(*fv)
+            if key in wanted:
+                groups.setdefault(key, []).append(row)
+    return {rep_id: (_summary(summary["model"], groups[summary["model"]])
+                     if len(groups.get(summary["model"]) or []) >= 2 else summary)
+            for rep_id, summary in info.items()}
 
 
 def apply_family_info(cards: list[dict], info: dict[int, dict],

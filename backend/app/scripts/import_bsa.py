@@ -37,12 +37,20 @@ DATA = Path(__file__).resolve().parent / "data"
 #: проверяемым, а не «примерно».
 NAKIDKA = 500
 
-#: Кадр Apple «finish-select» отдаётся 16:9 — без cropN Scene7 дорисует белые
-#: полосы сверху и снизу (см. docs/context/product-photos.md).
+#: Кадр Apple «finish-select» отдаётся 16:9 с большими полями вокруг
+#: аппаратов: в квадрат по центру (cropN=0.21875,0,0.5625,1) пара «спинка +
+#: экран» занимала около половины кадра, и в карточке каталога телефон
+#: выглядел далёким. Кроп подобран по самим аппаратам с полем ~8% (24.09.2026,
+#: просьба владельца). У Pro Max корпус выше — свой кроп, иначе верх
+#: упирается в край. Квадратность: ширина × 16/9 = высота (0.368×1.778≈0.655).
+APPLE_CROP = {
+    "6-3inch": "0.3158,0.171,0.368,0.655",
+    "6-9inch": "0.2998,0.118,0.40,0.711",
+}
 APPLE_CDN = (
     "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/"
     "iphone-18-pro-finish-select-202609-{size}-{color}"
-    "?wid=1200&hei=1200&fmt=jpeg&qlt=90&cropN=0.21875,0,0.5625,1"
+    "?wid=1200&hei=1200&fmt=jpeg&qlt=90&cropN={crop}"
 )
 
 #: Модель + цвет -> фото на нашем сайте (или полный URL, если фото чужое). Ключи для iPhone — («модель», «цвет»),
@@ -62,7 +70,7 @@ PHOTOS_IPHONE: dict[tuple[str, str], str] = {
     # 18 Pro / Pro Max — на rocketniks их нет, берём с CDN Apple те же кадры
     # finish-select, что у предзаказа (product-photos/preorder-apple-2026).
     **{
-        (model, color.title()): APPLE_CDN.format(size=size, color=color)
+        (model, color.title()): APPLE_CDN.format(size=size, color=color, crop=APPLE_CROP[size])
         for model, size in (("18 Pro", "6-3inch"), ("18 Pro Max", "6-9inch"))
         for color in ("black", "burgundy", "silver", "glacier")
     },
