@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import sys
 
-from PIL import Image
+from PIL import Image, ImageChops, ImageDraw
 
 from compose_preorder_banner import (FIELD_LEFT, FIELD_RIGHT, H, POST_H, POST_W, SRC, W,
                                      _place_row, _row, cutout, gradient, scaled)
@@ -58,28 +58,49 @@ def compose(out: str | None = None) -> None:
 BANNER_OUT = "frontend/public/assets/promos/iphone18-instock.webp"
 
 
+def _back(color: str) -> Image.Image:
+    """Только спинка из пары «спинка + экран»: в баннере важен цвет корпуса,
+    а экран у всех четырёх одинаковый и только съедал бы место."""
+    pair = cutout(f"{SRC}/iphone18pro-{color}.jpg", TOLERANCE.get(color, 26))
+    # Спинка — левая часть пары; экран подложен под неё справа. Режем по
+    # ширине спинки (≈0.585 пары) и заново обрезаем по непрозрачному.
+    back = pair.crop((0, 0, int(pair.width * 0.575), pair.height))
+    back = back.crop(back.getbbox())
+    # Экран подложен под спинку и выглядывает из-за её скруглённых углов
+    # тёмными полосками. Режем по силуэту самой спинки: скруглённый
+    # прямоугольник, радиус снят с кадра (~16% ширины корпуса).
+    mask = Image.new("L", back.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, back.width - 1, back.height - 1), radius=int(back.width * 0.16), fill=255)
+    alpha = ImageChops.multiply(back.getchannel("A"), mask)
+    back.putalpha(alpha)
+    return back
+
+
 def compose_banner(out: str | None = None) -> None:
-    """Тот же сюжет для первого баннера главной, но в его раме: левая треть
-    пустая — HeroBanner кладёт туда заголовок (FIELD_LEFT в соседнем скрипте).
-    Сетка 2×2 целиком в правой зоне."""
+    """Первый баннер главной: четыре цвета веером, крупно.
+
+    Левая треть пустая — HeroBanner кладёт туда заголовок (FIELD_LEFT в
+    соседнем скрипте). Первая сетка 2×2 из пар «спинка + экран» делала
+    аппараты мелкими: на телефоне баннер узкий, и они терялись. Веер из одних
+    спинок даёт каждому цвету почти всю высоту кадра, а камера — главное, что
+    отличает поколение, — остаётся открытой: следующий корпус перекрывает
+    предыдущий справа, а блок камер сидит слева."""
     canvas = gradient(W, H)
-    pair_h = 480
-    gap_y = 50
-    pairs = [[scaled(cutout(f"{SRC}/iphone18pro-{c}.jpg", TOLERANCE.get(c, 26)), pair_h)
-              for c in row] for row in COLORS]
+    order = ("black", "silver", "glacier", "burgundy")   # главный цвет — сверху
+    height = int(H * 0.86)
+    backs = [scaled(_back(c), height) for c in order]
     span = FIELD_RIGHT - FIELD_LEFT
-    top = (H - (2 * pair_h + gap_y)) // 2
-    for r, row in enumerate(pairs):
-        total = sum(p.width for p in row)
-        gap = (span - total) // 3
-        assert gap > 30, f"не помещается: {gap}"
-        x = FIELD_LEFT + gap
-        for p in row:
-            canvas.alpha_composite(p, (x, top + r * (pair_h + gap_y)))
-            x += p.width + gap
+    step = (span - backs[0].width) // (len(backs) - 1)
+    assert step > backs[0].width * 0.3, f"веер слишком плотный: {step}px"
+    top = (H - height) // 2
+    for i, back in enumerate(backs):
+        # Лёгкая лесенка по вертикали: ровный ряд читался бы витриной, а не веером.
+        dy = (len(backs) - 1 - i) * 18 - 27
+        canvas.alpha_composite(back, (FIELD_LEFT + i * step, top + dy))
     target = out or BANNER_OUT
     canvas.convert("RGB").save(target, "WEBP", quality=90, method=6)
-    print(f"{target}: {Image.open(target).size}")
+    print(f"{target}: {Image.open(target).size}, шаг веера {step}px")
 
 
 if __name__ == "__main__":

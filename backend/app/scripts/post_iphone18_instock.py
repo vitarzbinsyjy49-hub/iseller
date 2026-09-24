@@ -92,6 +92,65 @@ def build_body(db) -> str:
     return body
 
 
+STORAGES = ("256 ГБ", "512 ГБ", "1 ТБ", "2 ТБ")
+
+
+def storage_table(db, prefix: str) -> list[tuple[str, float]]:
+    """Память -> самая низкая цена новой версии. Пустые объёмы пропускаются."""
+    rows = []
+    for storage in STORAGES:
+        token = storage.split()[0] + ("TB" if "ТБ" in storage else "")
+        price = (db.query(func.min(Product.price))
+                 .filter(Product.sku.like(f"{prefix}{token}-%"),
+                         Product.is_active.is_(True), Product.in_stock.is_(True),
+                         Product.price > 0, ~Product.sku.like("%-ACT"))
+                 .scalar())
+        if price is not None:
+            rows.append((storage, price))
+    return rows
+
+
+def build_rich(db, image_url: str | None) -> str:
+    """Rich-версия поста — по методике постов канала (artifacts/channel-posts):
+    заголовок, кадр, короткий лид, цитата, раскрывающиеся блоки с таблицами.
+
+    Таблица по памяти, а не по регионам: человек выбирает объём, регион и SIM
+    уточняются в карточке. Цифры — из базы в момент запуска, как и в body."""
+    parts = ["<h3>iPhone 18 Pro и Pro Max приехали</h3>"]
+    if image_url:
+        parts.append(f'<img src="{image_url}"/>')
+    parts.append(
+        "<p>Все четыре цвета — Burgundy, Glacier, Silver и Black, память от 256 ГБ "
+        "до 2 ТБ. Аппараты новые, в плёнке, можно забрать сегодня.</p>")
+    parts.append(
+        "<blockquote>Burgundy — новый цвет этого поколения. Живьём он темнее "
+        "и спокойнее, чем на рендерах.</blockquote>")
+    parts.append("<hr/>")
+    for name, prefix in MODELS:
+        table = storage_table(db, prefix)
+        if not table:
+            continue
+        cells = "".join(f"<tr><td><b>{st}</b></td><td>от {rub(pr)}</td></tr>"
+                        for st, pr in table)
+        parts.append(f"<details>\n<summary><b>{name} — от {rub(table[0][1])}</b></summary>\n"
+                     f"<table>{cells}</table>\n</details>")
+    parts.append(
+        "<details>\n<summary><b>SIM + eSIM или только eSIM</b></summary>\n"
+        "<p>Версии для Кореи и Гонконга — с физической SIM и eSIM. Версии для США "
+        "и Кувейта — только eSIM, они дешевле. Если пользуетесь обычной "
+        "SIM-картой — берите SIM + eSIM; регион указан в каждой карточке.</p>\n"
+        "</details>")
+    parts.append(
+        "<details>\n<summary><b>А что с Duo, часами и AirPods</b></summary>\n"
+        "<p>iPhone Duo ждём 23 октября, Apple Watch Series 12, Ultra 4 и AirPods 5 "
+        "— следом. На всё открыт предзаказ без предоплаты: менеджер свяжется, "
+        "назовёт цену и срок.</p>\n</details>")
+    parts.append("<hr/>")
+    parts.append("<footer>Цена каждой версии — в приложении и в прайсе канала. "
+                 "Гарантия магазина — 1 месяц.</footer>")
+    return "\n\n".join(parts)
+
+
 def buttons() -> list[dict]:
     """Главная кнопка ведёт на экран события: там обе модели с описанием и
     выходом ко всем вариантам — тот же экран, что у первого баннера главной."""
@@ -107,7 +166,8 @@ def plain_length(html: str) -> int:
     return len(re.sub(r"<[^>]+>", "", html))
 
 
-def prepare(db, body: str, *, dry_run: bool) -> tuple[ChannelPost, list[str]]:
+def prepare(db, body: str, *, dry_run: bool,
+            republish: bool = False) -> tuple[ChannelPost, list[str]]:
     changed: list[str] = []
 
     for sku in PREORDER_SKUS:
@@ -147,6 +207,20 @@ def prepare(db, body: str, *, dry_run: bool) -> tuple[ChannelPost, list[str]]:
         post.image_url = save_image("image/webp", IMAGE.read_bytes())
         changed.append(f"картинка: {post.image_url}")
 
+    rich = build_rich(db, post.image_url)
+    if post.rich_html != rich:
+        post.rich_html = rich
+        changed.append("rich-версия")
+        if post.telegram_message_id:
+            post.status = "outdated"
+    # Фото с подписью Telegram не превращает в rich-текст правкой: сообщение
+    # приходится публиковать заново. Старое удаляется РУКАМИ в канале.
+    if republish and post.telegram_message_id:
+        changed.append(f"публикуем заново; старое сообщение {post.telegram_message_id} "
+                       "удалите в канале вручную")
+        post.telegram_message_id = None
+        post.status = "draft"
+
     db.flush()
     return post, changed
 
@@ -155,6 +229,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--confirm", action="store_true",
                         help="применить и опубликовать (без него — только показать)")
+    parser.add_argument("--republish", action="store_true",
+                        help="опубликовать новым сообщением (переход с фото на rich)")
     args = parser.parse_args()
     dry_run = not args.confirm
 
@@ -172,7 +248,8 @@ def main() -> int:
             print("!! подпись длиннее предела Telegram — сократите текст")
             return 1
 
-        post, changed = prepare(db, body, dry_run=dry_run)
+        post, changed = prepare(db, body, dry_run=dry_run, republish=args.republish)
+        print(post.rich_html, "\n")
         print("изменения:", ", ".join(changed) if changed else "нет")
         print("в канале:", f"message_id={post.telegram_message_id}"
               if post.telegram_message_id else "ещё не публиковался")

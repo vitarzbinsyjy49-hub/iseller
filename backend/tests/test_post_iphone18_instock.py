@@ -34,3 +34,13 @@ def test_prepare_retires_preorder_and_marks_new(db):
     assert db.query(Product).filter_by(sku="IP-18PRO-256-BLACK-KRHK-SIM").one().is_new
     assert row.image_url is None          # в предпросмотре картинку не кладём
     assert row.button_spec[0]["kind"] == "preorder"
+
+
+def test_rich_version_has_storage_tables_without_activated(db):
+    _seed(db)
+    row, _ = post.prepare(db, post.build_body(db), dry_run=True)
+    rich = row.rich_html
+    assert "<details>" in rich and "<table>" in rich
+    assert "<summary><b>iPhone 18 Pro — от 128 500 ₽</b></summary>" in rich
+    assert "<td><b>512 ГБ</b></td><td>от 154 500 ₽</td>" in rich
+    assert "123 000" not in rich            # активированный в таблицу не попадает
