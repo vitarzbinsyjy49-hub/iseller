@@ -140,3 +140,14 @@ def test_feed_section_is_not_eaten_by_one_big_family(db, client):
     hot = client.get("/api/catalog/feed").json()["hot"]
     assert len(hot) >= 6
     assert any(c["sku"] == "CHEAP" for c in hot)
+
+
+def test_family_summary_counts_the_whole_family_not_the_section(db, client):
+    """В «Горячем» может быть лишь часть вариантов модели, но «от X ₽» и число
+    вариантов на карточке — про модель целиком: иначе цена «от» завышена."""
+    _p(db, "Apple iPhone 18 Pro 256 ГБ Black (KR-HK, SIM+eSIM)", 129000, is_hot=True)
+    _p(db, "Apple iPhone 18 Pro 512 ГБ Black (HK, SIM+eSIM)", 153000, is_hot=True)
+    _p(db, "Apple iPhone 18 Pro 256 ГБ Silver (US-KW, eSIM)", 127500)       # не «горячий»
+    [card] = [c for c in client.get("/api/catalog/feed").json()["hot"] if "18 Pro" in c["title"]]
+    assert card["family"]["count"] == 3
+    assert card["family"]["min_price"] == 127500.0

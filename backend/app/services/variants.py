@@ -96,8 +96,51 @@ def collapse(products: list[Product]) -> tuple[list[Product], dict[int, dict]]:
     return out, info
 
 
-def apply_family_info(cards: list[dict], info: dict[int, dict]) -> None:
-    """Приклеить сводку семейства к карточкам (поле `family`)."""
+def whole_family_info(db: Session, info: dict[int, dict]) -> dict[int, dict]:
+    """Пересчитать сводки по ВСЕМ активным товарам семейства.
+
+    `collapse` видит только то, что попало в выдачу: секция «Горячее» — лишь
+    часть вариантов модели, и «от X ₽» на карточке выходил бы выше настоящей
+    цены, а «N вариантов» — меньше. Карточка говорит о модели целиком, значит
+    и считать надо по модели целиком. Один запрос на все семейства сразу.
+    """
+    if not info:
+        return info
+    from app.services.marketplace import MARKETPLACE_SOURCE
+
+    wanted = {summary["model"] for summary in info.values()}
+    groups: dict[str, list[tuple[Product, dict]]] = {}
+    rows = (db.query(Product)
+            .filter(Product.is_active.is_(True),
+                    Product.source.is_distinct_from(MARKETPLACE_SOURCE))
+            .all())
+    for row in rows:
+        fv = family_and_variant(row)
+        if fv and fv[0] in wanted:
+            groups.setdefault(fv[0], []).append((row, fv[1]))
+    out = {}
+    for rep_id, summary in info.items():
+        group = groups.get(summary["model"]) or []
+        if len(group) < 2:
+            out[rep_id] = summary
+            continue
+        available = [p for p, _ in group if p.in_stock] or [p for p, _ in group]
+        out[rep_id] = {
+            "model": summary["model"],
+            "count": len(group),
+            "min_price": min(float(p.price) for p in available),
+            "colors": sorted({v[COLOR_AXIS] for _, v in group if v.get(COLOR_AXIS)}),
+        }
+    return out
+
+
+def apply_family_info(cards: list[dict], info: dict[int, dict],
+                      db: Session | None = None) -> None:
+    """Приклеить сводку семейства к карточкам (поле `family`).
+
+    С `db` сводка пересчитывается по всему семейству (см. whole_family_info)."""
+    if db is not None:
+        info = whole_family_info(db, info)
     for card in cards:
         if card.get("id") in info:
             card["family"] = info[card["id"]]

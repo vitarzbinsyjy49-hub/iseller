@@ -174,7 +174,7 @@ def catalog_search(
     products = products[:limit]
     cards = [p.to_card() for p in products]
     apply_group_images(db, products, cards)
-    apply_family_info(cards, family)
+    apply_family_info(cards, family, db)
     return {"cards": cards}
 
 
@@ -286,7 +286,7 @@ def list_catalog(
     cards = [p.to_card() for p in products]
     apply_group_images(db, products, cards)
     apply_social_proof(db, products, cards)
-    apply_family_info(cards, family)
+    apply_family_info(cards, family, db)
     return {"cards": cards}
 
 
@@ -374,7 +374,7 @@ def feed(db: Session = Depends(get_db)):
     cards = {p.id: p.to_card() for p in uniq}
     apply_group_images(db, uniq, [cards[p.id] for p in uniq])
 
-    apply_family_info(list(cards.values()), family_info)
+    apply_family_info(list(cards.values()), family_info, db)
 
     def section(items):
         return [cards[p.id] for p in items]
