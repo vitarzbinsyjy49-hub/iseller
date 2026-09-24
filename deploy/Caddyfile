@@ -81,3 +81,33 @@
         reverse_proxy admin:80
     }
 }
+
+# ── Собрание ────────────────────────────────────────────────────────────────
+# Дописать В КОНЕЦ /opt/techshop/deploy/Caddyfile, заменив sobranie.158.255.1.248.sslip.io
+# (без покупки домена: sobranie.<ip-сервера>.sslip.io — сертификат Caddy получит сам).
+#
+# Отдельный сервис в своей папке /opt/sobranie, та же docker-сеть techshop_default
+# (docker-compose Собрания: networks.shared.external). Порт на хост НЕ публикуется:
+# файрвола на сервере нет. Сниппет security_headers уже объявлен выше в этом же Caddyfile.
+#
+# Править файл НА МЕСТЕ (cat >> / nano), не заменять копированием и не sed -i: он смонтирован
+# в контейнер как один файл, новый inode контейнер не увидит, а `caddy reload` скажет «успешно».
+# После правки: caddy validate → caddy reload; не помогло — up -d --force-recreate caddy.
+# Проверять только снаружи: curl -I https://sobranie.158.255.1.248.sslip.io/health
+sobranie.158.255.1.248.sslip.io {
+    encode gzip zstd
+    import security_headers
+
+    # Mini App живёт во фрейме Telegram Web: X-Frame-Options DENY даёт белый экран на десктопе.
+    # frame-ancestors — CSP ровно с одной директивой, ничего кроме встраивания не ограничивает.
+    header Content-Security-Policy "frame-ancestors https://web.telegram.org https://*.telegram.org"
+
+    # Лимит тела: самое большое, что принимает API, — фото вечера (3 МБ). Без лимита Caddy принимает запрос любого размера.
+    request_body {
+        max_size 4MB
+    }
+
+    # Вебхука Telegram нет (входящие на этом хостинге не работают, бот на long polling),
+    # поэтому отдельного handle /webhook/* нет. API и статика Mini App — один процесс.
+    reverse_proxy sobranie-api:3010
+}
