@@ -219,6 +219,57 @@ def upsert(db, *, sku: str, title: str, price: int, category: str,
     return "обновлён" if changed else "без изменений"
 
 
+def _without_region(sku: str) -> str:
+    """Артикул без региона: «IP-17-256-BLACK-US-ESIM» -> «IP-17-256-BLACK-ESIM».
+
+    У iPhone регион — пятый сегмент, у Mac/мониторов — последний
+    («MU9D3-INUSHK»). Это единственное, что BSA меняет у того же аппарата
+    от недели к неделе.
+    """
+    parts = sku.split("-")
+    if sku.startswith("IP-"):
+        return "-".join(parts[:4] + parts[5:])
+    return sku.rsplit("-", 1)[0]
+
+
+def retarget_regions(db, price: dict[str, tuple[int, str]], *,
+                     dry_run: bool) -> list[tuple[str, str]]:
+    """Карточка, чей артикул пропал из прайса только из-за смены региона,
+    переезжает на новый артикул: название, цена — из прайса.
+
+    Без этого шага аппарат, который BSA по-прежнему продаёт (было «US», стало
+    «US-JP»), ушёл бы в «нет в наличии», а новая строка прайса не нашла бы
+    карточки — в --prices-only новые не заводятся. Переименование, а не новая
+    карточка: сохраняются ссылки из канала, избранное и заявки.
+
+    Переезд только однозначный: ровно один кандидат в прайсе и его артикула
+    ещё нет в каталоге. Иначе карточка остаётся как есть и дальше решает
+    sync_stock. `price` — артикул -> (цена витрины, название).
+    """
+    ours = {row.sku: row for row in db.query(Product).filter(Product.source == "bsa")}
+    candidates: dict[str, list[str]] = {}
+    for sku in price:
+        if sku not in ours:
+            candidates.setdefault(_without_region(sku), []).append(sku)
+
+    moved = []
+    for sku, row in sorted(ours.items()):
+        if sku in price:
+            continue
+        options = candidates.get(_without_region(sku), [])
+        if len(options) != 1:
+            continue
+        new_sku = options[0]
+        moved.append((sku, new_sku))
+        candidates[_without_region(sku)] = []     # второй карточке он уже не достанется
+        if not dry_run:
+            row.sku = new_sku
+            row.price, row.title = price[new_sku]
+    if not dry_run:
+        db.flush()
+    return moved
+
+
 def sync_stock(db, present: set[str], *, dry_run: bool) -> tuple[list[str], list[str]]:
     """Наличие позиций BSA = есть ли их артикул в текущем прайсе.
 
@@ -323,6 +374,12 @@ def main() -> int:
             diff.append((sku, was, max(new_price - NAKIDKA, 0), title))
 
     try:
+        moved: list[tuple[str, str]] = []
+        if args.sync_stock:
+            price = {i.sku: (max(i.price - NAKIDKA, 0), i.title) for i in phones}
+            price.update({m.sku: (max(m.price - NAKIDKA, 0), m.full_title) for m in macs})
+            moved = retarget_regions(db, price, dry_run=dry_run)
+
         for item in phones:
             photo = photo_for_iphone(item)
             if photo is None:
@@ -348,8 +405,11 @@ def main() -> int:
         stock_off: list[str] = []
         stock_on: list[str] = []
         if args.sync_stock:
-            stock_off, stock_on = sync_stock(
-                db, {i.sku for i in phones} | {m.sku for m in macs}, dry_run=dry_run)
+            # В предпросмотре переезд не записан, и старые артикулы иначе
+            # посчитались бы пропавшими — добавляем их в «есть в прайсе».
+            present = {i.sku for i in phones} | {m.sku for m in macs}
+            present |= {old for old, _ in moved}
+            stock_off, stock_on = sync_stock(db, present, dry_run=dry_run)
 
         if dry_run:
             db.rollback()
@@ -357,6 +417,9 @@ def main() -> int:
             db.commit()
 
         if args.sync_stock:
+            print(f"сменился регион -> карточка переехала: {len(moved)}")
+            for old, new in moved:
+                print(f"   ~ {old} -> {new}")
             print(f"нет в прайсе -> «нет в наличии»: {len(stock_off)}")
             for sku in stock_off:
                 print("   -", sku)
