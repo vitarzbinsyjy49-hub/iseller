@@ -537,3 +537,50 @@ def sync_navigation(db: Session, *, on_date: date | None = None, dry_run: bool =
         result.failed.append((NAVIGATION_SLUG, str(exc)))
 
     return result
+
+
+#: Текст, которым заменяется выпавшая из плана страница прайса. Цен в нём нет
+#: намеренно: любая цифра здесь снова устареет, а обновлять её уже нечем.
+ORPHAN_TEXT = (
+    "{title}\n\n"
+    "Прайс стал короче и уместился в меньшее число сообщений. "
+    "Актуальные цены — в первой части раздела и в приложении."
+)
+
+
+def retire_orphan_pages(db: Session, *, on_date: date | None = None,
+                        dry_run: bool = False) -> list[str]:
+    """Переписать страницы прайса, которые выпали из плана, на отсылку.
+
+    Раздел режется на посты по длине, и когда он сокращается, лишняя страница
+    просто перестаёт генерироваться — а сообщение в канале остаётся со старыми
+    ценами (так 08.09 и 24.09.2026). Удалять его нельзя: строка связывает slug
+    с message_id, и если раздел снова разрастётся, система переиспользует это
+    сообщение вместо дубля. Поэтому текст заменяется короткой отсылкой с
+    кнопкой на первую часть раздела. Идемпотентна: переписанную не трогает.
+    """
+    planned = {p.slug for p in build_plan(db, on_date)}
+    links = section_links(db)
+    retired: list[str] = []
+    rows = (db.query(ChannelPost)
+            .filter(ChannelPost.kind == PRICE_KIND,
+                    ChannelPost.telegram_message_id.isnot(None))
+            .order_by(ChannelPost.slug).all())
+    for row in rows:
+        if row.slug in planned or not row.slug.startswith("price_") \
+                or row.slug == "price_navigation":
+            continue
+        text = ORPHAN_TEXT.format(title=f"<b>{row.title}</b>")
+        if row.body == text:
+            continue
+        retired.append(row.slug)
+        if dry_run:
+            continue
+        first = links.get(re.sub(r"_p\d+$", "", row.slug))
+        keyboard = [[{"text": "↑ Актуальный прайс", "url": first}]] if first else None
+        edit_message(message_id=row.telegram_message_id, text=text, keyboard=keyboard,
+                     channel_id=row.channel_id or channel_id())
+        row.body = text
+        row.last_synced_at = datetime.now(timezone.utc)
+        db.commit()
+    return retired

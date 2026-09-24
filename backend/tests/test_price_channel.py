@@ -429,3 +429,24 @@ def test_marketplace_item_never_reaches_channel_post(db, catalog, telegram):
     db.commit()
     price_channel.apply_plan(db, on_date=TODAY)
     assert all("с рук" not in msg["text"] for msg in telegram.sent)
+
+
+def test_orphan_page_is_rewritten_to_a_pointer_not_deleted(db, catalog, telegram):
+    """Раздел стал короче, и страница выпала из плана. Сообщение в канале
+    осталось бы со старыми ценами — его переписываем на отсылку к первой части
+    и связь slug -> message_id сохраняем (docs/context/channel-posts.md)."""
+    price_channel.apply_plan(db, on_date=TODAY)
+    first = db.query(ChannelPost).filter_by(slug="price_iphone").one()
+    db.add(ChannelPost(slug="price_iphone_p2", kind=price_channel.PRICE_KIND, title="iPhone",
+                       body="старые цены", telegram_message_id=555, status="published"))
+    db.commit()
+
+    retired = price_channel.retire_orphan_pages(db, on_date=TODAY)
+
+    assert retired == ["price_iphone_p2"]
+    [edit] = [e for e in telegram.edited if e["message_id"] == 555]
+    assert "старые цены" not in edit["text"]
+    assert edit["keyboard"][0][0]["url"].endswith(f"/{first.telegram_message_id}")
+    row = db.query(ChannelPost).filter_by(slug="price_iphone_p2").one()
+    assert row.telegram_message_id == 555          # связь не теряем
+    assert price_channel.retire_orphan_pages(db, on_date=TODAY) == []   # идемпотентно
