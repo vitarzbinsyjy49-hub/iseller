@@ -242,13 +242,31 @@ def _playstation(product, clean: str):
 _RULES = (_iphone, _ipad, _macbook, _imac, _mac_desktop, _airpods, _dyson, _playstation)
 
 
+#: Витринный образец iPhone: не вариант нового аппарата, но и не одиночка —
+#: у BSA их по десятку на модель, и россыпью они занимали полкаталога.
+_SHOWCASE = re.compile(r"\s*\[ASIS\]", re.I)
+SHOWCASE_SUFFIX = " — витринный образец"
+
+
 def resolve(product) -> Resolved | None:
     """Товар -> модель, оси и регион. None — товар остаётся одиночкой."""
     title = getattr(product, "title", None)
-    if not title or _ONE_OFF.search(title):
+    if not title:
+        return None
+    showcase = bool(_SHOWCASE.search(title)) and "iphone" in title.lower()
+    if showcase:
+        title = _SHOWCASE.sub("", title)
+    if _ONE_OFF.search(title):
         return None
     regions, clean = split_region_codes(title)
     clean = re.sub(r"\s+", " ", clean).strip()
+    if showcase:
+        got = _iphone(product, clean)
+        if not got:
+            return None
+        family, variant = got
+        ordered = {k: variant[k] for k in AXIS_ORDER if variant.get(k)}
+        return Resolved(family=family + SHOWCASE_SUFFIX, variant=ordered, regions=regions)
     for rule in _RULES:
         got = rule(product, clean)
         if got:

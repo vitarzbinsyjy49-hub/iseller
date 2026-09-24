@@ -73,6 +73,17 @@ def test_not_grouped(title, color, sub):
     assert resolve(P(title, color, sub)) is None
 
 
+def test_iphone_showcase_units_are_their_own_model():
+    """Витринные образцы (ASIS) — не вариант нового аппарата, но и не россыпь
+    одиночек: своя модель с теми же переключателями."""
+    a = resolve(P("Apple iPhone 17 Pro 512 ГБ Silver [ASIS] (HK)", None, "iPhone"))
+    b = resolve(P("Apple iPhone 17 Pro 1 ТБ Blue [ASIS] (HK)", None, "iPhone"))
+    new = resolve(P("Apple iPhone 17 Pro 512 ГБ Silver (KR-HK, SIM+eSIM)", None, "iPhone"))
+    assert a.family == b.family == "Apple iPhone 17 Pro — витринный образец"
+    assert a.family != new.family
+    assert a.variant == {"Цвет": "Silver", "Память": "512 ГБ"}
+
+
 def test_region_is_kept_aside():
     got = resolve(P("Apple iMac M4 (10/10/16/512) Silver (GB)", None, "iMac"))
     assert got.regions == ["GB"]
