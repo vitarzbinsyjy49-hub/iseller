@@ -17,7 +17,8 @@ import sys
 
 from PIL import Image
 
-from compose_preorder_banner import POST_H, POST_W, SRC, _place_row, _row, cutout, gradient
+from compose_preorder_banner import (FIELD_LEFT, FIELD_RIGHT, H, POST_H, POST_W, SRC, W,
+                                     _place_row, _row, cutout, gradient, scaled)
 
 OUT = "backend/app/scripts/data/iphone18-instock-post.webp"
 
@@ -54,5 +55,35 @@ def compose(out: str | None = None) -> None:
     print(f"{target}: {Image.open(target).size}, поля {top}px сверху и снизу")
 
 
+BANNER_OUT = "frontend/public/assets/promos/iphone18-instock.webp"
+
+
+def compose_banner(out: str | None = None) -> None:
+    """Тот же сюжет для первого баннера главной, но в его раме: левая треть
+    пустая — HeroBanner кладёт туда заголовок (FIELD_LEFT в соседнем скрипте).
+    Сетка 2×2 целиком в правой зоне."""
+    canvas = gradient(W, H)
+    pair_h = 480
+    gap_y = 50
+    pairs = [[scaled(cutout(f"{SRC}/iphone18pro-{c}.jpg", TOLERANCE.get(c, 26)), pair_h)
+              for c in row] for row in COLORS]
+    span = FIELD_RIGHT - FIELD_LEFT
+    top = (H - (2 * pair_h + gap_y)) // 2
+    for r, row in enumerate(pairs):
+        total = sum(p.width for p in row)
+        gap = (span - total) // 3
+        assert gap > 30, f"не помещается: {gap}"
+        x = FIELD_LEFT + gap
+        for p in row:
+            canvas.alpha_composite(p, (x, top + r * (pair_h + gap_y)))
+            x += p.width + gap
+    target = out or BANNER_OUT
+    canvas.convert("RGB").save(target, "WEBP", quality=90, method=6)
+    print(f"{target}: {Image.open(target).size}")
+
+
 if __name__ == "__main__":
-    compose(sys.argv[1] if len(sys.argv) > 1 else None)
+    if sys.argv[1:2] == ["--banner"]:
+        compose_banner(sys.argv[2] if len(sys.argv) > 2 else None)
+    else:
+        compose(sys.argv[1] if len(sys.argv) > 1 else None)
