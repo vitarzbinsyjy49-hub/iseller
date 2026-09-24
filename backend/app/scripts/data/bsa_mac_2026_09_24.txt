@@ -1,0 +1,200 @@
+# Выгрузка BSA от 24.09.2026 — компьютеры, мониторы, аксессуары.
+#
+# Строки товаров скопированы ДОСЛОВНО. Убраны только декоративные
+# эмодзи-разделители, заголовки блоков, дата поста, допгарантия и
+# услуги сервиса (гравировка, плёнка, установка Office) — это не товары.
+#
+# Источник: сообщения 12455 и 12459 из ChatExport_2026-09-24.
+
+## Компьютеры, мониторы, аксессуары
+🇷🇺Magic Keyboard MK2A3 — 12.200
+🇷🇺Magic Keyboard MK2A3RS/A  — 13.300
+🇷🇺Magic Keyboard Numeric MQ052 — 14.800
+🇷🇺Magic Keyboard с Touch ID MK293RS/A  — 16.600
+🇺🇸🍏[MU9D3] Mac Mini M4 (16/256)-73.000
+🇺🇸🍏[MU9E3] Mac Mini M4 (16/512)-79.500
+🇺🇸🍏[MCYT4] Mac Mini M4 (24/512)-129.000
+🇺🇸🍏[MCX44] Mac Mini M4 Pro (24/512)-175.000
+🇱🇷Mac Mini M4 Pro 14/20/48GB/1TB/10GBE - 346.000
+🇷🇺🖥 [MFEX4] Studio Display 2026 (Standard glass, tilt)  — 175000
+🇷🇺🖥 [MFEW4] Studio Display 2026 (Standard glass, tilt & height)  — 222500
+🇷🇺🖥 [MFEL4] Studio Display XDR 2026 (Standard glass, tilt & height)  — 365000
+🇷🇺🖥 [MFEP4] Studio Display XDR 2026 (Nano-texture glass, tilt & height)  — 393500
+🇷🇺Studio Display Standart Glass Tilt Stand | MYJG3R  - 189.000
+🇷🇺Studio Display Nano Glass Tilt Stand | MYJK3  - 203.000
+🇺🇸Studio Display Nano Glass Tilt Stand | MMYW3  - 200.000
+🇷🇺Studio Display Nano Glass VESA Mount Adapter  MYJL3  - 208.000
+🇷🇺Studio Display Standart Glass VESA Mount Adapter | MYJH3  - 200.000
+🇷🇺Apple Pro Display XDR 32 Standard Glass | MYLH3  - 605.000
+🇷🇺Apple Pro Stand | MX5N3  - 128000
+🇷🇺Apple VESA Mount Adapter | MX5M3 - 39.000
+🇷🇺🖥[MWUF3] iMac M4 (8/8/16/256) Blue — 166500
+🇷🇺🖥[MWUE3] iMac M4 (8/8/16/256) Green — 166500
+🇸🇬🖥[Z1E800069] iMac M4 (8/8/16/256) Orange Рус 🔌 — 166500
+🇷🇺🖥[Z1E8000J1] iMac M4 (8/8/16/256) Orange — 166500
+🇸🇬🖥[Z1E30005L] iMac M4 (8/8/16/256) Yellow Рус 🔌 — 166500
+🇷🇺🖥[Z1E3000JC] iMac M4 (8/8/16/256) Yellow — 166500
+🇷🇺🖥[MWUG3] iMac M4 (8/8/16/256) Pink — 166500
+🇷🇺🖥[Z1E7000KB] iMac M4 (8/8/16/256) Purple — 166500
+🇺🇸🖥[MWUU3] iMac M4 (10/10/16/256) Silver — 183500
+🇷🇺🖥[MWUU3] iMac M4 (10/10/16/256) Silver — 183500
+🇷🇺🖥[MWV13] iMac M4 (10/10/16/256) Blue — 183500
+🇷🇺🖥[MWUY3] iMac M4 (10/10/16/256) Green — 183500
+🇸🇬🖥[Z1EV0005K] iMac M4 (10/10/16/256) Orange Рус 🔌 — 183500
+🇷🇺🖥[Z1EV000KZ] iMac M4 (10/10/16/256) Orange — 183500
+🇸🇬🖥[Z1EK0005K] iMac M4 (10/10/16/256) Yellow Рус 🔌 — 183500
+🇷🇺🖥[Z1EK000L2] iMac M4 (10/10/16/256) Yellow — 183500
+🇷🇺🖥[MWV43] iMac M4 (10/10/16/256) Pink — 183500
+🇸🇬🖥[Z1ET0005K] iMac M4 (10/10/16/256) Purple Рус 🔌 — 183500
+🇷🇺🖥[Z1ET000MF] iMac M4 (10/10/16/256) Purple — 183500
+🇭🇰🖥[Z1E200002] iMac M4 (8/8/16/512) Silver — 183500
+🇷🇺🖥[Z1E2000KJ] iMac M4 (8/8/16/512) Silver — 183500
+🇷🇺🖥[Z1E5000JW] iMac M4 (8/8/16/512) Blue — 183500
+🇷🇺🖥[Z1E4000GS] iMac M4 (8/8/16/512) Green — 183500
+🇷🇺🖥[Z1E8000E8] iMac M4 (8/8/16/512) Orange — 183500
+🇷🇺🖥[Z1E6000FV] iMac M4 (8/8/16/512) Pink — 183500
+🇷🇺🖥[Z1E7000EQ] iMac M4 (8/8/16/512) Purple — 183500
+🇬🇧🖥[MWUV3] iMac M4 (10/10/16/512) Silver — 201000
+🇸🇬🖥[Z1EH0005N] iMac M4 (10/10/16/512) Silver Рус 🔌 — 201500
+🇷🇺🖥[Z1EH000ZC] iMac M4 (10/10/16/512) Silver — 201500
+🇸🇬🖥[Z1EP0005N] iMac M4 (10/10/16/512) Blue Рус 🔌 — 201500
+🇷🇺🖥[MWV33][Z1EP000WP] iMac M4 (10/10/16/512) Blue — 201500
+🇸🇬🖥[Z1EM0005N] iMac M4 (10/10/16/512) Green Рус 🔌 — 201500
+🇷🇺🖥[Z1EM000PH] iMac M4 (10/10/16/512) Green — 201500
+🇷🇺🖥[Z1EV000L0] iMac M4 (10/10/16/512) Orange — 201500
+🇷🇺🖥[Z1EK000L3] iMac M4 (10/10/16/512) Yellow — 201500
+🇷🇺🖥[Z1ER000LG] iMac M4 (10/10/16/512) Pink — 201500
+🇸🇬🖥[Z1EU00051] iMac M4 (10/10/16/512) Purple Рус 🔌 — 201500
+🇷🇺🖥[Z1ET000MG] iMac M4 (10/10/16/512) Purple — 201500
+🇭🇰🖥[Z1EJ00003] iMac M4 (10/10/16/1Tb) Silver — 232000
+🇷🇺🖥[Z1EH000V5] iMac M4 (10/10/16/1Tb) Silver — 232000
+🇷🇺🖥[Z1EP000T5] iMac M4 (10/10/16/1Tb) Blue — 232000
+🇷🇺🖥[Z1EM000MD] iMac M4 (10/10/16/1Tb) Green — 232000
+🇷🇺🖥[Z1EW000DV][Z1EV000TJ] iMac M4 (10/10/16/1Tb) Orange — 232000
+🇷🇺🖥[Z1EL000DS] iMac M4 (10/10/16/1Tb) Yellow — 232000
+🇷🇺🖥[Z1ER000TY] iMac M4 (10/10/16/1Tb) Pink — 232000
+🇷🇺🖥[Z1ET000XX] iMac M4 (10/10/16/1Tb) Purple — 232000
+🇸🇬🖥[Z1EH0005W] iMac M4 (10/10/24/512) Silver Рус 🔌 — 228000
+🇷🇺🖥[Z1EH001PZ] iMac M4 (10/10/24/512) Silver — 228000
+🇸🇬🖥[Z1EP0005W] iMac M4 (10/10/24/512) Blue Рус 🔌 — 228000
+🇷🇺🖥[Z1EP001G2] iMac M4 (10/10/24/512) Blue — 228000
+🇭🇰🖥[MD2Q4] iMac M4 (10/10/24/512) Green — 228000
+🇸🇬🖥[Z1EM0005W] iMac M4 (10/10/24/512) Green Рус 🔌 — 228000
+🇷🇺🖥[Z1EM0012L] iMac M4 (10/10/24/512) Green — 228000
+🇷🇺🖥[Z1EV000TH] iMac M4 (10/10/24/512) Orange — 228000
+🇸🇬🖥[Z1K200048] iMac M4 (10/10/24/512) Yellow Рус 🔌 — 228000
+🇷🇺🖥[Z1EK000RC] iMac M4 (10/10/24/512) Yellow — 228000
+🇭🇰🖥[MD2U4] iMac M4 (10/10/24/512) Pink — 228000
+🇸🇬🖥[Z1ER0005W] iMac M4 (10/10/24/512) Pink Рус 🔌 — 228000
+🇷🇺🖥[Z1ER000UN] iMac M4 (10/10/24/512) Pink — 228000
+🇸🇬🖥[Z1K700048] iMac M4 (10/10/24/512) Purple Рус 🔌 — 228000
+🇷🇺🖥[Z1ET000YX] iMac M4 (10/10/24/512) Purple — 228000
+🇭🇰🖥[Z1EJ0000M] iMac M4 (10/10/24/1Tb) Silver — 258700
+🇷🇺🖥[Z1EH001Q1] iMac M4 (10/10/24/1Tb) Silver — 258700
+🇷🇺🖥[Z1EQ001SN][Z1EP00210] iMac M4 (10/10/24/1Tb) Blue — 258700
+🇷🇺🖥[Z1EM0012M] iMac M4 (10/10/24/1Tb) Green — 258700
+🇷🇺🖥[Z1EV000TK] iMac M4 (10/10/24/1Tb) Orange — 258700
+🇷🇺🖥[Z1EL000VH][Z1EK00127] iMac M4 (10/10/24/1Tb) Yellow — 258700
+🇷🇺🖥[Z1ER00142] iMac M4 (10/10/24/1Tb) Pink — 258700
+🇷🇺🖥[Z1ET00199] iMac M4 (10/10/24/1Tb) Purple — 258700
+🇭🇰🖥[Z1EJ0000K] iMac M4 (10/10/32/512) Silver — 251000
+🇷🇺🖥[Z1EJ000MD][Z1EH001Q0] iMac M4 (10/10/32/512) Silver — 251000
+🇷🇺🖥[Z1EP00211] iMac M4 (10/10/32/512) Blue — 251000
+🇷🇺🖥[Z1EM001DN] iMac M4 (10/10/32/512) Green — 251000
+🇷🇺🖥[Z1EW000DW][Z1EV0012G] iMac M4 (10/10/32/512) Orange — 251000
+🇷🇺🖥[Z1EK000TE] iMac M4 (10/10/32/512) Yellow — 251000
+🇷🇺🖥[Z1ER000TX] iMac M4 (10/10/32/512) Pink — 251000
+🇷🇺🖥[Z1ET0019A] iMac M4 (10/10/32/512) Purple — 251000
+🇭🇰🖥[Z1EJ0000P] iMac M4 (10/10/32/1Tb) Silver — 282000
+🇷🇺🖥[Z1EJ000ME][Z1EH001Q2] iMac M4 (10/10/32/1Tb) Silver — 282000
+🇷🇺🖥[Z1EP001G3] iMac M4 (10/10/32/1Tb) Blue — 282000
+🇷🇺🖥[Z1EM000WE] iMac M4 (10/10/32/1Tb) Green — 282000
+🇷🇺🖥[Z1EV000TL] iMac M4 (10/10/32/1Tb) Orange — 282000
+🇷🇺🖥[Z1EK000UC] iMac M4 (10/10/32/1Tb) Yellow — 282000
+🇷🇺🖥[Z1ER000UP] iMac M4 (10/10/32/1Tb) Pink — 282000
+🇷🇺🖥[Z1ET0019B] iMac M4 (10/10/32/1Tb) Purple — 282000
+🇭🇰🖥[Z1EJ0000Q] iMac M4 (10/10/32/2Tb) Silver — 329000
+🇷🇺🖥[Z1EJ000MF][Z1EH001MT] iMac M4 (10/10/32/2Tb) Silver — 329000
+🇭🇰🖥[Z1EQ0000Q] iMac M4 (10/10/32/2Tb) Blue — 329000
+🇷🇺🖥[Z1EP001EE] iMac M4 (10/10/32/2Tb) Blue — 329000
+🇷🇺🖥[Z1EM0012N] iMac M4 (10/10/32/2Tb) Green — 329000
+🇭🇰🖥[Z1EW0000Q] iMac M4 (10/10/32/2Tb) Orange — 329000
+🇷🇺🖥[Z1EV000TM] iMac M4 (10/10/32/2Tb) Orange — 329000
+🇷🇺🖥[Z1ET000YY] iMac M4 (10/10/32/2Tb) Purple — 329000
+🇺🇸🐭Magic Mouse Black USB-C -9.300
+🇺🇸🐭Magic Mouse White USB-C-7.800
+🔌 USB-C to MagSafe 3 Cable (2 m) Silver - 5.000
+🔌 USB-C to MagSafe 3 Cable (2 m) Starlight - 5.000
+🔌 USB-C to MagSafe 3 Cable (2 m) Sky Blue✨ - 6.000
+🔌 USB-C to MagSafe 3 Cable (2 m) Midnight - 5.000
+🔌 USB-C to MagSafe 3 Cable (2 m) Space Black - 5.000
+🇭🇰🇺🇸[MHFF4] NEO (8/256) Indigo-62.500
+🇭🇰🇺🇸[MHFA4] NEO (8/256) Silver-65.000
+🇭🇰🇺🇸[MHFH4] NEO (8/256) Blush-62.500
+🇭🇰🇺🇸[MHFD4] NEO (8/256) Citrus -62.500
+🇮🇳🇺🇸[MHFG4] NEO (8/512/Touch ID) Indigo-72.000
+🇮🇳🇺🇸[MHFC4] NEO (8/512/Touch ID) Silver-74.500
+🇮🇳🇺🇸[MHFJ4] NEO (8/512/Touch ID) Blush-72.500
+🇮🇳🇺🇸[MHFE4] NEO (8/512/Touch ID) Citrus-70.700
+🇮🇳🇺🇸MDH74 Air 13 (M5 16/512) Silver-126.500
+🇮🇳🇺🇸MDHA4 Air 13 (M5 16/512) Starlight-126.500
+🇮🇳🇺🇸MDHE4 Air 13 (M5 16/512) Midnight-127.000
+🇮🇳🇺🇸MDHH4 Air 13 (M5 16/512) Sky Blue -126.000
+🇺🇸[MDHF4] Air 13 (M5 16/1Tb) Midnight-142.000
+🇺🇸[MDH84] Air 13 (M5 16/1Tb) Silver- 146.500
+🇺🇸[MDHC4] Air 13 (M5 16/1Tb) Starlight- 142.500
+🇺🇸[MDHJ4] Air 13 (M5 16/1Tb) Sky Blue-143.000
+🇺🇸MDHG4 Air 13 Midnight (M5, 24GB, 1TB)-165.000
+🇺🇸MDH94 Air 13 Silver  (M5, 24GB, 1TB)- 166.000
+🇺🇸MDHK4 Air 13 Sky Blue (M5, 24GB, 1TB)-165.500
+🇺🇸MDHD4 Air 13 Starlight (M5, 24GB, 1TB)-166.000
+Air 13 Midnight (M5, 32GB, 1TB) Z1L8000GM — 220 000
+Air 13 Starlight (M5, 32GB, 1TB) Z1L5000GM — 220 000
+Air 13 Silver (M5, 32GB, 1TB) Z1L2000GM — 220 000
+Air 13 Sky Blue (M5, 32GB, 1TB) Z1L9001VX — 220 000
+Air 13 Midnight (M5, 32GB, 2TB) Z1L8000GQ — 260 000
+Air 13 Starlight (M5, 32GB, 2TB) Z1L5000GQ — 260 000
+Air 13 Silver (M5, 32GB, 2TB) Z1L2000GQ — 260 000
+Air 13 Sky Blue (M5, 32GB, 2TB) Z1LB000GQ — 260 000
+🇺🇸[MRYP3] Air 15 Silver (M3, 8GB, 256GB) - 102.000 (с гравировкой)
+🇺🇸MDVH4 Air 15 Midnight (M5, 16GB, 512GB) -142.000🔥
+🇺🇸MDVQ4 Air 15  Sky Blue (M5, 16GB, 512GB) - 147.500
+🇺🇸MDVD4 Air 15 Starlight (M5, 16GB, 512GB) -147.500
+🇺🇸MDV94 Air 15 Silver (M5, 16GB, 512GB)- 149.500
+🇺🇸MDVK4 Air 15 Midnight (M5, 16GB, 1TB) - 161.000
+🇺🇸MDVE4 Air 15 Starlight (M5, 16GB, 1TB) - 161.000*
+🇺🇸MDVT4 Air 15 Sky Blue  (M5, 16GB, 1TB) -161.000
+🇺🇸MDVA4 Air 15 Silver (M5, 16GB, 1TB) -172.000
+🇺🇸MDVN4 Air 15 Midnight (M5, 24GB, 1TB) -184.500*
+🇺🇸MDVC4 Air 15 Silver (M5, 24GB, 1TB) -188.000*
+🇺🇸MDVU4 Air 15 Sky Blue M5, 24GB, 1TB) - 185.500*
+🇺🇸MDVF4 Air 15 Starlight (M5, 24GB, 1TB) - 185.000*
+🇸🇬 💻[Z1LQ00054] Air 15 (M5 32/512) Silver Рус 🔌 — 206500
+🇸🇬 💻[Z1LT00054] Air 15 (M5 32/512) Starlight Рус 🔌 — 206000
+🇷🇺 💻[Z1LT000ZU] Air 15 (M5 32/512/70W) Starlight — 206500
+🇸🇬 💻[Z1LZ00054] Air 15 (M5 32/512) Sky Blue Рус 🔌 — 206000
+🇷🇺 💻[Z1LZ0013A] Air 15 (M5 32/512/70W) Sky Blue — 206500
+🇸🇬 💻[Z1LT0005B] Air 15 (M5 32/1Tb) Starlight Рус 🔌 — 236500
+🇸🇬 💻[Z1LW0005P] Air 15 (M5 32/2Tb) Midnight Рус 🔌 — 284000
+🇸🇬 💻[Z1LQ0005P] Air 15 (M5 32/2Tb) Silver Рус 🔌 — 284000
+🇸🇬 💻[Z1LT0005C] Air 15 (M5 32/2Tb) Starlight Рус 🔌 — 283500
+🇸🇬 💻[Z1LZ0005A] Air 15 (M5 32/2Tb) Sky Blue Рус 🔌 — 284000
+🇷🇺 💻[Z1LZ0013C] Air 15 (M5 32/2Tb/70W) Sky Blue — 284000
+🇸🇬 💻[Z1LW0005S] Air 15 (M5 32/4Tb) Midnight Рус 🔌 — 368000
+🇸🇬 💻[Z1LQ0005S] Air 15 (M5 32/4Tb) Silver Рус 🔌 — 368000
+🇸🇬 💻[Z1LT0005D] Air 15 (M5 32/4Tb) Starlight Рус 🔌 — 367500
+🇷🇺 💻[Z1LT000ZX] Air 15 (M5 32/4Tb/70W) Starlight — 368000
+🇸🇬 💻[Z1LZ0005D] Air 15 (M5 32/4Tb) Sky Blue Рус 🔌 — 367500
+🇷🇺 💻[Z1LZ0013D] Air 15 (M5 32/4Tb/70W) Sky Blue — 368000
+🇺🇸 Magic Keyboard USB-C White MXCL3 — 11200
+🇺🇸 Magic Keyboard Touch ID USB-C White MXCK3 — 15800
+🇺🇸 Magic Keyboard Touch ID Numeric USB-C Black MXK83 — 20500
+🇺🇸 Magic Keyboard Touch ID Numeric USB-C White MXK73 — 18000
+🇮🇳 Air 13 Midnight (M4, 16GB, 1TB) Z1CY000YL — 143500
+🇮🇳 Air 13 Silver (M4, 16GB, 1TB) Z1CT00238 — 145500
+🇮🇳 Air 13 Starlight (M4, 16GB, 1TB) Z1CW000GS — 140500
+🇮🇳 Air 13 Starlight (M4, 24GB, 1TB) Z1CW000R0-Z1CW000GW — 160500
+🇮🇳 Air 15 Midnight (M4, 16GB, 1TB) Z1DH000Q5 — 150800
+🇮🇳 Air 15 Starlight (M4, 16GB, 1TB) Z1DF0004Z — 155300
+🇮🇳 Air 15 Sky Blue (M4, 16GB, 1TB) Z1HE0004Z — 155300
+🇮🇳 Air 15 Sky Blue (M4, 24GB, 1TB) Z1HF001EF — 170300

@@ -219,6 +219,33 @@ def upsert(db, *, sku: str, title: str, price: int, category: str,
     return "обновлён" if changed else "без изменений"
 
 
+def sync_stock(db, present: set[str], *, dry_run: bool) -> tuple[list[str], list[str]]:
+    """Наличие позиций BSA = есть ли их артикул в текущем прайсе.
+
+    Прайс поставщика и есть его склад: позиция пропала из прайса — купить её
+    не у кого. Товар не удаляется и не выключается (is_active), а получает
+    «нет в наличии»: карточка, ссылки на неё и заявки остаются, а вернётся
+    позиция в прайс — вернётся и наличие. Трогает ТОЛЬКО source="bsa": товары,
+    заведённые руками или сидом, прайс BSA не описывает.
+
+    Важно: артикул включает регион и SIM, поэтому звать с полным набором
+    файлов прайса (все --phones и --macs), иначе всё, что лежит в
+    непереданном файле, уйдёт в «нет в наличии».
+    """
+    off, on = [], []
+    for row in db.query(Product).filter(Product.source == "bsa").order_by(Product.sku):
+        listed = row.sku in present
+        if row.in_stock and not listed:
+            off.append(row.sku)
+        elif not row.in_stock and listed:
+            on.append(row.sku)
+        if not dry_run and bool(row.in_stock) != listed:
+            row.in_stock = listed
+    if not dry_run:
+        db.flush()
+    return off, on
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--confirm", action="store_true")
@@ -232,18 +259,24 @@ def main() -> int:
         help="показать список «было → стало» по каждой изменившейся позиции",
     )
     parser.add_argument(
-        "--phones", default="bsa_2026_09_12.txt",
-        help="файл iPhone в data/; пустая строка — пропустить",
+        "--phones", default="bsa_2026_09_24.txt,bsa_18_2026_09_24.txt",
+        help="файлы iPhone в data/ через запятую; пустая строка — пропустить",
     )
     parser.add_argument(
-        "--macs", default="bsa_mac_2026_09_12.txt",
+        "--sync-stock", action="store_true",
+        help="позициям BSA, которых нет в этих файлах, поставить «нет в наличии»,"
+             " вернувшимся — «в наличии» (передавайте ВСЕ файлы прайса)",
+    )
+    parser.add_argument(
+        "--macs", default="bsa_mac_2026_09_24.txt",
         help="файл Mac/мониторов в data/; пустая строка — пропустить",
     )
     args = parser.parse_args()
     dry_run = not args.confirm
 
-    def read(name: str) -> str:
-        return (DATA / name).read_text(encoding="utf-8") if name else ""
+    def read(names: str) -> str:
+        return "\n".join((DATA / name.strip()).read_text(encoding="utf-8")
+                         for name in names.split(",") if name.strip())
 
     phones, failed_phones = parse(read(args.phones))
     macs, failed_macs = parse_mac(read(args.macs))
@@ -312,10 +345,25 @@ def main() -> int:
                             prices_only=args.prices_only)
             stats[result] = stats.get(result, 0) + 1
 
+        stock_off: list[str] = []
+        stock_on: list[str] = []
+        if args.sync_stock:
+            stock_off, stock_on = sync_stock(
+                db, {i.sku for i in phones} | {m.sku for m in macs}, dry_run=dry_run)
+
         if dry_run:
             db.rollback()
         else:
             db.commit()
+
+        if args.sync_stock:
+            print(f"нет в прайсе -> «нет в наличии»: {len(stock_off)}")
+            for sku in stock_off:
+                print("   -", sku)
+            print(f"вернулись в прайс -> «в наличии»: {len(stock_on)}")
+            for sku in stock_on:
+                print("   +", sku)
+            print()
 
         if args.diff and diff:
             print("изменения цены (было → стало):")
