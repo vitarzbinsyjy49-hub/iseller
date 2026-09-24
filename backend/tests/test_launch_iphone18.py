@@ -18,5 +18,6 @@ def test_launch_switches_banner_retires_preorder_marks_new(db):
     assert banner.image_url == launch.BANNER["image_url"]
     active = {p.sku: p.is_active for p in db.query(Product)}
     assert active["PREORDER-IP18PRO"] is False and active["PREORDER-IPDUO"] is True
-    assert db.query(Product).filter_by(sku="IP-18PROMAX-256-BLACK-KRHK-SIM").one().is_new
+    flagship = db.query(Product).filter_by(sku="IP-18PROMAX-256-BLACK-KRHK-SIM").one()
+    assert flagship.is_new and flagship.is_hot and flagship.promo_boost == launch.PROMO_BOOST
     assert launch.apply(db) == []          # повторный запуск ничего не меняет

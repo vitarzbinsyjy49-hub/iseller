@@ -164,3 +164,22 @@ def test_view_counts_respects_window(db):
 def test_view_counts_empty_when_no_events(db):
     make_product(db, title="P")
     assert view_counts(db) == {}
+
+
+def test_promo_boost_lifts_flagship_above_demand_but_not_above_stock(db):
+    """Редакторское продвижение (запуск новой модели) выше спроса: у новинки
+    просмотров ещё нет, и без него она неделю стояла бы под прошлогодней
+    моделью. Но ниже наличия — продвигать то, что нельзя купить, нельзя."""
+    from sqlalchemy import select
+
+    from app.services.ranking import default_order
+
+    items = [
+        make_product(db, title="iPhone 17 Pro", popularity=13, price=100000),
+        make_product(db, title="iPhone 18 Pro", popularity=0, price=127000, promo_boost=10),
+        make_product(db, title="iPhone 18 Pro нет", popularity=0, price=1, promo_boost=10,
+                     in_stock=False),
+    ]
+    assert _titles_in_order(db, items) == ["iPhone 18 Pro", "iPhone 17 Pro", "iPhone 18 Pro нет"]
+    sql = [p.title for p in db.execute(select(Product).order_by(*default_order(db))).scalars()]
+    assert sql == ["iPhone 18 Pro", "iPhone 17 Pro", "iPhone 18 Pro нет"]

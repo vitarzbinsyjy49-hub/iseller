@@ -181,6 +181,8 @@ def _apply_demo_migrations() -> None:
         # и помеченная золотом на карточке. DEFAULT FALSE: у существующих 215
         # товаров ничего не меняется, флаг ставится вручную в админке.
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS is_legendary BOOLEAN NOT NULL DEFAULT FALSE",
+        # Редакторское продвижение (services/ranking): 0 у всех существующих.
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS promo_boost INTEGER NOT NULL DEFAULT 0",
         # Афиша события: широкий макет для страницы товара. Отдельно от images,
         # потому что в квадратной карточке ленты постер обрезался бы по центру,
         # теряя и заголовок, и цену. NULL у всех, кроме единичных позиций.

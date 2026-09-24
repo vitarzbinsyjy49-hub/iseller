@@ -1,5 +1,6 @@
 /** Типы ответа AI-моста и карточек товаров (Demo MVP). */
 import type { AiFilterState } from "../../lib/aiFilters";
+import type { FamilyInfo, Variants } from "../../lib/variants";
 import type { AvailabilityMode } from "../../lib/cartMath";
 import type { ScenarioKey } from "../../lib/scenario";
 
@@ -78,6 +79,9 @@ export type ProductCard = {
    *  null, и тогда не показываем НИЧЕГО. Придумывать замену на фронте нельзя:
    *  весь смысл в том, что это посчитано, а не написано. */
   social_proof?: string | null;
+  /** Карточка представляет модель целиком: в выдаче одна карточка вместо
+   *  вариантов памяти/цвета/SIM. Есть только у свёрнутых семейств. */
+  family?: FamilyInfo;
   tags?: string[];
   why: string[];
   buttons: CardButton[];
@@ -105,6 +109,9 @@ export type ProductDetail = ProductCard & {
    *  только на странице товара — в квадратной карточке ленты постер обрезался
    *  бы по центру, теряя и заголовок, и цену. */
   poster_url?: string | null;
+  /** Соседние варианты той же модели (память, цвет, SIM). null — переключать
+   *  не на что. Backend: services/variants.py. */
+  variants?: Variants | null;
 };
 
 export type ManagerRole = "retail" | "wholesale" | "b2b" | "trade_in";

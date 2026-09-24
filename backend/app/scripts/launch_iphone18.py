@@ -6,7 +6,9 @@
 2. карточки предзаказа 18 Pro / Pro Max уходят с витрины (is_active=False).
    С экрана события они НЕ пропадают: api/preorder показывает их в блоке
    «Уже в наличии» с реальными вариантами — описание живёт только там;
-3. складские карточки 18 Pro / Pro Max получают флаг «новинка».
+3. складские карточки 18 Pro / Pro Max получают флаг «новинка», «горячее» и
+   редакторское продвижение PROMO_BOOST (services/ranking): у новинки ещё нет
+   просмотров, и без него она стояла бы под 17-й серией.
 
 Идемпотентен: повторный запуск ничего не меняет.
 
@@ -30,6 +32,7 @@ BANNER = {
 }
 PREORDER_SKUS = ("PREORDER-IP18PRO", "PREORDER-IP18PROMAX")
 STOCK_PREFIX = "IP-18PRO"      # захватывает и IP-18PRO-, и IP-18PROMAX-
+PROMO_BOOST = 100
 
 
 def apply(db) -> list[str]:
@@ -50,13 +53,14 @@ def apply(db) -> list[str]:
             row.is_active = False
             changed.append(f"снят с витрины {row.sku}")
 
-    fresh = (db.query(Product)
-             .filter(Product.sku.like(STOCK_PREFIX + "%"), Product.is_new.is_(False))
-             .all())
-    for row in fresh:
-        row.is_new = True
-    if fresh:
-        changed.append(f"«новинка» у {len(fresh)} карточек")
+    stock = db.query(Product).filter(Product.sku.like(STOCK_PREFIX + "%")).all()
+    touched = 0
+    for row in stock:
+        if not (row.is_new and row.is_hot and row.promo_boost == PROMO_BOOST):
+            row.is_new, row.is_hot, row.promo_boost = True, True, PROMO_BOOST
+            touched += 1
+    if touched:
+        changed.append(f"«новинка», «горячее» и продвижение у {touched} карточек")
 
     db.flush()
     return changed

@@ -29,6 +29,7 @@ from app.services.marketplace import exclude_marketplace
 from app.services.ranking import default_order
 from app.services.recommendations import diversify_by_category, recently_viewed, recommend
 from app.services.social_proof import apply_social_proof
+from app.services.variants import apply_family_info, collapse, variants_payload
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -167,9 +168,13 @@ def catalog_search(
     limit: int = Query(default=6, ge=1, le=20),
     db: Session = Depends(get_db),
 ):
-    products = search_products(db, query, price_max, limit)
+    # Берём с запасом и сворачиваем варианты: иначе шесть мест выдачи заняли бы
+    # шесть регионов одного iPhone (services/variants).
+    products, family = collapse(search_products(db, query, price_max, 100))
+    products = products[:limit]
     cards = [p.to_card() for p in products]
     apply_group_images(db, products, cards)
+    apply_family_info(cards, family)
     return {"cards": cards}
 
 
@@ -265,6 +270,10 @@ def list_catalog(
     # Товары без реального фото — в конец выдачи (не пропадают из каталога),
     # выбранная сортировка сохраняется внутри каждой из двух групп.
     products = _photo_last(db, products)
+    # Одна карточка на модель: память, цвет и SIM переключаются на странице
+    # товара (services/variants). Сворачиваем ДО среза по limit, иначе срез
+    # съел бы места вариантами одной модели.
+    products, family = collapse(products)
     # «Популярные» без сужающих фильтров — это дефолтный обзорный экран
     # каталога. Спрос сейчас сконцентрирован в смартфонах (их и в каталоге
     # больше всего), и без перемешивания категория за категорией шла бы
@@ -277,6 +286,7 @@ def list_catalog(
     cards = [p.to_card() for p in products]
     apply_group_images(db, products, cards)
     apply_social_proof(db, products, cards)
+    apply_family_info(cards, family)
     return {"cards": cards}
 
 
@@ -324,8 +334,14 @@ def feed(db: Session = Depends(get_db)):
                                             *preorder_raw)}.values())
     resolved = resolve_product_images(db, all_candidates)
 
+    family_info: dict[int, dict] = {}
+
     def with_photo(items):
-        return [p for p in items if has_real_photo(resolved.get(p.id))]
+        # Сначала свёртка вариантов (одна карточка на модель, services/variants),
+        # потом фото: представитель семейства — самый дешёвый в наличии.
+        items, info = collapse([p for p in items if has_real_photo(resolved.get(p.id))])
+        family_info.update(info)
+        return items
 
     hot = dedupe_by_group(with_photo(hot_raw))[:8]
     preorder = dedupe_by_group(with_photo(preorder_raw))[:8]
@@ -352,6 +368,8 @@ def feed(db: Session = Depends(get_db)):
     uniq = list({p.id: p for p in (*hot, *today, *new_items, *recommended, *preorder)}.values())
     cards = {p.id: p.to_card() for p in uniq}
     apply_group_images(db, uniq, [cards[p.id] for p in uniq])
+
+    apply_family_info(list(cards.values()), family_info)
 
     def section(items):
         return [cards[p.id] for p in items]
@@ -475,4 +493,5 @@ def product_details(product_id: int, db: Session = Depends(get_db)):
     detail = product.to_detail()
     apply_group_images(db, [product], [detail])
     apply_social_proof(db, [product], [detail])
+    detail["variants"] = variants_payload(db, product)
     return detail

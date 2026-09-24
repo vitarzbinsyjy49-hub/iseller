@@ -23,6 +23,10 @@
    формально они там есть, практически их никто не увидит. Ступень снимается
    одной правкой здесь же, когда товары приедут и станут обычными;
 1. `in_stock` — то, что нельзя купить, вниз;
+1.5. `promo_boost` — редакторское продвижение (запуск новой модели): у новинки
+   просмотров ещё нет, и спрос неделю держал бы её под прошлым поколением.
+   Выше спроса, но ниже наличия. Ставится скриптом/админкой, снимается, когда
+   спрос наберётся сам;
 2. `popularity` — реальный спрос, если он есть. Ноль у всех => шаг не работает,
    и решение переходит дальше;
 3. позиция категории из плиток; категория без плитки — в конец, но НЕ пропадает;
@@ -96,6 +100,7 @@ def product_sort_key(product: Product, priority: dict[str, int]) -> tuple:
         0 if product.is_legendary else 1,
         0 if resolve_availability(product) == "preorder" else 1,
         0 if product.in_stock else 1,
+        -int(product.promo_boost or 0),
         -float(product.popularity or 0),
         priority.get(product.category, NO_TILE_RANK),
         -price,
@@ -116,6 +121,7 @@ def order_by_clauses(priority: dict[str, int]):
         # ЯВНЫЙ, вывести его из флагов нельзя, он бывает только в колонке.
         case((Product.availability_mode == "preorder", 0), else_=1).asc(),
         Product.in_stock.desc(),
+        Product.promo_boost.desc(),
         Product.popularity.desc(),
         rank.asc(),
         Product.price.desc(),

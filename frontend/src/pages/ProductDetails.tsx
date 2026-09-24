@@ -26,6 +26,7 @@ import { QuantityStepper } from "../components/QuantityStepper";
 import { specChips } from "../lib/specChips";
 import LegendaryProduct from "../components/LegendaryProduct";
 import PriceOfferBlock from "../components/PriceOfferBlock";
+import VariantPicker from "../components/VariantPicker";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 import { CART_SWAP_DX_PX, useCartSwapOut } from "../lib/useCartSwap";
 
@@ -47,7 +48,10 @@ export default function ProductDetails() {
 
   const load = useCallback(() => {
     if (!id) return;
-    setState("loading");
+    // Переход между вариантами (память, цвет) — это смена id при уже открытом
+    // товаре. Скелетон на этот миг выглядел бы как перезагрузка страницы:
+    // держим прежний товар на экране, пока не придёт новый.
+    setState((s) => (s === "ready" ? s : "loading"));
     cachedApi<ProductDetail>(`/catalog/product/${id}`)
       .then((d) => {
         setP(d); setState("ready");
@@ -321,6 +325,9 @@ export default function ProductDetails() {
         )}
       </div>
       )}
+
+      {/* Память / цвет / SIM — соседние товары той же модели (lib/variants). */}
+      {p.variants && <VariantPicker variants={p.variants} productId={p.id} />}
 
       {/* Остаток — только у товаров, помеченных в админке как лимитированные
           (is_limited). Малый складской остаток сам по себе дефицитом не считаем. */}

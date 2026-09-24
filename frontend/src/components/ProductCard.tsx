@@ -22,6 +22,7 @@ import { QuantityStepper } from "./QuantityStepper";
 import { CART_SWAP_DX_PX } from "../lib/useCartSwap";
 import { preloadProduct } from "../lib/routePreload";
 import { productName } from "../lib/productName";
+import { colorHex } from "../lib/variants";
 import { Icon } from "./icons";
 
 const MAX_CARD_IMAGES = 10;
@@ -408,6 +409,19 @@ function CardCartControl({ card, onOpen }: { card: TCard; onOpen: () => void }) 
     }
   }
 
+  // Карточка модели целиком: какой вариант класть в корзину, решает человек
+  // на странице товара. Иначе в корзину молча уезжал бы самый дешёвый регион.
+  if (card.family && orderable) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onOpen(); }}
+        className="tap h-11 w-full rounded-field bg-accent text-[12px] font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        Выбрать
+      </button>
+    );
+  }
+
   if (!orderable) {
     return (
       <button
@@ -586,7 +600,9 @@ function ProductCard({ card, compact, onOpen }: Props) {
               убирает ТОЛЬКО коды стран, а «SIM+eSIM» намеренно оставляет —
               потерять его значит слить разные позиции в одну. */}
           <p className="line-clamp-2 min-h-[2.25rem] text-footnote font-medium">
-            {productName(card)}
+            {/* Свёрнутое семейство называется моделью: «iPhone 18 Pro», а не
+                «… 256 ГБ Silver (eSIM)» — память и цвет выбираются внутри. */}
+            {productName(card.family ? { ...card, title_clean: card.family.model } : card)}
           </p>
         </button>
         {/* Цена или её отсутствие. price_note приходит с backend непустым ровно
@@ -613,7 +629,19 @@ function ProductCard({ card, compact, onOpen }: Props) {
           </p>
         ) : (
           <div className="mt-1.5 flex items-baseline gap-1.5">
-            <span className="text-title font-bold tracking-tight">{formatPrice(card.price)}</span>
+            <span className="text-title font-bold tracking-tight">
+              {card.family ? `от ${formatPrice(card.family.min_price)}` : formatPrice(card.price)}
+            </span>
+            {/* Кружки цветов — в той же строке, что цена: отдельная строка
+                сделала бы плитку семейства выше соседних, и ряд сетки «поехал» бы. */}
+            {card.family && card.family.colors.length > 1 && (
+              <span className="ml-auto flex shrink-0 -space-x-1 self-center" aria-label={card.family.colors.join(", ")}>
+                {card.family.colors.slice(0, 5).map((c) => (
+                  <span key={c} className="h-3 w-3 rounded-full border border-surface"
+                    style={{ background: colorHex(c) }} />
+                ))}
+              </span>
+            )}
             {/* old_price показываем только когда реально даёт скидку — иначе цифры вводят в заблуждение */}
             {disc !== null && (
               <span className="text-[11px] text-muted line-through">{formatPrice(card.old_price!)}</span>

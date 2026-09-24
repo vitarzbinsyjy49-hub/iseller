@@ -100,6 +100,16 @@ REQUIRED_SCHEMA: dict[str, tuple[str, ...]] = {
     # синхронизации таблицу без этой строки не видит — он проверяет только уже
     # перечисленные здесь.
     "ad_touches": ("kind",),
+    # Напоминания об избранном читают товары через ORM — все колонки разом.
+    # Новая колонка товара (promo_boost, 24.09.2026) без этой строки уронила
+    # бы первый тик после деплоя.
+    "products": (
+        "sku", "subcategory", "condition", "color", "memory", "storage",
+        "screen_size", "cpu", "ram", "source", "created_at", "images",
+        "is_limited", "model_family", "image_group_detached", "image_group_key",
+        "availability_mode", "preorder_eta", "preorder_group", "accent_color",
+        "is_legendary", "poster_url", "promo_boost",
+    ),
     "fx_rate_history": (),
 }
 
