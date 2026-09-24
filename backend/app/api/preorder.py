@@ -119,7 +119,10 @@ def get_preorder_event(group: str, db: Session = Depends(get_db)):
         card["offer"] = offer_card
         card["variants"] = len(variants)
         card["min_price"] = float(variants[0].price)
-        card["query"] = model_key(member.title).lower()
+        # Заголовок блока — модель, а не «256 ГБ»: вариантов памяти у неё теперь
+        # несколько, и базовая комплектация из предзаказа ввела бы в заблуждение.
+        card["title"] = model_key(member.title)
+        card["query"] = card["title"].lower()
         arrived_cards.append(card)
 
     return {

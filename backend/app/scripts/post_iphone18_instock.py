@@ -27,14 +27,12 @@ from pathlib import Path
 
 from sqlalchemy import func
 
-from app.core.config import settings
 from app.core.uploads import save_image
 from app.db.session import SessionLocal
 from app.models.post import ChannelPost
 from app.models.product import Product
 from app.services import price_channel
 from app.services.info_posts import INFO_KIND
-from app.services.price_posts import deep_link
 
 SLUG = "info_iphone18_instock"
 IMAGE = Path(__file__).with_name("data") / "iphone18-instock-post.webp"
@@ -95,10 +93,10 @@ def build_body(db) -> str:
 
 
 def buttons() -> list[dict]:
-    """Поиск по «iphone 18 pro» собирает обе модели сразу — один экран вместо двух."""
-    search = deep_link(settings.BOT_USERNAME, "q_iphone-18-pro", settings.MINI_APP_SHORT_NAME)
+    """Главная кнопка ведёт на экран события: там обе модели с описанием и
+    выходом ко всем вариантам — тот же экран, что у первого баннера главной."""
     specs = [
-        {"text": "📱 Выбрать iPhone 18 Pro", "kind": "url", "value": search or "", "row": 0},
+        {"text": "📱 Смотреть iPhone 18 Pro", "kind": "preorder", "value": "apple-sept-2026", "row": 0},
         {"text": "💰 Все цены на iPhone", "kind": "section", "value": "price_iphone", "row": 1},
         {"text": "💬 Менеджер", "kind": "manager", "row": 1},
     ]

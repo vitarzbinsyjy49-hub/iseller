@@ -33,4 +33,4 @@ def test_prepare_retires_preorder_and_marks_new(db):
     assert db.query(Product).filter_by(sku="PREORDER-IP18PRO").one().is_active is False
     assert db.query(Product).filter_by(sku="IP-18PRO-256-BLACK-KRHK-SIM").one().is_new
     assert row.image_url is None          # в предпросмотре картинку не кладём
-    assert row.button_spec[0]["kind"] == "url"
+    assert row.button_spec[0]["kind"] == "preorder"
