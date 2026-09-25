@@ -662,6 +662,16 @@ export default function Home() {
           при его сбое раньше секции бесконечно показывали скелетон (feed оставался null
           навсегда). Теперь при ошибке — один явный блок с повтором вместо трёх немых. */}
 
+      {/* «Новинки» — первой товарной секцией, выше личной истории (решение
+          владельца 25.09.2026): когда приезжает новое устройство, его должно
+          быть видно сразу, а не после «Недавно смотрели» и трёх подборок. Секция
+          читает тот же /catalog/feed; при его сбое ниже стоит один общий блок
+          с повтором, здесь просто ничего не рисуем. */}
+      {!feedError && (
+        <Section title="Новинки" cards={feed?.new}
+          onAll={() => navigate("/catalog")} />
+      )}
+
       {/* v5.2.6: персональные секции — «Недавно смотрели» (если есть история) и «Для вас» */}
       {recentlyViewed && recentlyViewed.length >= 2 && (
         <Section title="Вы недавно смотрели" cards={recentlyViewed}
@@ -714,8 +724,6 @@ export default function Home() {
             onAll={() => navigate("/catalog")} />
           <Section title="Забрать сегодня" cards={feed?.available_today}
             onAll={() => navigate("/catalog?today=1")} />
-          <Section title="Новинки" cards={feed?.new}
-            onAll={() => navigate("/catalog")} />
         </>
       )}
 
