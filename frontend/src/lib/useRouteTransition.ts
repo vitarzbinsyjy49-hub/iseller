@@ -45,6 +45,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useNavigationType, type Location } from "react-router-dom";
 import { animateOpacity, easeOutQuint, prefersReducedMotion } from "./motion";
+import { isVariantSwitch } from "./variantSwitch";
 import {
   resolveRouteMotion,
   routeMotionDuration,
@@ -449,6 +450,14 @@ export function useRouteTransition(location: Location): Location {
       // остался бы в документе навсегда — его никто больше не держит.
       ghost.current?.remove();
       ghost.current = null;
+      // Смена цвета/памяти на карточке — тот же экран, у него меняется только
+      // содержимое. Даже короткое проявление всего <main> выглядело бы как
+      // перезагрузка страницы, поэтому здесь нет ни снимка, ни затухания.
+      if (isVariantSwitch(location.state)) {
+        pending.current = null;
+        setDisplayed(location);
+        return;
+      }
       const motion = prefersReducedMotion()
         ? ({ kind: "none" } as const)
         : resolveRouteMotion(displayed.pathname, location.pathname, navigationType);

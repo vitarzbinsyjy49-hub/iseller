@@ -9,6 +9,7 @@ import { usePageSwipe } from "../lib/usePageSwipe";
 import { setBackButton } from "../lib/telegram";
 import { useCart } from "../lib/cart";
 import { shouldShowCartBar } from "../lib/cartMath";
+import { isVariantSwitch } from "../lib/variantSwitch";
 
 /** Позиции корневого scroll-контейнера живут вне route-компонентов: возврат из
  * карточки товара восстанавливает каталог, а переход на новый экран стартует
@@ -61,6 +62,13 @@ export default function Layout() {
   useLayoutEffect(() => {
     const main = mainRef.current;
     if (!main) return;
+    // Смена цвета/памяти — тот же экран: прокрутка остаётся, где была, и
+    // запоминается уже за новым адресом (для возврата «Назад» на него).
+    if (isVariantSwitch(location.state)) {
+      restoreVersion.current += 1;
+      rememberRouteScroll(routeId, main.scrollTop);
+      return;
+    }
     const target = routeScrollPositions.get(routeId) ?? 0;
     const version = ++restoreVersion.current;
     let attempts = 0;

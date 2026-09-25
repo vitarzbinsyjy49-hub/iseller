@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { cachedApi, invalidateApi } from "../lib/apiCache";
 import { indexFromScroll } from "../lib/carousel";
-import { animateScrollTo, transitionDuration } from "../lib/motion";
+import { animateOpacity, animateScrollTo, prefersReducedMotion, transitionDuration } from "../lib/motion";
 import { PICKUP_ADDRESS, PICKUP_HOURS } from "../lib/pickup";
 import { track, trackProduct } from "../lib/analytics";
 import { ProductCard as TCard, ProductDetail } from "../components/ai/types";
@@ -721,8 +721,21 @@ function Gallery({
   const scrollRef = useRef<HTMLDivElement>(null);
   const slides = images.length ? images : [""];
 
-  // Сброс при смене товара/набора фото (главная всегда первой).
-  useEffect(() => { setIdx(0); scrollRef.current?.scrollTo({ left: 0 }); }, [images[0], images.length]);
+  // Сброс при смене товара/набора фото (главная всегда первой). Смена цвета
+  // подменяет фото на месте: без проявления новое фото «щёлкает» поверх
+  // старого. Мотор rAF, а не CSS transition — в Telegram WebView
+  // декларативная анимация гасла целиком. Первый показ — без эффекта.
+  const shownFirst = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    setIdx(0);
+    const el = scrollRef.current;
+    el?.scrollTo({ left: 0 });
+    const prev = shownFirst.current;
+    shownFirst.current = images[0];
+    if (!el || prev === undefined || prev === images[0] || prefersReducedMotion()) return;
+    const cancel = animateOpacity(el, 0.25, 1, 220, () => { el.style.opacity = ""; });
+    return () => { cancel(); el.style.opacity = ""; };
+  }, [images[0], images.length]);
 
   function goTo(i: number) {
     const el = scrollRef.current;

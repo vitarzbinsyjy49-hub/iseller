@@ -5,6 +5,7 @@ import { haptic } from "../lib/telegram";
 import {
   COLOR_AXIS, colorHex, isExact, otherVersions, pickVariant, valueLabel, type Variants,
 } from "../lib/variants";
+import { variantSwitchState } from "../lib/variantSwitch";
 import { RegionFlags } from "./flags";
 
 /** Переключатели вариантов на странице товара: цвет, память, конфигурация…
@@ -15,6 +16,8 @@ import { RegionFlags } from "./flags";
  *
  *  Каждый вариант — отдельный товар, поэтому выбор уводит на соседнюю
  *  страницу (replace: «Назад» возвращает в каталог, а не листает цвета).
+ *  Переход помечен variantSwitchState: прокрутка остаётся на месте, экран не
+ *  мигает — меняется только содержимое карточки (lib/variantSwitch).
  *  Регион не переключатель: покупателю он почти никогда не важен, и лишний ряд
  *  кнопок только пугал бы. Показываем его одной строкой, а одинаковые
  *  конфигурации других регионов — по тапу, «другие версии». */
@@ -32,7 +35,7 @@ export default function VariantPicker({ variants, productId }: {
     const target = pickVariant(variants, axis, value);
     if (!target || target.id === productId) return;
     haptic("light");
-    navigate(`/product/${target.id}`, { replace: true });
+    navigate(`/product/${target.id}`, { replace: true, state: variantSwitchState() });
   }
 
   return (
@@ -81,7 +84,7 @@ export default function VariantPicker({ variants, productId }: {
             <div className="mt-2 flex flex-col gap-1.5">
               {others.map((o) => (
                 <button key={o.id}
-                  onClick={() => navigate(`/product/${o.id}`, { replace: true })}
+                  onClick={() => navigate(`/product/${o.id}`, { replace: true, state: variantSwitchState() })}
                   className="tap flex min-h-11 items-center justify-between rounded-field border border-border bg-surface px-3 text-[13px]">
                   <span className="inline-flex items-center gap-2">
                     <RegionFlags codes={o.regions} />
