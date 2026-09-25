@@ -285,13 +285,16 @@ export default function ProductDetails() {
       </h1>
 
       {/* Состояние + ключевые характеристики одной строкой */}
-      {(p.condition === "used" || p.condition === "refurbished" || p.color || p.memory || p.storage) && (
+      {(p.condition === "used" || p.condition === "refurbished" || p.condition === "showcase" || p.color || p.memory || p.storage) && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {p.condition === "used" && (
             <span className="rounded-full bg-[#fff3d6] px-2 py-0.5 text-[11px] font-semibold text-[#a16207]">Б/у</span>
           )}
           {p.condition === "refurbished" && (
             <span className="rounded-full bg-[#e0f4f3] px-2 py-0.5 text-[11px] font-semibold text-[#0f766e]">Восстановленный</span>
+          )}
+          {p.condition === "showcase" && (
+            <span className="rounded-full bg-mutedbg px-2 py-0.5 text-[11px] font-semibold text-muted">Витринный образец</span>
           )}
           {/* Дедуп по значению: в прайсе memory и storage почти всегда одно и
               то же («512 ГБ»), и без него здесь висели два одинаковых чипа. */}

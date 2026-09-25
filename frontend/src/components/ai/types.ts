@@ -51,7 +51,7 @@ export type ProductCard = {
    *  (components/ProductCard.tsx). Отдаёт backend в to_card() для КАЖДОЙ
    *  карточки, не только на странице товара — здесь, а не только в
    *  ProductDetail. */
-  condition?: "new" | "used" | "refurbished";
+  condition?: "new" | "used" | "refurbished" | "showcase";
   /** Режим доступности считает backend (services/availability.py) — фронт его
    *  только показывает. Второй раз выводить правила из in_stock/is_limited
    *  нельзя: кнопка «в корзину» и проверка на checkout обязаны совпадать. */

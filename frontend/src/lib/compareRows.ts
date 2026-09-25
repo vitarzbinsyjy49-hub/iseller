@@ -21,6 +21,7 @@ const CONDITION_LABEL: Record<string, string> = {
   new: "Новый",
   used: "Б/у",
   refurbished: "Восстановленный",
+  showcase: "Витринный образец",
 };
 
 /** Строка выходит, только если значения РАЗНЫЕ. Строка, одинаковая во всех

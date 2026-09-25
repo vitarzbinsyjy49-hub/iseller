@@ -34,6 +34,7 @@ const CONDITION_LABEL: Record<string, string> = {
   new: "Новые",
   used: "Б/у",
   refurbished: "Восстановленные",
+  showcase: "Витринные",
 };
 
 function budgetLabel(value: number): string {

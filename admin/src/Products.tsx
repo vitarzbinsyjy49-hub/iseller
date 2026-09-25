@@ -631,6 +631,7 @@ function ProductModal({
               <option value="new">Новый</option>
               <option value="used">Б/у</option>
               <option value="refurbished">Восстановленный</option>
+              <option value="showcase">Витринный образец (ASIS)</option>
             </select>
           </label>
           {/* Доступность для корзины. Пусто = выводится из «в наличии» и

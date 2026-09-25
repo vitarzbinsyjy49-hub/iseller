@@ -32,7 +32,7 @@ _STR_FIELDS = ("title", "brand", "category", "subcategory", "condition", "color"
 _BOOL_FIELDS = ("is_hot", "is_available_today", "is_active", "is_new", "on_sale")
 _TRUE = {"1", "true", "да", "yes", "y", "истина", "+"}
 _FALSE = {"0", "false", "нет", "no", "n", "ложь", "-"}
-_CONDITIONS = {"new", "used", "refurbished"}
+_CONDITIONS = {"new", "used", "refurbished", "showcase"}
 
 # Детерминированные алиасы заголовков (рус -> канон). Никакого угадывания LLM.
 HEADER_ALIASES = {
@@ -222,7 +222,7 @@ def normalize_row(raw: dict) -> tuple[str | None, dict, list[str], list[str], li
     if "condition" in ch:
         low = ch["condition"].lower()
         if low not in _CONDITIONS:
-            warnings.append(f"condition '{ch['condition']}' не из new/used/refurbished — заменён на new")
+            warnings.append(f"condition '{ch['condition']}' не из new/used/refurbished/showcase — заменён на new")
             ch["condition"] = "new"
         else:
             ch["condition"] = low

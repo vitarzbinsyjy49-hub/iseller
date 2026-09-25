@@ -39,6 +39,10 @@ describe("filterChips", () => {
     expect(filterChips({ budget_max: 0 })).toEqual([]);
   });
 
+  it("витринный образец (ASIS) — своим чипом, не «Новые»", () => {
+    expect(filterChips({ condition: "showcase" })).toEqual([{ key: "condition", label: "Витринные" }]);
+  });
+
   it("незнакомое состояние не выдумывается", () => {
     expect(filterChips({ condition: "странное" })).toEqual([]);
   });

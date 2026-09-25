@@ -27,7 +27,7 @@ export type CardBadgeKind = "legendary" | "discount" | "hot" | "used";
 export type BadgeSource = {
   is_legendary?: boolean;
   is_hot?: boolean;
-  condition?: "new" | "used" | "refurbished";
+  condition?: "new" | "used" | "refurbished" | "showcase";
 };
 
 /** Сколько бейджей плитка показывает одновременно. */

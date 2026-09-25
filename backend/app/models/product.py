@@ -26,7 +26,12 @@ _STRUCTURED_SPEC_LABELS: list[tuple[str, str]] = [
     ("storage", "Накопитель"),
 ]
 
-_CONDITION_RU = {"new": "Новый", "used": "Б/у", "refurbished": "Восстановленный"}
+#: Витринный образец / уценка — пометка ASIS в прайсе BSA (services/bsa_parser).
+#: Не «б/у»: хозяина у аппарата не было, но и новым его называть нельзя.
+CONDITION_SHOWCASE = "showcase"
+
+_CONDITION_RU = {"new": "Новый", "used": "Б/у", "refurbished": "Восстановленный",
+                 CONDITION_SHOWCASE: "Витринный образец"}
 
 
 def _spec_value_to_str(v) -> str | None:
@@ -116,7 +121,7 @@ class Product(Base):
     # нет в файле импорта, то есть у большинства новых товаров, — и прежняя
     # дюжина тихо возвращала бы в каталог обещание, которого магазин не даёт.
     warranty_months: Mapped[int] = mapped_column(Integer, default=1)
-    condition: Mapped[str] = mapped_column(String(20), default="new")  # new / used / refurbished
+    condition: Mapped[str] = mapped_column(String(20), default="new")  # new / used / refurbished / showcase
     color: Mapped[str | None] = mapped_column(String(50))
     memory: Mapped[str | None] = mapped_column(String(50))             # оперативная/встроенная, как в прайсе
     storage: Mapped[str | None] = mapped_column(String(50))

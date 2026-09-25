@@ -525,6 +525,8 @@ const CONDITIONS = [
   { key: "new", label: "Новое" },
   { key: "used", label: "Б/у" },
   { key: "refurbished", label: "Восстановленное" },
+  // ASIS из прайса BSA: витринный образец / уценка (backend: CONDITION_SHOWCASE).
+  { key: "showcase", label: "Витрина" },
 ];
 
 /** Desktop-sidebar фильтров каталога (>=1024px). Только представление —

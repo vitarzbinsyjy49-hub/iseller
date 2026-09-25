@@ -26,7 +26,7 @@ import httpx
 
 from app.core.uploads import save_image
 from app.db.session import SessionLocal
-from app.models.product import Product
+from app.models.product import CONDITION_SHOWCASE, Product
 from app.services.bsa_parser import Item, MacItem, parse, parse_mac
 from app.services.family_rules import resolve as resolve_family
 
@@ -173,9 +173,21 @@ def mac_subcategory(title: str) -> str:
     return "Аксессуары"
 
 
+def catalog_condition(item: Item | MacItem) -> str:
+    """Пометка ASIS в прайсе -> состояние товара в каталоге.
+
+    Раньше ASIS доезжал только до названия («… Orange [ASIS]»), а condition
+    оставался new — и фильтр «только новые» в каталоге и ИИ-подборе отдавал
+    витринные образцы как новые. Остальные пометки Mac (BOX, SERVICE, SALE,
+    DEMO) пока меняют только артикул — решение владельца 25.09.2026.
+    """
+    asis = item.asis if isinstance(item, Item) else item.condition == "ASIS"
+    return CONDITION_SHOWCASE if asis else "new"
+
+
 def upsert(db, *, sku: str, title: str, price: int, category: str,
            subcategory: str, brand: str, photo_name: str | None, dry_run: bool,
-           prices_only: bool = False) -> str:
+           prices_only: bool = False, condition: str = "new") -> str:
     """Создать или обновить позицию. Возвращает «создан»/«обновлён»/«без изменений».
 
     `prices_only` — еженедельный режим сверки: у поставщика меняются ЦЕНЫ, а
@@ -202,7 +214,7 @@ def upsert(db, *, sku: str, title: str, price: int, category: str,
         row = Product(sku=sku, title=title, brand=brand, category=category,
                       subcategory=subcategory,
                       price=final_price, in_stock=True, stock=1, is_active=True,
-                      warranty_months=1, source="bsa")
+                      warranty_months=1, source="bsa", condition=condition)
         # Сразу в своё семейство (services/variants): иначе новая карточка до
         # следующего backfill жила бы только на правилах «на лету».
         resolved = resolve_family(row)
@@ -215,10 +227,12 @@ def upsert(db, *, sku: str, title: str, price: int, category: str,
         db.add(row)
         return "создан"
 
-    changed = row.price != final_price or row.title != title
+    changed = (row.price != final_price or row.title != title
+               or row.condition != condition)
     if not dry_run:
         row.price = final_price
         row.title = title
+        row.condition = condition
         row.category = category
         row.subcategory = subcategory
         row.warranty_months = 1
@@ -431,7 +445,8 @@ def main() -> int:
             result = upsert(db, sku=item.sku, title=item.title, price=item.price,
                             category="смартфоны", subcategory="iPhone", brand="Apple",
                             photo_name=photo, dry_run=dry_run,
-                            prices_only=args.prices_only)
+                            prices_only=args.prices_only,
+                            condition=catalog_condition(item))
             stats[result] = stats.get(result, 0) + 1
 
         for mac in macs:
@@ -442,7 +457,8 @@ def main() -> int:
             result = upsert(db, sku=mac.sku, title=mac.full_title, price=mac.price,
                             category=mac.category, subcategory=mac_subcategory(mac.title),
                             brand="Apple", photo_name=photo, dry_run=dry_run,
-                            prices_only=args.prices_only)
+                            prices_only=args.prices_only,
+                            condition=catalog_condition(mac))
             stats[result] = stats.get(result, 0) + 1
 
         stock_off: list[str] = []
