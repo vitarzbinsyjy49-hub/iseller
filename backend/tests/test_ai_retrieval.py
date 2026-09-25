@@ -293,3 +293,42 @@ def test_alternatives_for_excludes_marketplace(db):
     titles = [p.title for p in alternatives_for(db, reference)]
     assert "iPhone 15 обычный сосед" in titles
     assert "iPhone 15 маркетплейс сосед" not in titles
+
+
+# ------------------------------------------------- падежи: «айфоны», «макбуки»
+
+def test_inflected_model_names_resolve_to_latin_alias():
+    """«какие есть новые айфоны 18?» — прод отвечал «iPhone 18 ещё не выпущен».
+
+    _alias знал «айфон» и его начала («айфо»), но не падежи: «айфоны»
+    оставалось кириллицей, не совпадало ни с одним названием, и из запроса
+    работало одно «18» — оно же в «MacBook Pro M5 Max 18/40». На проде
+    MacBook-ов много, и они вытеснили iPhone 18 из кандидатов целиком.
+    """
+    from app.services.ai_retrieval import _query_tokens
+
+    for word, expected in [("айфоны", "iphone"), ("айфона", "iphone"), ("айфонов", "iphone"),
+                           ("айфоне", "iphone"), ("макбуки", "macbook"), ("айпады", "ipad"),
+                           ("дайсоны", "dyson")]:
+        assert expected in _query_tokens(f"покажи {word}"), word
+
+
+def test_inflection_does_not_swallow_unrelated_words():
+    """Окончание снимается только у известного имени, а не с любого слова,
+    которое с него начинается: «макароны» — не macbook, «масло» — не «мас»."""
+    from app.api.catalog import _alias
+
+    assert _alias("макароны") == "макароны"
+    assert _alias("макет") == "макет"
+
+
+def test_plural_iphone_query_ranks_iphone_above_macbooks_with_same_number(db):
+    iphone = make_product(db, title="Apple iPhone 18 Pro 256 ГБ Black", brand="Apple",
+                          category="смартфоны")
+    for i in range(15):
+        make_product(db, title=f"Apple MacBook Pro 16 M5 Max 18/40 48GB 2TB v{i}", brand="Apple",
+                     category="ноутбуки", cpu="M5 Max", ram="48 ГБ", storage="2 ТБ",
+                     screen_size="16", popularity=20, rating=5)
+    q = "какие есть новые айфоны 18?"
+    top = retrieve_candidates(db, q, extract_filters(q))[:3]
+    assert iphone.id in [p.id for p in top]

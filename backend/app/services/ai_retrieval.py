@@ -165,12 +165,16 @@ def _relevance(p: Product, tokens: list[str]) -> float:
     sku_low = (p.sku or "").lower()
     score = 0.0
     hits = 0
+    # Число из запроса весит полностью, только если в названии совпало и
+    # СЛОВО запроса. Иначе «айфоны 18» поднимал MacBook «M5 Max 18/40»: у него
+    # тоже есть «18», и на проде такие ноутбуки вытесняли iPhone 18 целиком.
+    word_hit = any(t in title_tokens for t in tokens if not t.isdigit())
     for t in tokens:
         if sku_low and t == sku_low:
             score += 15  # точный артикул — сильнейший сигнал
         if t in title_tokens:
             hits += 1
-            score += 7
+            score += 7 if word_hit or not t.isdigit() else 2
         elif t == brand_low:
             score += 3
         # совпадение значений характеристик: «512», «16», «синий».

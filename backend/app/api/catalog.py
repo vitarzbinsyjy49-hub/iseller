@@ -73,13 +73,23 @@ _SEARCH_ALIASES = {
 }
 
 
+#: Падежные окончания, которые снимаются с кириллического имени из
+#: _SEARCH_ALIASES: «айфоны», «айфона», «макбуки», «айпадом». Только у ключей
+#: от 4 букв и только из этого списка — иначе «мак»+«ароны» стал бы macbook.
+_INFLECTIONS = ("ами", "ах", "ам", "ов", "ом", "ой", "ы", "и", "а", "у", "е")
+
+
 def _alias(word: str) -> str:
-    """Алиас с поддержкой префиксов: 'iph', 'айфо' -> iphone (для live-поиска по буквам)."""
+    """Алиас с поддержкой префиксов: 'iph', 'айфо' -> iphone (для live-поиска по буквам)
+    и падежей: 'айфоны' -> iphone (иначе в запросе остаются одни цифры)."""
     w = word.lower()
     if w in _SEARCH_ALIASES:
         return _SEARCH_ALIASES[w]
     for key, value in _SEARCH_ALIASES.items():
         if len(w) >= 3 and key.startswith(w):
+            return value
+    for key, value in _SEARCH_ALIASES.items():
+        if len(key) >= 4 and w.startswith(key) and w[len(key):] in _INFLECTIONS:
             return value
     return word
 
