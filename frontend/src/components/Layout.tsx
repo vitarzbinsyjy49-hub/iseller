@@ -4,6 +4,7 @@ import AuroraBackground from "./AuroraBackground";
 import BottomNav from "./BottomNav";
 import CartBar from "./CartBar";
 import DesktopHeader from "./DesktopHeader";
+import DesktopFooter from "./DesktopFooter";
 import { BrandWordmark } from "./BrandMark";
 import { usePageSwipe } from "../lib/usePageSwipe";
 import { setBackButton } from "../lib/telegram";
@@ -163,6 +164,13 @@ export default function Layout() {
         <div className="lg:mx-auto lg:w-full lg:max-w-[1320px]">
           <Outlet />
         </div>
+        {/* Футер — ВНУТРИ <main>, потому что прокручивается именно он: снаружи
+            футер оказался бы прибитым к нижней кромке окна, а не приходил бы
+            после контента. Нижний отступ <main> (.pb-nav, на desktop — 3rem и
+            больше, когда видна плавающая корзина) футер не гасит: этот отступ
+            держит место под панель корзины, и без него футер уехал бы под неё.
+            На мобильных не монтируется ничего лишнего — сам футер hidden. */}
+        <DesktopFooter />
       </main>
       <CartBar />
       {/* Поиск живёт внутри самого BottomNav: круг доступен с каждого экрана,
