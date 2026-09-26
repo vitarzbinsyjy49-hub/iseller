@@ -8,6 +8,7 @@ import { Products } from "./Products";
 import { Analytics, AiLogs } from "./Analytics";
 import { ImportCenter, HomeContent, MediaTab } from "./HomeAdmin";
 import Reviews from "./Reviews";
+import BugReports from "./BugReports";
 import { Posts } from "./Posts";
 import { PricePosts } from "./PricePosts";
 import { ChannelPosts } from "./ChannelPosts";
@@ -119,11 +120,12 @@ function Login({ onToken }: { onToken: (t: string) => void }) {
 }
 
 // ---------- Shell with tabs ----------
-type Tab = "dashboard" | "leads" | "reviews" | "customers" | "promo" | "products" | "posts" | "price" | "channel" | "import" | "home" | "media" | "analytics" | "ai" | "referrals" | "settings";
+type Tab = "dashboard" | "leads" | "reviews" | "bugs" | "customers" | "promo" | "products" | "posts" | "price" | "channel" | "import" | "home" | "media" | "analytics" | "ai" | "referrals" | "settings";
 const TABS: { key: Tab; label: string }[] = [
   { key: "dashboard", label: "Дашборд" },
   { key: "leads", label: "Заявки" },
   { key: "reviews", label: "Отзывы" },
+  { key: "bugs", label: "Ошибки" },
   { key: "customers", label: "Клиенты" },
   { key: "referrals", label: "Приглашения" },
   { key: "promo", label: "Промокоды" },
@@ -183,6 +185,7 @@ function Shell({ token, onLogout }: { token: string; onLogout: () => void }) {
         {tab === "analytics" && <Analytics token={token} />}
         {tab === "ai" && <AiLogs token={token} />}
         {tab === "reviews" && <Reviews token={token} />}
+        {tab === "bugs" && <BugReports token={token} />}
         {tab === "referrals" && <Referrals token={token} />}
         {tab === "settings" && <Settings token={token} />}
       </main>

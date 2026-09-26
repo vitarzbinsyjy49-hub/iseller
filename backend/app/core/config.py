@@ -146,6 +146,11 @@ class Settings(BaseSettings):
     # честное использование: в отзыве до 10 фото (MAX_REVIEW_PHOTOS), то есть
     # это три полных отзыва в сутки с правками.
     REVIEW_PHOTO_DAILY_LIMIT_PER_USER: int = 30
+    # «Сообщить об ошибке»: каждое сообщение — алерт владельцу в Telegram, и
+    # по скриншотам та же угроза диску, что у отзывов. В сообщении до 5
+    # скриншотов (services/bug_reports.MAX_PHOTOS).
+    BUG_REPORT_DAILY_LIMIT_PER_USER: int = 5
+    BUG_REPORT_PHOTO_DAILY_LIMIT_PER_USER: int = 30
     # Попыток входа в админку с одного IP в минуту (v5.4.2, защита от перебора пароля).
     ADMIN_LOGIN_RATE_LIMIT_PER_MINUTE: int = 5
     # Необязательный Redis для распределённого лимита. Пусто => in-memory (per-process),

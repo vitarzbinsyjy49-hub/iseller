@@ -425,3 +425,41 @@ def favorite_message(
             _row(_web_app_button("⭐️ Избранное", "/favorites")),
         ),
     )
+
+
+# ================ Сообщение об ошибке — владельцу и автору ================
+#: Порядок строк контекста в алерте: сначала то, по чему воспроизводят.
+_BUG_CONTEXT_RU = (
+    ("platform", "Платформа"), ("tg_version", "Telegram"),
+    ("viewport", "Экран"), ("path", "Раздел"),
+)
+
+
+def bug_report_message(
+    *, report_id: int, text: str, photos_count: int = 0,
+    username: str | None = None, context: dict | None = None,
+) -> Message:
+    """Алерт владельцу: покупатель нажал «Сообщить об ошибке» в профиле.
+
+    Скриншоты в Telegram не пересылаем — outbox умеет только текст. Их число
+    сказано прямо, сами они в админке, вкладка «Ошибки»."""
+    lines = [f"🐞 <b>Сообщение об ошибке #{report_id}</b>", ""]
+    trimmed = text if len(text) <= _MESSAGE_PREVIEW_LIMIT * 2 else text[:_MESSAGE_PREVIEW_LIMIT * 2] + "…"
+    lines.append(_esc(trimmed))
+    lines += ["", f"От: {'@' + _esc(username) if username else 'покупатель'}"]
+    ctx = context or {}
+    for key, label in _BUG_CONTEXT_RU:
+        if ctx.get(key):
+            lines.append(f"{label}: {_esc(str(ctx[key]))}")
+    if photos_count:
+        lines.append(f"Скриншотов: {photos_count}")
+    lines += ["", "Смотрите во вкладке «Ошибки» админки."]
+    return Message("\n".join(lines))
+
+
+def bug_fixed_message(*, report_id: int) -> Message:
+    """Автору: ошибку, о которой он сообщил, исправили."""
+    return Message(
+        f"🛠 <b>Исправили ошибку, о которой вы сообщили</b> (#{report_id}).\n\n"
+        "Спасибо, что написали — без таких сообщений мы бы её не нашли."
+    )

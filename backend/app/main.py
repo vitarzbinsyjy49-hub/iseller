@@ -11,11 +11,13 @@ from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
 from app.api import admin, admin_crm, admin_promo, admin_referrals, admin_settings, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, preorder, price_posts, referral as referral_api, scenario_chat, telegram, users
 from app.api import fx as fx_router
+from app.api import bug_reports as bug_reports_api
 from app.api import reviews as reviews_api
 
 # Регистрация таблиц в metadata до create_all (Demo MVP)
 from app.models import ad_touch as _ad_touch  # noqa: F401
 from app.models import analytics_event as _analytics_event  # noqa: F401
+from app.models import bug_report as _bug_report  # noqa: F401
 from app.models import cart as _cart  # noqa: F401
 from app.models import favorite as _favorite  # noqa: F401
 from app.models import fx_rate as _fx_rate  # noqa: F401
@@ -86,6 +88,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")
 app.include_router(reviews_api.router, prefix="/api")
+app.include_router(bug_reports_api.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 # Sprint 1.5: Integration Layer (AI + каталог + аналитика)
 app.include_router(ai.router, prefix="/api")

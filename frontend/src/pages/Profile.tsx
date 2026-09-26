@@ -301,8 +301,10 @@ export default function Profile() {
           onClick={() => openScenario("wholesale")} />
         <MenuRow icon="building" title="Поставка для компании" subtitle="Техника для офиса, документы для юрлиц"
           onClick={() => openScenario("b2b")} />
-        <MenuRow icon="refresh" title="Trade-In / предложить технику" subtitle="Обменяйте старое устройство или продайте нам" last
+        <MenuRow icon="refresh" title="Trade-In / предложить технику" subtitle="Обменяйте старое устройство или продайте нам"
           onClick={() => openScenario("trade_in")} />
+        <MenuRow icon="alert" title="Сообщить об ошибке" subtitle="Что-то не работает — опишите и приложите скриншот" last
+          onClick={() => navigate("/report-bug")} />
       </div>
       </div>{/* /правая колонка */}
       </div>{/* /desktop 2 колонки */}

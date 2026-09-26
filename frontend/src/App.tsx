@@ -37,6 +37,7 @@ const Info = lazy(routeLoaders.info);
 // Форма отзыва: открывается из бота по кнопке «Оценить заказ», в обычной
 // навигации её нет — поэтому чанк отдельный и грузится только по этому пути.
 const ReviewForm = lazy(routeLoaders.reviewForm);
+const BugReport = lazy(routeLoaders.bugReport);
 
 export default function App() {
   const { setTokens, setUser, user } = useAuthStore();
@@ -175,6 +176,7 @@ export default function App() {
           <Route path="/loyalty" element={<DeferredPage><Loyalty /></DeferredPage>} />
           <Route path="/info" element={<DeferredPage><Info /></DeferredPage>} />
           <Route path="/review/:leadId" element={<DeferredPage><ReviewForm /></DeferredPage>} />
+          <Route path="/report-bug" element={<DeferredPage><BugReport /></DeferredPage>} />
           <Route path="*" element={<Home />} />
         </Route>
       </Routes>

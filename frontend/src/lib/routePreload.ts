@@ -21,6 +21,7 @@ export const routeLoaders = {
   favorites: withStaleChunkReload(() => import("../pages/Favorites")),
   history: withStaleChunkReload(() => import("../pages/History")),
   reviewForm: withStaleChunkReload(() => import("../pages/ReviewForm")),
+  bugReport: withStaleChunkReload(() => import("../pages/BugReport")),
   profile: withStaleChunkReload(() => import("../pages/Profile")),
   loyalty: withStaleChunkReload(() => import("../pages/Loyalty")),
   info: withStaleChunkReload(() => import("../pages/Info")),
@@ -47,6 +48,7 @@ function routeKey(pathname: string): keyof typeof routeLoaders | null {
   if (pathname.startsWith("/sell")) return "sellItem";
   if (pathname.startsWith("/marketplace")) return "marketplace";
   if (pathname.startsWith("/preorder/")) return "preorder";
+  if (pathname.startsWith("/report-bug")) return "bugReport";
   return null;
 }
 

@@ -22,13 +22,14 @@ from app.core.uploads import (
 from app.db.session import get_db
 from app.models.analytics_event import AnalyticsEvent
 from app.models.audit import AuditLog
+from app.models.bug_report import BugReport
 from app.models.lead import CART_LEAD_TYPE, LEAD_STATUSES, Lead
 from app.models.product import Product
 from app.models.review import Review
 from app.models.user import User
 from app.schemas.ai import LeadStatusIn
 from app.services.availability import EXPLICIT_MODES
-from app.services import purchase, reviews
+from app.services import bug_reports, purchase, reviews
 from app.services.notification_templates import lead_status_message
 from app.services.notifications import enqueue, notifications_enabled
 
@@ -1122,3 +1123,49 @@ def admin_moderate_review(
     db.commit()
     db.refresh(row)
     return row.to_admin()
+
+
+# ==================== Сообщения об ошибках ====================
+#
+# Приходят из профиля Mini App («Сообщить об ошибке»). Почему это не заявка —
+# см. models/bug_report.py.
+
+@router.get("/bug-reports")
+def admin_list_bug_reports(
+    db: Session = Depends(get_db),
+    status_filter: str | None = None,
+    limit: int = 100,
+):
+    stmt = select(BugReport).order_by(BugReport.id.desc())
+    if status_filter:
+        stmt = stmt.where(BugReport.status == status_filter)
+    rows = db.execute(stmt.limit(min(limit, 500))).scalars().all()
+    new = db.scalar(
+        select(func.count()).select_from(BugReport).where(BugReport.status == "new")) or 0
+    return {"reports": [r.to_dict() for r in rows], "new": int(new)}
+
+
+@router.patch("/bug-reports/{report_id}")
+def admin_update_bug_report(
+    report_id: int,
+    status_value: str = Body(..., embed=True, alias="status"),
+    note: str | None = Body(None, embed=True),
+    db: Session = Depends(get_db),
+    admin: str = Depends(get_current_admin),
+):
+    """«Исправлено» — автору уходит спасибо; «не ошибка» — закрывается молча."""
+    row = db.get(BugReport, report_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
+    try:
+        bug_reports.set_status(db, row, status_value, note=note)
+    except bug_reports.BugReportError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    db.add(AuditLog(
+        actor=f"admin:{admin}",
+        action="bug_report_status",
+        detail=f"bug_report={report_id};status={status_value}",
+    ))
+    db.commit()
+    db.refresh(row)
+    return row.to_dict()

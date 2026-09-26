@@ -19,6 +19,8 @@ type TelegramWebApp = {
    *  телефона (см. lib/analyticsContext.ts). Необязательное: старые клиенты
    *  поля не отдают. */
   platform?: string;
+  /** Версия Bot API клиента («8.0») — едет в «Сообщить об ошибке». */
+  version?: string;
   // Патч 2.0: startapp-запуск (t.me/<bot>/<app>?startapp=<payload>) — Mini App
   // открывается СРАЗУ, минуя чат с ботом; payload приходит сюда, а не в
   // текстовое сообщение (см. getStartParam/startParamFrom ниже).
