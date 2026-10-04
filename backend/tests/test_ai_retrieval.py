@@ -364,3 +364,94 @@ def test_named_model_beats_well_filled_older_neighbours(db):
         f"названная модель обязана быть среди кандидатов: {[p.title[:40] for p in got]}"
     )
     assert all("iphone 18" in p.title.lower() for p in got[:3])
+
+
+# ---------------------------------------------------------------- новинки (спека 04.10)
+
+def _phones_17_vs_18(db):
+    """Прод 04.10: на «что нового из телефонов» ИИ назвал iPhone 17 «текущим
+    флагманом» при 64 iPhone 18 в наличии. 17-й — старый, популярный, с
+    заполненными характеристиками и «можно сегодня»; 18-й — свежий, без
+    просмотров и почти без характеристик."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.novelty import sync_novelty
+
+    long_ago = datetime.now(timezone.utc) - timedelta(days=300)
+    old = [make_product(db, title=f"Apple iPhone 17 Pro 256 ГБ Blue v{i}", brand="Apple",
+                        category="смартфоны", popularity=40, rating=4.9, is_available_today=True,
+                        memory="256 ГБ", storage="256 ГБ", color="Blue", cpu="A19 Pro",
+                        screen_size="6.3", family_key="Apple iPhone 17 Pro", created_at=long_ago)
+           for i in range(8)]
+    new = [make_product(db, title=f"Apple iPhone 18 Pro 256 ГБ Black v{i}", brand="Apple",
+                        category="смартфоны", popularity=0, rating=0,
+                        family_key="Apple iPhone 18 Pro")
+           for i in range(3)]
+    sync_novelty(db)
+    return old, new
+
+
+def test_prefer_new_is_extracted():
+    assert extract_filters("что нового из телефонов").prefer_new is True
+    assert extract_filters("какой последний айфон").prefer_new is True
+    assert extract_filters("доставка в Новосибирск").prefer_new is False
+    assert extract_filters("айфон 17 pro").prefer_new is False
+
+
+def test_prefer_new_survives_history():
+    """«а что по новинкам?» во втором сообщении — тоже просьба о новом."""
+    assert extract_filters("а телефоны?", history=["что нового"]).prefer_new is True
+
+
+def test_whats_new_in_phones_puts_fresh_model_first(db):
+    _phones_17_vs_18(db)
+    q = "что нового из телефонов"
+    got = retrieve_candidates(db, q, extract_filters(q, vocab=category_vocabulary(db)), limit=12)
+    assert got and "iphone 18" in got[0].title.lower(), [p.title[:30] for p in got]
+
+
+def test_latest_iphone_puts_fresh_model_first(db):
+    _phones_17_vs_18(db)
+    q = "какой последний айфон"
+    got = retrieve_candidates(db, q, extract_filters(q, vocab=category_vocabulary(db)), limit=12)
+    assert got and "iphone 18" in got[0].title.lower(), [p.title[:30] for p in got]
+
+
+def test_fresh_model_wins_a_tie_without_novelty_words(db):
+    """Без слов про новизну бонус свежести меньше, но при прочих равных он
+    решает: на «айфон» 18-й идёт раньше 17-го."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.novelty import sync_novelty
+
+    old = make_product(db, title="Apple iPhone 17 256 ГБ Blue", brand="Apple", category="смартфоны",
+                       popularity=10, family_key="Apple iPhone 17",
+                       created_at=datetime.now(timezone.utc) - timedelta(days=300))
+    new = make_product(db, title="Apple iPhone 18 256 ГБ Blue", brand="Apple", category="смартфоны",
+                       popularity=10, family_key="Apple iPhone 18")
+    sync_novelty(db)
+    q = "айфон"
+    got = retrieve_candidates(db, q, extract_filters(q), limit=12)
+    assert [p.id for p in got[:2]] == [new.id, old.id]
+
+
+def test_relevance_still_beats_freshness(db):
+    """Названная модель важнее свежести: «iPhone 17 Pro» не уступает место
+    свежему 18-му (фикс e69f327 — релевантность остаётся первым ключом)."""
+    _phones_17_vs_18(db)
+    q = "есть ли iPhone 17 Pro 256?"
+    got = retrieve_candidates(db, q, extract_filters(q), limit=12)
+    assert "iphone 17" in got[0].title.lower()
+
+
+def test_payload_carries_novelty(db):
+    from datetime import datetime, timezone
+
+    _old, new = _phones_17_vs_18(db)
+    old = _old[0]
+    payload = {c["id"]: c for c in candidate_payload([new[0], old])}
+    assert payload[new[0].id]["is_new"] is True
+    assert payload[old.id]["is_new"] is False
+    since = payload[new[0].id]["model_since"]
+    assert since == datetime.now(timezone.utc).date().isoformat()
+    assert payload[old.id]["model_since"]

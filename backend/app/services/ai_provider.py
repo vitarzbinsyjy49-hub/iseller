@@ -77,17 +77,82 @@ def _use_case_note(text: str) -> str | None:
     return None
 
 
+#: Сколько строк берём под свёртку новинок: у одной модели бывает 40 вариантов,
+#: и без запаса шесть мест ответа заняли бы цвета одного iPhone.
+_FRESH_POOL = 200
+
+
+def _fresh_products(db: Session, message: str, category: str | None,
+                    price_max: float | None, limit: int) -> tuple[list, bool]:
+    """Ответ на «новинки», «что нового»: (товары, это ли новинки).
+
+    Сначала — названа ли в запросе модель или бренд: ищем по остатку без слов
+    про новизну. «новинки apple» -> свежие модели Apple; «новый айфон 17» ->
+    названный 17-й как есть, потому что «новый» тут — состояние («не б/у»), а
+    не просьба о новинке, и подменять его свежим 18-м было бы ошибкой.
+
+    Ничего не названо («что нового», «новинки смартфонов») — свежие модели по
+    тому, что из запроса извлекается надёжно: категория и бюджет. Текстовый
+    поиск по всему запросу здесь не годится: слова «что», «нового», «из» не
+    встречаются ни в одном названии, и AND-поиск давал ноль.
+
+    Самая новая модель — первой, внутри модели — обычный порядок выдачи;
+    варианты сворачиваются до карточки на модель + цвет (services/variants),
+    иначе шесть мест ответа заняли бы цвета одного iPhone.
+    """
+    from sqlalchemy import select
+
+    from app.models.product import Product
+    from app.services.marketplace import exclude_marketplace
+    from app.services.novelty import as_utc, is_fresh, novelty_cutoff, strip_novelty_words
+    from app.services.ranking import default_order
+    from app.services.variants import collapse
+
+    def newest_first(items: list) -> list:
+        # Стабильная сортировка: внутри одной даты сохраняется порядок выдачи.
+        return sorted(items, key=lambda p: -as_utc(p.model_first_seen_at).timestamp())
+
+    rest = strip_novelty_words(message)
+    if any(len(w) >= 2 for w in rest.split()):
+        named = search_products(db, rest, price_max, limit=_FRESH_POOL)
+        if named:
+            fresh = [p for p in named if is_fresh(p)]
+            if not fresh:
+                return named[:limit], False
+            products, _info = collapse(newest_first(fresh))
+            return products[:limit], True
+
+    stmt = exclude_marketplace(select(Product).where(
+        Product.is_active.is_(True), Product.model_first_seen_at >= novelty_cutoff()))
+    if category:
+        stmt = stmt.where(Product.category == category)
+    if price_max:
+        stmt = stmt.where(Product.price <= price_max)
+    stmt = stmt.order_by(Product.model_first_seen_at.desc(), *default_order(db)).limit(_FRESH_POOL)
+    products, _info = collapse(list(db.execute(stmt).scalars().all()))
+    return products[:limit], bool(products)
+
+
 def build_demo_answer(db: Session, message: str, max_cards: int = 6, source: str = "fallback") -> dict:
     """Сформировать demo/fallback-ответ по каталогу. Возвращает контракт {text, cards, actions, meta}.
 
     source: "fallback" (AI недоступен/выключен) или "mock" (имитация AI для демо) —
     логика одна, отличается только meta.source и тон ответа."""
+    from app.services.novelty import prefers_new
+
     t0 = time.monotonic()
     price_max = _extract_price_max(message)
     category = _detect_category(message, category_vocabulary(db))
 
+    # «новинки», «что нового»: свежие модели. Пусто (новинок нет или не в этой
+    # категории) — обычный путь ниже, лучше показать каталог, чем ничего.
+    products, fresh = [], False
+    if prefers_new(message):
+        products, fresh = _fresh_products(db, message, category, price_max, max_cards)
+
     # Ищем: сначала пробуем по всему запросу, отсекаем по бюджету/категории
-    products = search_products(db, message, price_max, limit=max_cards)
+    if not products:
+        products = search_products(db, message, price_max, limit=max_cards)
 
     # Если по словам ничего не нашли, но есть категория — берём топ категории в бюджете
     if not products and category:
@@ -102,7 +167,10 @@ def build_demo_answer(db: Session, message: str, max_cards: int = 6, source: str
             select(Product).where(Product.is_active.is_(True), Product.category == category))
         if price_max:
             stmt = stmt.where(Product.price <= price_max)
-        stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc()).limit(max_cards)
+        # Общий порядок выдачи (services/ranking), а не свой «наличие, спрос»:
+        # иначе здесь новизны не было бы, и «айфоны» в фолбэке давали бы 17-й.
+        from app.services.ranking import default_order
+        stmt = stmt.order_by(*default_order(db)).limit(max_cards)
         products = list(db.execute(stmt).scalars().all())
 
     latency = int((time.monotonic() - t0) * 1000)
@@ -110,7 +178,10 @@ def build_demo_answer(db: Session, message: str, max_cards: int = 6, source: str
 
     if products:
         budget_str = f" до {int(price_max):,}".replace(",", " ") + " ₽" if price_max else ""
-        head = ("Подобрал для вас варианты" if source == "mock" else "Вот что подходит") + budget_str
+        if fresh:
+            head = "Новинки магазина" + budget_str
+        else:
+            head = ("Подобрал для вас варианты" if source == "mock" else "Вот что подходит") + budget_str
         if category:
             head += f" в категории «{category}»"
         parts = [head + "."]

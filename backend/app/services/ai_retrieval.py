@@ -18,6 +18,8 @@ from app.models.product import Product
 from app.services.ai_provider import _extract_price_max, _detect_category
 from app.services.availability import exclude_preorder
 from app.services.marketplace import exclude_marketplace
+from app.services.novelty import as_utc, is_fresh, novelty_cutoff, prefers_new, window_days
+from app.services.ranking import novelty_order
 
 logger = logging.getLogger("techshop.ai.retrieval")
 
@@ -72,6 +74,10 @@ class ExtractedFilters:
     condition: str | None = None
     use_cases: list[str] = field(default_factory=list)
     in_stock_only: bool = False
+    # «что нового», «последний айфон», «свежие»: человек спрашивает про новинки
+    # (services/novelty). Без флага подбор отдавал прошлогодний флагман с
+    # набранной популярностью, и ИИ называл его «текущим» при 18-х в наличии.
+    prefer_new: bool = False
 
     def to_state(self) -> dict:
         """conversation state для фронта/логов (без чувствительных данных)."""
@@ -80,6 +86,7 @@ class ExtractedFilters:
             "brand": self.brand, "excluded_brands": self.excluded_brands,
             "condition": self.condition,
             "use_cases": self.use_cases, "in_stock_only": self.in_stock_only,
+            "prefer_new": self.prefer_new,
         }
 
 
@@ -125,6 +132,10 @@ def extract_filters(message: str, history: list[str] | None = None,
                 f.use_cases.append(case)
         if "в наличии" in low or "сегодня" in low:
             f.in_stock_only = True
+        # Просьба о новом не «перезаписывается» уточнением: «что нового?» ->
+        # «а телефоны?» — всё ещё про новинки.
+        if prefers_new(text):
+            f.prefer_new = True
     return f
 
 
@@ -191,9 +202,34 @@ def _relevance(p: Product, tokens: list[str]) -> float:
     return score
 
 
+#: Бонус свежей модели (services/novelty). Без просьбы о новом — небольшой:
+#: при прочих равных «айфон» даёт iPhone 18 раньше 17-го, как и каталог, где
+#: новизна стоит выше спроса. С просьбой — больше всех бонусов «не про запрос»
+#: вместе (наличие сегодня, популярность, рейтинг, характеристики — до ~42),
+#: иначе на «что нового» снова побеждал бы набравший просмотры прошлогодний.
+#: Релевантность всё равно первый ключ сортировки — названная модель не
+#: уступит место свежей (см. retrieve_candidates).
+FRESH_BONUS = 25.0
+FRESH_BONUS_PREFER_NEW = 60.0
+#: Сверху при просьбе о новом: среди свежих более новая модель — выше.
+FRESH_RECENCY_BONUS = 10.0
+
+
+def _freshness_bonus(p: Product, f: ExtractedFilters) -> float:
+    if not is_fresh(p):
+        return 0.0
+    if not f.prefer_new:
+        return FRESH_BONUS
+    seen = as_utc(p.model_first_seen_at)
+    span = max(1.0, window_days() * 86400.0)
+    recency = (seen - novelty_cutoff()).total_seconds() / span   # 0 у края окна, 1 — сегодня
+    return FRESH_BONUS_PREFER_NEW + FRESH_RECENCY_BONUS * min(1.0, max(0.0, recency))
+
+
 def _score(p: Product, f: ExtractedFilters, tokens: list[str]) -> float:
     """Мягкий ranking. Жёсткие фильтры уже применены в SQL."""
     score = _relevance(p, tokens)
+    score += _freshness_bonus(p, f)
     if p.in_stock:
         score += 30
         if p.is_available_today:
@@ -341,8 +377,13 @@ def retrieve_candidates(db: Session, message: str, f: ExtractedFilters, limit: i
     if f.in_stock_only:
         stmt = stmt.where(Product.in_stock.is_(True))
     # Явная детерминированная сортировка ДО limit: иначе при большом каталоге
-    # в пул до Python-ranking попадёт случайный срез.
-    stmt = stmt.order_by(Product.in_stock.desc(), Product.popularity.desc(), Product.id).limit(limit * 3)
+    # в пул до Python-ranking попадёт случайный срез. При просьбе о новом
+    # новизна — первый ключ: срез по популярности отрезал бы как раз новинки,
+    # у которых просмотров ещё нет.
+    order = [Product.in_stock.desc(), Product.popularity.desc(), Product.id]
+    if f.prefer_new:
+        order.insert(0, novelty_order())
+    stmt = stmt.order_by(*order).limit(limit * 3)
     structural = list(db.execute(stmt).scalars().all())
     # Пустая структурная ветка при извлечённой категории — сигнал, что словарь
     # разъехался с каталогом. Молчать здесь нельзя: именно так баг с «феном»
@@ -421,5 +462,12 @@ def candidate_payload(products: list[Product]) -> list[dict]:
             "warranty_months": p.warranty_months,
             "tags": (p.tags or [])[:5],
             "specs": specs,
+            # Новинка ли МОДЕЛЬ и с какого дня она в каталоге (services/novelty).
+            # По дате, а не по флагу: флаг выравнивается раз в час. Без этих
+            # полей модель судила о «новизне» по своим знаниям и называла
+            # прошлогодний флагман текущим.
+            "is_new": is_fresh(p),
+            "model_since": (as_utc(p.model_first_seen_at).date().isoformat()
+                            if p.model_first_seen_at else None),
         })
     return out

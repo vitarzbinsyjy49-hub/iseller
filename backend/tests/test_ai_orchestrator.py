@@ -489,3 +489,77 @@ def test_skip_can_be_disabled(db, monkeypatch):
     }))
     ans = run(orch.answer_via_local_ai(db, "айфон", []))
     assert ans["meta"].get("skipped_llm") is not True
+
+
+# ---------- новинки на быстром пути (спека 04.10) ----------
+
+def _old_and_fresh(db):
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.novelty import sync_novelty
+
+    old = make_product(db, title="Apple iPhone 17 Pro 256 Blue", category="смартфоны",
+                       subcategory="iPhone", brand="Apple", popularity=50, is_available_today=True,
+                       family_key="Apple iPhone 17 Pro",
+                       created_at=datetime.now(timezone.utc) - timedelta(days=300))
+    fresh = make_product(db, title="Apple iPhone 18 Pro 256 Black", category="смартфоны",
+                         subcategory="iPhone", brand="Apple", popularity=0,
+                         family_key="Apple iPhone 18 Pro")
+    sync_novelty(db)
+    return old, fresh
+
+
+@pytest.mark.parametrize("q", ["новинки", "что нового", "новинки смартфонов", "айфон"])
+def test_fast_path_shows_fresh_models_first(db, monkeypatch, q):
+    _old, fresh = _old_and_fresh(db)
+
+    async def boom(**kwargs):
+        raise AssertionError("LLM must not be called for plain browse")
+
+    monkeypatch.setattr(orch, "call_gateway", boom)
+    ans = run(orch.answer_via_local_ai(db, q, []))
+    assert ans["meta"].get("skipped_llm") is True
+    assert ans["cards"] and ans["cards"][0]["id"] == fresh.id, [c["title"] for c in ans["cards"]]
+
+
+def test_fallback_provider_answers_novelty_from_catalog(db):
+    """AI_PROVIDER=fallback (значение по умолчанию) отвечает build_demo_answer
+    напрямую: «что нового» там раньше давало «Не совсем понял запрос»."""
+    from app.services.ai_provider import build_demo_answer
+
+    _old, fresh = _old_and_fresh(db)
+    ans = build_demo_answer(db, "что нового")
+    assert ans["cards"] and ans["cards"][0]["id"] == fresh.id
+
+
+def test_active_prompt_explains_novelty_fields():
+    """Поля is_new/model_since в кандидатах бесполезны, если промпт о них
+    молчит: модель судила о новизне по своим знаниям о релизах и называла
+    прошлогодний флагман текущим."""
+    from app.core.config import settings
+    from app.services.ai_orchestrator import load_system_prompt
+
+    prompt = load_system_prompt(settings.AI_SYSTEM_PROMPT_VERSION)
+    assert "is_new" in prompt and "model_since" in prompt
+    assert "не вышла" in prompt
+
+
+def test_new_named_model_means_condition_not_novelty(db):
+    """«новый айфон 17 pro» — это состояние («не б/у»), а не просьба о новинке:
+    названная модель остаётся первой, свежий 18-й её не подменяет."""
+    from app.services.ai_provider import build_demo_answer
+
+    old, _fresh = _old_and_fresh(db)
+    ans = build_demo_answer(db, "новый айфон 17 pro")
+    assert ans["cards"] and ans["cards"][0]["id"] == old.id
+    assert not ans["text"].startswith("Новинки")
+
+
+def test_novelties_of_a_brand_are_fresh_only(db):
+    """«новинки apple» — свежие модели бренда, а не весь бренд по порядку."""
+    from app.services.ai_provider import build_demo_answer
+
+    _old, fresh = _old_and_fresh(db)
+    ans = build_demo_answer(db, "новинки apple")
+    assert [c["id"] for c in ans["cards"]] == [fresh.id]
+    assert ans["text"].startswith("Новинки магазина")

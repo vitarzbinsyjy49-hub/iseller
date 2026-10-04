@@ -134,6 +134,12 @@ def _is_plain_browse(
         return False
     if _ADVICE_RE.search(low):
         return False
+    # «новинки», «что нового», «новинки apple»: ответ — список свежих моделей
+    # из базы (build_demo_answer), модель к нему ничего не добавит. Совет
+    # («какой новый айфон лучше») сюда не доходит — его отсекла строка выше.
+    from app.services.novelty import prefers_new
+    if prefers_new(low):
+        return True
     from app.services.ai_provider import _detect_category
     if _detect_category(low, vocab):
         return True
