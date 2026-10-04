@@ -34,6 +34,14 @@ _CONDITION_RU = {"new": "Новый", "used": "Б/у", "refurbished": "Восс�
                  CONDITION_SHOWCASE: "Витринный образец"}
 
 
+def _novelty_until_iso(product) -> str | None:
+    """«Новинка до» датой ISO. Импорт ленивый: services.novelty сам импортирует
+    модель, и на уровне модуля это был бы цикл."""
+    from app.services.novelty import novelty_until
+    until = novelty_until(product)
+    return until.isoformat() if until else None
+
+
 def _spec_value_to_str(v) -> str | None:
     """Значение характеристики -> строка для показа. bool -> Да/Нет,
     список -> перечисление, пустое -> None (строку не добавляем)."""
@@ -66,7 +74,15 @@ class Product(Base):
     rating: Mapped[float] = mapped_column(Float, default=0)
     popularity: Mapped[float] = mapped_column(Float, default=0)
     margin_pct: Mapped[float] = mapped_column(Float, default=0)
+    # Новинка. С 04.10.2026 флаг СИСТЕМНЫЙ (services/novelty.sync_novelty): руками
+    # его ставили и никогда не снимали — 307 из 488 товаров, включая стартовый
+    # импорт, и он перестал что-либо значить. Ручное продвижение — promo_boost.
     is_new: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Когда МОДЕЛЬ (семейство вариантов) впервые появилась в каталоге — min
+    # created_at по всем её товарам, включая выключенные. Одно значение у всех
+    # вариантов: новый цвет iPhone 17 не делает его новинкой. NULL — ещё не
+    # посчитано (sync_novelty на старте и раз в час в цикле бота).
+    model_first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     on_sale: Mapped[bool] = mapped_column(Boolean, default=False)
     is_hot: Mapped[bool] = mapped_column(Boolean, default=False)               # «горячее предложение»
     is_available_today: Mapped[bool] = mapped_column(Boolean, default=False)   # «можно забрать сегодня»
@@ -361,6 +377,12 @@ class Product(Base):
             "accent_color": self.accent_color,
             "family_key": self.family_key, "variant": self.variant or {},
             "promo_boost": self.promo_boost or 0,
+            # Новизна — только для чтения: её считает services/novelty. Срок
+            # «новинка до» отдаём готовым, чтобы окно жило в одном месте
+            # (settings), а не дублировалось числом в админке.
+            "is_new": bool(self.is_new),
+            "model_first_seen_at": self.model_first_seen_at.isoformat() if self.model_first_seen_at else None,
+            "novelty_until": _novelty_until_iso(self),
             "popularity": self.popularity, "rating": self.rating,
             # Полные поля для формы редактирования в админке (v2)
             "image": self.image, "images": self.images or [], "poster_url": self.poster_url,

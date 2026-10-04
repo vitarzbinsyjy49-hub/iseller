@@ -30,6 +30,7 @@ from app.api.deps import get_current_admin
 from app.core.uploads import MAX_PRODUCT_IMAGES, save_image
 from app.db.session import get_db
 from app.models.product import Product
+from app.services.novelty import refresh_novelty
 
 router = APIRouter(prefix="/admin", tags=["admin-import"], dependencies=[Depends(get_current_admin)])
 
@@ -137,6 +138,9 @@ def _apply_plan(plan: list[dict], db: Session) -> None:
         if step["action"] == "create":
             db.add(product)
     db.commit()
+    # is_new из файла не решает — его считает services/novelty по модели;
+    # выравниваем весь каталог тем же одним SELECT, что и точечный пересчёт.
+    refresh_novelty(db)
 
 
 @router.post("/import/products/preview")
@@ -448,6 +452,9 @@ async def batch_confirm(job_id: str, admin: str = Depends(get_current_admin),
         _batch_logger.exception("batch confirm failed, rolled back")
         raise HTTPException(status.HTTP_409_CONFLICT,
                             f"Импорт отменён, БД не изменена: {str(e)[:200]}")
+    # Новинки — после того, как товары закоммичены: сбой пересчёта не должен
+    # откатывать импорт (refresh_novelty глотает его сам, цикл бота доровняет).
+    refresh_novelty(db)
 
     # --- 2) фото: по товарам, ошибки отдельных файлов не откатывают товары ---
     # Матчинг с планом job И с уже существующими SKU (image-only ZIP без data-файлов)

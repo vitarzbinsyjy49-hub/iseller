@@ -11,8 +11,9 @@ services/ranking.py вырождается: решение переходит к
 
 Идемпотентен: каждый прогон целиком пересчитывает значение по окну
 VIEW_WINDOW_DAYS, поэтому старые просмотры со временем сами выпадают из
-счёта — отдельной ручки «забыть» не нужно. Расписания (cron) на сервере нет,
-прогонять нужно вручную по мере накопления новых просмотров.
+счёта — отдельной ручки «забыть» не нужно. С 04.10.2026 тот же пересчёт
+(services/ranking.recompute_popularity) раз в сутки делает цикл бота; скрипт
+остался для ручного прогона и предпросмотра.
 
     docker compose -f docker-compose.prod.yml exec -T backend \\
         python -m app.scripts.recompute_popularity --confirm
@@ -22,8 +23,7 @@ from __future__ import annotations
 import argparse
 
 from app.db.session import SessionLocal
-from app.models.product import Product
-from app.services.ranking import VIEW_WINDOW_DAYS, view_counts
+from app.services.ranking import VIEW_WINDOW_DAYS, recompute_popularity
 
 
 def main() -> int:
@@ -34,25 +34,11 @@ def main() -> int:
 
     db = SessionLocal()
     try:
-        counts = view_counts(db, window_days=VIEW_WINDOW_DAYS)
-        products = db.query(Product).filter(Product.is_active.is_(True)).all()
-
-        changed = 0
-        for product in products:
-            new_value = float(counts.get(product.id, 0))
-            if float(product.popularity or 0) != new_value:
-                changed += 1
-                if not dry_run:
-                    product.popularity = new_value
-
-        print(f"окно: {VIEW_WINDOW_DAYS} дн., товаров: {len(products)}, "
-              f"с просмотрами: {len(counts)}, изменится: {changed}")
-
+        changed = recompute_popularity(db, dry_run=dry_run)
+        print(f"окно: {VIEW_WINDOW_DAYS} дн., изменится: {changed}")
         if dry_run:
-            db.rollback()
             print("\nЭто предпросмотр. Для выполнения добавьте --confirm.")
         else:
-            db.commit()
             print("готово.")
     finally:
         db.close()

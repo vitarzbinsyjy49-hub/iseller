@@ -29,6 +29,7 @@ from app.models.review import Review
 from app.models.user import User
 from app.schemas.ai import LeadStatusIn
 from app.services.availability import EXPLICIT_MODES
+from app.services.novelty import keys_for as novelty_keys_for, refresh_novelty
 from app.services import bug_reports, purchase, reviews
 from app.services.notification_templates import lead_status_message
 from app.services.notifications import enqueue, notifications_enabled
@@ -446,7 +447,11 @@ def admin_products(
 # Поля товара, которые можно править/задавать из админки (демо)
 _PRODUCT_EDITABLE = (
     "sku", "title", "brand", "category", "subcategory", "price", "old_price", "stock", "in_stock",
-    "is_active", "is_hot", "is_available_today", "is_new", "on_sale",
+    # is_new здесь НЕТ намеренно (04.10.2026): флаг считает services/novelty по
+    # дате первого появления модели. Пришедший в теле запроса — молча
+    # игнорируется, а не 400: старый клиент или JSON-импорт с этим полем не
+    # должны ломаться. Поднять старый товар — promo_boost.
+    "is_active", "is_hot", "is_available_today", "on_sale",
     "is_limited",   # v5.5.0: показывать «Осталось N шт» на витрине
     "is_legendary",  # v5.8: закрепить наверху выдачи и пометить золотом
     "availability_mode",  # Cart: пусто = вывести из in_stock/is_limited
@@ -511,6 +516,10 @@ def admin_create_product(body: dict, db: Session = Depends(get_db)):
     db.add(product)
     db.commit()
     db.refresh(product)
+    # Новинка ли это — решает модель: первый iPhone 18 — да, новый цвет
+    # iPhone 17 — нет (services/novelty). Пересчёт только своей модели.
+    refresh_novelty(db, novelty_keys_for([product]))
+    db.refresh(product)
     return product.to_admin()
 
 
@@ -519,8 +528,13 @@ def admin_update_product(product_id: int, body: dict, db: Session = Depends(get_
     product = db.get(Product, product_id)
     if product is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    # Модель товара может смениться правкой (семейство, название): тогда
+    # первая дата меняется у ОБЕИХ — и у той, откуда ушёл, и у той, куда пришёл.
+    keys = novelty_keys_for([product])
     _apply_product_fields(product, body)
     db.commit()
+    db.refresh(product)
+    refresh_novelty(db, keys | novelty_keys_for([product]))
     db.refresh(product)
     return product.to_admin()
 
@@ -1046,6 +1060,10 @@ def admin_import_products(body: list[dict] | dict, db: Session = Depends(get_db)
             skipped += 1
             errors.append({"index": i, "title": title, "error": str(e)[:200]})
 
+    # Импорт — пачка моделей, в том числе сменивших семейство: выравниваем
+    # каталог целиком. Это тот же один SELECT, что и точечный пересчёт.
+    if created or updated:
+        refresh_novelty(db)
     return {"created": created, "updated": updated, "skipped": skipped, "errors": errors}
 
 

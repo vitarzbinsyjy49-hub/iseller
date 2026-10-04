@@ -23,12 +23,16 @@
    формально они там есть, практически их никто не увидит. Ступень снимается
    одной правкой здесь же, когда товары приедут и станут обычными;
 1. `in_stock` — то, что нельзя купить, вниз;
-1.5. `promo_boost` — редакторское продвижение (запуск новой модели): у новинки
-   просмотров ещё нет, и спрос неделю держал бы её под прошлым поколением.
-   Выше спроса, но ниже наличия. Ставится скриптом/админкой, снимается, когда
-   спрос наберётся сам;
-2. `popularity` — реальный спрос, если он есть. Ноль у всех => шаг не работает,
-   и решение переходит дальше;
+1.5. `promo_boost` — редакторское продвижение: поднять СТАРЫЙ товар руками.
+   Выше спроса и новизны, но ниже наличия. Ставится скриптом/админкой;
+1.7. новизна модели (services/novelty) — свежие модели (первое появление не
+   раньше окна) выше несвежих, среди свежих более новая выше. У несвежих
+   ступень одинаковая — решение уходит в спрос, а не в «кто старше». Раньше
+   эту работу делал promo_boost, и всё зависело от того, не забудут ли его
+   поставить и снять; теперь у новинки без просмотров место есть само;
+2. `popularity` — реальный спрос (просмотры за VIEW_WINDOW_DAYS, пересчёт раз
+   в сутки в цикле бота). Ноль у всех => шаг не работает, и решение переходит
+   дальше;
 3. позиция категории из плиток; категория без плитки — в конец, но НЕ пропадает;
 4. цена по убыванию — внутри категории вперёд выходит старшая модель;
 5. `id` — чтобы не осталось ни одной неразличимой пары. Без этого шага равные
@@ -44,6 +48,7 @@ from app.models.product import Product
 from app.services.availability import resolve_availability
 from app.models.user_product_event import UserProductEvent
 from app.services.catalog_nav import SALE_KEY
+from app.services.novelty import as_utc, novelty_cutoff
 
 #: Ранг категории, для которой плитки нет. Заведомо больше любой позиции.
 NO_TILE_RANK = 10_000
@@ -90,8 +95,21 @@ def category_priority(db: Session) -> dict[str, int]:
             if value and value != SALE_KEY}
 
 
-def product_sort_key(product: Product, priority: dict[str, int]) -> tuple:
-    """Ключ сортировки для питоновской сортировки (рекомендации, дедуп)."""
+def _novelty_rank(product: Product, cutoff: datetime) -> float:
+    """Ступень новизны для Python: -timestamp у свежих (новее = меньше = выше),
+    +inf у остальных — все несвежие равны, как NULL в SQL-варианте ниже."""
+    seen = as_utc(product.model_first_seen_at)
+    if seen is None or seen < cutoff:
+        return float("inf")
+    return -seen.timestamp()
+
+
+def product_sort_key(product: Product, priority: dict[str, int],
+                     cutoff: datetime | None = None) -> tuple:
+    """Ключ сортировки для питоновской сортировки (рекомендации, дедуп).
+
+    `cutoff` — граница окна новизны; передайте один на всю сортировку, если
+    важна точная граница (иначе он берётся из часов на каждый товар)."""
     try:
         price = float(product.price or 0)
     except (TypeError, ValueError):
@@ -101,6 +119,7 @@ def product_sort_key(product: Product, priority: dict[str, int]) -> tuple:
         0 if resolve_availability(product) == "preorder" else 1,
         0 if product.in_stock else 1,
         -int(product.promo_boost or 0),
+        _novelty_rank(product, cutoff or novelty_cutoff()),
         -float(product.popularity or 0),
         priority.get(product.category, NO_TILE_RANK),
         -price,
@@ -108,7 +127,16 @@ def product_sort_key(product: Product, priority: dict[str, int]) -> tuple:
     )
 
 
-def order_by_clauses(priority: dict[str, int]):
+def novelty_order(cutoff: datetime | None = None):
+    """Ступень новизны для SQL: дата у свежих, NULL у остальных, NULL — в конец.
+    Нужна и сама по себе — секции «Новинки» и подбору ИИ «что нового»."""
+    cutoff = cutoff or novelty_cutoff()
+    return case(
+        (Product.model_first_seen_at >= cutoff, Product.model_first_seen_at), else_=None,
+    ).desc().nulls_last()
+
+
+def order_by_clauses(priority: dict[str, int], cutoff: datetime | None = None):
     """То же правило для SQL: список выражений для `stmt.order_by(*...)`."""
     if priority:
         rank = case(priority, value=Product.category, else_=NO_TILE_RANK)
@@ -122,6 +150,7 @@ def order_by_clauses(priority: dict[str, int]):
         case((Product.availability_mode == "preorder", 0), else_=1).asc(),
         Product.in_stock.desc(),
         Product.promo_boost.desc(),
+        novelty_order(cutoff),
         Product.popularity.desc(),
         rank.asc(),
         Product.price.desc(),
@@ -132,3 +161,29 @@ def order_by_clauses(priority: dict[str, int]):
 def default_order(db: Session):
     """Готовый порядок выдачи по умолчанию — один вызов на запрос."""
     return order_by_clauses(category_priority(db))
+
+
+def recompute_popularity(db: Session, *, dry_run: bool = False) -> int:
+    """Пересчитать `Product.popularity` из просмотров за VIEW_WINDOW_DAYS.
+
+    Вынесено из scripts/recompute_popularity.py: скрипт был, но его никто не
+    запускал — ни таймера, ни цикла, и 298 просмотров за 90 дней лежали без
+    пользы. Теперь его раз в сутки зовёт цикл бота, скрипт остался обёрткой
+    для ручного прогона.
+
+    Идемпотентно: каждый прогон считает значение по окну целиком, старые
+    просмотры выпадают сами. Только активные товары — как и раньше. Возвращает
+    число изменившихся; `dry_run` ничего не пишет (предпросмотр скрипта).
+    """
+    counts = view_counts(db, window_days=VIEW_WINDOW_DAYS)
+    products = db.query(Product).filter(Product.is_active.is_(True)).all()
+    changed = 0
+    for product in products:
+        new_value = float(counts.get(product.id, 0))
+        if float(product.popularity or 0) != new_value:
+            changed += 1
+            if not dry_run:
+                product.popularity = new_value
+    if changed and not dry_run:
+        db.commit()
+    return changed

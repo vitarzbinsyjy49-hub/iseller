@@ -186,6 +186,11 @@ def _apply_demo_migrations() -> None:
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS is_legendary BOOLEAN NOT NULL DEFAULT FALSE",
         # Редакторское продвижение (services/ranking): 0 у всех существующих.
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS promo_boost INTEGER NOT NULL DEFAULT 0",
+        # Новинки (services/novelty): когда модель впервые появилась в
+        # каталоге. NULL у всех существующих — бэкфилл делает sync_novelty
+        # ниже, на этом же старте. Синхронно добавлено в REQUIRED_SCHEMA бота.
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS model_first_seen_at TIMESTAMPTZ",
+        "CREATE INDEX IF NOT EXISTS ix_products_model_first_seen_at ON products (model_first_seen_at)",
         # Склейка вариантов (services/variants): модель и оси варианта.
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS family_key VARCHAR(160)",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS variant JSON",
@@ -330,6 +335,23 @@ def _apply_demo_migrations() -> None:
         logger.warning("SKU unique index migration skipped", exc_info=True)
 
 
+def _sync_novelty() -> None:
+    """Новинки: бэкфилл model_first_seen_at и выравнивание is_new.
+
+    Один SELECT по каталогу и UPDATE только изменившихся строк — на первом
+    старте после выкладки это весь каталог (сотни строк), дальше единицы.
+    Ручной is_new, стоявший у двух третей каталога, здесь и гаснет."""
+    from app.db.session import SessionLocal
+    from app.services.novelty import sync_novelty
+    try:
+        with SessionLocal() as db:
+            changed = sync_novelty(db)
+            if changed:
+                logger.info("Novelty synced for %d products", changed)
+    except Exception:  # noqa: BLE001 — новизна не должна ронять старт
+        logger.exception("novelty sync failed")
+
+
 def _backfill_image_group_keys() -> None:
     """v5.2.6: заполнить image_group_key у товаров, где он пуст (после ALTER —
     у всех существующих). Логика ключа — Python (title/цвет), не SQL. Идемпотентно:
@@ -355,6 +377,7 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
     _apply_demo_migrations()
     _backfill_image_group_keys()
+    _sync_novelty()
     # v4: если баннеры/категории главной ещё не создавались — заполняем дефолтными
     from app.api.home import seed_home_defaults
     from app.db.session import SessionLocal

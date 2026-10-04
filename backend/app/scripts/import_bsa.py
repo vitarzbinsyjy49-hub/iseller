@@ -474,6 +474,10 @@ def main() -> int:
             db.rollback()
         else:
             db.commit()
+            # Новые модели из прайса — сразу новинки, не через час, когда до
+            # них дойдёт цикл бота (services/novelty).
+            from app.services.novelty import sync_novelty
+            print(f"новизна моделей пересчитана: {sync_novelty(db)} строк")
 
         if args.sync_stock:
             print(f"сменился регион -> карточка переехала: {len(moved)}")

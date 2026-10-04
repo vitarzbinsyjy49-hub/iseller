@@ -20,8 +20,13 @@ export type Prod = {
   /** Склейка вариантов: модель и оси ({"Цвет": "Silver", "Память": "256 ГБ"}). */
   family_key?: string | null;
   variant?: Record<string, string>;
-  /** Редакторское продвижение в выдаче: больше — выше (после наличия, до спроса). */
+  /** Редакторское продвижение в выдаче: больше — выше (после наличия, до новизны и спроса). */
   promo_boost?: number;
+  /** Новизна — только для чтения, её считает backend (services/novelty) по
+   *  первой дате МОДЕЛИ. novelty_until — последний день «новинки» (ISO-дата). */
+  is_new?: boolean;
+  model_first_seen_at?: string | null;
+  novelty_until?: string | null;
   popularity: number; rating: number;
   // Полные поля (to_admin) — используются модалкой редактирования
   description?: string | null; specs?: Record<string, unknown>; tags?: string[];
@@ -31,6 +36,25 @@ export type Prod = {
 };
 
 type ProdFull = Prod;
+
+/** «2026-11-18» или «2026-08-11T10:00:00+00:00» -> «18.11». */
+function ddmm(iso: string): string {
+  const [, m, d] = iso.slice(0, 10).split("-");
+  return `${d}.${m}`;
+}
+
+/** Подпись новизны в форме товара. Галочки «Новинка» больше нет: её ставили
+ *  руками и не снимали, и к 04.10.2026 «новинкой» был весь стартовый импорт.
+ *  Теперь срок — от первого появления модели в каталоге; поднять старый товар
+ *  можно только продвижением. Решаем по дате, а не по флагу: флаг backend
+ *  выравнивает раз в час, и «Новинка до вчера» выглядела бы как ошибка. */
+export function noveltyHint(p: Pick<Prod, "model_first_seen_at" | "novelty_until"> | null, today = new Date()): string {
+  if (!p) return "Новинка или нет — решится по модели после сохранения";
+  if (!p.model_first_seen_at) return "Новизна ещё не посчитана";
+  const todayIso = today.toISOString().slice(0, 10);
+  if (p.novelty_until && p.novelty_until >= todayIso) return `Новинка до ${ddmm(p.novelty_until)}`;
+  return `Не новинка (модель с ${ddmm(p.model_first_seen_at)})`;
+}
 
 /** {"Цвет": "Silver"} <-> «Цвет: Silver» по строке — так ось правится руками
  *  без JSON. Строка без двоеточия или с пустым значением отбрасывается. */
@@ -681,7 +705,14 @@ function ProductModal({
           <label style={{ fontSize: 13, color: C.sub }}>
             Продвижение в выдаче (0 — нет; больше — выше)
             <input style={input} inputMode="numeric" value={form.promo_boost ?? "0"} onChange={(e) => set("promo_boost", e.target.value.replace(/\D/g, ""))} />
+            <span style={{ display: "block", fontSize: 12, marginTop: 4 }}>поднять старый товар — сюда</span>
           </label>
+          {/* Новизна — только для чтения: считается по первой дате модели
+              (новый цвет старой модели новинкой не становится). */}
+          <div style={{ fontSize: 13, color: C.sub }}>
+            Новинка
+            <div style={{ ...input, background: C.muted, color: C.text }}>{noveltyHint(isNew ? null : full)}</div>
+          </div>
           <label style={{ fontSize: 13, color: C.sub }}>
             Бренд<input style={input} value={form.brand ?? ""} onChange={(e) => set("brand", e.target.value)} />
           </label>

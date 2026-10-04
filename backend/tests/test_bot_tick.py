@@ -125,9 +125,13 @@ def test_tick_runs_both_scans_and_drains(monkeypatch):
     monkeypatch.setattr("app.services.notifications.drain",
                         lambda db, limit: called.append("drain") or
                         {"sent": 0, "failed": 0, "retry": 0})
+    monkeypatch.setattr("app.services.novelty.sync_novelty",
+                        lambda db: called.append("novelty") or 0)
+    monkeypatch.setattr("app.services.ranking.recompute_popularity",
+                        lambda db: called.append("popularity") or 0)
 
     bp._tick({})
-    assert called == ["carts", "favorites", "drain"]
+    assert called == ["carts", "favorites", "drain", "novelty", "popularity"]
 
 
 def test_scans_do_not_run_on_every_tick(monkeypatch):
@@ -180,6 +184,60 @@ def _quiet_background(monkeypatch):
     monkeypatch.setattr("app.services.fx_rate.sync", lambda db: False)
     monkeypatch.setattr("app.services.notifications.drain",
                         lambda db, limit: {"sent": 0, "failed": 0, "retry": 0})
+    monkeypatch.setattr("app.services.novelty.sync_novelty", lambda db: 0)
+    monkeypatch.setattr("app.services.ranking.recompute_popularity", lambda db: 0)
+
+
+def test_catalog_jobs_run_on_their_own_intervals(monkeypatch):
+    """Новизна — раз в час (окно сдвигается, и is_new должен гаснуть сам),
+    популярность — раз в сутки. Чаще бессмысленно: ни то, ни другое за 30
+    секунд не меняется, а это полный проход по каталогу."""
+    _quiet_background(monkeypatch)
+    calls = []
+    monkeypatch.setattr("app.services.novelty.sync_novelty",
+                        lambda db: calls.append("novelty") or 0)
+    monkeypatch.setattr("app.services.ranking.recompute_popularity",
+                        lambda db: calls.append("popularity") or 0)
+    clock = [100_000.0]
+    monkeypatch.setattr(bp.time, "monotonic", lambda: clock[0])
+
+    state: dict = {}
+    bp._tick(state)
+    bp._tick(state)
+    assert calls == ["novelty", "popularity"]
+
+    clock[0] += 3600
+    bp._tick(state)
+    assert calls == ["novelty", "popularity", "novelty"], "новизна — раз в час"
+
+    clock[0] += 24 * 3600
+    bp._tick(state)
+    assert calls[-2:] == ["novelty", "popularity"], "популярность — раз в сутки"
+
+
+def test_failed_catalog_job_does_not_block_the_others(monkeypatch):
+    """Каталожные задачи — в своём try: упавшая новизна не трогает очередь
+    уведомлений и не отменяет пересчёт популярности, и повторяется на
+    следующем тике, а не через час."""
+    _quiet_background(monkeypatch)
+    drained, attempts, pops = [], [], []
+    monkeypatch.setattr("app.services.notifications.drain",
+                        lambda db, limit: drained.append(1) or {"sent": 0, "failed": 0, "retry": 0})
+
+    def broken(db):
+        attempts.append(1)
+        raise RuntimeError("колонки ещё нет")
+
+    monkeypatch.setattr("app.services.novelty.sync_novelty", broken)
+    monkeypatch.setattr("app.services.ranking.recompute_popularity",
+                        lambda db: pops.append(1) or 0)
+
+    state: dict = {}
+    bp._tick(state)
+    bp._tick(state)
+    assert drained == [1, 1]
+    assert attempts == [1, 1]
+    assert pops == [1], "популярность не должна ждать починки новизны"
 
 
 def test_gateway_warm_ping_runs_on_its_own_interval(monkeypatch):

@@ -341,7 +341,11 @@ def feed(db: Session = Depends(get_db)):
     preorder_raw = rows(base.where(Product.availability_mode == "preorder").order_by(*order))
     today_raw = rows(base.where(Product.is_available_today.is_(True), Product.in_stock.is_(True))
                      .order_by(*order))
-    new_raw = rows(base.where(Product.is_new.is_(True)).order_by(Product.id.desc()))
+    # «Новинки» — самые новые МОДЕЛИ первыми (services/novelty), а не самые
+    # поздние строки: по id наверх выходил свежезаведённый цвет старой модели.
+    # Внутри модели — обычный порядок выдачи (в наличии, промо, спрос…).
+    new_raw = rows(base.where(Product.is_new.is_(True))
+                   .order_by(Product.model_first_seen_at.desc().nulls_last(), *order))
     recent_raw = rows(base.order_by(Product.id.desc()))
     pool_raw = rows(base.order_by(*order))
 

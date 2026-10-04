@@ -109,6 +109,8 @@ REQUIRED_SCHEMA: dict[str, tuple[str, ...]] = {
         "is_limited", "model_family", "image_group_detached", "image_group_key",
         "availability_mode", "preorder_eta", "preorder_group", "accent_color",
         "is_legendary", "poster_url", "promo_boost", "family_key", "variant",
+        # Новинки (04.10.2026): бот сам их и пересчитывает раз в час.
+        "model_first_seen_at",
     ),
     "fx_rate_history": (),
 }
@@ -270,6 +272,52 @@ def _tick(state: dict) -> None:
                 logger.info("уведомления: %s", stats)
     except Exception:  # noqa: BLE001 — фон не роняет polling
         logger.exception("фоновая задача завершилась ошибкой")
+
+    _catalog_upkeep(state, now)
+
+
+#: Как часто выравнивать новинки. Окно новизны сдвигается со временем, и
+#: is_new обязан гаснуть сам: дольше часа «новинка» после срока не висит.
+NOVELTY_SYNC_SECONDS = 3600
+#: Как часто пересчитывать популярность из просмотров. Просмотров — десятки в
+#: день, порядок выдачи от пересчёта раз в сутки не отстаёт.
+POPULARITY_RECOMPUTE_SECONDS = 24 * 3600
+
+
+def _catalog_upkeep(state: dict, now: float) -> None:
+    """Обслуживание каталога: новинки (раз в час) и популярность (раз в сутки).
+
+    Своя сессия и свой try на КАЖДУЮ задачу, после очереди уведомлений: это
+    порядок выдачи, а не сообщения людям, — его сбой не имеет права задержать
+    drain или утащить соседнюю задачу. Отметку двигаем после успеха, как у
+    сканов выше: упавший пересчёт повторится следующим тиком, а не через час.
+    """
+    from app.db.session import SessionLocal
+    from app.services import novelty, ranking
+
+    # Схема та же, что у задач выше: без колонки model_first_seen_at пересчёт
+    # упал бы на деплое ровно так, как падали сканы. Проверка кешируется.
+    try:
+        if not _schema_ready(state):
+            return
+    except Exception:  # noqa: BLE001 — БД недоступна; уже залогировано выше
+        return
+
+    jobs = (
+        ("last_novelty_sync", NOVELTY_SYNC_SECONDS, novelty.sync_novelty, "новинки"),
+        ("last_popularity", POPULARITY_RECOMPUTE_SECONDS, ranking.recompute_popularity,
+         "популярность"),
+    )
+    for key, interval, job, label in jobs:
+        if not _due(state.get(key), now, interval):
+            continue
+        try:
+            with SessionLocal() as db:
+                changed = job(db)
+            state[key] = now
+            logger.info("%s: пересчитано, изменилось %s", label, changed)
+        except Exception:  # noqa: BLE001 — фон не роняет polling
+            logger.exception("пересчёт «%s» завершился ошибкой", label)
 
 
 def _stop(signum: int, _frame: FrameType | None) -> None:
