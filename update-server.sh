@@ -77,6 +77,9 @@ tar czf - \
   --exclude=artifacts \
   --exclude=docs/handoff \
   --exclude=release-evidence \
+  --exclude=tools/channel_cleanup \
+  --exclude='*.session' \
+  --exclude='*.session-journal' \
   . | ssh "$SERVER" "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
 
 # Сторож здоровья (health-watch.timer) проверяет сервер раз в две минуты и

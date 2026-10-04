@@ -33,3 +33,14 @@ ad-creatives/
 
 # Выхлоп офлайн-инструмента подбора фото — 71 MB кэша API и картинок, в сборке не участвует
 artifacts/rocketniks/
+
+# Чистка канала (tools/channel_cleanup): сессия Telethon = полный доступ к
+# аккаунту, ключи API и выгрузки подписчиков — только локально.
+*.session
+*.session-journal
+credentials.local.json
+tools/channel_cleanup/*.csv
+tools/channel_cleanup/*.log
+tools/channel_cleanup/whitelist.txt
+tools/channel_cleanup/known_customers.txt
+tools/channel_cleanup/summary.txt
