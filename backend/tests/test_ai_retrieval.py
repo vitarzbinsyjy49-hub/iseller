@@ -332,3 +332,35 @@ def test_plural_iphone_query_ranks_iphone_above_macbooks_with_same_number(db):
     q = "какие есть новые айфоны 18?"
     top = retrieve_candidates(db, q, extract_filters(q))[:3]
     assert iphone.id in [p.id for p in top]
+
+
+def test_named_model_beats_well_filled_older_neighbours(db):
+    """«есть ли у вас iPhone 18 Pro Max?» не должен отвечать «18-х нет».
+
+    Прод 04.10: iPhone 18 из свежего импорта без популярности, «доступно
+    сегодня» и заполненных характеристик набирал 64 балла против 71–72 у
+    iPhone 17 Pro Max, хотя совпадал с запросом сильнее (33 против 26). Бонусы
+    «не про запрос» складывались с релевантностью и вытесняли названную модель
+    из 12 кандидатов — модель видела только 17-е и MacBook «M5 Max 18/40».
+    """
+    new = [
+        make_product(db, title=f"Apple iPhone 18 Pro Max 2 ТБ Black v{i}", brand="Apple",
+                     category="смартфоны", popularity=0, rating=0, price=279500)
+        for i in range(3)
+    ]
+    for i in range(10):
+        make_product(db, title=f"Apple iPhone 17 Pro Max 256 ГБ Blue v{i}", brand="Apple",
+                     category="смартфоны", popularity=5, is_available_today=True,
+                     memory="256 ГБ", storage="256 ГБ", color="Blue")
+    for i in range(6):
+        make_product(db, title=f"Apple MacBook Pro 16 M5 Max 18/40 48GB 2TB v{i}", brand="Apple",
+                     category="ноутбуки", popularity=3, is_available_today=True,
+                     cpu="M5 Max", ram="48 ГБ", storage="2 ТБ", screen_size="16")
+
+    q = "есть ли у вас iPhone 18 Pro Max?"
+    got = retrieve_candidates(db, q, extract_filters(q), limit=12)
+
+    assert {p.id for p in new} <= {p.id for p in got}, (
+        f"названная модель обязана быть среди кандидатов: {[p.title[:40] for p in got]}"
+    )
+    assert all("iphone 18" in p.title.lower() for p in got[:3])

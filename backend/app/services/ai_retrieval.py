@@ -386,7 +386,12 @@ def retrieve_candidates(db: Session, message: str, f: ExtractedFilters, limit: i
         merged = [p for p in db.execute(alt).scalars().all()
                   if (p.brand or "").lower() not in excluded_low]
 
-    merged.sort(key=lambda p: _score(p, f, tokens), reverse=True)
+    # Релевантность запросу — ПЕРВЫЙ ключ, общий балл только разводит равных.
+    # Раньше они складывались, и бонусы «не про запрос» (популярность, «доступно
+    # сегодня», заполненные характеристики — до +40) перевешивали разницу в
+    # совпадении (7 за слово): свежий iPhone 18 без истории продаж проигрывал
+    # прошлогоднему 17-му и MacBook «M5 Max 18/40», и модель отвечала «18-х нет».
+    merged.sort(key=lambda p: (_relevance(p, tokens), _score(p, f, tokens)), reverse=True)
     return merged[:limit]
 
 
