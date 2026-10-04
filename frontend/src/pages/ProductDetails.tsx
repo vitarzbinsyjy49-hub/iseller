@@ -26,6 +26,8 @@ import { QuantityStepper } from "../components/QuantityStepper";
 import { specChips } from "../lib/specChips";
 import LegendaryProduct from "../components/LegendaryProduct";
 import PriceOfferBlock from "../components/PriceOfferBlock";
+import ProductAskAi from "../components/ProductAskAi";
+import { aiChatHref, aiSeesProduct, showAskInCard } from "../lib/askInCard";
 import VariantPicker from "../components/VariantPicker";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 import { CART_SWAP_DX_PX, useCartSwapOut } from "../lib/useCartSwap";
@@ -152,7 +154,7 @@ export default function ProductDetails() {
           product={p}
           shared={shared}
           onShare={share}
-          onAskAi={() => navigate(`/ai?product=${p.id}`)}
+          onAskAi={() => navigate(aiChatHref(p.id))}
           cta={
             <ProductCta
               product={p}
@@ -369,12 +371,18 @@ export default function ProductDetails() {
             // (services/ai_retrieval), чтобы не советовать то, чего нет в
             // продаже, и не выдумывать характеристики. Кнопку при этом НЕ
             // убираем: молча пропавший элемент читается как поломка. Вместо
-            // перехода — честный ответ на месте.
-            if (p.price_note) {
+            // перехода — честный ответ на месте. Правило «видит ли AI товар»
+            // одно с блоком вопроса ниже (lib/askInCard.aiSeesProduct).
+            //
+            // Кнопка остаётся и рядом с блоком «Спросить про этот товар»: блок
+            // — короткий ответ на месте, кнопка — вход в полный чат, пока
+            // вопроса ещё не было (после ответа тот же вход дублирует ссылка
+            // «Продолжить в чате»).
+            if (!aiSeesProduct(p)) {
               toast("Устройство ещё не в продаже — характеристики и цену подтвердит менеджер");
               return;
             }
-            navigate(`/ai?product=${p.id}`);
+            navigate(aiChatHref(p.id));
           }}
           className="tap flex flex-1 items-center justify-center gap-1.5 rounded-xl2 border border-border bg-surface py-2.5 text-xs font-medium text-muted"
         >
@@ -416,6 +424,14 @@ export default function ProductDetails() {
           source: "product", preset: `Сообщите, когда появится: ${p.title}`,
         })} />
       </div>
+
+      {/* Вопрос к AI на месте — ПОД ценой и покупкой: сначала решение «брать
+          или нет», потом сомнения. На mobile CTA прибита к низу, и блок встаёт
+          сразу за «Нашли дешевле?»; на desktop — за CTA правой колонки.
+          Легендарного товара здесь нет (его экран выше), предзаказ AI не
+          видит — оба правила в showAskInCard. key: соседний вариант (память,
+          цвет) — другой товар, и ответ про прежний под ним был бы неправдой. */}
+      {showAskInCard(p) && <ProductAskAi key={p.id} productId={p.id} />}
 
       </div>{/* /правая колонка */}
       </div>{/* /desktop 2 колонки */}

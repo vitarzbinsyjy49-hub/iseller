@@ -110,6 +110,9 @@ ALLOWED_EVENTS = {
     # Пара статусов в шапке главной: что вывели на передний план.
     "status_pair_switched",
     "ai_prefill_opened",
+    # Вопрос к ИИ прямо из карточки товара (спека 2026-10-04, часть 3).
+    # Payload — product_id и preset|custom, сам текст вопроса не уходит.
+    "ai_in_card_ask",
     "history_opened",
     "empty_state_action_clicked",
     # v5.4.0: встроенные сценарные заявки (bottom-sheet) и карусель фото.

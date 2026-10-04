@@ -16,8 +16,8 @@ import AiRoadmapSheet from "../components/AiRoadmapSheet";
 import { openExternalLink } from "../lib/telegram";
 import { aiEntryAction, clearAiHistory, loadAiHistory, pushAiQuery } from "../lib/searchHistory";
 import { clearConversation, loadConversation, saveConversation } from "../lib/aiConversation";
-import { prefersReducedMotion, revealDurationMs, revealedChars } from "../lib/answerReveal";
-import { parseAnswer, plainText } from "../lib/answerFormat";
+import { useAnswerReveal } from "../lib/useAnswerReveal";
+import { normalizeAnswer } from "../lib/aiAnswer";
 import { Icon } from "../components/icons";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 import ScreenHeader from "../components/ScreenHeader";
@@ -217,13 +217,10 @@ export default function AiSearch() {
     return () => { delete document.documentElement.dataset.auroraHushed; };
   }, [hasChat]);
 
-  // Набор текста последнего ответа. null — «набирать нечего»: либо ответ уже
-  // показан целиком, либо это старое сообщение в истории диалога.
-  // Число — сколько символов показано прямо сейчас; по нему же решается,
-  // пора ли прикладывать карточки (они ждут конца набора).
-  const [revealChars, setRevealChars] = useState<number | null>(null);
-  const revealRaf = useRef<number | null>(null);
-  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Набор текста последнего ответа (lib/useAnswerReveal — та же механика, что
+  // у ответа на странице товара). null — «набирать нечего»: ответ показан
+  // целиком или это старое сообщение в истории диалога.
+  const { revealChars, startReveal } = useAnswerReveal();
 
   // Момент, когда набор закончился и появились карточки: высота выросла, нужен
   // доскролл. Отдельным эффектом, а не вместе с [chat, loading]: там пришлось бы
@@ -231,70 +228,6 @@ export default function AiSearch() {
   useEffect(() => {
     if (revealChars === null) endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [revealChars]);
-
-  /** Снять набор: показать ответ целиком. Одна точка выхода для обеих ветвей —
-   *  и для кадров rAF, и для страховочного таймера. */
-  function finishReveal() {
-    if (revealRaf.current !== null) { cancelAnimationFrame(revealRaf.current); revealRaf.current = null; }
-    if (revealTimer.current !== null) { clearTimeout(revealTimer.current); revealTimer.current = null; }
-    // null вместо length: «набор закончен» и «набирать нечего» — одно состояние
-    // для рендера, поэтому не держим два разных признака.
-    setRevealChars(null);
-  }
-
-  /** Запустить набор текста только что полученного ответа.
-   *
-   *  rAF, а не setInterval: интервал не синхронизирован с кадрами и на слабом
-   *  устройстве даёт рваный набор. Кадр пропущен — ничего не сломается, число
-   *  символов считается от реального времени, а не накоплением шагов.
-   *
-   *  Плюс страховочный таймер: rAF в скрытой вкладке НЕ вызывается. Свернул
-   *  Mini App посреди набора — без таймера текст остался бы недописанным, а
-   *  карточки не появились бы вовсе. Таймеры в фоне работают (пусть и
-   *  притормаживают), поэтому набор всегда доводится до конца. Проверено живьём:
-   *  в скрытой панели браузера кадры не шли, и набор висел неоконченным. */
-  function startReveal(text: string) {
-    finishReveal();
-    // Считаем по тексту БЕЗ разметки: символы `**` и `- ` на экран не попадают,
-    // и если мерить по сырому ответу, набор «залипал» бы на невидимом.
-    const length = plainText(parseAnswer(text)).length;
-    // Пустой текст показываем сразу. При «уменьшить движение» набор НЕ
-    // выключается — он короче: текст не движется, а проявляется, и без него
-    // ответ возникал стеной (жалоба с телефона в Telegram).
-    if (!length) return;
-    const reduced = prefersReducedMotion();
-    const startedAt = performance.now();
-    const total = revealDurationMs(length, reduced);
-    setRevealChars(0);
-    const step = () => {
-      const elapsed = performance.now() - startedAt;
-      if (elapsed >= total) { finishReveal(); return; }
-      setRevealChars(revealedChars(length, elapsed, reduced));
-      revealRaf.current = requestAnimationFrame(step);
-    };
-    revealRaf.current = requestAnimationFrame(step);
-    // Запас 400мс: если кадры идут нормально, таймер не успевает сработать.
-    revealTimer.current = setTimeout(finishReveal, total + 400);
-  }
-
-  // Уход с экрана посреди набора не должен оставлять висящий кадр или таймер.
-  useEffect(() => () => {
-    if (revealRaf.current !== null) cancelAnimationFrame(revealRaf.current);
-    if (revealTimer.current !== null) clearTimeout(revealTimer.current);
-  }, []);
-
-  /** Нормализация ответа AI: даже если backend/движок вернул неполный объект
-   *  (нет cards/meta/actions), UI не должен падать — рисуем что есть. */
-  function normalizeAnswer(raw: Partial<AiAnswer> | null | undefined): AiAnswer {
-    return {
-      text: typeof raw?.text === "string" && raw.text
-        ? raw.text
-        : "Подобрал варианты — посмотрите карточки ниже или уточните запрос.",
-      cards: Array.isArray(raw?.cards) ? raw!.cards : [],
-      actions: Array.isArray(raw?.actions) ? raw!.actions : [],
-      meta: raw?.meta && typeof raw.meta === "object" ? raw.meta : {},
-    };
-  }
 
   /** История для backend (v5): последние 10 текстовых сообщений, без карточек. */
   function historyPayload(items: ChatItem[]): { role: string; text: string }[] {
