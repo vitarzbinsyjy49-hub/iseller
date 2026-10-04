@@ -1,94 +1,136 @@
-/** Слайд 3 — лояльность/кэшбек. Шкала и счётчик "0,25 → 2%" — ОДИН
- *  animateNumber на оба значения разом: раньше (в static-экспорте) это были
- *  отдельная CSS-анимация ширины и свой independent requestAnimationFrame
- *  скрипт, и они могли разойтись по времени. */
+/** Слайд 4 — кэшбек и уровни.
+ *
+ *  Лестница приходит с сервера (`/loyalty/me` → `levels`), как и на экране
+ *  `/loyalty`. Прежний слайд держал свою копию «0,25% → 2%» с выдуманными
+ *  названиями уровней — лояльность пересобрали, а онбординг ещё полгода
+ *  обещал старые ставки. Вторая копия порогов разъезжается всегда.
+ *
+ *  Ступени растут по очереди, а крупная цифра досчитывает до ставки той
+ *  ступени, которая сейчас выросла, — один мотор на оба значения, чтобы они
+ *  не могли разойтись. Плашка акции первой покупки — только если акция
+ *  реально действует для этого человека (`next_purchase.promo`). */
 import { useEffect, useRef, useState } from "react";
+import { api } from "../../lib/api";
 import { animateNumber, prefersReducedMotion } from "../../lib/motion";
+import { Icon } from "../icons";
 import { Appear } from "./Appear";
 
-const START_RATE = 0.25;
-const TOP_RATE = 2;
-const START_WIDTH = 12;
-const TOP_WIDTH = 96;
+type Level = { key: string; title: string; threshold: number; rate_percent: number };
+type LoyaltyMe = {
+  levels: Level[];
+  next_purchase?: { rate_percent: number; promo: string | null };
+};
 
-const LEVELS = [
-  { label: "Старт", rate: "0,25%" },
-  { label: "Клиент", rate: "0,5%" },
-  { label: "Постоянный", rate: "1%" },
-  { label: "Топ", rate: "2%" },
-];
+const GROW_DELAY_MS = 500;
+const GROW_MS = 1900;
+
+function pct(v: number): string {
+  return `${v.toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%`;
+}
+
+function thresholdLabel(rub: number): string {
+  if (rub <= 0) return "сразу";
+  if (rub >= 1_000_000) return `от ${(rub / 1_000_000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} млн`;
+  return `от ${Math.round(rub / 1000)} тыс`;
+}
 
 export function SceneLoyalty() {
-  const fillRef = useRef<HTMLDivElement>(null);
-  const [rateText, setRateText] = useState("0,25");
+  const [data, setData] = useState<LoyaltyMe | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [rate, setRate] = useState<number | null>(null);
+  const barRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
-    const fill = fillRef.current;
-    if (!fill) return;
-    // transitionDuration() здесь не годится: 160мс — темп замены СДВИГА на
-    // затухание (направление всё равно не считать), а тут анимируется ЧИСЛО —
-    // сама суть слайда в том, что ставка растёт на глазах. Схлопнуть до 160мс
-    // значит показать сразу «2%» без смысла шкалы. Короче обычного (уважаем
-    // «меньше движения»), но не мгновенно.
-    const ms = prefersReducedMotion() ? 900 : 2200;
-    const cancel = animateNumber(0, 1, ms, (t) => {
-      const eased = 1 - (1 - t) ** 3;
-      fill.style.width = `${START_WIDTH + eased * (TOP_WIDTH - START_WIDTH)}%`;
-      setRateText((START_RATE + eased * (TOP_RATE - START_RATE)).toFixed(2).replace(".", ","));
-    });
-    return cancel;
+    let cancelled = false;
+    api<LoyaltyMe>("/loyalty/me?history_limit=1")
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
   }, []);
+
+  const levels = data?.levels ?? [];
+  const top = levels.length ? levels[levels.length - 1].rate_percent : 0;
+
+  useEffect(() => {
+    if (!levels.length) return;
+    const n = levels.length;
+    const ms = prefersReducedMotion() ? 700 : GROW_MS;
+    let cancel = () => {};
+    const timer = window.setTimeout(() => {
+      cancel = animateNumber(0, n, ms, (v) => {
+        barRefs.current.forEach((bar, i) => {
+          if (bar) bar.style.transform = `scaleY(${Math.max(0, Math.min(1, v - i))})`;
+        });
+        const reached = Math.max(0, Math.min(n - 1, Math.floor(v - 0.001)));
+        const part = Math.max(0, Math.min(1, v - reached));
+        const prev = reached > 0 ? levels[reached - 1].rate_percent : 0;
+        setRate(prev + (levels[reached].rate_percent - prev) * part);
+      });
+    }, GROW_DELAY_MS);
+    return () => { window.clearTimeout(timer); cancel(); };
+    // levels приходят один раз; массив из ответа сравнивать по ссылке незачем.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  const promo = data?.next_purchase?.promo ? data.next_purchase : null;
 
   return (
     <div
-      className="flex h-full flex-col items-center bg-bg px-6 text-center"
-      style={{ paddingTop: "calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 64px)" }}
+      className="flex h-full flex-col bg-bg px-6 pb-8"
+      style={{ paddingTop: "calc(var(--app-content-top-offset, env(safe-area-inset-top, 0px)) + 72px)" }}
     >
-      <Appear className="text-[12px] font-semibold uppercase tracking-[0.06em] text-accent">
-        АйСеллер · Лояльность
-      </Appear>
-      <Appear delayMs={80} className="mt-2 text-[27px] font-extrabold leading-[1.15] tracking-[-0.03em] text-text">
+      <Appear className="text-[30px] font-extrabold leading-[1.1] tracking-[-0.03em] text-text [text-wrap:balance]">
         <h1>
           Кэшбек баллами
           <br />
-          с каждой покупки
+          <span className="text-accent">{top ? `до ${pct(top)}` : "с каждой покупки"}</span>
         </h1>
       </Appear>
-
-      <Appear delayMs={160} className="mt-10 w-full max-w-[300px]">
-        <div className="mb-2 flex justify-between text-[13px] text-muted">
-          <span>0,25%</span>
-          <span>2%</span>
-        </div>
-        <div className="h-2.5 overflow-hidden rounded-full bg-mutedbg">
-          <div ref={fillRef} className="h-full rounded-full bg-gradient-to-r from-accent to-green" style={{ width: `${START_WIDTH}%` }} />
-        </div>
+      <Appear delayMs={120} className="mt-3 max-w-[320px] text-[15px] leading-snug text-muted">
+        <p>1 балл = 1 ₽. Ставка растёт с суммой покупок и не падает, когда тратите баллы</p>
       </Appear>
 
-      <div className="mt-7 text-[60px] font-extrabold leading-none tracking-[-0.03em] text-text tabular-nums">
-        {rateText}<span className="text-[28px] font-bold text-accent">%</span>
-      </div>
-      <Appear delayMs={2900} className="mt-1.5 text-[14px] text-muted">
-        ставка растёт с оборотом покупок
-      </Appear>
+      {promo && (
+        <Appear delayMs={260} className="mt-5 inline-flex items-center gap-2 self-start rounded-full bg-accent/10 px-3.5 py-2 text-[13px] font-semibold text-accent">
+          <Icon name="flame" className="h-4 w-4" />
+          Первая покупка — {pct(promo.rate_percent)} кэшбека
+        </Appear>
+      )}
 
-      <div className="mt-9 flex w-full gap-2">
-        {LEVELS.map((l, i) => (
-          <Appear
-            key={l.label}
-            delayMs={3000 + i * 100}
-            className={`flex-1 rounded-card px-1.5 py-2.5 text-[11px] font-semibold ${
-              i === LEVELS.length - 1 ? "bg-accent text-white" : "bg-mutedbg text-muted"
-            }`}
-          >
-            {l.label}
-            <div className="mt-0.5 text-[13px]">{l.rate}</div>
-          </Appear>
-        ))}
-      </div>
+      {levels.length > 0 && (
+        <>
+          <div className="mt-7 text-[64px] font-extrabold leading-none tracking-[-0.03em] text-text tabular-nums">
+            {rate === null ? "0" : rate.toLocaleString("ru-RU", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+            <span className="ml-0.5 text-[30px] font-bold text-accent">%</span>
+          </div>
 
-      <Appear delayMs={3500} className="mt-7 max-w-[280px] text-[13px] leading-relaxed text-muted">
-        <p>Баллы копятся автоматически — <b className="text-text">без промокодов</b> и лишних шагов</p>
+          <div className="mt-6 flex h-[150px] items-end gap-2">
+            {levels.map((l, i) => (
+              <div key={l.key} className="flex h-full flex-1 flex-col justify-end">
+                <div className="mb-1.5 text-center text-[12px] font-bold text-text tabular-nums">{pct(l.rate_percent)}</div>
+                <div
+                  ref={(el) => { barRefs.current[i] = el; }}
+                  className={`origin-bottom rounded-t-[10px] ${i === levels.length - 1 ? "bg-accent" : "bg-accent/25"}`}
+                  style={{ height: `${28 + (l.rate_percent / top) * 72}%`, transform: "scaleY(0)" }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-2">
+            {levels.map((l) => (
+              <div key={l.key} className="min-w-0 flex-1 text-center">
+                <div className="truncate text-[11.5px] font-semibold text-text">{l.title}</div>
+                <div className="truncate text-[10.5px] text-muted">{thresholdLabel(l.threshold)}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {data === null && !failed && <div className="skeleton mt-8 h-[220px] w-full rounded-xl2" />}
+
+      <Appear delayMs={2600} className="mt-auto pt-6 text-[13px] leading-relaxed text-muted">
+        <p>Баллы начисляются сами после покупки — <b className="text-text">без промокодов</b>. Ими можно оплатить часть следующей</p>
       </Appear>
     </div>
   );

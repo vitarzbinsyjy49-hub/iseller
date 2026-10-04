@@ -90,7 +90,7 @@
      Значение совпадает с --app-bg (246 247 249): системная область Telegram,
      вырез safe-area и страница должны быть одним полотном, иначе между ними
      появляется шов. --app-hero-bg и .app-hero остаются — ими живёт онбординг
-     (components/onboarding/SceneTrust). */
+     (components/onboarding/Scene*). */
   --app-header-color: #f6f7f9;
   --app-hero-bg: linear-gradient(163deg, #14304d 0%, #1b4870 58%, #205488 100%);
   --app-hero-chip: rgba(255, 255, 255, 0.13);

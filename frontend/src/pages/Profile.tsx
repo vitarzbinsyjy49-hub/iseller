@@ -4,6 +4,7 @@ import { useAuthStore } from "../store/auth";
 import {
   addToHomeScreen,
   checkHomeScreenStatus,
+  haptic,
   isInsideTelegram,
   openExternalLink,
   type HomeScreenStatus,
@@ -309,10 +310,43 @@ export default function Profile() {
       </div>{/* /правая колонка */}
       </div>{/* /desktop 2 колонки */}
 
+      <DevCredit />
+
       {roadmap && (
         <Suspense fallback={null}>
           <RoadmapSheet onClose={() => setRoadmap(false)} />
         </Suspense>
+      )}
+    </div>
+  );
+}
+
+const DEV_USERNAME = "CblHMOCKBA";
+
+/** Пасхалка в самом низу профиля: неприметное «Сделано с ♥», которое по тапу
+ *  раскрывается в подпись разработчика. Свёрнутой она намеренно — это подпись
+ *  автора, а не пункт меню, и спорить по весу с «Сообщить об ошибке» над ней
+ *  не должна. Ссылка — только через openExternalLink: внутри Telegram t.me
+ *  откроется диалогом, а не браузером поверх магазина. */
+function DevCredit() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-6 flex justify-center pb-2 text-[13px] text-muted">
+      {open ? (
+        <button
+          onClick={() => openExternalLink(`https://t.me/${DEV_USERNAME}`)}
+          className="tap rounded-field px-3 py-2 outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          Бота разработал <span className="font-semibold text-accent">@{DEV_USERNAME}</span>
+        </button>
+      ) : (
+        <button
+          onClick={() => { haptic("soft"); setOpen(true); }}
+          aria-label="Кто сделал бота"
+          className="tap rounded-field px-3 py-2 outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          Сделано с <span className="text-[#e5484d]">♥</span>
+        </button>
       )}
     </div>
   );

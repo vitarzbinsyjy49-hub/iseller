@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceSlide, shouldShowOnboarding, tapZoneFor } from "./onboarding";
+import { advanceSlide, shouldShowOnboarding, tapZoneFor, releaseDirection, dragOffset, isTap } from "./onboarding";
 
 describe("shouldShowOnboarding", () => {
   it("нет пользователя — не показываем", () => {
@@ -48,5 +48,50 @@ describe("tapZoneFor", () => {
 
   it("левый край — prev", () => {
     expect(tapZoneFor(0)).toBe("prev");
+  });
+});
+
+describe("releaseDirection — куда докатить экран, когда палец отпущен", () => {
+  const W = 400;
+  it("короткий медленный сдвиг — остаёмся на месте", () => {
+    expect(releaseDirection(-60, W, 0.1)).toBe("stay");
+    expect(releaseDirection(60, W, -0.1)).toBe("stay");
+  });
+  it("больше четверти экрана — листаем в сторону жеста", () => {
+    expect(releaseDirection(-120, W, 0)).toBe("next");
+    expect(releaseDirection(120, W, 0)).toBe("prev");
+  });
+  it("короткий, но быстрый смахивающий жест — тоже листает", () => {
+    expect(releaseDirection(-40, W, -0.8)).toBe("next");
+    expect(releaseDirection(40, W, 0.8)).toBe("prev");
+  });
+  it("быстрый рывок против сдвига не листает назад через ноль", () => {
+    // Потянул влево на полэкрана и дёрнул обратно: это отмена, а не «назад».
+    expect(releaseDirection(-200, W, 0.9)).toBe("stay");
+  });
+});
+
+describe("dragOffset — экран за пальцем", () => {
+  it("посреди последовательности идёт за пальцем один к одному", () => {
+    expect(dragOffset(-80, 2, 5)).toBe(-80);
+    expect(dragOffset(80, 2, 5)).toBe(80);
+  });
+  it("влево с первого экрана тянется туго — дальше некуда", () => {
+    expect(dragOffset(90, 0, 5)).toBe(30);
+  });
+  it("вправо с последнего идёт свободно: это закрытие онбординга", () => {
+    expect(dragOffset(-90, 4, 5)).toBe(-90);
+  });
+});
+
+describe("isTap", () => {
+  it("почти без движения и быстро — тап", () => {
+    expect(isTap(4, 180)).toBe(true);
+  });
+  it("сдвиг пальца — не тап", () => {
+    expect(isTap(14, 120)).toBe(false);
+  });
+  it("долгое удержание — пауза, а не тап", () => {
+    expect(isTap(2, 600)).toBe(false);
   });
 });

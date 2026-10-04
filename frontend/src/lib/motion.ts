@@ -177,6 +177,22 @@ export function animateNumber(
   return animateValue(from, to, durationMs, apply, done);
 }
 
+/** Равномерное движение тем же мотором. Нужно там, где торможение читалось
+ *  бы как рывок: бесконечная лента (каждый круг заново замедлялся бы) и
+ *  полоска прогресса сторис (её скорость и есть обещанное время слайда).
+ *  Мотор отдаёт ease-out значение — время разворачиваем обратно. */
+export function animateLinear(
+  from: number, to: number, durationMs: number,
+  apply: (value: number) => void,
+  done?: () => void,
+): () => void {
+  return animateValue(0, 1, durationMs, (eased) => {
+    // easeOutQuint(t) = 1 - (1 - t)^5  →  t = 1 - (1 - eased)^(1/5)
+    const t = 1 - Math.pow(Math.max(0, 1 - eased), 1 / 5);
+    apply(from + (to - from) * t);
+  }, done);
+}
+
 /** Длительность проявления слайда онбординга. Раньше жила в CSS
  *  (`.onboarding-appear { animation: fadeUp 550ms ... }`) — теперь считается
  *  тут же, где и остальное движение, которое должен увидеть человек. */

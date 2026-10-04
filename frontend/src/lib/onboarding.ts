@@ -27,3 +27,37 @@ export function advanceSlide(
 export function tapZoneFor(xRatio: number): "prev" | "next" {
   return xRatio < 1 / 3 ? "prev" : "next";
 }
+
+/** Доля ширины экрана, после которой отпущенный свайп листает. */
+const SWIPE_DISTANCE_RATIO = 0.25;
+/** Скорость смахивания (px/мс), при которой листает и короткий жест. */
+const SWIPE_FLICK_SPEED = 0.5;
+
+/** Куда докатить экран, когда палец отпущен. dx < 0 — палец ушёл влево
+ *  (к следующему экрану), velocity — px/мс со знаком, как у dx.
+ *
+ *  Быстрый рывок учитывается, только если он в ту же сторону, что и сдвиг:
+ *  потянул влево и дёрнул обратно — это отмена, а не «назад через ноль». */
+export function releaseDirection(dx: number, width: number, velocity: number): "next" | "prev" | "stay" {
+  if (dx === 0) return "stay";
+  const sameWay = Math.sign(velocity) === Math.sign(dx);
+  const far = Math.abs(dx) > width * SWIPE_DISTANCE_RATIO;
+  const flick = sameWay && Math.abs(velocity) > SWIPE_FLICK_SPEED;
+  if (!far && !flick) return "stay";
+  if (far && !sameWay && Math.abs(velocity) > SWIPE_FLICK_SPEED) return "stay";
+  return dx < 0 ? "next" : "prev";
+}
+
+/** Сдвиг экрана за пальцем. Назад с первого экрана тянется туго (в треть
+ *  хода пальца) — там ничего нет, но жест должен ощущаться живым, а не
+ *  упираться в стену. Вперёд с последнего — свободно: это закрытие. */
+export function dragOffset(dx: number, index: number, _count: number): number {
+  if (index === 0 && dx > 0) return dx / 3;
+  return dx;
+}
+
+/** Тап — короткое касание почти без движения. Долгое удержание — пауза
+ *  автопролистывания, как в сторис Telegram, и экран не листает. */
+export function isTap(distancePx: number, durationMs: number): boolean {
+  return distancePx < 10 && durationMs < 350;
+}
