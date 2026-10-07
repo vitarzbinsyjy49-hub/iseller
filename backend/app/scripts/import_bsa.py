@@ -360,7 +360,7 @@ def main() -> int:
         help="показать список «было → стало» по каждой изменившейся позиции",
     )
     parser.add_argument(
-        "--phones", default="bsa_2026_09_24.txt,bsa_18_2026_09_24.txt",
+        "--phones", default="bsa_2026_10_06.txt,bsa_18_2026_10_06.txt",
         help="файлы iPhone в data/ через запятую; пустая строка — пропустить",
     )
     parser.add_argument(
@@ -369,7 +369,7 @@ def main() -> int:
              " вернувшимся — «в наличии» (передавайте ВСЕ файлы прайса)",
     )
     parser.add_argument(
-        "--macs", default="bsa_mac_2026_09_24.txt",
+        "--macs", default="bsa_mac_2026_10_06.txt",
         help="файл Mac/мониторов в data/; пустая строка — пропустить",
     )
     args = parser.parse_args()

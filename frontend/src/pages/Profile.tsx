@@ -21,6 +21,7 @@ import { telegramShareUrl } from "../lib/share";
 import { useOnboardingReplayStore } from "../store/onboardingReplay";
 import { enterRefCallback } from "../lib/useEnter";
 import { useLeadsBadge } from "../store/leadsBadge";
+import { fetchEligible } from "../lib/staff";
 
 // Отдельным chunk'ом: роудмап открывают единицы, а весит он как экран.
 const RoadmapSheet = lazy(() => import("../components/RoadmapSheet"));
@@ -70,6 +71,11 @@ export default function Profile() {
   const [referral, setReferral] = useState<ReferralAccount | null>(null);
   const [refCopied, setRefCopied] = useState(false);
   useEffect(() => { fetchReferral().then(setReferral).catch(() => setReferral(null)); }, []);
+
+  // Строка «Режим администратора» — только тем, кого сервер признал админом.
+  // Это удобство, а не защита: вход всё равно подтверждается в чате с ботом.
+  const [staffEligible, setStaffEligible] = useState(false);
+  useEffect(() => { fetchEligible().then((r) => setStaffEligible(r.eligible)).catch(() => setStaffEligible(false)); }, []);
 
   /** Поделиться личной ссылкой.
    *
@@ -147,6 +153,21 @@ export default function Profile() {
           <p className="text-xs text-muted">{source}</p>
         </div>
       </div>
+
+      {staffEligible && (
+        <button
+          onClick={() => navigate("/staff")}
+          className="tap mt-3 flex w-full items-center gap-3 rounded-xl2 bg-surface p-4 text-left shadow-soft"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field bg-accent/10 text-accent">
+            <Icon name="shield" className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold">Режим администратора</p>
+            <p className="mt-0.5 text-xs text-muted">Цены и наличие · вход с подтверждением в боте</p>
+          </div>
+        </button>
+      )}
 
       {/* Desktop: 2 колонки — [аккаунт/заявки | контакты/опт/B2B/Trade-In] */}
       <div className="lg:mt-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6">

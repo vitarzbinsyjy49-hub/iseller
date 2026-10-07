@@ -29,6 +29,8 @@ import PriceOfferBlock from "../components/PriceOfferBlock";
 import ProductAskAi from "../components/ProductAskAi";
 import { aiChatHref, aiSeesProduct, showAskInCard } from "../lib/askInCard";
 import VariantPicker from "../components/VariantPicker";
+import StaffPriceSheet from "../components/StaffPriceSheet";
+import { hasStaffSession } from "../lib/staff";
 import { enterGridRefCallback, enterRefCallback } from "../lib/useEnter";
 import { CART_SWAP_DX_PX, useCartSwapOut } from "../lib/useCartSwap";
 
@@ -40,6 +42,9 @@ export default function ProductDetails() {
   const navigate = useNavigate();
   const config = usePublicConfig();
   const [p, setP] = useState<ProductDetail | null>(null);
+  // Правка цены прямо с карточки (вариант C) — только при активной сессии
+  // администратора; без неё кнопки нет, а сервер всё равно не примет правку.
+  const [staffEdit, setStaffEdit] = useState(false);
   const [state, setState] = useState<LoadState>("loading");
   const [tab, setTab] = useState<Tab>("desc");
   const [shared, setShared] = useState(false);
@@ -329,6 +334,26 @@ export default function ProductDetails() {
           </span>
         )}
       </div>
+      )}
+
+      {hasStaffSession() && (
+        <button
+          onClick={() => setStaffEdit(true)}
+          className="tap mt-2 inline-flex min-h-11 items-center gap-2 rounded-field border border-accent/40 bg-accent/10 px-3 text-[13.5px] font-semibold text-accent"
+        >
+          <Icon name="shield" className="h-4 w-4" />
+          Правка цены и наличия
+        </button>
+      )}
+      {staffEdit && (
+        <StaffPriceSheet
+          product={{ id: p.id, title: p.title, sku: p.sku ?? null, price: p.price, in_stock: !!p.in_stock }}
+          onClose={() => setStaffEdit(false)}
+          onSaved={(saved) => {
+            setP((cur) => (cur ? { ...cur, price: saved.price ?? cur.price, in_stock: saved.in_stock } : cur));
+            invalidateApi("/catalog");
+          }}
+        />
       )}
 
       {/* Память / цвет / SIM — соседние товары той же модели (lib/variants). */}

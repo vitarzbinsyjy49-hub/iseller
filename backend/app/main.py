@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, admin_promo, admin_referrals, admin_settings, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, preorder, price_posts, referral as referral_api, scenario_chat, telegram, users
+from app.api import admin, admin_crm, admin_promo, admin_referrals, admin_settings, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, preorder, price_posts, referral as referral_api, scenario_chat, staff as staff_api, telegram, users
 from app.api import fx as fx_router
 from app.api import bug_reports as bug_reports_api
 from app.api import reviews as reviews_api
@@ -33,6 +33,8 @@ from app.models import review as _review  # noqa: F401
 from app.models import revoked_token as _revoked_token  # noqa: F401
 from app.models import user_product_event as _user_product_event  # noqa: F401
 from app.models import post as _post  # noqa: F401
+from app.models import price_change as _price_change  # noqa: F401
+from app.models import staff_login as _staff_login  # noqa: F401
 
 setup_logging()
 logger = logging.getLogger("techshop")
@@ -126,6 +128,7 @@ app.include_router(price_posts.router, prefix="/api")
 app.include_router(telegram.router, prefix="/api")
 # Резолвер payload -> путь Mini App, для запуска по ?startapp= (без auth)
 app.include_router(deeplink.router, prefix="/api")
+app.include_router(staff_api.router, prefix="/api")
 
 # Раздача загруженных изображений товаров (тот же origin, что и API)
 app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")

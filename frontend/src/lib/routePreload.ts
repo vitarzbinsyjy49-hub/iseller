@@ -29,6 +29,7 @@ export const routeLoaders = {
   sellItem: withStaleChunkReload(() => import("../pages/SellItem")),
   marketplace: withStaleChunkReload(() => import("../pages/Marketplace")),
   preorder: withStaleChunkReload(() => import("../pages/Preorder")),
+  staff: withStaleChunkReload(() => import("../pages/StaffPrices")),
 };
 
 const started = new Set<keyof typeof routeLoaders>();
@@ -49,6 +50,7 @@ function routeKey(pathname: string): keyof typeof routeLoaders | null {
   if (pathname.startsWith("/marketplace")) return "marketplace";
   if (pathname.startsWith("/preorder/")) return "preorder";
   if (pathname.startsWith("/report-bug")) return "bugReport";
+  if (pathname.startsWith("/staff")) return "staff";
   return null;
 }
 

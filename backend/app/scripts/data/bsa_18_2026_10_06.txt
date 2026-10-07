@@ -1,0 +1,81 @@
+# Выгрузка BSA от 06.10.2026 (пост датирован 07/10/2026), iPhone 18 Pro / Pro Max.
+# Источник: сообщение 12970 из ChatExport_2026-10-06, поле rich_message.
+# Строки дословно; «…Glacier-172.000…(1 sim+e sim» — скобка не закрыта у
+# поставщика, парсеру не мешает. Чехлы из того же поста не включены.
+
+## iPhone 18 Pro
+18 Pro 256Gb Black-123.500🇰🇷🇭🇰(1 sim+e sim)
+18 Pro 256Gb Black-113.500🇺🇸e sim
+18 Pro 256Gb Burgundy-127.900🇰🇷🇭🇰(1 sim+e sim)
+18 Pro 256Gb Burgundy-121.000🇺🇸e sim
+18 Pro 256Gb Silver-121.000🇰🇷🇭🇰(1 sim+e sim)
+18 Pro 256Gb Silver-114.000🇰🇷🇭🇰(1 sim+e sim)актив 🔥
+18 Pro 256Gb Silver-110.500🇺🇸e sim
+18 Pro 256Gb Glacier-125.000🇰🇷🇭🇰(1 sim+e sim)
+18 Pro 256Gb Glacier-117.000🇰🇷🇭🇰(1 sim+e sim)актив 🔥
+18 Pro 256Gb Glacier-112.500🇺🇸e sim
+18 Pro 512Gb Black-143.000🇰🇷🇭🇰(1 sim+e sim)
+18 Pro 512Gb Black-140.500🇨🇳(2 sim+e sim)актив 🔥
+18 Pro 512Gb Black-135.500*🇯🇵🇺🇸e sim
+18 Pro 512Gb Burgundy-151.500🇰🇷🇭🇰(1 sim+e sim)
+18 Pro 512Gb Burgundy-139.500🇺🇸e sim
+18 Pro 512Gb Silver-150.000🇰🇷🇭🇰(1 sim+e sim)
+18 Pro 512Gb Silver-139.000🇰🇷🇭🇰(1 sim+e sim)актив 🔥
+18 Pro 512Gb Silver-140.000🇨🇳(2 sim+e sim)актив 🔥
+18 Pro 512Gb Silver-142.000🇺🇸e sim
+18 Pro 512Gb Glacier-148.000🇰🇷🇭🇰(1 sim+e sim)
+18 Pro 512Gb Glacier-139.000🇺🇸e sim
+18 Pro 1Tb Black-196.000🇭🇰(1 sim+e sim)
+18 Pro 1Tb Black-175.000🇺🇸e sim
+18 Pro 1Tb Burgundy-203.500🇭🇰(1 sim+e sim)
+18 Pro 1Tb Burgundy-173.500🇺🇸е sim
+18 Pro 1Tb Silver-194.000🇭🇰(1 sim+e sim)
+18 Pro 1Tb Silver-175.000🇺🇸e sim
+18 Pro 1Tb Glacier-196.000🇭🇰(1 sim+e sim)
+18 Pro 1Tb Glacier-175.000🇺🇸e sim
+18 Pro 2Tb Black-257.000🇭🇰(1 sim+e sim)
+18 Pro 2Tb Black-223.500🇺🇸е sim
+18 Pro 2Tb Burgundy-267.000🇭🇰(1 sim+e sim)
+18 Pro 2Tb Burgundy-247.000🇺🇸e sim
+18 Pro 2Tb Silver-257.000🇭🇰(1 sim+e sim)
+18 Pro 2Tb Silver-215.000🇺🇸e sim
+18 Pro 2Tb Glacier-257.000🇭🇰(1 sim+e sim)
+18 Pro 2Tb Glacier-225.000🇺🇸e sim
+
+## iPhone 18 Pro Max
+18 Pro Max 256Gb Black-141.500🇰🇷🇭🇰(1 sim+e sim)
+18 Pro Max 256Gb Black-139.000🇰🇷🇭🇰(1 sim+e sim)актив 🔥
+18 Pro Max 256Gb Black-124.500🇺🇸е sim
+18 Pro Max 256Gb Burgundy-148.000🇰🇷🇭🇰(1 sim+e sim)
+18 Pro Max 256Gb Burgundy-137.500🇺🇸e sim
+18 Pro Max 256Gb Silver-133.000🇰🇷🇭🇰(1 sim+e sim)
+18 Pro Max 256Gb Silver-129.500🇰🇷🇭🇰(1 sim+e sim)актив 🔥
+18 Pro Max 256Gb Silver-123.500🇺🇸e sim
+18 Pro Max 256Gb Glacier-141.500*🇰🇷🇭🇰(1 sim+e sim)
+18 Pro Max 256Gb Glacier-136.500🇰🇷🇭🇰(1 sim+e sim)актив 🔥
+18 Pro Max 256Gb Glacier-125.500🇺🇸e sim
+18 Pro Max 512Gb Black-169.500🇰🇷🇭🇰(1 sim+e sim)
+18 Pro Max 512Gb Black-143.000🇺🇸e sim
+18 Pro Max 512Gb Burgundy-173.000🇰🇷🇭🇰(1 sim+e sim)
+18 Pro Max 512Gb Burgundy-158.500🇺🇸e sim
+18 Pro Max 512Gb Silver-168.000🇰🇷🇭🇰(1 sim+e sim)
+18 Pro Max 512Gb Silver-155.000🇰🇷🇭🇰(1 sim+e sim)актив 🔥
+18 Pro Max 512Gb Silver-150.500🇺🇸e sim
+18 Pro Max 512Gb Glacier-172.000🇰🇷🇭🇰(1 sim+e sim
+18 Pro Max 512Gb Glacier-152.000🇺🇸e sim
+18 Pro Max 1Tb Black-197.500🇭🇰(1 sim+e sim)
+18 Pro Max 1Tb Black-190.000🇺🇸e sim
+18 Pro Max 1Tb Burgundy-209.000🇭🇰(1 sim+e sim)
+18 Pro Max 1Tb Burgundy-202.000🇺🇸e sim
+18 Pro Max 1Tb Silver-195.500🇭🇰(1 sim+e sim)
+18 Pro Max 1Tb Silver-185.000🇺🇸e sim
+18 Pro Max 1Tb Glacier-197.000🇭🇰(1 sim+e sim)
+18 Pro Max 1Tb Glacier-194.000🇺🇸е sim
+18 Pro Max 2Tb Black-255.000🇭🇰(1 sim+e sim)
+18 Pro Max 2Tb Black-223.000🇺🇸e sim
+18 Pro Max 2Tb Burgundy-284.000🇭🇰(1 sim+e sim)
+18 Pro Max 2Tb Burgundy-230.000🇺🇸e sim
+18 Pro Max 2Tb Silver-253.000🇭🇰(1 sim+e sim)
+18 Pro Max 2Tb Silver -223.000🇺🇸e sim
+18 Pro Max 2Tb Glacier-257.000🇭🇰(1 sim+e sim)
+18 Pro Max 2Tb Glacier-231.000🇺🇸e sim

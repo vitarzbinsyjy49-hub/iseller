@@ -676,6 +676,8 @@ def apply_product_plan(db: Session, plan: dict) -> dict:
     Возвращает {sku: product_id}. Любая ошибка -> исключение, вызывающий
     делает rollback — частично применённых товаров не бывает.
     """
+    from app.services.price_history import attribute
+    attribute(db, actor=db.info.get("price_actor", "system"), source="import")
     existing = {
         (p.sku or "").lower(): p
         for p in db.execute(select(Product).where(Product.sku.is_not(None))).scalars()

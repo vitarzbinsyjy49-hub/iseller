@@ -524,10 +524,14 @@ def admin_create_product(body: dict, db: Session = Depends(get_db)):
 
 
 @router.patch("/products/{product_id}")
-def admin_update_product(product_id: int, body: dict, db: Session = Depends(get_db)):
+def admin_update_product(product_id: int, body: dict, db: Session = Depends(get_db),
+                         admin: str = Depends(get_current_admin)):
     product = db.get(Product, product_id)
     if product is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    # Подпись для истории цен (services/price_history): правка из админки сайта.
+    from app.services.price_history import attribute
+    attribute(db, actor=f"admin:{admin}", source="admin_site")
     # Модель товара может смениться правкой (семейство, название): тогда
     # первая дата меняется у ОБЕИХ — и у той, откуда ушёл, и у той, куда пришёл.
     keys = novelty_keys_for([product])

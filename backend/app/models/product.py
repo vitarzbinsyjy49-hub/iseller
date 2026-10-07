@@ -414,3 +414,9 @@ def _product_set_image_group_key(_mapper, _connection, target: "Product") -> Non
         target.image_group_key = product_image_group_key(target)
     except Exception:  # noqa: BLE001 — ключ вспомогательный, не роняем сохранение
         target.image_group_key = None
+
+
+# История цен пишется слушателем сессии (services/price_history). Регистрируем
+# его здесь: модуль товара импортирует любой процесс, который может поменять
+# цену — backend, бот, скрипты, — и ни один не уйдёт мимо истории.
+from app.services import price_history as _price_history  # noqa: E402,F401

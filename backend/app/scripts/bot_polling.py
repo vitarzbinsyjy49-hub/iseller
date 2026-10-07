@@ -31,7 +31,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.services import ad_touch
+from app.services import ad_touch, staff_auth
 from app.services.ai_bot import allow_question, is_ai_question, prune_window, render_answer
 from app.services.telegram_bot import (
     TELEGRAM_API,
@@ -491,6 +491,17 @@ def run() -> int:
                 offset = update["update_id"] + 1
                 try:
                     if _handle_membership(update) is not None:
+                        continue
+
+                    # Подтверждение входа в режим администратора Mini App
+                    # (диплинк staffok_*). Раньше AI и build_reply: это не
+                    # вопрос и не обычный /start.
+                    staff_reply = staff_auth.handle_bot_update(update)
+                    if staff_reply is not None:
+                        chat = ((update.get("message") or {}).get("chat") or {}).get("id")
+                        if chat is not None:
+                            staff_auth.notify(chat, staff_reply)
+                        logger.info("апдейт: staff-confirm (чат %s)", chat)
                         continue
 
                     # Обычная реплика человека -> вопрос к модели, в фоновый
