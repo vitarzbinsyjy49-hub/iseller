@@ -150,11 +150,47 @@ def resume(db: Session, telegram_id: int) -> bool:
     return True
 
 
+ADMIN_COMMAND = "admin"
+
+
+def grant_from_bot(db: Session, telegram_id: int) -> bool:
+    """Команда /admin в личке бота: само сообщение от этого аккаунта и есть
+    подтверждение, поэтому заявка создаётся сразу подтверждённой. Забрать её
+    Mini App может в течение LOGIN_TTL (кнопка под ответом). Не админ — False."""
+    if not is_admin(telegram_id):
+        return False
+    row, _nonce = create_login(db, telegram_id, ip="bot")
+    row.status = "approved"
+    row.approved_at = _now()
+    return True
+
+
+def _admin_command(message: dict) -> int | None:
+    """telegram_id отправителя, если это /admin в ЛИЧНОМ чате, иначе None."""
+    from app.services.telegram_bot import parse_command
+    if parse_command(message.get("text")) != ADMIN_COMMAND:
+        return None
+    if (message.get("chat") or {}).get("type") not in (None, "private"):
+        return None                       # в группах кнопку входа не показываем
+    return (message.get("from") or {}).get("id")
+
+
 def handle_bot_update(update: dict) -> str | None:
     """Обработчик для цикла бота. None — апдейт не про вход, обрабатывать дальше.
 
     Иначе возвращает текст ответа человеку (и сам подтверждает заявку)."""
     message = update.get("message") or {}
+    admin_sender = _admin_command(message)
+    if admin_sender is not None:
+        from app.db.session import SessionLocal
+        with SessionLocal() as db:
+            granted = grant_from_bot(db, int(admin_sender))
+            db.commit()
+        if not granted:
+            return None                   # не админ — обычный ответ бота, команду не выдаём
+        logger.info("вход в режим администратора: команда /admin (tg %s)", admin_sender)
+        last_outcome[int(admin_sender)] = "ok"
+        return "🔐 Режим администратора. Кнопка ниже действует 5 минут."
     nonce = parse_confirm_payload(message.get("text"))
     if nonce is None:
         return None
@@ -171,6 +207,20 @@ def handle_bot_update(update: dict) -> str | None:
         "ok": "✅ Вход подтверждён. Нажмите кнопку ниже — откроется режим администратора.",
         "expired": "Ссылка устарела (действует 5 минут). Запросите вход в приложении ещё раз.",
     }.get(outcome, "Эта ссылка недействительна.")
+
+
+def publish_admin_commands() -> None:
+    """Меню команд бота с /admin — только в личных чатах админов (scope=chat).
+    Остальные видят обычное меню и о команде не знают. Ошибки не фатальны."""
+    from app.services.telegram_bot import BOT_COMMANDS
+    from app.services.telegram_publisher import call
+    commands = [{"command": c, "description": d} for c, d in BOT_COMMANDS]
+    commands.append({"command": ADMIN_COMMAND, "description": "Режим администратора"})
+    for tg_id in sorted(allowed_ids()):
+        try:
+            call("setMyCommands", {"commands": commands, "scope": {"type": "chat", "chat_id": tg_id}})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("меню /admin для %s не выставлено: %s", tg_id, exc)
 
 
 def open_admin_button() -> dict | None:

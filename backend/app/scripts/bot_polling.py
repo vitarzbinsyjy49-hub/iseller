@@ -446,6 +446,9 @@ def run() -> int:
         except httpx.HTTPError as exc:
             logger.warning("не удалось снять вебхук на старте: %s", exc)
 
+        # Команда /admin в меню — только у админов (scope=chat). Раз на старте.
+        staff_auth.publish_admin_commands()
+
         offset: int | None = None
         backoff = BACKOFF_START
         # Пул живёт столько же, сколько цикл: выход из with дожидается уже

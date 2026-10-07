@@ -203,3 +203,23 @@ def test_resume_is_not_for_strangers_or_stale(client, db):
     row.approved_at = datetime.now(timezone.utc) - timedelta(minutes=6)
     db.commit()
     assert client.post("/api/staff/login/resume", headers=admin).json() == {"status": "none"}
+
+
+def test_admin_command_in_bot_opens_admin_for_five_minutes(client, db, monkeypatch):
+    """/admin в личке бота = готовое подтверждение; Mini App забирает его по кнопке."""
+    from contextlib import contextmanager
+    import app.db.session as session_mod
+
+    @contextmanager
+    def same_db():
+        yield db
+    monkeypatch.setattr(session_mod, "SessionLocal", same_db)
+
+    upd = lambda tg, chat_type="private": {"message": {
+        "text": "/admin", "from": {"id": tg}, "chat": {"id": tg, "type": chat_type}}}
+    assert staff_auth.handle_bot_update(upd(STRANGER)) is None          # чужим — обычный ответ
+    assert staff_auth.handle_bot_update(upd(ADMIN, "supergroup")) is None  # не в группах
+    assert "5 минут" in staff_auth.handle_bot_update(upd(ADMIN))
+    assert staff_auth.last_outcome.pop(ADMIN) == "ok"
+    body = client.post("/api/staff/login/resume", headers=_user(db, ADMIN)).json()
+    assert body["status"] == "approved" and body["token"]
