@@ -176,3 +176,30 @@ def test_list_search_and_filters(client, db):
     assert [i["sku"] for i in items] == ["MDVH4"]
     out = client.get("/api/staff/products?filter=out_of_stock", headers=_staff()).json()["items"]
     assert [i["sku"] for i in out] == ["IP-17"]
+
+
+def test_resume_after_app_was_closed(client, db):
+    """Окно свернули, пока жали «Подтвердить» в боте: подтверждение не теряется."""
+    headers = _user(db, ADMIN)
+    assert client.post("/api/staff/login/resume", headers=headers).json() == {"status": "none"}
+    client.post("/api/staff/login", headers=headers)
+    nonce = client.sent[-1][2][1].split("staffok_")[1]
+    assert staff_auth.approve(db, nonce, ADMIN) == "ok"
+    db.commit()
+    body = client.post("/api/staff/login/resume", headers=headers).json()
+    assert body["status"] == "approved" and body["token"]
+    # Выдаётся один раз.
+    assert client.post("/api/staff/login/resume", headers=headers).json() == {"status": "none"}
+
+
+def test_resume_is_not_for_strangers_or_stale(client, db):
+    admin = _user(db, ADMIN)
+    client.post("/api/staff/login", headers=admin)
+    nonce = client.sent[-1][2][1].split("staffok_")[1]
+    staff_auth.approve(db, nonce, ADMIN)
+    db.commit()
+    assert client.post("/api/staff/login/resume", headers=_user(db, STRANGER)).json() == {"status": "none"}
+    row = db.query(StaffLogin).one()
+    row.approved_at = datetime.now(timezone.utc) - timedelta(minutes=6)
+    db.commit()
+    assert client.post("/api/staff/login/resume", headers=admin).json() == {"status": "none"}

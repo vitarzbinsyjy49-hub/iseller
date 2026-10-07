@@ -31,6 +31,10 @@ CONFIRM_PREFIX = "staffok_"
 LOGIN_TTL = timedelta(minutes=5)
 STAFF_TOKEN_TTL = timedelta(hours=2)
 
+#: Исход последнего подтверждения по чату — цикл бота решает по нему, нужна ли
+#: под ответом кнопка «Открыть режим администратора».
+last_outcome: dict[int, str] = {}
+
 
 def allowed_ids() -> set[int]:
     raw = settings.ADMIN_TELEGRAM_IDS or settings.ADMIN_TELEGRAM_ID or ""
@@ -128,6 +132,24 @@ def claim(db: Session, request_id: str, telegram_id: int) -> str:
     return "pending" if row.status == "pending" else "expired"
 
 
+def resume(db: Session, telegram_id: int) -> bool:
+    """Забрать последнее подтверждённое, но ещё не выданное подтверждение.
+
+    Нужен, когда Mini App свернули или закрыли, пока человек жал «Подтвердить»
+    в боте: опрос по request_id умер вместе с окном, а подтверждение уже есть.
+    Без этого человек застревал — подтверждал снова и снова, а войти не мог
+    (07.10.2026, две подтверждённые заявки так и остались невыданными).
+    Безопасность та же: нужен пользовательский токен ЭТОГО аккаунта и
+    подтверждение из его же чата не старше LOGIN_TTL."""
+    row = db.execute(select(StaffLogin).where(
+        StaffLogin.telegram_id == telegram_id, StaffLogin.status == "approved",
+    ).order_by(StaffLogin.approved_at.desc(), StaffLogin.id.desc())).scalars().first()
+    if row is None or row.approved_at is None or _now() - _aware(row.approved_at) > LOGIN_TTL:
+        return False
+    row.status = "issued"
+    return True
+
+
 def handle_bot_update(update: dict) -> str | None:
     """Обработчик для цикла бота. None — апдейт не про вход, обрабатывать дальше.
 
@@ -144,13 +166,21 @@ def handle_bot_update(update: dict) -> str | None:
         outcome = approve(db, nonce, int(sender))
         db.commit()
     logger.info("вход в режим администратора: %s (tg %s)", outcome, sender)
+    last_outcome[int(sender)] = outcome
     return {
-        "ok": "✅ Вход подтверждён. Вернитесь в приложение — режим администратора откроется сам.",
+        "ok": "✅ Вход подтверждён. Нажмите кнопку ниже — откроется режим администратора.",
         "expired": "Ссылка устарела (действует 5 минут). Запросите вход в приложении ещё раз.",
     }.get(outcome, "Эта ссылка недействительна.")
 
 
-def notify(chat_id: int, text: str, button: tuple[str, str] | None = None) -> bool:
+def open_admin_button() -> dict | None:
+    """web_app-кнопка прямо на экран «Цены» (в личном чате web_app разрешён)."""
+    from app.services.telegram_bot import _web_app_button
+    return _web_app_button("🔐 Открыть режим администратора", "/staff")
+
+
+def notify(chat_id: int, text: str, button: tuple[str, str] | None = None,
+           web_app: dict | None = None) -> bool:
     """Прямое сообщение в личный чат через Bot API (мимо очереди: вход ждёт секунды,
     а очередь разбирается раз в цикл бота). False — не отправилось."""
     if not settings.TELEGRAM_BOT_TOKEN:
@@ -160,6 +190,8 @@ def notify(chat_id: int, text: str, button: tuple[str, str] | None = None) -> bo
                      "disable_web_page_preview": True}
     if button:
         payload["reply_markup"] = {"inline_keyboard": [[{"text": button[0], "url": button[1]}]]}
+    elif web_app:
+        payload["reply_markup"] = {"inline_keyboard": [[web_app]]}
     try:
         call("sendMessage", payload)
         return True

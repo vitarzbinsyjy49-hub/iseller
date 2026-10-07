@@ -103,6 +103,21 @@ def login_poll(request_id: str, request: Request, user: User = Depends(get_curre
             "expires_in": int(staff_auth.STAFF_TOKEN_TTL.total_seconds())}
 
 
+@router.post("/login/resume")
+def login_resume(request: Request, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db)) -> dict:
+    """Войти по уже нажатому в боте подтверждению, если окно приложения закрывали."""
+    if not staff_auth.is_admin(user.telegram_id) or not staff_auth.resume(db, int(user.telegram_id)):
+        db.commit()
+        return {"status": "none"}
+    token = _create_token(f"staff:{user.telegram_id}", "staff", staff_auth.STAFF_TOKEN_TTL)
+    db.add(AuditLog(actor=f"tg:{user.telegram_id}", action="staff_login", detail="resume",
+                    ip=client_ip(request)))
+    db.commit()
+    return {"status": "approved", "token": token,
+            "expires_in": int(staff_auth.STAFF_TOKEN_TTL.total_seconds())}
+
+
 # ---------------------------------------------------------------- товары ----
 def _last_changes(db: Session, ids: list[int]) -> dict[int, datetime]:
     if not ids:

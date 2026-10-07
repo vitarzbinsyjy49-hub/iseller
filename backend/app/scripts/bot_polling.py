@@ -500,7 +500,9 @@ def run() -> int:
                     if staff_reply is not None:
                         chat = ((update.get("message") or {}).get("chat") or {}).get("id")
                         if chat is not None:
-                            staff_auth.notify(chat, staff_reply)
+                            ok = staff_auth.last_outcome.pop(int(chat), None) == "ok"
+                            staff_auth.notify(chat, staff_reply,
+                                              web_app=staff_auth.open_admin_button() if ok else None)
                         logger.info("апдейт: staff-confirm (чат %s)", chat)
                         continue
 

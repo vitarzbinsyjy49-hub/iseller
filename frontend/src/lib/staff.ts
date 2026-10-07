@@ -91,6 +91,12 @@ export function pollStaffLogin(requestId: string): Promise<LoginPoll> {
   return api(`/staff/login/${encodeURIComponent(requestId)}`);
 }
 
+/** Забрать уже нажатое в боте подтверждение — работает после сворачивания и
+ *  повторного открытия приложения, когда опрос по request_id уже умер. */
+export function resumeStaffLogin(): Promise<LoginPoll | { status: "none" }> {
+  return api("/staff/login/resume", { method: "POST" });
+}
+
 // ---------------------------------------------------------------- товары ----
 export type StaffProduct = {
   id: number;

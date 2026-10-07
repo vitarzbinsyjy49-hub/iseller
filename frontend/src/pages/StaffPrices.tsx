@@ -8,7 +8,7 @@ import StaffPriceSheet from "../components/StaffPriceSheet";
 import { Icon } from "../components/icons";
 import { usePublicConfig } from "../lib/appConfig";
 import {
-  clearStaffSession, hasStaffSession, listStaffProducts, pollStaffLogin, saveStaffSession,
+  clearStaffSession, hasStaffSession, listStaffProducts, pollStaffLogin, resumeStaffLogin, saveStaffSession,
   startStaffLogin, type StaffFilter, type StaffProduct,
 } from "../lib/staff";
 import { openExternalLink } from "../lib/telegram";
@@ -30,6 +30,33 @@ function StaffLogin({ onReady }: { onReady: () => void }) {
 
   useEffect(() => () => { if (timer.current) window.clearInterval(timer.current); }, []);
 
+  // Подтверждение могли нажать, пока приложение было свёрнуто или закрыто:
+  // забираем его при открытии экрана и при каждом возвращении в приложение.
+  // Без этого человек застревал — подтверждал в боте снова и снова, а окно,
+  // потерявшее свой опрос, так и показывало «Войти» (07.10.2026).
+  useEffect(() => {
+    let alive = true;
+    const tryResume = async () => {
+      try {
+        const r = await resumeStaffLogin();
+        if (alive && r.status === "approved" && "token" in r) {
+          if (timer.current) window.clearInterval(timer.current);
+          saveStaffSession(r.token, r.expires_in);
+          onReady();
+        }
+      } catch { /* нет сети — попробуем при следующем возвращении */ }
+    };
+    void tryResume();
+    const onVisible = () => { if (document.visibilityState === "visible") void tryResume(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      alive = false;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [onReady]);
+
   async function start() {
     setError(null);
     try {
@@ -47,7 +74,15 @@ function StaffLogin({ onReady }: { onReady: () => void }) {
             saveStaffSession(r.token, r.expires_in);
             onReady();
           } else if (r.status === "expired") {
-            window.clearInterval(timer.current!); setState("expired");
+            // Заявку могли погасить более новой — подтверждение по ней всё равно заберём.
+            const again = await resumeStaffLogin();
+            window.clearInterval(timer.current!);
+            if (again.status === "approved" && "token" in again) {
+              saveStaffSession(again.token, again.expires_in);
+              onReady();
+            } else {
+              setState("expired");
+            }
           }
         } catch { /* сеть моргнула — следующий опрос через 2 секунды */ }
       }, 2000);
@@ -103,6 +138,7 @@ export default function StaffPrices() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<StaffProduct | null>(null);
+  const markReady = useCallback(() => setReady(true), []);
 
   const load = useCallback(async (append = false) => {
     setLoading(true);
@@ -135,7 +171,7 @@ export default function StaffPrices() {
       <ScreenHeader title="Цены" subtitle={ready ? `Режим администратора · ${total} товаров` : "Режим администратора"} />
 
       {!ready ? (
-        <StaffLogin onReady={() => setReady(true)} />
+        <StaffLogin onReady={markReady} />
       ) : (
         <>
           <div className="mt-3 flex items-center gap-2 rounded-field border border-border bg-surface px-3">
