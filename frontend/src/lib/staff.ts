@@ -91,6 +91,12 @@ export function pollStaffLogin(requestId: string): Promise<LoginPoll> {
   return api(`/staff/login/${encodeURIComponent(requestId)}`);
 }
 
+/** Вход в одно касание: свежая подпись Telegram (приложение только что открыто
+ *  кнопкой «⚙️ Админка»). Старая подпись или не админ — {status: "none"}. */
+export function instantStaffLogin(initData: string): Promise<LoginPoll | { status: "none" }> {
+  return api("/staff/login/instant", { method: "POST", body: JSON.stringify({ init_data: initData }) });
+}
+
 /** Забрать уже нажатое в боте подтверждение — работает после сворачивания и
  *  повторного открытия приложения, когда опрос по request_id уже умер. */
 export function resumeStaffLogin(): Promise<LoginPoll | { status: "none" }> {

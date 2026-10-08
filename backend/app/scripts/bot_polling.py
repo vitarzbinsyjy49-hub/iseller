@@ -466,6 +466,7 @@ def run() -> int:
 
         # Команда /admin в меню — только у админов (scope=chat). Раз на старте.
         staff_auth.publish_admin_commands()
+        staff_auth.publish_admin_menu_button()
 
         offset: int | None = None
         backoff = BACKOFF_START

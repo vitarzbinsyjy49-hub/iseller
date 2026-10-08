@@ -103,6 +103,47 @@ def login_poll(request_id: str, request: Request, user: User = Depends(get_curre
             "expires_in": int(staff_auth.STAFF_TOKEN_TTL.total_seconds())}
 
 
+class InitDataIn(BaseModel):
+    init_data: str
+
+
+#: Насколько свежей должна быть подпись Telegram для входа в одно касание.
+#: Подпись ставится в момент открытия Mini App, поэтому «свежая» = приложение
+#: только что открыто ЭТИМ аккаунтом (кнопка меню «⚙️ Админка»).
+INSTANT_LOGIN_MAX_AGE = 120
+
+
+@router.post("/login/instant")
+def login_instant(body: InitDataIn, request: Request, db: Session = Depends(get_db)) -> dict:
+    """Вход в одно касание по только что подписанному Telegram запуску.
+
+    Подпись initData подделать без токена бота нельзя, а её свежесть (≤2 мин)
+    означает, что приложение открыл сам владелец аккаунта прямо сейчас — та же
+    гарантия, что у команды /admin. О каждом таком входе админу приходит
+    сообщение. Не вышло (старая подпись, не админ) — {"status": "none"},
+    экран переходит к обычному входу с подтверждением в боте."""
+    import time as _time
+    from app.core.security import TelegramAuthError, verify_telegram_init_data
+    from urllib.parse import parse_qsl
+    try:
+        tg_user = verify_telegram_init_data(body.init_data)
+    except TelegramAuthError:
+        return {"status": "none"}
+    auth_date = int(dict(parse_qsl(body.init_data)).get("auth_date", "0"))
+    tg_id = int(tg_user.get("id", 0))
+    if _time.time() - auth_date > INSTANT_LOGIN_MAX_AGE or not staff_auth.is_admin(tg_id):
+        return {"status": "none"}
+    ip = client_ip(request)
+    token = _create_token(f"staff:{tg_id}", "staff", staff_auth.STAFF_TOKEN_TTL)
+    db.add(AuditLog(actor=f"tg:{tg_id}", action="staff_login", detail="instant", ip=ip))
+    db.commit()
+    when = datetime.now(timezone(timedelta(hours=3))).strftime("%H:%M")
+    staff_auth.notify(tg_id, f"🔐 Вход в режим администратора в {when} (МСК), IP {ip}. "
+                             "Если это были не вы — напишите разработчику.")
+    return {"status": "approved", "token": token,
+            "expires_in": int(staff_auth.STAFF_TOKEN_TTL.total_seconds())}
+
+
 @router.post("/login/resume")
 def login_resume(request: Request, user: User = Depends(get_current_user),
                  db: Session = Depends(get_db)) -> dict:

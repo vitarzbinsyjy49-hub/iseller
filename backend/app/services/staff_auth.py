@@ -223,6 +223,25 @@ def publish_admin_commands() -> None:
             logger.warning("меню /admin для %s не выставлено: %s", tg_id, exc)
 
 
+ADMIN_MENU_TEXT = "⚙️ Админка"
+
+
+def publish_admin_menu_button() -> None:
+    """Кнопка меню рядом с полем ввода у админов — сразу на экран «Цены».
+    Только в их личных чатах (chat_id); у остальных остаётся «Каталог»."""
+    from app.services.telegram_bot import _mini_app
+    from app.services.telegram_publisher import call
+    url = _mini_app("/staff")
+    if not url:
+        return
+    for tg_id in sorted(allowed_ids()):
+        try:
+            call("setChatMenuButton", {"chat_id": tg_id, "menu_button": {
+                "type": "web_app", "text": ADMIN_MENU_TEXT, "web_app": {"url": url}}})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("кнопка «Админка» для %s не выставлена: %s", tg_id, exc)
+
+
 def open_admin_button() -> dict | None:
     """web_app-кнопка прямо на экран «Цены» (в личном чате web_app разрешён)."""
     from app.services.telegram_bot import _web_app_button

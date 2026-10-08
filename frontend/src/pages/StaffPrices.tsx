@@ -8,10 +8,10 @@ import StaffPriceSheet from "../components/StaffPriceSheet";
 import { Icon } from "../components/icons";
 import { usePublicConfig } from "../lib/appConfig";
 import {
-  clearStaffSession, hasStaffSession, listStaffProducts, pollStaffLogin, resumeStaffLogin, saveStaffSession,
+  clearStaffSession, hasStaffSession, listStaffProducts, instantStaffLogin, pollStaffLogin, resumeStaffLogin, saveStaffSession,
   startStaffLogin, type StaffFilter, type StaffProduct,
 } from "../lib/staff";
-import { openExternalLink } from "../lib/telegram";
+import { getTelegram, openExternalLink } from "../lib/telegram";
 
 const FILTERS: { key: StaffFilter; label: string }[] = [
   { key: "all", label: "Все" },
@@ -38,7 +38,10 @@ function StaffLogin({ onReady }: { onReady: () => void }) {
     let alive = true;
     const tryResume = async () => {
       try {
-        const r = await resumeStaffLogin();
+        // Сначала — одно касание: приложение только что открыто кнопкой меню.
+        const initData = getTelegram()?.initData;
+        const instant = initData ? await instantStaffLogin(initData) : { status: "none" as const };
+        const r = instant.status === "approved" ? instant : await resumeStaffLogin();
         if (alive && r.status === "approved" && "token" in r) {
           if (timer.current) window.clearInterval(timer.current);
           saveStaffSession(r.token, r.expires_in);

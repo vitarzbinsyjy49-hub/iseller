@@ -223,3 +223,31 @@ def test_admin_command_in_bot_opens_admin_for_five_minutes(client, db, monkeypat
     assert staff_auth.last_outcome.pop(ADMIN) == "ok"
     body = client.post("/api/staff/login/resume", headers=_user(db, ADMIN)).json()
     assert body["status"] == "approved" and body["token"]
+
+
+def _signed_init_data(tg: int, age_seconds: int = 0) -> str:
+    """initData, подписанный так же, как это делает Telegram."""
+    import hashlib, hmac, json, time
+    from urllib.parse import urlencode
+    fields = {"auth_date": str(int(time.time()) - age_seconds),
+              "user": json.dumps({"id": tg, "first_name": "A"})}
+    check = "\n".join(f"{k}={v}" for k, v in sorted(fields.items()))
+    secret = hmac.new(b"WebAppData", settings.TELEGRAM_BOT_TOKEN.encode(), hashlib.sha256).digest()
+    fields["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+    return urlencode(fields)
+
+
+def test_instant_login_one_tap(client, db, monkeypatch):
+    monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "123:abc")
+    body = client.post("/api/staff/login/instant", json={"init_data": _signed_init_data(ADMIN)}).json()
+    assert body["status"] == "approved" and body["token"]
+    assert any("Вход в режим администратора" in t for _c, t, _b in client.sent)   # админ узнаёт о входе
+
+
+def test_instant_login_refuses_stale_forged_or_stranger(client, db, monkeypatch):
+    monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "123:abc")
+    none = {"status": "none"}
+    assert client.post("/api/staff/login/instant", json={"init_data": _signed_init_data(ADMIN, 300)}).json() == none
+    assert client.post("/api/staff/login/instant", json={"init_data": _signed_init_data(STRANGER)}).json() == none
+    forged = _signed_init_data(ADMIN).replace("hash=", "hash=0")
+    assert client.post("/api/staff/login/instant", json={"init_data": forged}).json() == none
