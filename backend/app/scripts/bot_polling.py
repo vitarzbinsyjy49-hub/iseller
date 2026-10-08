@@ -274,6 +274,24 @@ def _tick(state: dict) -> None:
         logger.exception("фоновая задача завершилась ошибкой")
 
     _catalog_upkeep(state, now)
+    _daily_price_sync(state, now)
+
+
+def _daily_price_sync(state: dict, now: float) -> None:
+    """Прайс-посты канала — раз в день в 10:30 МСК (services/daily_price_sync).
+    Проверка «пора ли» — не чаще раза в минуту; своя сессия и свой try."""
+    if not _due(state.get("last_price_sync_check"), now, 60):
+        return
+    state["last_price_sync_check"] = now
+    from app.db.session import SessionLocal
+    from app.services import daily_price_sync
+    try:
+        with SessionLocal() as db:
+            stats = daily_price_sync.maybe_run(db)
+        if stats is not None:
+            logger.info("прайс канала (ежедневно): %s", stats)
+    except Exception:  # noqa: BLE001 — фон не роняет polling
+        logger.exception("ежедневное обновление прайса канала упало")
 
 
 #: Как часто выравнивать новинки. Окно новизны сдвигается со временем, и
