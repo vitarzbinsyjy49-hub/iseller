@@ -31,7 +31,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.services import ad_touch, staff_auth
+from app.services import ad_touch, daily_bsa_check, staff_auth
 from app.services.ai_bot import allow_question, is_ai_question, prune_window, render_answer
 from app.services.telegram_bot import (
     TELEGRAM_API,
@@ -286,6 +286,11 @@ def _daily_price_sync(state: dict, now: float) -> None:
     from app.db.session import SessionLocal
     from app.services import daily_price_sync
     try:
+        # Сначала сверка с BSA (10:20), затем прайс-посты (10:30).
+        with SessionLocal() as db:
+            check = daily_bsa_check.maybe_run(db)
+        if check is not None:
+            logger.info("сверка с BSA (ежедневно): %s", check)
         with SessionLocal() as db:
             stats = daily_price_sync.maybe_run(db)
         if stats is not None:
@@ -518,6 +523,15 @@ def run() -> int:
                     # Подтверждение входа в режим администратора Mini App
                     # (диплинк staffok_*). Раньше AI и build_reply: это не
                     # вопрос и не обычный /start.
+                    # Выгрузка канала BSA (result.json) от админа — сверка цен.
+                    export_reply = daily_bsa_check.handle_export_document(update)
+                    if export_reply is not None:
+                        chat = ((update.get("message") or {}).get("chat") or {}).get("id")
+                        if chat is not None:
+                            staff_auth.notify(chat, export_reply)
+                        logger.info("апдейт: bsa-export (чат %s)", chat)
+                        continue
+
                     staff_reply = staff_auth.handle_bot_update(update)
                     if staff_reply is not None:
                         chat = ((update.get("message") or {}).get("chat") or {}).get("id")

@@ -104,8 +104,17 @@ export function resumeStaffLogin(): Promise<LoginPoll | { status: "none" }> {
 }
 
 // ---------------------------------------------------------------- товары ----
+export type SupplierRef = {
+  price: number;
+  suggested: number;
+  line: string;
+  seen_at: string | null;
+  fresh: boolean;
+};
+
 export type StaffProduct = {
   id: number;
+  bsa?: SupplierRef | null;
   sku: string | null;
   title: string;
   brand: string | null;
@@ -117,7 +126,7 @@ export type StaffProduct = {
   price_changed_at: string | null;
 };
 
-export type StaffFilter = "all" | "in_stock" | "out_of_stock" | "recent";
+export type StaffFilter = "all" | "diff" | "in_stock" | "out_of_stock" | "recent" | "unlinked";
 
 export type PriceChange = {
   id: number;
@@ -142,6 +151,14 @@ export function patchStaffProduct(id: number, body: { price?: number; in_stock?:
 
 export function staffHistory(id: number): Promise<{ items: PriceChange[] }> {
   return staffApi(`/products/${id}/history`);
+}
+
+export function getStaffProduct(id: number): Promise<StaffProduct> {
+  return staffApi(`/products/${id}`);
+}
+
+export function applyBsaPrice(id: number): Promise<StaffProduct> {
+  return staffApi(`/products/${id}/apply-bsa`, { method: "POST" });
 }
 
 export function revertPrice(id: number, changeId: number): Promise<StaffProduct> {

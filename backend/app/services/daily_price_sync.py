@@ -62,8 +62,9 @@ def summary_text(updated: list[str], pending_create: list[str], failed: list[tup
     return "\n".join(lines)
 
 
-def run(db: Session) -> dict:
-    """Один прогон. Возвращает итог для лога."""
+def run(db: Session, *, mark: bool = True) -> dict:
+    """Один прогон. Возвращает итог для лога. mark=False — внеплановое обновление
+    (после выгрузки BSA): плановый прогон в 10:30 им не отменяется."""
     from app.services import price_channel, staff_auth
 
     plans = price_channel.build_plan(db)
@@ -73,7 +74,7 @@ def run(db: Session) -> dict:
     result = price_channel.apply_plan(db, slugs=to_update) if to_update else None
     updated = result.updated if result else []
     failed = (result.failed if result else []) + [(p.slug, "превышен лимит") for p in plans if p.over_limit]
-    db.add(AuditLog(actor="system", action=ACTION,
+    db.add(AuditLog(actor="system", action=ACTION if mark else ACTION + "_extra",
                     detail=f"updated={len(updated)};price_lines={price_lines};"
                            f"create_pending={len(pending_create)};failed={len(failed)}"))
     db.commit()

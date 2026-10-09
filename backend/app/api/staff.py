@@ -23,7 +23,8 @@ from app.models.audit import AuditLog
 from app.models.price_change import PriceChange
 from app.models.product import Product
 from app.models.user import User
-from app.services import price_history, staff_auth
+from app.models.price_ref import PriceLink
+from app.services import price_history, price_sync, staff_auth
 
 router = APIRouter(prefix="/staff", tags=["staff"])
 
@@ -169,8 +170,16 @@ def _last_changes(db: Session, ids: list[int]) -> dict[int, datetime]:
     return {pid: ts for pid, ts in rows}
 
 
-def _row(p: Product, changed: datetime | None) -> dict:
+def _ref_dict(ref) -> dict | None:
+    if ref is None:
+        return None
+    return {"price": ref.price, "suggested": ref.suggested, "line": ref.line,
+            "seen_at": ref.seen_at.isoformat() if ref.seen_at else None, "fresh": ref.fresh}
+
+
+def _row(p: Product, changed: datetime | None, ref=None) -> dict:
     return {
+        "bsa": _ref_dict(ref),
         "id": p.id, "sku": p.sku, "title": p.title, "brand": p.brand,
         "category": p.category, "price": float(p.price) if p.price is not None else None,
         "in_stock": bool(p.in_stock), "is_active": bool(p.is_active), "image": p.image,
@@ -179,7 +188,7 @@ def _row(p: Product, changed: datetime | None) -> dict:
 
 
 @router.get("/products")
-def list_products(q: str = "", filter: str = Query("all", pattern="^(all|in_stock|out_of_stock|recent)$"),
+def list_products(q: str = "", filter: str = Query("all", pattern="^(all|in_stock|out_of_stock|recent|diff|unlinked)$"),
                   limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
                   _staff: int = Depends(get_current_staff), db: Session = Depends(get_db)) -> dict:
     stmt = select(Product).where(Product.is_active.is_(True))
@@ -195,11 +204,27 @@ def list_products(q: str = "", filter: str = Query("all", pattern="^(all|in_stoc
         since = datetime.now(timezone.utc) - timedelta(days=7)
         recent_ids = select(PriceChange.product_id).where(PriceChange.created_at >= since)
         stmt = stmt.where(Product.id.in_(recent_ids))
-    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
-    items = db.execute(stmt.order_by(Product.category, Product.title, Product.id)
-                       .limit(limit).offset(offset)).scalars().all()
+    elif filter == "unlinked":
+        linked = select(PriceLink.product_id).where(PriceLink.source == price_sync.SOURCE)
+        stmt = stmt.where(Product.in_stock.is_(True), Product.id.not_in(linked))
+    if filter == "diff":
+        # Расхождение считается в Python (выбор строки и «лечение» привязки),
+        # поэтому здесь фильтр поверх готового списка расхождений.
+        diffs, _stats = price_sync.discrepancies(db, heal=False)
+        ids = [d.product_id for d in diffs]
+        if q:
+            ids = [pid for pid in ids if pid in set(db.execute(stmt.with_only_columns(Product.id)).scalars())]
+        total = len(ids)
+        page = ids[offset:offset + limit]
+        by_id = {p.id: p for p in db.execute(select(Product).where(Product.id.in_(page))).scalars()}
+        items = [by_id[i] for i in page if i in by_id]
+    else:
+        total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+        items = db.execute(stmt.order_by(Product.category, Product.title, Product.id)
+                           .limit(limit).offset(offset)).scalars().all()
     changed = _last_changes(db, [p.id for p in items])
-    return {"total": total, "items": [_row(p, changed.get(p.id)) for p in items]}
+    refs = price_sync.reference_for(db, [p.id for p in items])
+    return {"total": total, "items": [_row(p, changed.get(p.id), refs.get(p.id)) for p in items]}
 
 
 class ProductPatch(BaseModel):
@@ -247,7 +272,15 @@ def patch_product(product_id: int, body: ProductPatch, request: Request,
                         ip=client_ip(request)))
     db.commit()
     db.refresh(product)
-    return _row(product, _last_changes(db, [product.id]).get(product.id))
+    return _row(product, _last_changes(db, [product.id]).get(product.id),
+                price_sync.reference_for(db, [product.id]).get(product.id))
+
+
+@router.get("/products/{product_id}")
+def get_product(product_id: int, _staff: int = Depends(get_current_staff), db: Session = Depends(get_db)) -> dict:
+    product = _get(db, product_id)
+    return _row(product, _last_changes(db, [product.id]).get(product.id),
+                price_sync.reference_for(db, [product.id]).get(product.id))
 
 
 @router.get("/products/{product_id}/history")
@@ -273,4 +306,24 @@ def revert(product_id: int, change_id: int, request: Request,
                     detail=f"product={product.id};change={change.id}", ip=client_ip(request)))
     db.commit()
     db.refresh(product)
-    return _row(product, _last_changes(db, [product.id]).get(product.id))
+    return _row(product, _last_changes(db, [product.id]).get(product.id),
+                price_sync.reference_for(db, [product.id]).get(product.id))
+
+
+@router.post("/products/{product_id}/apply-bsa")
+def apply_bsa(product_id: int, request: Request, staff: int = Depends(get_current_staff),
+              db: Session = Depends(get_db)) -> dict:
+    """Поставить предложенную цену: BSA − 500 по сегодняшней строке поставщика."""
+    product = _get(db, product_id)
+    ref = price_sync.reference_for(db, [product.id]).get(product.id)
+    if ref is None or not ref.fresh:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Свежей цены BSA для товара нет")
+    # Цена из прайса поставщика — порог «точно?» уже пройден сверкой: админ видел
+    # и строку BSA, и итог, и нажал именно эту кнопку.
+    _apply_price(db, product, ref.suggested, staff=staff, confirm=True, note=f"BSA: {ref.line[:200]}")
+    price_history.attribute(db, actor=f"tg:{staff}", source="bsa", note=f"BSA: {ref.line[:200]}")
+    db.add(AuditLog(actor=f"tg:{staff}", action="staff_price_from_bsa",
+                    detail=f"product={product.id};price={ref.suggested}", ip=client_ip(request)))
+    db.commit()
+    db.refresh(product)
+    return _row(product, _last_changes(db, [product.id]).get(product.id), ref)

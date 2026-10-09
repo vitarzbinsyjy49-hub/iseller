@@ -35,6 +35,7 @@ from app.models import user_product_event as _user_product_event  # noqa: F401
 from app.models import post as _post  # noqa: F401
 from app.models import price_change as _price_change  # noqa: F401
 from app.models import staff_login as _staff_login  # noqa: F401
+from app.models import price_ref as _price_ref  # noqa: F401
 
 setup_logging()
 logger = logging.getLogger("techshop")

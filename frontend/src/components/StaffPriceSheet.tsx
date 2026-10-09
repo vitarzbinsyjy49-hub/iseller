@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { SheetShell } from "./ScenarioSheet";
 import { Icon } from "./icons";
 import {
-  isBigChange, parsePriceInput, patchStaffProduct, revertPrice, sourceLabel, staffHistory,
+  applyBsaPrice, getStaffProduct, isBigChange, parsePriceInput, patchStaffProduct, revertPrice, sourceLabel, staffHistory,
   StaffError, type PriceChange, type StaffProduct,
 } from "../lib/staff";
 import { haptic } from "../lib/telegram";
@@ -20,7 +20,7 @@ function when(iso: string | null): string {
 export default function StaffPriceSheet({
   product, onClose, onSaved,
 }: {
-  product: Pick<StaffProduct, "id" | "title" | "sku" | "price" | "in_stock">;
+  product: Pick<StaffProduct, "id" | "title" | "sku" | "price" | "in_stock"> & { bsa?: StaffProduct["bsa"] };
   onClose: () => void;
   onSaved: (p: StaffProduct) => void;
 }) {
@@ -30,6 +30,13 @@ export default function StaffPriceSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmBig, setConfirmBig] = useState(false);
+
+  // С карточки товара шторка открывается без данных поставщика — дозапрашиваем.
+  const [bsa, setBsa] = useState(product.bsa);
+  useEffect(() => {
+    if (product.bsa !== undefined) return;
+    getStaffProduct(product.id).then((p) => setBsa(p.bsa ?? null)).catch(() => setBsa(null));
+  }, [product.id, product.bsa]);
 
   useEffect(() => {
     staffHistory(product.id).then((r) => setHistory(r.items)).catch(() => setHistory([]));
@@ -65,6 +72,20 @@ export default function StaffPriceSheet({
     }
   }
 
+  async function applyBsa(close: () => void) {
+    setBusy(true); setError(null);
+    try {
+      const saved = await applyBsaPrice(product.id);
+      haptic("medium");
+      onSaved(saved);
+      close();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось поставить цену");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function undo(change: PriceChange) {
     setBusy(true); setError(null);
     try {
@@ -94,6 +115,26 @@ export default function StaffPriceSheet({
               <Icon name="close" className="h-4 w-4" strokeWidth={2.2} />
             </button>
           </div>
+
+          {bsa ? (
+            <div className={`mt-3 rounded-field p-3 ${bsa.fresh && bsa.suggested !== Math.round(product.price ?? 0) ? "bg-dangerbg" : "bg-mutedbg"}`}>
+              <p className="text-[13px]">
+                <span className="font-semibold">BSA: {fmt(bsa.price)}</span>
+                {" "}→ по правилу −500: <span className="font-semibold">{fmt(bsa.suggested)}</span>
+              </p>
+              <p className="mt-0.5 text-[11.5px] text-muted">
+                «{bsa.line}» · {bsa.fresh ? `проверено ${when(bsa.seen_at)}` : "сегодня в прайсе BSA не найдено"}
+              </p>
+              {bsa.fresh && bsa.suggested !== Math.round(product.price ?? 0) && (
+                <button onClick={() => applyBsa(close)} disabled={busy}
+                  className="tap mt-2 min-h-11 w-full rounded-field bg-accent px-4 text-[14px] font-semibold text-white disabled:opacity-60">
+                  Поставить {fmt(bsa.suggested)}
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-[12px] text-muted">Карточка не привязана к прайсу BSA.</p>
+          )}
 
           <label className="mt-4 block text-[12px] text-muted" htmlFor="staff-price-input">Цена, ₽</label>
           <input

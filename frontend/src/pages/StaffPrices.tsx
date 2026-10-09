@@ -15,9 +15,11 @@ import { getTelegram, openExternalLink } from "../lib/telegram";
 
 const FILTERS: { key: StaffFilter; label: string }[] = [
   { key: "all", label: "Все" },
+  { key: "diff", label: "Расходится с BSA" },
   { key: "in_stock", label: "В наличии" },
   { key: "recent", label: "Менялись за 7 дней" },
   { key: "out_of_stock", label: "Нет в наличии" },
+  { key: "unlinked", label: "Не привязаны к BSA" },
 ];
 
 const fmt = (n: number | null) => (n == null ? "—" : `${Math.round(n).toLocaleString("ru-RU")} ₽`);
@@ -206,6 +208,11 @@ export default function StaffPrices() {
                     <p className="text-[11.5px] text-muted">
                       {p.sku ?? "—"}{p.in_stock ? "" : " · нет в наличии"}
                     </p>
+                    {p.bsa && (
+                      <p className={`text-[11.5px] ${p.bsa.fresh && p.bsa.suggested !== Math.round(p.price ?? 0) ? "text-danger" : "text-muted"}`}>
+                        BSA {fmt(p.bsa.price)}{p.bsa.fresh ? ` → ${fmt(p.bsa.suggested)}` : " · не видели сегодня"}
+                      </p>
+                    )}
                   </div>
                   <span className="shrink-0 rounded-field border border-border px-2 py-1 text-[14px] font-bold">{fmt(p.price)}</span>
                 </button>
