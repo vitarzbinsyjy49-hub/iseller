@@ -122,3 +122,9 @@ def test_daily_check_applies_bsa_minus_500_and_holds_big_jumps(db, monkeypatch):
     change = db.query(PriceChange).one()
     assert (change.source, change.actor) == ("bsa", "system")
     assert "Изменено цен: 1" in sent[0] and "Ждут подтверждения: 1" in sent[0]
+
+
+def test_export_source_detection():
+    assert bsa_fetch.export_source("BSA Store") == "bsa"
+    assert bsa_fetch.export_source("apostl price") == "apostl"
+    assert bsa_fetch.export_source("Какой-то канал") is None

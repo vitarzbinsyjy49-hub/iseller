@@ -94,10 +94,25 @@ def handle_export_document(update: dict) -> str | None:
             if not path:
                 return "Не удалось получить файл от Telegram — пришлите ещё раз."
             raw = client.get(f"{TELEGRAM_API}/file/bot{token}/{path}").content
+        channel = bsa_fetch.export_channel(raw)
         texts = bsa_fetch.parse_export(raw)
     except (httpx.HTTPError, ValueError, KeyError) as exc:
         logger.warning("выгрузка BSA не прочитана: %s", type(exc).__name__)
         return "Не получилось прочитать файл. Это точно result.json из «Экспорта истории чата» (формат JSON)?"
+    source = bsa_fetch.export_source(channel)
+    if source is None:
+        return (f"Это выгрузка канала «{channel or 'без названия'}». Я принимаю только BSA Store "
+                "и apostl price — цены ничьи не менял.")
+    if source == "apostl":
+        # Цены apostl копим отдельно (source=apostl) и НИКОГДА не принимаем за
+        # BSA: иначе «−500» уехало бы от чужой цены. Как ставить цены по apostl —
+        # решение владельца; пока только справка для «Цен».
+        from app.services import price_sync
+        from app.services.source_lines import parse_text
+        with SessionLocal() as db:
+            n = sum(price_sync.ingest(db, parse_text(t), post_id=i, source="apostl") for i, t in texts.items())
+            db.commit()
+        return f"✅ Выгрузка apostl price сохранена: строк с ценой {n}. Цены в магазине по ней пока не меняю."
     from app.services import daily_price_sync
     with SessionLocal() as db:
         stats = run(db, texts=texts, failed=[], origin="export")

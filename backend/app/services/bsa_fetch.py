@@ -96,6 +96,21 @@ def _rich(node) -> str:
     return ""
 
 
+def export_channel(raw: bytes) -> str:
+    """Название канала из result.json («BSA Store», «apostl price»)."""
+    return str(json.loads(raw.decode("utf-8")).get("name") or "")
+
+
+def export_source(name: str) -> str | None:
+    """bsa | apostl | None (чужой канал — не принимаем)."""
+    low = name.lower()
+    if "bsa" in low or "big sale" in low or "bigsale" in low:
+        return "bsa"
+    if "apostl" in low or "apostle" in low:
+        return "apostl"
+    return None
+
+
 def parse_export(raw: bytes) -> dict[int, str]:
     """result.json из Telegram Desktop -> {id сообщения: текст}. И text, и rich_message
     (у rich-постов text пустой — docs/context/bsa-price-sync.md)."""
