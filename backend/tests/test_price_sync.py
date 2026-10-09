@@ -128,3 +128,9 @@ def test_export_source_detection():
     assert bsa_fetch.export_source("BSA Store") == "bsa"
     assert bsa_fetch.export_source("apostl price") == "apostl"
     assert bsa_fetch.export_source("Какой-то канал") is None
+
+
+def test_iphone_key_ignores_flag_order():
+    a = parse_text("17 Pro 256 Silver-104.000🇭🇰🇰🇷(1sim+e sim)")[0].key
+    b = parse_text("17 Pro 256 Silver-104.000🇰🇷🇭🇰(1sim+e sim)")[0].key
+    assert a == b

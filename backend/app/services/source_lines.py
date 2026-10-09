@@ -72,6 +72,16 @@ def article(line: str) -> str | None:
     return found[0] if len(set(found)) == 1 else None
 
 
+def canonical_ip(sku: str) -> str:
+    """IP-17PRO-256-SILVER-KRHK-SIM == IP-17PRO-256-SILVER-HKKR-SIM: порядок флагов
+    у BSA меняется изо дня в день, а аппарат тот же. Регион — пятый сегмент."""
+    parts = sku.split("-")
+    if len(parts) >= 5 and parts[0] == "IP" and len(parts[4]) % 2 == 0 and parts[4].isalpha():
+        region = parts[4]
+        parts[4] = "".join(sorted(region[i:i + 2] for i in range(0, len(region), 2)))
+    return "-".join(parts)
+
+
 def parse_text(text: str) -> list[SourceLine]:
     """Все строки с ценой из текста поста. Активированные iPhone пропускаются."""
     from app.services.bsa_parser import parse
@@ -86,7 +96,7 @@ def parse_text(text: str) -> list[SourceLine]:
             item = items[0]
             if item.activated:
                 continue
-            out.append(SourceLine(f"ip:{item.sku}", int(item.price), line))
+            out.append(SourceLine(f"ip:{canonical_ip(item.sku)}", int(item.price), line))
             continue
         art = article(line)
         if art:

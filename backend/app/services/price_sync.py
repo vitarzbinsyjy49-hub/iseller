@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.models.price_ref import PriceLink, PriceRef
 from app.models.product import Product
-from app.services.source_lines import SourceLine, parse_text, text_key
+from app.services.source_lines import SourceLine, canonical_ip, parse_text, text_key
 
 SOURCE = "bsa"
 NAKIDKA = 500                     # то же правило, что в scripts/import_bsa.py
@@ -91,6 +91,11 @@ def link(db: Session, product_id: int, key: str, line: str | None, origin: str,
 
 def seed_links(db: Session, links_tsv: Path | None = None) -> dict:
     """Привязать всё, что можно, автоматически. Существующие привязки не трогает."""
+    # Привязки iPhone из прежних версий — к каноническому виду региона.
+    for l in db.execute(select(PriceLink).where(PriceLink.key.like("ip:%"))).scalars():
+        canon = "ip:" + canonical_ip(l.key[3:])
+        if canon != l.key:
+            l.key = canon
     linked = {pid for (pid,) in db.execute(select(PriceLink.product_id).where(PriceLink.source == SOURCE))}
     stats = {"iphone": 0, "article": 0, "tsv": 0}
     by_sku = {p.sku: p for p in db.execute(select(Product).where(Product.sku.is_not(None))).scalars()}
@@ -112,7 +117,7 @@ def seed_links(db: Session, links_tsv: Path | None = None) -> dict:
         if p.id in linked:
             continue
         if p.source == "bsa" and sku.startswith("IP-"):
-            link(db, p.id, f"ip:{sku}", None, "auto")
+            link(db, p.id, f"ip:{canonical_ip(sku)}", None, "auto")
         else:
             base = sku.split("-")[0]
             if "RS/A" in sku or not _BARE_ART.match(base):
