@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.uploads import UPLOAD_DIR
 from app.db.session import Base, engine
-from app.api import admin, admin_crm, admin_promo, admin_referrals, admin_settings, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, preorder, price_posts, referral as referral_api, scenario_chat, staff as staff_api, telegram, users
+from app.api import admin, admin_crm, admin_promo, admin_referrals, admin_settings, admin_users, ai, auth, cart, catalog, config as config_api, deeplink, events, favorites, health, home, imports, leads, loyalty, posts, preorder, price_ingest, price_posts, referral as referral_api, scenario_chat, staff as staff_api, telegram, users
 from app.api import fx as fx_router
 from app.api import bug_reports as bug_reports_api
 from app.api import reviews as reviews_api
@@ -125,6 +125,7 @@ app.include_router(config_api.router, prefix="/api")
 app.include_router(posts.router, prefix="/api")
 # v5.6.0: постоянные прайс-посты канала (генерация, diff, публикация, навигация)
 app.include_router(price_posts.router, prefix="/api")
+app.include_router(price_ingest.router, prefix="/api")
 # v5.5.0: приём апдейтов Telegram-бота (вебхук, защищён secret_token)
 app.include_router(telegram.router, prefix="/api")
 # Резолвер payload -> путь Mini App, для запуска по ?startapp= (без auth)

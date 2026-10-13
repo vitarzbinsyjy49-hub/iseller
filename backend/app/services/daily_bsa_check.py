@@ -26,8 +26,11 @@ RUN_AT = time(10, 20)
 
 
 def _ran_today(db: Session, today: date) -> bool:
-    start = datetime.combine(today, time(0, 0), MSK)
-    return db.execute(select(AuditLog.id).where(AuditLog.action == ACTION, AuditLog.created_at >= start)).first() is not None
+    """Сверка сегодня уже была. Неполный пакет читателя (failed>0) не считается:
+    его пропуски должен добрать публичный виджет в 10:20."""
+    start = datetime.combine(today, time(0, 0), MSK).astimezone(timezone.utc)
+    rows = db.execute(select(AuditLog.detail).where(AuditLog.action == ACTION, AuditLog.created_at >= start)).scalars()
+    return any(not (d or "").startswith("origin=reader;") or ";failed=0;" in (d or "") + ";" for d in rows)
 
 
 def run(db: Session, *, texts: dict[int, str] | None = None, failed: list[int] | None = None,

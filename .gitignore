@@ -44,3 +44,7 @@ tools/channel_cleanup/*.log
 tools/channel_cleanup/whitelist.txt
 tools/channel_cleanup/known_customers.txt
 tools/channel_cleanup/summary.txt
+
+# Читатель прайсов (tools/tg_reader): данные и сессия живут на сервере, не в git.
+tools/tg_reader/data/
+tools/tg_reader/.env

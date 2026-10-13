@@ -284,13 +284,16 @@ def _daily_price_sync(state: dict, now: float) -> None:
         return
     state["last_price_sync_check"] = now
     from app.db.session import SessionLocal
-    from app.services import daily_price_sync
+    from app.services import daily_price_sync, price_reader
     try:
         # Сначала сверка с BSA (10:20), затем прайс-посты (10:30).
         with SessionLocal() as db:
             check = daily_bsa_check.maybe_run(db)
         if check is not None:
             logger.info("сверка с BSA (ежедневно): %s", check)
+        with SessionLocal() as db:
+            if price_reader.maybe_alert_missing(db):
+                logger.warning("читатель BSA не прислал цены до 10:25 — админам сказано")
         with SessionLocal() as db:
             stats = daily_price_sync.maybe_run(db)
         if stats is not None:

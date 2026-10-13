@@ -1,0 +1,15 @@
+# Один изолированный контейнер без портов и без общей сети с остальным на сервере.
+# Запуск: docker compose run --rm reader <login|ping|probe|run [--dry]>
+services:
+  reader:
+    build: .
+    image: iseller-reader:local
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data
+    network_mode: bridge
+    mem_limit: 256m
+    cpus: 0.5
+    restart: "no"

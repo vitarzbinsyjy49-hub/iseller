@@ -34,6 +34,13 @@ PUBLIC_POSTS: dict[int, str] = {
     11187: "PlayStation", 12116: "Dyson очистители", 12862: "Dyson пылесосы",
 }
 
+#: Rich-посты BSA: публичный виджет их не отдаёт, читает только аккаунт
+#: (tools/tg_reader). Тоже правятся на месте, номера постоянные.
+RICH_POSTS: dict[int, str] = {
+    12966: "iPhone 17 / 17e / Air", 12968: "iPhone 17 Pro / Pro Max", 12970: "iPhone 18",
+    12119: "Apple Watch S11/S12", 11510: "Dyson стайлеры", 12064: "Dyson фены",
+}
+
 _TEXT_RE = re.compile(r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>\s*<div class="tgme_widget_message_footer', re.S)
 
 

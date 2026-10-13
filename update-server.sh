@@ -78,6 +78,7 @@ tar czf - \
   --exclude=docs/handoff \
   --exclude=release-evidence \
   --exclude=tools/channel_cleanup \
+  --exclude=tools/tg_reader \
   --exclude='*.session' \
   --exclude='*.session-journal' \
   . | ssh "$SERVER" "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"

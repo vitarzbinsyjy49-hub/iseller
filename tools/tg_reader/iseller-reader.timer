@@ -1,0 +1,10 @@
+[Unit]
+Description=iSeller: прайсы BSA — каждый день 10:10 МСК (07:10 UTC), повтор в 10:17
+
+[Timer]
+OnCalendar=*-*-* 07:10:00 UTC
+OnCalendar=*-*-* 07:17:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

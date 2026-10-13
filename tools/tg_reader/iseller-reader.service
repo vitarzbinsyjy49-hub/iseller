@@ -1,0 +1,10 @@
+[Unit]
+Description=iSeller: чтение прайсов BSA и apostl price
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/iseller-reader
+ExecStart=/usr/bin/docker compose run --rm -T reader run
+TimeoutStartSec=600
